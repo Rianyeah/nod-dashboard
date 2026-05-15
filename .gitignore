@@ -1,0 +1,44 @@
+# Environment variables
+.env
+.env.local
+.env.production
+*.env
+
+# Agent tooling
+.agent/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+env/
+
+# Node
+node_modules/
+dist/
+.vite/
+*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build
+*.egg-info/
+build/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Temporary
+nod_content.txt

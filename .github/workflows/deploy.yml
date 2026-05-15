@@ -1,0 +1,23 @@
+name: Deploy to Zeabur
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Deploy Backend
+        uses: zeabur/action@main
+        with:
+          service-name: nod-backend
+          token: ${{ secrets.ZEABUR_TOKEN }}
+
+      - name: Deploy Frontend
+        uses: zeabur/action@main
+        with:
+          service-name: nod-frontend
+          token: ${{ secrets.ZEABUR_TOKEN }}
