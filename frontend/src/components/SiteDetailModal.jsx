@@ -1,131 +1,422 @@
-import { X, MapPin, Radio, Activity, Zap, Wifi, Server, Battery, Eye, Shield } from 'lucide-react';
+import {
+  X,
+  MapPin,
+  Radio,
+  Zap,
+  Wifi,
+  Server,
+  Battery,
+  Eye,
+  Shield,
+  Database,
+  CalendarDays,
+} from 'lucide-react';
+
+const EMPTY_VALUES = new Set(['', '#N/A', 'N/A', '#REF!', null, undefined]);
+const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+
+const FIELD_GROUPS = [
+  {
+    title: 'Lokasi',
+    icon: MapPin,
+    fields: [
+      ['Kabupaten', ['Kabupaten/KOTA', 'kabupaten', 'Kabupaten']],
+      ['Kecamatan', ['Kecamatan']],
+      ['Desa', ['Desa']],
+      ['NOP', ['NOP']],
+      ['Cluster', ['New Cluster', 'cluster']],
+      ['Latitude', ['Latitude', 'latitude']],
+      ['Longitude', ['Longitude', 'longitude']],
+      ['Alamat', ['Alamat']],
+    ],
+  },
+  {
+    title: 'Info Site',
+    icon: Radio,
+    fields: [
+      ['Class', ['Site Class', 'site_class']],
+      ['Type', ['Type Site', 'type_site']],
+      ['Category', ['Category Site']],
+      ['Status', ['Status Site', 'status_site']],
+      ['TP', ['TP']],
+      ['Brand Type', ['Brand Type', 'Brand']],
+      ['Band NE', ['Band NE']],
+      ['Jumlah Cell', ['jumlah_cell']],
+      ['RCA Dominan', ['rca_dominan']],
+    ],
+  },
+  {
+    title: 'Teknologi',
+    icon: Wifi,
+    fields: [
+      ['DCS1800', ['DCS1800']],
+      ['GSM900', ['GSM900']],
+      ['L900', ['L900']],
+      ['L1800', ['L1800']],
+      ['L2100', ['L2100']],
+      ['L2300', ['L2300']],
+      ['N2100', ['N2100']],
+      ['N2300', ['N2300']],
+      ['LTE NB-IoT', ['LTE NB-IoT']],
+    ],
+  },
+  {
+    title: 'Power',
+    icon: Zap,
+    fields: [
+      ['Backup Power', ['BACKUP POWER BY']],
+      ['Backup Time Battery', ['Backup Time Battery']],
+      ['Type Battery', ['Type Battery']],
+      ['Jumlah Battery', ['Jumlah Battery']],
+      ['Umur Battery', ['Umur Battery (Tahun)']],
+      ['Garansi Battery', ['Status Garansi Battery']],
+      ['Rectifier', ['Jenis Rectifier']],
+      ['Total Load Rectifier', ['Total Load Rectifier']],
+      ['Jumlah Modul', ['Jumlah Modul']],
+      ['ID PLN', ['ID PLN']],
+      ['Kapasitas PLN', ['Kap PLN (VA)']],
+    ],
+  },
+  {
+    title: 'Genset',
+    icon: Battery,
+    fields: [
+      ['Genset Fix', ['Genset Fix']],
+      ['Status Genset', ['Status Genset']],
+      ['Kapasitas Genset', ['Kapasitas Genset']],
+      ['Tahun Pembuatan', ['Tahun Pembuatan']],
+      ['Merk Genset', ['Merk Genset']],
+      ['SN Genset', ['SN Genset']],
+      ['Jalur Pemadaman', ['Jalur Pemadaman']],
+    ],
+  },
+  {
+    title: 'Transport',
+    icon: Server,
+    fields: [
+      ['Transport Type', ['Transport Type']],
+      ['List Far End', ['List Far End']],
+      ['Jenis Infra', ['Jenis Infra']],
+      ['Kriteria PM Site', ['Kriteria PM Site']],
+      ['BBLTI', ['BBLTI']],
+    ],
+  },
+  {
+    title: 'Monitoring',
+    icon: Eye,
+    fields: [
+      ['WDM', ['WDM STATUS', 'WDM']],
+      ['NMS Rectifier', ['NMS RECTI STATUS', 'NMS']],
+      ['EMU', ['EMU STATUS', 'EMU']],
+      ['ENVA', ['ENVA STATUS', 'ENVA']],
+      ['Relokasi Battery', ['Relokasi Batt']],
+      ['Remark', ['REMARK']],
+    ],
+  },
+];
+
+function isEmptyValue(value) {
+  if (EMPTY_VALUES.has(value)) return true;
+  if (typeof value === 'string' && EMPTY_VALUES.has(value.trim())) return true;
+  return false;
+}
+
+function getFirstValue(data, keys) {
+  for (const key of keys) {
+    if (!isEmptyValue(data[key])) return data[key];
+  }
+  return null;
+}
+
+function formatValue(value) {
+  if (value == null) return '-';
+  if (typeof value === 'number') return Number.isInteger(value) ? value.toLocaleString() : value.toLocaleString(undefined, { maximumFractionDigits: 4 });
+  return String(value);
+}
+
+function minutesLabel(value) {
+  if (isEmptyValue(value)) return 'N/A';
+  const minutes = Number(value);
+  if (Number.isNaN(minutes)) return formatValue(value);
+  if (minutes < 60) return `${Math.round(minutes)} min`;
+  return `${Math.floor(minutes / 60).toLocaleString()} jam ${Math.round(minutes % 60)} min`;
+}
+
+const CHART_WIDTH = 280;
+const CHART_HEIGHT = 92;
+const CHART_PADDING_X = 28;
+const CHART_PADDING_Y = 14;
+
+function buildSparklinePoints(
+  rows,
+  valueKey,
+  width = CHART_WIDTH,
+  height = CHART_HEIGHT,
+  paddingX = CHART_PADDING_X,
+  paddingY = CHART_PADDING_Y,
+) {
+  const points = rows
+    .map((row, index) => ({ value: Number(row[valueKey]), index }))
+    .filter(point => Number.isFinite(point.value));
+
+  if (points.length < 2) return [];
+
+  const min = Math.min(90, ...points.map(point => point.value));
+  const max = Math.max(100, ...points.map(point => point.value));
+  const range = Math.max(max - min, 1);
+  const step = (width - paddingX * 2) / Math.max(points.length - 1, 1);
+
+  return points.map((point, visibleIndex) => {
+    const x = paddingX + visibleIndex * step;
+    const y = height - paddingY - ((point.value - min) / range) * (height - paddingY * 2);
+    return { x, y, value: point.value };
+  });
+}
+
+function averageValue(rows, valueKey) {
+  const values = rows
+    .map(row => Number(row[valueKey]))
+    .filter(Number.isFinite);
+
+  if (!values.length) return null;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function TrendCard({ title, rows, valueKey, labelKey, accent = '#34D399', headlineValue = null, headlinePrefix = '' }) {
+  const points = buildSparklinePoints(rows, valueKey);
+  const path = points
+    .map((point, index) => `${index === 0 ? 'M' : 'L'}${point.x.toFixed(1)},${point.y.toFixed(1)}`)
+    .join(' ');
+  const firstPoint = points[0];
+  const lastPoint = points[points.length - 1];
+  const areaPath = firstPoint && lastPoint
+    ? `${path} L${lastPoint.x.toFixed(1)},${(CHART_HEIGHT - 4).toFixed(1)} L${firstPoint.x.toFixed(1)},${(CHART_HEIGHT - 4).toFixed(1)} Z`
+    : '';
+  const fallbackLatest = rows.length ? Number(rows[rows.length - 1]?.[valueKey]) : null;
+  const displayValue = headlineValue ?? fallbackLatest;
+  const labelRows = rows.length > 12
+    ? rows.filter((_, index) => index === 0 || index === rows.length - 1 || index % 7 === 0)
+    : rows;
+
+  return (
+    <div className="rounded-lg border border-white/[0.07] bg-white/[0.035] p-4">
+      <div className="mb-3 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
+        <h3 className="min-w-0 text-[10px] font-black uppercase tracking-[0.12em] text-[var(--text-secondary)]">{title}</h3>
+        <span className="whitespace-nowrap font-mono text-xs font-black" style={{ color: accent }}>
+          {Number.isFinite(displayValue) ? `${headlinePrefix}${displayValue.toFixed(2)}%` : 'N/A'}
+        </span>
+      </div>
+
+      {path ? (
+        <>
+          <svg viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} className="h-[86px] w-full">
+            <defs>
+              <linearGradient id={`trend-fill-${title.replace(/\s+/g, '-')}`} x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor={accent} stopOpacity="0.36" />
+                <stop offset="100%" stopColor={accent} stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <path d={areaPath} fill={`url(#trend-fill-${title.replace(/\s+/g, '-')})`} />
+            <path d={path} fill="none" stroke={accent} strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" />
+            {points.map((point, index) => (
+              <circle
+                key={`${title}-point-${index}`}
+                cx={point.x}
+                cy={point.y}
+                r={index === points.length - 1 ? 4 : 2.4}
+                fill={accent}
+                opacity={index === points.length - 1 ? 1 : 0.75}
+              />
+            ))}
+          </svg>
+          <div className="mt-2 flex justify-between gap-2 px-1 text-[9px] font-semibold text-[var(--text-muted)]">
+            {labelRows.map((row, index) => (
+              <span key={`${title}-${index}`} className="truncate">
+                {labelKey(row)}
+              </span>
+            ))}
+          </div>
+        </>
+      ) : (
+        <div className="flex h-[104px] items-center justify-center text-xs text-[var(--text-muted)]">
+          Data trend tidak tersedia
+        </div>
+      )}
+    </div>
+  );
+}
 
 function InfoRow({ label, value }) {
-  if (!value || value === '#N/A' || value === 'N/A') return null;
+  if (isEmptyValue(value)) return null;
   return (
-    <div className="flex justify-between py-1.5 border-b border-white/[0.04] last:border-0">
+    <div className="grid grid-cols-[145px_minmax(0,1fr)] gap-5 border-b border-white/[0.05] py-1.5 last:border-0">
       <span className="text-[11px] text-[var(--text-muted)]">{label}</span>
-      <span className="text-[11px] text-[var(--text-primary)] font-medium text-right max-w-[60%] truncate">{value}</span>
+      <span className="min-w-0 text-right text-[11px] font-semibold text-[var(--text-primary)] break-words">
+        {formatValue(value)}
+      </span>
     </div>
   );
 }
 
 function Section({ icon: Icon, title, children }) {
   return (
-    <div className="glass-card p-3">
-      <div className="flex items-center gap-2 mb-2">
-        <Icon className="w-3.5 h-3.5 text-[var(--primary-light)]" />
-        <h4 className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider">{title}</h4>
+    <section className="rounded-lg border border-white/[0.07] bg-white/[0.025] overflow-hidden">
+      <div className="flex items-center gap-2 border-b border-white/[0.06] bg-white/[0.03] px-4 py-2">
+        <Icon className="h-3.5 w-3.5 text-[var(--primary-light)]" />
+        <h4 className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--text-secondary)]">{title}</h4>
       </div>
-      <div>{children}</div>
+      <div className="px-4 py-2">{children}</div>
+    </section>
+  );
+}
+
+function MetricCard({ label, value, color }) {
+  return (
+    <div className="flex aspect-square min-h-[86px] flex-col justify-between rounded-lg border border-white/[0.07] bg-white/[0.035] p-3">
+      <div className="text-[10px] leading-tight text-[var(--text-muted)]">{label}</div>
+      <div className="font-mono text-base font-bold leading-tight" style={{ color }}>
+        {value}
+      </div>
     </div>
   );
 }
 
-export default function SiteDetailModal({ data, onClose }) {
+export default function SiteDetailModal({ data, trendData = [], dailyData = [], onClose }) {
   if (!data) return null;
 
+  const siteId = data.Siteid || data.site_id || '-';
+  const siteName = data['Site Name'] || data.site_name || '';
   const avail = data.avg_availability != null ? Number(data.avg_availability) : null;
   const getAvailColor = (v) => {
-    if (v == null) return 'var(--text-muted)';
+    if (v == null || Number.isNaN(v)) return 'var(--text-muted)';
     if (v >= 99.5) return 'var(--success)';
     if (v >= 95) return 'var(--warning)';
     return 'var(--danger)';
   };
+  const availColor = getAvailColor(avail);
+
+  const usedKeys = new Set([
+    'Siteid',
+    'site_id',
+    'Site Name',
+    'site_name',
+    'avg_availability',
+    'total_outage_menit',
+    'jumlah_hari_data',
+    'Bulan',
+    'bulan',
+    'Tahun',
+    'tahun',
+    'OA DATE',
+    'cek',
+  ]);
+  FIELD_GROUPS.forEach(group => group.fields.forEach(([, keys]) => keys.forEach(key => usedKeys.add(key))));
+
+  const remainingRows = Object.entries(data)
+    .filter(([key, value]) => !usedKeys.has(key) && !isEmptyValue(value))
+    .sort(([a], [b]) => a.localeCompare(b));
+  const sixMonthTrend = [...trendData].slice(-6);
+  const sixMonthAverage = averageValue(sixMonthTrend, 'avg_availability');
+  const dailyTrend = [...dailyData]
+    .filter(row => row.availability != null)
+    .sort((a, b) => Number(a.tgl) - Number(b.tgl));
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in"
-      onClick={onClose}
-    >
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-8 animate-fade-in" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/72 backdrop-blur-sm" />
 
-      {/* Modal */}
       <div
-        className="relative w-full max-w-lg max-h-[85vh] bg-[var(--bg-surface)] border border-white/[0.08] rounded-2xl overflow-hidden flex flex-col animate-fade-in-scale"
+        className="relative flex max-h-[calc(100vh-64px)] w-full max-w-[calc(100vw-72px)] flex-col overflow-hidden rounded-xl border border-white/[0.08] bg-[var(--bg-surface)] shadow-2xl animate-fade-in-scale xl:max-w-6xl"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="px-5 py-4 border-b border-white/[0.06] bg-gradient-to-r from-[var(--bg-surface)] to-[var(--bg-elevated)]">
+        <div className="shrink-0 border-b border-white/[0.08] bg-gradient-to-r from-[var(--bg-surface)] to-[var(--bg-elevated)] px-8 py-6">
           <button
             onClick={onClose}
-            className="absolute right-4 top-4 w-7 h-7 rounded-lg flex items-center justify-center hover:bg-white/[0.08] transition-colors cursor-pointer"
+            className="absolute right-4 top-4 flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg transition-colors hover:bg-white/[0.08]"
+            aria-label="Tutup detail site"
           >
-            <X className="w-4 h-4 text-[var(--text-muted)]" />
+            <X className="h-4 w-4 text-[var(--text-muted)]" />
           </button>
 
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 items-start gap-3 pr-10">
             <div
-              className="w-3 h-3 rounded-full"
-              style={{ backgroundColor: getAvailColor(avail), boxShadow: `0 0 10px ${getAvailColor(avail)}` }}
+              className="mt-1 h-3 w-3 shrink-0 rounded-full"
+              style={{ backgroundColor: availColor, boxShadow: `0 0 12px ${availColor}` }}
             />
-            <div>
-              <h2 className="text-base font-bold text-white font-mono">{data.Siteid || data.site_id || '—'}</h2>
-              <p className="text-xs text-[var(--text-muted)] mt-0.5 truncate max-w-[320px]">{data['Site Name'] || data.site_name || ''}</p>
+            <div className="min-w-0">
+              <h2 className="font-mono text-xl font-black leading-tight text-white">{siteId}</h2>
+              <p className="mt-1 truncate text-sm text-[var(--text-muted)]">{siteName}</p>
             </div>
           </div>
 
-          {/* Availability badge */}
-          <div className="mt-3 flex items-center gap-3">
-            <div className="glass-card px-3 py-1.5 text-center">
-              <div className="text-[9px] text-[var(--text-muted)] mb-0.5">Availability</div>
-              <div className="text-sm font-bold font-mono" style={{ color: getAvailColor(avail) }}>
-                {avail != null ? `${avail.toFixed(2)}%` : 'N/A'}
-              </div>
-            </div>
-            <div className="glass-card px-3 py-1.5 text-center">
-              <div className="text-[9px] text-[var(--text-muted)] mb-0.5">Outage</div>
-              <div className="text-sm font-bold font-mono text-[var(--text-primary)]">
-                {data.total_outage_menit != null ? `${Math.round(data.total_outage_menit)} min` : 'N/A'}
-              </div>
-            </div>
-            <div className="glass-card px-3 py-1.5 text-center">
-              <div className="text-[9px] text-[var(--text-muted)] mb-0.5">Hari Data</div>
-              <div className="text-sm font-bold font-mono text-[var(--text-primary)]">
-                {data.jumlah_hari_data || '—'}
-              </div>
-            </div>
-          </div>
         </div>
 
-        {/* Body — scrollable */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          <Section icon={MapPin} title="Lokasi">
-            <InfoRow label="Kabupaten" value={data.kabupaten || data.Kabupaten} />
-            <InfoRow label="Kecamatan" value={data.Kecamatan} />
-            <InfoRow label="NOP" value={data.NOP} />
-            <InfoRow label="Cluster" value={data.cluster} />
-            <InfoRow label="Latitude" value={data.latitude || data.Latitude} />
-            <InfoRow label="Longitude" value={data.longitude || data.Longitude} />
-          </Section>
+        <div className="flex-1 overflow-y-auto px-8 py-6">
+          <div className="mb-6 grid gap-4 lg:grid-cols-[1fr_1fr_0.95fr]">
+            <TrendCard
+              title="Avg Avail 6 Month"
+              rows={sixMonthTrend}
+              valueKey="avg_availability"
+              labelKey={(row) => MONTH_LABELS[(Number(row.bulan) || 1) - 1] || row.bulan}
+              accent={avail != null && avail < 95 ? '#EF4444' : '#34D399'}
+              headlineValue={sixMonthAverage}
+            />
+            <TrendCard
+              title="Daily Availability"
+              rows={dailyTrend}
+              valueKey="availability"
+              labelKey={(row) => String(row.tgl).padStart(2, '0')}
+              accent="#60A5FA"
+              headlineValue={avail}
+              headlinePrefix="Month Avg "
+            />
+            <div className="rounded-lg border border-white/[0.07] bg-white/[0.035] p-4">
+              <h3 className="mb-3 text-[10px] font-black uppercase tracking-[0.12em] text-[var(--text-secondary)]">Monthly Scorecard</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <MetricCard label="Availability" value={avail != null && !Number.isNaN(avail) ? `${avail.toFixed(2)}%` : 'N/A'} color={availColor} />
+                <MetricCard label="Total Outage" value={minutesLabel(data.total_outage_menit)} color="var(--danger)" />
+                <MetricCard label="Total Cell" value={data.jumlah_cell ?? '-'} color="var(--primary-light)" />
+                <MetricCard label="Hari Data" value={data.jumlah_hari_data ?? '-'} color="var(--text-primary)" />
+              </div>
+            </div>
+          </div>
 
-          <Section icon={Radio} title="Info Site">
-            <InfoRow label="Class" value={data['Site Class']} />
-            <InfoRow label="Type" value={data['Type Site']} />
-            <InfoRow label="Status" value={data['Status Site']} />
-            <InfoRow label="Brand" value={data['Brand']} />
-          </Section>
+          <div className="grid gap-5 lg:grid-cols-2">
+            {FIELD_GROUPS.map((group) => {
+              const rows = group.fields
+                .map(([label, keys]) => [label, getFirstValue(data, keys)])
+                .filter(([, value]) => !isEmptyValue(value));
 
-          <Section icon={Wifi} title="Teknologi">
-            <InfoRow label="2G" value={data['2G Bands']} />
-            <InfoRow label="4G" value={data['4G Bands']} />
-            <InfoRow label="5G" value={data['5G Bands']} />
-          </Section>
+              if (!rows.length) return null;
 
-          <Section icon={Zap} title="Power">
-            <InfoRow label="PLN" value={data['PLN']} />
-            <InfoRow label="Genset" value={data['Genset']} />
-            <InfoRow label="Battery" value={data['Battery']} />
-            <InfoRow label="Solar Panel" value={data['Solar Panel']} />
-          </Section>
+              return (
+                <Section key={group.title} icon={group.icon} title={group.title}>
+                  {rows.map(([label, value]) => (
+                    <InfoRow key={label} label={label} value={value} />
+                  ))}
+                </Section>
+              );
+            })}
 
-          <Section icon={Eye} title="Monitoring">
-            <InfoRow label="WDM" value={data['WDM']} />
-            <InfoRow label="NMS" value={data['NMS']} />
-            <InfoRow label="EMU" value={data['EMU']} />
-            <InfoRow label="ENVA" value={data['ENVA']} />
-          </Section>
+            {remainingRows.length > 0 && (
+              <Section icon={Database} title="Data Lainnya">
+                {remainingRows.map(([key, value]) => (
+                  <InfoRow key={key} label={key} value={value} />
+                ))}
+              </Section>
+            )}
+
+            <Section icon={CalendarDays} title="Periode Data">
+              <InfoRow label="Bulan" value={data.Bulan || data.bulan} />
+              <InfoRow label="Tahun" value={data.Tahun || data.tahun} />
+              <InfoRow label="OA Date" value={data['OA DATE']} />
+            </Section>
+
+            <Section icon={Shield} title="Kualitas Data">
+              <InfoRow label="RCA Dominan" value={data.rca_dominan} />
+              <InfoRow label="Cek" value={data.cek} />
+            </Section>
+          </div>
         </div>
       </div>
     </div>

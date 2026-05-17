@@ -25,7 +25,7 @@ function SelectDropdown({ id, value, onChange, children, className = '' }) {
     <div className="relative">
       <select
         id={id}
-        value={value}
+        value={value ?? ''}
         onChange={onChange}
         className={`appearance-none bg-white/[0.06] text-white border border-white/10 rounded-lg pl-3 pr-8 py-2 text-sm cursor-pointer hover:bg-white/10 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/40 focus:border-[var(--primary)]/40 backdrop-blur-sm ${className}`}
       >

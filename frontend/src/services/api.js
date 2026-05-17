@@ -8,7 +8,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000,
+  timeout: 30000,
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -55,6 +55,11 @@ export async function fetchSummary(bulan, tahun) {
   return data;
 }
 
+export async function fetchLatestPeriod() {
+  const { data } = await api.get('/availability/latest-period');
+  return data;
+}
+
 export async function fetchByKabupaten(bulan, tahun) {
   const { data } = await api.get('/availability/by-kabupaten', { params: { bulan, tahun } });
   return data;
@@ -65,8 +70,8 @@ export async function fetchSiteAvailability(siteId, bulan, tahun) {
   return data;
 }
 
-export async function fetchTrend(siteId, tahun) {
-  const { data } = await api.get(`/availability/trend/${siteId}`, { params: { tahun } });
+export async function fetchTrend(siteId, tahun, bulan) {
+  const { data } = await api.get(`/availability/trend/${siteId}`, { params: { tahun, bulan } });
   return data;
 }
 
@@ -77,9 +82,9 @@ export async function fetchWorstSites(bulan, tahun, limit = 10) {
 
 // ===== Sites =====
 
-export async function fetchSites({ bulan, tahun, kabupaten, cluster, status, kelas, nop, page = 1, limit = 20 } = {}) {
+export async function fetchSites({ bulan, tahun, kabupaten, cluster, status, kelas, nop, q, page = 1, limit = 20 } = {}) {
   const { data } = await api.get('/sites', {
-    params: { bulan, tahun, kabupaten, cluster, status, kelas, nop, page, limit },
+    params: { bulan, tahun, kabupaten, cluster, status, kelas, nop, q, page, limit },
   });
   return data;
 }

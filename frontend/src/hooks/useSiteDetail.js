@@ -24,10 +24,10 @@ export function useSiteDetail() {
     }
   }, []);
 
-  const loadTrend = useCallback(async (siteId, tahun) => {
+  const loadTrend = useCallback(async (siteId, tahun, bulan) => {
     if (!siteId) return;
     try {
-      const data = await fetchTrend(siteId, tahun);
+      const data = await fetchTrend(siteId, tahun, bulan);
       setTrend(data);
     } catch (err) {
       console.error('Trend error:', err);

@@ -15,35 +15,56 @@ function getBarColor(val) {
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   const val = payload[0]?.value;
+  const tooltipLabel = payload[0]?.payload?.tooltipLabel || label;
   return (
-    <div className="glass-card px-3 py-2 text-xs">
-      <p className="text-[var(--text-muted)] mb-1">{label}</p>
-      <p className="font-mono font-bold" style={{ color: getBarColor(val) }}>
+    <div className="min-w-[82px] rounded-md border border-white/[0.12] bg-[#0F172A]/95 px-3 py-2 text-xs shadow-xl">
+      <p className="mb-1 whitespace-nowrap text-[10px] text-[var(--text-muted)]">{tooltipLabel}</p>
+      <p className="whitespace-nowrap font-mono text-sm font-bold leading-none" style={{ color: getBarColor(val) }}>
         {val != null ? `${val}%` : 'N/A'}
       </p>
     </div>
   );
 };
 
-export default function AvailabilityChart({ siteId, tahun }) {
+export default function AvailabilityChart({ siteId, bulan, tahun }) {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!siteId || !tahun) { setData([]); return; }
-    setLoading(true);
-    fetchTrend(siteId, tahun)
-      .then(setData)
-      .catch(() => setData([]))
-      .finally(() => setLoading(false));
-  }, [siteId, tahun]);
+    if (!siteId || !bulan || !tahun) return;
+    let cancelled = false;
+
+    Promise.resolve()
+      .then(() => {
+        if (!cancelled) setLoading(true);
+        return fetchTrend(siteId, tahun, bulan);
+      })
+      .then((trendData) => {
+        if (!cancelled) setData(trendData);
+      })
+      .catch(() => {
+        if (!cancelled) setData([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [siteId, bulan, tahun]);
 
   const chartData = useMemo(() =>
-    data.map(d => ({
-      name: `${MONTH_NAMES[(d.bulan || 1) - 1]}`,
-      value: d.avg_availability != null ? +Number(d.avg_availability).toFixed(2) : 0,
-      raw: d.avg_availability,
-    })),
+    [...data]
+      .sort((a, b) => (Number(a.tahun) - Number(b.tahun)) || (Number(a.bulan) - Number(b.bulan)))
+      .map(d => ({
+        name: `${MONTH_NAMES[(d.bulan || 1) - 1]}`,
+        tooltipLabel: `${MONTH_NAMES[(d.bulan || 1) - 1]} ${d.tahun}`,
+        month: Number(d.bulan),
+        year: Number(d.tahun),
+        value: d.avg_availability != null ? +Number(d.avg_availability).toFixed(2) : 0,
+        raw: d.avg_availability,
+      })),
   [data]);
 
   if (!siteId) {
@@ -71,7 +92,7 @@ export default function AvailabilityChart({ siteId, tahun }) {
         <p className="text-[11px] text-[var(--text-muted)] text-center py-6">Tidak ada data trend</p>
       ) : (
         <ResponsiveContainer width="100%" height={150}>
-          <BarChart data={chartData} margin={{ top: 5, right: 5, left: -25, bottom: 5 }}>
+          <BarChart data={chartData} margin={{ top: 5, right: 12, left: -22, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
             <XAxis
               dataKey="name"
@@ -81,12 +102,18 @@ export default function AvailabilityChart({ siteId, tahun }) {
             />
             <YAxis
               tick={{ fontSize: 9, fill: '#64748B' }}
-              domain={[90, 100]}
+              domain={[(dataMin) => Math.min(90, Math.max(0, Math.floor(dataMin) - 2)), 100]}
               unit="%"
               axisLine={false}
               tickLine={false}
             />
-            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
+            <Tooltip
+              content={<CustomTooltip />}
+              allowEscapeViewBox={{ x: true, y: true }}
+              wrapperStyle={{ outline: 'none', zIndex: 20 }}
+              offset={12}
+              cursor={{ fill: 'rgba(255,255,255,0.03)' }}
+            />
             <ReferenceLine y={99.5} stroke="rgba(16, 185, 129, 0.3)" strokeDasharray="3 3" />
             <ReferenceLine y={95} stroke="rgba(245, 158, 11, 0.3)" strokeDasharray="3 3" />
             <Bar dataKey="value" radius={[3, 3, 0, 0]} maxBarSize={24}>

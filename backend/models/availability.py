@@ -11,9 +11,18 @@ class AvailabilitySummary(BaseModel):
     total_site_master: int = 0
     avg_availability: Optional[float] = None
     total_outage_menit: Optional[float] = None
+    total_cell: int = 0
     site_excellent: int = 0
     site_degraded: int = 0
     site_critical: int = 0
+
+
+class LatestPeriod(BaseModel):
+    """Most recent availability period present in the database."""
+    bulan: int
+    tahun: int
+    row_count: int = 0
+    site_count: int = 0
 
 
 class AvailabilityTrendItem(BaseModel):
@@ -40,6 +49,7 @@ class WorstSite(BaseModel):
     site_class: Optional[str] = None
     avg_availability: Optional[float] = None
     total_outage_menit: Optional[float] = None
+    jumlah_cell: Optional[int] = None
 
 
 class SiteAvailabilityDetail(BaseModel):

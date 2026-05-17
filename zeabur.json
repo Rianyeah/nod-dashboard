@@ -1,32 +1,46 @@
 {
   "$schema": "https://schema.zeabur.app/template.json",
-  "name": "NOD Dashboard",
-  "description": "Network Operation Dashboard — Jawa Timur Availability Monitoring",
-  "services": [
-    {
-      "name": "nod-dashboard",
-      "icon": "https://raw.githubusercontent.com/Rianyeah/nod-dashboard/main/frontend/public/favicon.svg",
-      "template": "PREBUILT",
-      "source": {
-        "image": "ghcr.io/rianyeah/nod-dashboard:latest"
-      },
-      "ports": [8000],
-      "env": {
-        "DATABASE_URL": {
-          "description": "PostgreSQL connection string (NeonDB)",
-          "required": true
-        },
-        "VITE_MAPBOX_TOKEN": {
-          "description": "Mapbox access token for map tiles",
-          "required": true
-        },
-        "VITE_API_BASE_URL": {
-          "default": "/api/v1"
-        },
-        "APP_ENV": {
-          "default": "production"
+  "apiVersion": "zeabur.com/v1",
+  "kind": "Template",
+  "metadata": {
+    "name": "NOD Dashboard"
+  },
+  "spec": {
+    "description": "Network Operation Dashboard — Jawa Timur Availability Monitoring",
+    "services": [
+      {
+        "name": "nod-dashboard",
+        "icon": "https://raw.githubusercontent.com/Rianyeah/nod-dashboard/main/frontend/public/favicon.svg",
+        "template": "PREBUILT",
+        "spec": {
+          "source": {
+            "image": "ghcr.io/rianyeah/nod-dashboard:latest"
+          },
+          "ports": [
+            {
+              "id": "web",
+              "port": 8000,
+              "type": "HTTP"
+            }
+          ],
+          "env": {
+            "DATABASE_URL": {
+              "description": "PostgreSQL connection string (NeonDB)",
+              "default": ""
+            },
+            "VITE_MAPBOX_TOKEN": {
+              "description": "Mapbox access token for map tiles",
+              "default": ""
+            },
+            "VITE_API_BASE_URL": {
+              "default": "/api/v1"
+            },
+            "APP_ENV": {
+              "default": "production"
+            }
+          }
         }
       }
-    }
-  ]
+    ]
+  }
 }

@@ -43,6 +43,8 @@ async def get_map_sites(
                 type_site=row.get("Type Site"),
                 avg_availability=float(row["avg_availability"]) if row.get("avg_availability") is not None else None,
                 total_outage_menit=float(row["total_outage_menit"]) if row.get("total_outage_menit") is not None else None,
+                jumlah_cell=int(row["jumlah_cell"]) if row.get("jumlah_cell") is not None else None,
+                rca_dominan=row.get("rca_dominan"),
             ))
         except (ValueError, TypeError):
             # Skip rows with invalid data

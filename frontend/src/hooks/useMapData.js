@@ -10,7 +10,11 @@ export function useMapData(bulan, tahun) {
   const [error, setError] = useState(null);
 
   const loadData = useCallback(async () => {
-    if (!bulan || !tahun) return;
+    if (!bulan || !tahun) {
+      setSites([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {

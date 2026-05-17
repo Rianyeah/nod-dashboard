@@ -19,6 +19,8 @@ class SiteMapFeature(BaseModel):
     type_site: Optional[str] = None
     avg_availability: Optional[float] = None
     total_outage_menit: Optional[float] = None
+    jumlah_cell: Optional[int] = None
+    rca_dominan: Optional[str] = None
 
 
 class SiteListItem(BaseModel):
@@ -33,6 +35,8 @@ class SiteListItem(BaseModel):
     type_site: Optional[str] = None
     avg_availability: Optional[float] = None
     total_outage_menit: Optional[float] = None
+    jumlah_cell: Optional[int] = None
+    rca_dominan: Optional[str] = None
 
 
 class SiteSearchResult(BaseModel):
@@ -112,6 +116,8 @@ class SiteDetail(BaseModel):
     avg_availability: Optional[float] = None
     total_outage_menit: Optional[float] = None
     jumlah_hari_data: Optional[int] = None
+    jumlah_cell: Optional[int] = None
+    rca_dominan: Optional[str] = None
 
 
 class SiteFilterOptions(BaseModel):

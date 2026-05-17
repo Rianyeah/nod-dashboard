@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Radio, Activity, AlertTriangle, TrendingUp, TrendingDown, Zap } from 'lucide-react';
+import { Radio, Activity, TrendingUp, TrendingDown, Zap, Signal } from 'lucide-react';
 import { fetchSummary } from '../services/api';
 
 export default function SummaryCards({ bulan, tahun }) {
@@ -7,19 +7,35 @@ export default function SummaryCards({ bulan, tahun }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!bulan || !tahun) return;
-    setLoading(true);
-    fetchSummary(bulan, tahun)
-      .then(setData)
+    if (!bulan || !tahun) {
+      return;
+    }
+
+    let cancelled = false;
+
+    Promise.resolve()
+      .then(() => {
+        if (!cancelled) setLoading(true);
+        return fetchSummary(bulan, tahun);
+      })
+      .then((summary) => {
+        if (!cancelled) setData(summary);
+      })
       .catch(console.error)
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [bulan, tahun]);
 
   if (loading) {
     return (
-      <div className="space-y-2.5">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="skeleton h-[76px]" />
+      <div className="flex flex-col gap-2">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="skeleton h-[64px]" />
         ))}
       </div>
     );
@@ -32,16 +48,16 @@ export default function SummaryCards({ bulan, tahun }) {
   const cards = [
     {
       title: 'Total Sites',
-      value: data?.total_site_master?.toLocaleString() ?? '—',
-      subtitle: `${data?.total_site_dengan_data ?? 0} dengan data`,
+      value: data?.total_site_dengan_data?.toLocaleString() ?? '-',
+      subtitle: 'site dengan data bulan ini',
       icon: Radio,
       accent: 'var(--primary)',
       glow: 'rgba(59, 130, 246, 0.15)',
     },
     {
       title: 'Avg Availability',
-      value: avail != null ? `${Number(avail).toFixed(2)}%` : '—',
-      subtitle: `${data?.site_excellent ?? 0} exc · ${data?.site_degraded ?? 0} deg · ${data?.site_critical ?? 0} crit`,
+      value: avail != null ? `${Number(avail).toFixed(2)}%` : '-',
+      subtitle: '',
       icon: isExcellent ? TrendingUp : isDegraded ? Activity : TrendingDown,
       accent: isExcellent ? 'var(--success)' : isDegraded ? 'var(--warning)' : 'var(--danger)',
       glow: isExcellent ? 'rgba(16, 185, 129, 0.15)' : isDegraded ? 'rgba(245, 158, 11, 0.15)' : 'rgba(239, 68, 68, 0.15)',
@@ -50,7 +66,7 @@ export default function SummaryCards({ bulan, tahun }) {
       title: 'Total Outage',
       value: data?.total_outage_menit != null
         ? `${(data.total_outage_menit / 60).toFixed(0)}h`
-        : '—',
+        : '-',
       subtitle: data?.total_outage_menit
         ? `${Math.round(data.total_outage_menit).toLocaleString()} menit`
         : '',
@@ -58,28 +74,36 @@ export default function SummaryCards({ bulan, tahun }) {
       accent: 'var(--danger)',
       glow: 'rgba(239, 68, 68, 0.12)',
     },
+    {
+      title: 'Total Cell',
+      value: data?.total_cell?.toLocaleString() ?? '-',
+      subtitle: 'cell dengan data',
+      icon: Signal,
+      accent: 'var(--primary-light)',
+      glow: 'rgba(96, 165, 250, 0.14)',
+    },
   ];
 
   return (
-    <div className="space-y-2.5">
+    <div className="flex flex-col gap-2">
       {cards.map((card, i) => (
         <div
           key={card.title}
-          className="glass-card p-3.5 animate-fade-in cursor-default group"
+          className="glass-card p-3 animate-fade-in cursor-default group"
           style={{ animationDelay: `${i * 80}ms` }}
         >
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             <div
-              className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-all duration-300 group-hover:scale-105"
+              className="size-8 rounded-lg flex items-center justify-center shrink-0 transition-all duration-300 group-hover:scale-105"
               style={{ backgroundColor: card.glow, boxShadow: `0 0 12px ${card.glow}` }}
             >
-              <card.icon className="w-4.5 h-4.5" style={{ color: card.accent }} />
+              <card.icon className="size-4" style={{ color: card.accent }} />
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-widest">
                 {card.title}
               </p>
-              <p className="text-lg font-bold font-mono tracking-tight" style={{ color: card.accent }}>
+              <p className="text-base font-bold font-mono tracking-tight" style={{ color: card.accent }}>
                 {card.value}
               </p>
               {card.subtitle && (

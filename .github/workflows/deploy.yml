@@ -11,13 +11,13 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Deploy Backend
-        uses: zeabur/action@main
+        uses: zeabur/action@v0.0.15
         with:
           service-name: nod-backend
           token: ${{ secrets.ZEABUR_TOKEN }}
 
       - name: Deploy Frontend
-        uses: zeabur/action@main
+        uses: zeabur/action@v0.0.15
         with:
           service-name: nod-frontend
           token: ${{ secrets.ZEABUR_TOKEN }}

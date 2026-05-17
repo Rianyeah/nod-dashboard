@@ -13,6 +13,7 @@ from sqlalchemy import text
 from database import get_session
 from queries.sql_queries import (
     SUMMARY_CARD_QUERY,
+    LATEST_PERIOD_QUERY,
     AVAILABILITY_BY_KABUPATEN_QUERY,
     SITE_AVAILABILITY_QUERY,
     TREND_AVAILABILITY_QUERY,
@@ -20,6 +21,7 @@ from queries.sql_queries import (
 )
 from models.availability import (
     AvailabilitySummary,
+    LatestPeriod,
     AvailabilityByKabupaten,
     SiteAvailabilityDetail,
     AvailabilityTrendItem,
@@ -29,16 +31,46 @@ from models.availability import (
 router = APIRouter(prefix="/availability", tags=["Availability"])
 
 
+@router.get("/latest-period", response_model=LatestPeriod)
+async def get_latest_period(
+    session: AsyncSession = Depends(get_session),
+):
+    """Get the newest month/year with availability data."""
+    result = await session.execute(text(LATEST_PERIOD_QUERY))
+    row = result.mappings().first()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="No availability period found")
+
+    return LatestPeriod(
+        bulan=int(row["bulan"]),
+        tahun=int(row["tahun"]),
+        row_count=int(row.get("row_count") or 0),
+        site_count=int(row.get("site_count") or 0),
+    )
+
+
 @router.get("/summary", response_model=AvailabilitySummary)
 async def get_summary(
     bulan: int = Query(..., ge=1, le=12),
     tahun: int = Query(..., ge=2020),
+    kabupaten: str = Query(None),
+    cluster: str = Query(None),
+    status: str = Query(None),
+    kelas: str = Query(None),
+    nop: str = Query(None),
     session: AsyncSession = Depends(get_session),
 ):
     """Summary card: total sites, avg availability, total outage."""
+    from routers.sites import _build_filters
+    filters, filter_params = _build_filters(kabupaten, cluster, status, kelas, nop)
+
+    query = SUMMARY_CARD_QUERY.format(filters=filters)
+    params = {"bulan": bulan, "tahun": tahun, **filter_params}
+
     result = await session.execute(
-        text(SUMMARY_CARD_QUERY),
-        {"bulan": bulan, "tahun": tahun},
+        text(query),
+        params,
     )
     row = result.mappings().first()
     if not row:
@@ -49,6 +81,7 @@ async def get_summary(
         total_site_master=int(row.get("total_site_master") or 0),
         avg_availability=float(row["avg_availability"]) if row.get("avg_availability") is not None else None,
         total_outage_menit=float(row["total_outage_menit"]) if row.get("total_outage_menit") is not None else None,
+        total_cell=int(row.get("total_cell") or 0),
         site_excellent=int(row.get("site_excellent") or 0),
         site_degraded=int(row.get("site_degraded") or 0),
         site_critical=int(row.get("site_critical") or 0),
@@ -114,12 +147,13 @@ async def get_site_availability(
 async def get_trend(
     site_id: str,
     tahun: int = Query(..., ge=2020),
+    bulan: int = Query(12, ge=1, le=12),
     session: AsyncSession = Depends(get_session),
 ):
     """12-month availability trend for a site."""
     result = await session.execute(
         text(TREND_AVAILABILITY_QUERY),
-        {"site_id": site_id, "tahun": tahun, "tahun_prev": tahun - 1},
+        {"site_id": site_id, "tahun": tahun, "bulan": bulan},
     )
     rows = result.mappings().all()
 
@@ -156,6 +190,7 @@ async def get_worst_sites(
             site_class=row.get("Site Class"),
             avg_availability=float(row["avg_availability"]) if row.get("avg_availability") is not None else None,
             total_outage_menit=float(row["total_outage_menit"]) if row.get("total_outage_menit") is not None else None,
+            jumlah_cell=int(row["jumlah_cell"]) if row.get("jumlah_cell") is not None else None,
         )
         for row in rows
     ]

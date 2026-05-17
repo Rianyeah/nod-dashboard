@@ -54,6 +54,19 @@ def _build_filters(kabupaten=None, cluster=None, status=None, kelas=None, nop=No
     return filters, params
 
 
+def _build_search_filter(q=None):
+    """Build search filter across table-visible identity/location columns."""
+    if not q:
+        return "", {}
+
+    return (
+        ' AND (m."Siteid" ILIKE :q'
+        ' OR m."Site Name" ILIKE :q'
+        ' OR m."Kabupaten/KOTA" ILIKE :q)',
+        {"q": f"%{q}%"},
+    )
+
+
 @router.get("/filters/options", response_model=SiteFilterOptions)
 async def get_filter_options(
     session: AsyncSession = Depends(get_session),
@@ -143,6 +156,7 @@ async def list_sites(
     status: str = Query(None),
     kelas: str = Query(None),
     nop: str = Query(None),
+    q: str = Query(None, description="Search by Site ID, site name, or Kabupaten"),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     session: AsyncSession = Depends(get_session),
@@ -156,21 +170,23 @@ async def list_sites(
         tahun = now.year
 
     filters, filter_params = _build_filters(kabupaten, cluster, status, kelas, nop)
+    search_filter, search_params = _build_search_filter(q)
     offset = (page - 1) * limit
 
     # Get total count
-    count_query = SITES_COUNT_QUERY.format(filters=filters)
-    count_result = await session.execute(text(count_query), filter_params)
+    count_query = SITES_COUNT_QUERY.format(filters=filters, search_filter=search_filter)
+    count_result = await session.execute(text(count_query), {**filter_params, **search_params})
     total = count_result.scalar() or 0
 
     # Get paginated data
-    list_query = SITES_LIST_QUERY.format(filters=filters)
+    list_query = SITES_LIST_QUERY.format(filters=filters, search_filter=search_filter)
     params = {
         "bulan": bulan,
         "tahun": tahun,
         "limit_val": limit,
         "offset_val": offset,
         **filter_params,
+        **search_params,
     }
     result = await session.execute(text(list_query), params)
     rows = result.mappings().all()
@@ -187,6 +203,8 @@ async def list_sites(
             type_site=row.get("Type Site"),
             avg_availability=float(row["avg_availability"]) if row.get("avg_availability") is not None else None,
             total_outage_menit=float(row["total_outage_menit"]) if row.get("total_outage_menit") is not None else None,
+            jumlah_cell=int(row["jumlah_cell"]) if row.get("jumlah_cell") is not None else None,
+            rca_dominan=row.get("rca_dominan"),
         )
         for row in rows
     ]
