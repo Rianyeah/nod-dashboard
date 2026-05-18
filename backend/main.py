@@ -5,16 +5,16 @@ Network Operation Dashboard — Backend API.
 import os
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
-from fastapi import FastAPI, Depends, HTTPException, status, Header, Security
+from fastapi import FastAPI, Depends, HTTPException, status, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
+from security import verify_n8n_key
 
 load_dotenv()
 
 API_PREFIX = os.getenv("API_PREFIX", "/api/v1")
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
-N8N_API_KEY = os.getenv("N8N_API_KEY", "change-me-n8n-secret")
 DASHBOARD_USER = os.getenv("DASHBOARD_USER", "admin")
 DASHBOARD_PASS = os.getenv("DASHBOARD_PASS", "admin123")
 DASHBOARD_TOKEN = "nod-dashboard-token-123"  # Simple fixed token for valid session
@@ -84,12 +84,6 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Security(security))
         )
     return credentials.credentials
 
-def verify_n8n_key(x_n8n_api_key: str = Header(...)):
-    if x_n8n_api_key != N8N_API_KEY:
-        raise HTTPException(status_code=401, detail="Invalid N8N API Key")
-    return x_n8n_api_key
-
-
 # ---------- N8N Webhook ----------
 
 class N8NAlertPayload(BaseModel):
@@ -112,11 +106,13 @@ async def n8n_webhook(payload: N8NAlertPayload):
 from routers import map as map_router
 from routers import availability as availability_router
 from routers import sites as sites_router
+from routers import admin as admin_router
 
 # NOTE: Token auth removed for initial deployment — dashboard is internal
 app.include_router(map_router.router, prefix=API_PREFIX)
 app.include_router(availability_router.router, prefix=API_PREFIX)
 app.include_router(sites_router.router, prefix=API_PREFIX)
+app.include_router(admin_router.router, prefix=API_PREFIX)
 
 
 # ---------- Serve Frontend Static Files (Production) ----------
@@ -139,4 +135,3 @@ if FRONTEND_DIST.exists():
         if file_path.exists() and file_path.is_file():
             return FileResponse(str(file_path))
         return FileResponse(str(FRONTEND_DIST / "index.html"))
-

@@ -1,16 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { SlidersHorizontal, X } from 'lucide-react';
-import { fetchFilterOptions } from '../services/api';
 
-export default function FilterPanel({ filters, onFilterChange }) {
+export default function FilterPanel({ filters, onFilterChange, options = { kabupaten: [], cluster: [], kelas: [] } }) {
   const [open, setOpen] = useState(false);
-  const [options, setOptions] = useState({ kabupaten: [], cluster: [], kelas: [] });
-
-  useEffect(() => {
-    fetchFilterOptions()
-      .then(setOptions)
-      .catch(() => setOptions({ kabupaten: [], cluster: [], kelas: [] }));
-  }, []);
 
   const set = (key, val) => {
     const next = { ...filters };

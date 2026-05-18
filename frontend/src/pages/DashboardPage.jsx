@@ -7,7 +7,7 @@ import FilterPanel from '../components/FilterPanel';
 import SiteDetailModal from '../components/SiteDetailModal';
 import WorstSitesPanel from '../components/WorstSitesPanel';
 import { useMapData } from '../hooks/useMapData';
-import { fetchLatestPeriod, fetchSiteAvailability, fetchSiteDetail, fetchTrend } from '../services/api';
+import { fetchFilterOptions, fetchLatestPeriod, fetchSiteAvailability, fetchSiteDetail, fetchTrend } from '../services/api';
 import { ChevronDown, ChevronUp, GripHorizontal } from 'lucide-react';
 
 function normalizeSiteFocusData(site, siteId) {
@@ -46,6 +46,7 @@ export default function DashboardPage() {
   const [siteDetailDaily, setSiteDetailDaily] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [filters, setFilters] = useState({});
+  const [filterOptions, setFilterOptions] = useState({ kabupaten: [], cluster: [], kelas: [], nop: [] });
 
   // Resizable layout state
   const [sidebarWidth, setSidebarWidth] = useState(272);
@@ -60,6 +61,23 @@ export default function DashboardPage() {
     error: mapError,
     refetch: refetchMapData,
   } = useMapData(bulan, tahun, nop);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    fetchFilterOptions()
+      .then((options) => {
+        if (!cancelled) setFilterOptions(options);
+      })
+      .catch((err) => {
+        console.error('Failed to load filter options:', err);
+        if (!cancelled) setFilterOptions({ kabupaten: [], cluster: [], kelas: [], nop: [] });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -198,6 +216,7 @@ export default function DashboardPage() {
         bulan={bulan}
         tahun={tahun}
         nop={nop}
+        nopOptions={filterOptions.nop}
         onBulanChange={setBulan}
         onTahunChange={setTahun}
         onNopChange={setNop}
@@ -280,7 +299,7 @@ export default function DashboardPage() {
                   filters={tableFilters}
                   onSiteSelect={handleTableSiteSelect}
                   siteCount={null}
-                  toolbar={<FilterPanel filters={filters} onFilterChange={setFilters} />}
+                  toolbar={<FilterPanel filters={filters} onFilterChange={setFilters} options={filterOptions} />}
                 />
               </div>
             )}

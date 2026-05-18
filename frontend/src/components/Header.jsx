@@ -1,6 +1,4 @@
-import { useState, useEffect } from 'react';
 import { Globe, ChevronDown, MapPin } from 'lucide-react';
-import { fetchFilterOptions } from '../services/api';
 
 const BULAN_OPTIONS = [
   { value: 1, label: 'Januari' },
@@ -36,15 +34,7 @@ function SelectDropdown({ id, value, onChange, children, className = '' }) {
   );
 }
 
-export default function Header({ bulan, tahun, nop, onBulanChange, onTahunChange, onNopChange }) {
-  const [nopOptions, setNopOptions] = useState([]);
-
-  useEffect(() => {
-    fetchFilterOptions()
-      .then(opts => setNopOptions(opts.nop || []))
-      .catch(() => setNopOptions([]));
-  }, []);
-
+export default function Header({ bulan, tahun, nop, nopOptions = [], onBulanChange, onTahunChange, onNopChange }) {
   return (
     <header className="relative bg-gradient-to-r from-[#0A0E1A] via-[#111827] to-[#0A0E1A] border-b border-white/[0.06]">
       {/* Subtle grid overlay */}

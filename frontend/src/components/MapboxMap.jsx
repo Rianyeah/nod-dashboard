@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { getMarkerColor } from '../utils/mapColors';
@@ -256,9 +256,11 @@ export default function MapboxMap({
   const neighborMarkers = useRef([]);
   const sitesRef = useRef([]);
   const focusSiteRef = useRef(null);
+  const dailyAvailabilityCache = useRef(new Map());
   const cameraProgrammatic = useRef(false);
   const lastFocusedRequest = useRef(null);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const sitesGeoJson = useMemo(() => buildSitesGeoJson(sites), [sites]);
 
   useEffect(() => {
     sitesRef.current = sites || [];
@@ -497,8 +499,17 @@ export default function MapboxMap({
     });
 
     if (bulan && tahun) {
+      const cacheKey = `${p.site_id}-${tahun}-${bulan}`;
+      const cachedRows = dailyAvailabilityCache.current.get(cacheKey);
+      if (cachedRows) {
+        const chartEl = document.getElementById(chartId);
+        if (chartEl) chartEl.innerHTML = dailySparklineHtml(cachedRows, p.avg_availability);
+        return;
+      }
+
       fetchSiteAvailability(p.site_id, bulan, tahun)
         .then((rows) => {
+          dailyAvailabilityCache.current.set(cacheKey, rows);
           const chartEl = document.getElementById(chartId);
           if (chartEl) chartEl.innerHTML = dailySparklineHtml(rows, p.avg_availability);
         })
@@ -666,8 +677,8 @@ export default function MapboxMap({
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
     const source = map.current.getSource('sites-source');
-    if (source) source.setData(buildSitesGeoJson(sites));
-  }, [sites, mapLoaded]);
+    if (source) source.setData(sitesGeoJson);
+  }, [sitesGeoJson, mapLoaded]);
 
   return (
     <div className="relative w-full h-full rounded-xl overflow-hidden border border-white/[0.06]">

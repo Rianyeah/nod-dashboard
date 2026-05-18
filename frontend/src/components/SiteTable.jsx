@@ -4,6 +4,17 @@ import { fetchSites } from '../services/api';
 import StatusBadge from './ui/StatusBadge';
 import { formatAvailability, formatOutage } from '../utils/mapColors';
 
+function useDebouncedValue(value, delayMs = 300) {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => setDebouncedValue(value), delayMs);
+    return () => window.clearTimeout(timeoutId);
+  }, [value, delayMs]);
+
+  return debouncedValue;
+}
+
 export default function SiteTable({ bulan, tahun, filters, onSiteSelect, siteCount, toolbar }) {
   const [data, setData] = useState({ data: [], total: 0, page: 1, limit: 15, total_pages: 0 });
   const [loading, setLoading] = useState(true);
@@ -12,6 +23,7 @@ export default function SiteTable({ bulan, tahun, filters, onSiteSelect, siteCou
   const [sortCol, setSortCol] = useState(null);
   const [sortDir, setSortDir] = useState('asc');
   const searchTerm = search.trim();
+  const debouncedSearchTerm = useDebouncedValue(searchTerm, 300);
 
   useEffect(() => {
     let cancelled = false;
@@ -30,7 +42,7 @@ export default function SiteTable({ bulan, tahun, filters, onSiteSelect, siteCou
     Promise.resolve()
       .then(() => {
         if (!cancelled) setLoading(true);
-        return fetchSites({ bulan, tahun, page, limit: 15, q: searchTerm || undefined, ...filters });
+        return fetchSites({ bulan, tahun, page, limit: 15, q: debouncedSearchTerm || undefined, ...filters });
       })
       .then((nextData) => {
         if (!cancelled) setData(nextData);
@@ -43,7 +55,7 @@ export default function SiteTable({ bulan, tahun, filters, onSiteSelect, siteCou
     return () => {
       cancelled = true;
     };
-  }, [bulan, tahun, page, filters, searchTerm]);
+  }, [bulan, tahun, page, filters, debouncedSearchTerm]);
 
   const handleSearchChange = (e) => {
     setSearch(e.target.value);

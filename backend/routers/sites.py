@@ -175,7 +175,10 @@ async def list_sites(
 
     # Get total count
     count_query = SITES_COUNT_QUERY.format(filters=filters, search_filter=search_filter)
-    count_result = await session.execute(text(count_query), {**filter_params, **search_params})
+    count_result = await session.execute(
+        text(count_query),
+        {"bulan": bulan, "tahun": tahun, **filter_params, **search_params},
+    )
     total = count_result.scalar() or 0
 
     # Get paginated data

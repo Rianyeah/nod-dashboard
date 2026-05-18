@@ -11,7 +11,8 @@ class MapQueryContractTest(unittest.TestCase):
 
         normalized = " ".join(MAP_SITES_QUERY.split()).lower()
 
-        self.assertIn('join site_month agg on agg."site id" = m."siteid"', normalized)
+        self.assertIn('join site_month_metrics agg', normalized)
+        self.assertIn('agg.site_id = m."siteid"', normalized)
         self.assertNotIn('left join site_month agg on agg."site id" = m."siteid"', normalized)
         self.assertIn("{filters}", normalized)
         self.assertIn('nullif(nullif(m."latitude"', normalized)

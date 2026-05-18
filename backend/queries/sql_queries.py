@@ -97,7 +97,6 @@ LIMIT 1
 
 # Query 1 - Map Site Data (GeoJSON-ready)
 MAP_SITES_QUERY = f"""
-{SITE_MONTH_AGG_CTE}
 SELECT
     m."Siteid",
     m."Site Name",
@@ -114,7 +113,10 @@ SELECT
     agg.jumlah_cell,
     agg.rca_dominan
 FROM data_site_master m
-JOIN site_month agg ON agg."SITE ID" = m."Siteid"
+JOIN site_month_metrics agg
+  ON agg.site_id = m."Siteid"
+ AND agg.tahun = :tahun
+ AND agg.bulan = :bulan
 WHERE NULLIF(NULLIF(m."Latitude", '#N/A'), '') IS NOT NULL
   AND NULLIF(NULLIF(m."Longitude", '#N/A'), '') IS NOT NULL
 {{filters}}
@@ -122,9 +124,8 @@ WHERE NULLIF(NULLIF(m."Latitude", '#N/A'), '') IS NOT NULL
 
 # Query 2 - Summary Card Dashboard
 SUMMARY_CARD_QUERY = f"""
-{SITE_MONTH_AGG_CTE}
 SELECT
-    COUNT(DISTINCT agg."SITE ID") AS total_site_dengan_data,
+    COUNT(DISTINCT agg.site_id) AS total_site_dengan_data,
     COUNT(DISTINCT m."Siteid") AS total_site_master,
     ROUND(
         (
@@ -135,17 +136,17 @@ SELECT
     SUM(agg.total_outage_menit) AS total_outage_menit,
     SUM(agg.jumlah_cell) AS total_cell,
     COUNT(DISTINCT CASE
-        WHEN agg.avg_availability >= 99.5 THEN agg."SITE ID"
+        WHEN agg.avg_availability >= 99.5 THEN agg.site_id
     END) AS site_excellent,
     COUNT(DISTINCT CASE
-        WHEN agg.avg_availability >= 95 AND agg.avg_availability < 99.5 THEN agg."SITE ID"
+        WHEN agg.avg_availability >= 95 AND agg.avg_availability < 99.5 THEN agg.site_id
     END) AS site_degraded,
     COUNT(DISTINCT CASE
-        WHEN agg.avg_availability < 95 THEN agg."SITE ID"
+        WHEN agg.avg_availability < 95 THEN agg.site_id
     END) AS site_critical
-FROM data_site_master m
-LEFT JOIN site_month agg ON agg."SITE ID" = m."Siteid"
-WHERE 1=1
+FROM site_month_metrics agg
+JOIN data_site_master m ON m."Siteid" = agg.site_id
+WHERE agg.tahun = :tahun AND agg.bulan = :bulan
 {{filters}}
 """
 
@@ -285,24 +286,23 @@ ORDER BY a."Tgl" ASC
 
 # Query - Worst Sites
 WORST_SITES_QUERY = f"""
-{SITE_MONTH_AGG_CTE}
 SELECT
-    agg."SITE ID" AS site_id,
+    agg.site_id AS site_id,
     m."Site Name" AS site_name,
     m."Kabupaten/KOTA" AS kabupaten,
     m."Site Class",
     agg.avg_availability,
     agg.total_outage_menit,
     agg.jumlah_cell
-FROM site_month agg
-JOIN data_site_master m ON m."Siteid" = agg."SITE ID"
+FROM site_month_metrics agg
+JOIN data_site_master m ON m."Siteid" = agg.site_id
+WHERE agg.tahun = :tahun AND agg.bulan = :bulan
 ORDER BY avg_availability ASC
 LIMIT :limit_val
 """
 
 # Query - Sites list with filters
 SITES_LIST_QUERY = f"""
-{SITE_MONTH_AGG_CTE}
 SELECT
     m."Siteid",
     m."Site Name",
@@ -319,7 +319,10 @@ SELECT
     agg.jumlah_cell,
     agg.rca_dominan
 FROM data_site_master m
-LEFT JOIN site_month agg ON agg."SITE ID" = m."Siteid"
+JOIN site_month_metrics agg
+  ON agg.site_id = m."Siteid"
+ AND agg.tahun = :tahun
+ AND agg.bulan = :bulan
 WHERE 1=1
 {{filters}}
 {{search_filter}}
@@ -331,6 +334,10 @@ LIMIT :limit_val OFFSET :offset_val
 SITES_COUNT_QUERY = """
 SELECT COUNT(DISTINCT m."Siteid") AS total
 FROM data_site_master m
+JOIN site_month_metrics metrics
+  ON metrics.site_id = m."Siteid"
+ AND metrics.tahun = :tahun
+ AND metrics.bulan = :bulan
 WHERE 1=1
 {filters}
 {search_filter}
