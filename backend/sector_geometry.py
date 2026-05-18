@@ -32,6 +32,10 @@ def normalize_bearing(degrees: float) -> float:
     return degrees % 360.0
 
 
+def _normalize_longitude(degrees: float) -> float:
+    return ((degrees + 180.0) % 360.0) - 180.0
+
+
 def destination_point(
     longitude: float,
     latitude: float,
@@ -52,7 +56,7 @@ def destination_point(
         math.cos(angular_distance) - math.sin(lat1) * math.sin(lat2),
     )
 
-    return (math.degrees(lon2), math.degrees(lat2))
+    return (_normalize_longitude(math.degrees(lon2)), math.degrees(lat2))
 
 
 def _row_value(row: Mapping[str, Any], key: str) -> Any:

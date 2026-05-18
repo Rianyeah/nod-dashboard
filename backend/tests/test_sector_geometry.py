@@ -7,6 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from sector_geometry import (
     clamp_render_radius_m,
     destination_point,
+    normalize_bearing,
     sector_row_to_feature,
 )
 
@@ -24,6 +25,20 @@ class SectorGeometryTest(unittest.TestCase):
 
         self.assertAlmostEqual(longitude, 113.0, places=3)
         self.assertGreater(latitude, -7.0)
+
+    def test_destination_point_normalizes_antimeridian_longitude(self):
+        longitude, latitude = destination_point(179.999, 0.0, 90, 1000)
+
+        self.assertGreaterEqual(longitude, -180.0)
+        self.assertLessEqual(longitude, 180.0)
+        self.assertLess(longitude, -179.0)
+        self.assertAlmostEqual(latitude, 0.0, places=3)
+
+    def test_normalize_bearing_wraps_degrees_to_compass_range(self):
+        self.assertEqual(normalize_bearing(0), 0.0)
+        self.assertEqual(normalize_bearing(360), 0.0)
+        self.assertEqual(normalize_bearing(390), 30.0)
+        self.assertEqual(normalize_bearing(-30), 330.0)
 
     def test_sector_feature_is_closed_polygon_with_expected_properties(self):
         row = {
@@ -52,6 +67,17 @@ class SectorGeometryTest(unittest.TestCase):
         self.assertEqual(ring[0], [113.043529, -7.747718])
         self.assertEqual(ring[-1], [113.043529, -7.747718])
         self.assertEqual(len(ring), 7)
+        self.assertNotEqual(ring[1], ring[0])
+
+        middle_arc_point = ring[3]
+        expected_lng, expected_lat = destination_point(
+            113.043529,
+            -7.747718,
+            30,
+            120,
+        )
+        self.assertAlmostEqual(middle_arc_point[0], expected_lng, places=6)
+        self.assertAlmostEqual(middle_arc_point[1], expected_lat, places=6)
 
     def test_sector_feature_skips_invalid_coordinates_or_azimuth(self):
         valid = {
