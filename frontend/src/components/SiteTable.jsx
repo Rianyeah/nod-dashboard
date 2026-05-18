@@ -134,7 +134,7 @@ export default function SiteTable({ bulan, tahun, filters, onSiteSelect, siteCou
               sorted.map(site => (
                 <tr
                   key={site.site_id}
-                  onClick={() => onSiteSelect?.(site.site_id)}
+                  onClick={() => onSiteSelect?.(site)}
                   className="hover:bg-white/[0.03] cursor-pointer transition-colors group"
                 >
                   <td className="px-3 py-1.5 font-semibold font-mono text-[var(--primary-light)] group-hover:text-[var(--primary)]">{site.site_id}</td>

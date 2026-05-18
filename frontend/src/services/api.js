@@ -38,8 +38,8 @@ export function authLogout() {
 
 // ===== Map =====
 
-export async function fetchMapSites(bulan, tahun) {
-  const { data } = await api.get('/map/sites', { params: { bulan, tahun } });
+export async function fetchMapSites(bulan, tahun, nop) {
+  const { data } = await api.get('/map/sites', { params: { bulan, tahun, nop: nop || undefined } });
   return data;
 }
 

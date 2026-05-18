@@ -195,6 +195,8 @@ async def list_sites(
         SiteListItem(
             site_id=row["Siteid"],
             site_name=row.get("Site Name"),
+            latitude=float(row["latitude"]) if row.get("latitude") is not None else None,
+            longitude=float(row["longitude"]) if row.get("longitude") is not None else None,
             kabupaten=row.get("kabupaten"),
             site_class=row.get("Site Class"),
             status_site=row.get("Status Site"),

@@ -103,6 +103,36 @@ function siteToPopupData(site) {
   };
 }
 
+function buildSitesGeoJson(sites = []) {
+  return {
+    type: 'FeatureCollection',
+    features: sites
+      .map(site => ({
+        ...site,
+        latitude: Number(site.latitude),
+        longitude: Number(site.longitude),
+      }))
+      .filter(site => Number.isFinite(site.latitude) && Number.isFinite(site.longitude))
+      .map(site => ({
+        type: 'Feature',
+        properties: {
+          site_id: site.site_id,
+          site_name: site.site_name || '',
+          kabupaten: site.kabupaten || '',
+          site_class: site.site_class || '',
+          status_site: site.status_site || '',
+          avg_availability: site.avg_availability,
+          total_outage_menit: site.total_outage_menit,
+          jumlah_cell: site.jumlah_cell,
+          latitude: site.latitude,
+          longitude: site.longitude,
+          color: getMarkerColor(site.avg_availability, site.status_site),
+        },
+        geometry: { type: 'Point', coordinates: [site.longitude, site.latitude] },
+      })),
+  };
+}
+
 function formatAvailability(value) {
   return value == null ? 'N/A' : `${Number(value).toFixed(2)}%`;
 }
@@ -208,14 +238,31 @@ function createCircleFeature(center, radiusKm, steps = 96) {
   };
 }
 
-export default function MapboxMap({ sites, loading, onSiteClick, selectedSiteId, selectedSiteFocusKey = 0, bulan, tahun }) {
+export default function MapboxMap({
+  sites,
+  loading,
+  error,
+  onRetry,
+  onSiteClick,
+  selectedSiteId,
+  selectedSiteFocusKey = 0,
+  selectedSiteFallback,
+  bulan,
+  tahun,
+}) {
   const mapContainer = useRef(null);
   const map = useRef(null);
   const popup = useRef(null);
   const neighborMarkers = useRef([]);
+  const sitesRef = useRef([]);
+  const focusSiteRef = useRef(null);
   const cameraProgrammatic = useRef(false);
   const lastFocusedRequest = useRef(null);
   const [mapLoaded, setMapLoaded] = useState(false);
+
+  useEffect(() => {
+    sitesRef.current = sites || [];
+  }, [sites]);
 
   useEffect(() => {
     if (map.current || !mapContainer.current) return;
@@ -338,7 +385,8 @@ export default function MapboxMap({ sites, loading, onSiteClick, selectedSiteId,
   }, []);
 
   const renderNeighborMarkers = useCallback((siteData) => {
-    if (!map.current || !sites?.length) return;
+    const currentSites = sitesRef.current;
+    if (!map.current || !currentSites.length) return;
 
     clearNeighborMarkers();
 
@@ -347,7 +395,7 @@ export default function MapboxMap({ sites, loading, onSiteClick, selectedSiteId,
       longitude: Number(siteData.longitude),
     };
 
-    const neighbors = sites
+    const neighbors = currentSites
       .filter(site => site.site_id !== siteData.site_id && site.latitude && site.longitude)
       .map(site => ({
         ...site,
@@ -398,7 +446,7 @@ export default function MapboxMap({ sites, loading, onSiteClick, selectedSiteId,
         .setLngLat([site.longitude, site.latitude])
         .addTo(map.current);
     });
-  }, [sites, clearNeighborMarkers]);
+  }, [clearNeighborMarkers]);
 
   const openSitePopup = useCallback((siteData, coordinates) => {
     if (!map.current) return;
@@ -506,17 +554,24 @@ export default function MapboxMap({ sites, loading, onSiteClick, selectedSiteId,
   }, [mapLoaded]);
 
   useEffect(() => {
-    if (!map.current || !mapLoaded || !selectedSiteId || !sites?.length) return;
+    if (!map.current || !mapLoaded || !selectedSiteId) return;
 
     const requestKey = `${selectedSiteId}:${selectedSiteFocusKey}`;
     if (requestKey === lastFocusedRequest.current) return;
 
-    const site = sites.find(s => s.site_id === selectedSiteId);
-    if (!site?.longitude || !site?.latitude) return;
+    const site = sitesRef.current.find(s => s.site_id === selectedSiteId)
+      || (selectedSiteFallback?.site_id === selectedSiteId ? selectedSiteFallback : null);
+    const longitude = Number(site?.longitude);
+    const latitude = Number(site?.latitude);
+    if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) return;
 
     lastFocusedRequest.current = requestKey;
-    focusSite(siteToPopupData(site), [site.longitude, site.latitude]);
-  }, [selectedSiteId, selectedSiteFocusKey, sites, mapLoaded, focusSite]);
+    focusSite(siteToPopupData({ ...site, longitude, latitude }), [longitude, latitude]);
+  }, [selectedSiteId, selectedSiteFocusKey, selectedSiteFallback, mapLoaded, focusSite]);
+
+  useEffect(() => {
+    focusSiteRef.current = focusSite;
+  }, [focusSite]);
 
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
@@ -527,31 +582,9 @@ export default function MapboxMap({ sites, loading, onSiteClick, selectedSiteId,
     if (map.current.getSource(RADIUS_SOURCE_ID)) map.current.removeSource(RADIUS_SOURCE_ID);
     if (map.current.getSource('sites-source')) map.current.removeSource('sites-source');
 
-    const geojson = {
-      type: 'FeatureCollection',
-      features: (sites || [])
-        .filter(s => s.latitude && s.longitude && !isNaN(s.latitude) && !isNaN(s.longitude))
-        .map(site => ({
-          type: 'Feature',
-          properties: {
-            site_id: site.site_id,
-            site_name: site.site_name || '',
-            kabupaten: site.kabupaten || '',
-            site_class: site.site_class || '',
-            avg_availability: site.avg_availability,
-            total_outage_menit: site.total_outage_menit,
-            jumlah_cell: site.jumlah_cell,
-            latitude: site.latitude,
-            longitude: site.longitude,
-            color: getMarkerColor(site.avg_availability, site.status_site),
-          },
-          geometry: { type: 'Point', coordinates: [site.longitude, site.latitude] },
-        })),
-    };
-
     map.current.addSource('sites-source', {
       type: 'geojson',
-      data: geojson,
+      data: emptyFeatureCollection(),
       cluster: false,
     });
 
@@ -562,9 +595,9 @@ export default function MapboxMap({ sites, loading, onSiteClick, selectedSiteId,
       slot: 'top',
       paint: {
         'circle-color': ['get', 'color'],
-        'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 6, 10, 10, 14, 14],
-        'circle-opacity': 0.24,
-        'circle-blur': 0.65,
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 8, 10, 12, 14, 16],
+        'circle-opacity': 0.34,
+        'circle-blur': 0.55,
       },
     });
 
@@ -575,9 +608,9 @@ export default function MapboxMap({ sites, loading, onSiteClick, selectedSiteId,
       slot: 'top',
       paint: {
         'circle-color': ['get', 'color'],
-        'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 3.8, 10, 5.4, 14, 7],
-        'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 6, 1, 10, 1.5],
-        'circle-stroke-color': 'rgba(255,255,255,0.88)',
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 4.6, 10, 6.2, 14, 7.6],
+        'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 6, 1.3, 10, 1.8],
+        'circle-stroke-color': 'rgba(255,255,255,0.94)',
         'circle-opacity': 0.95,
       },
     });
@@ -605,7 +638,7 @@ export default function MapboxMap({ sites, loading, onSiteClick, selectedSiteId,
     const handleSiteClick = (e) => {
       const p = e.features[0].properties;
       const c = e.features[0].geometry.coordinates.slice();
-      focusSite(p, c, { notify: true });
+      focusSiteRef.current?.(p, c, { notify: true });
     };
 
     const setPointerCursor = () => { map.current.getCanvas().style.cursor = 'pointer'; };
@@ -628,7 +661,13 @@ export default function MapboxMap({ sites, loading, onSiteClick, selectedSiteId,
         map.current.off('mouseleave', layer, clearPointerCursor);
       });
     };
-  }, [sites, mapLoaded, focusSite]);
+  }, [mapLoaded]);
+
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+    const source = map.current.getSource('sites-source');
+    if (source) source.setData(buildSitesGeoJson(sites));
+  }, [sites, mapLoaded]);
 
   return (
     <div className="relative w-full h-full rounded-xl overflow-hidden border border-white/[0.06]">
@@ -638,6 +677,21 @@ export default function MapboxMap({ sites, loading, onSiteClick, selectedSiteId,
             <div className="w-8 h-8 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
             <span className="text-xs text-[var(--text-muted)]">Memuat peta...</span>
           </div>
+        </div>
+      )}
+      {error && (
+        <div className="absolute left-3 top-3 z-20 max-w-[280px] rounded-lg border border-amber-400/30 bg-[var(--bg-surface)]/90 p-3 shadow-xl backdrop-blur-md">
+          <div className="text-[10px] font-semibold uppercase tracking-widest text-amber-300">Marker peta gagal dimuat</div>
+          <div className="mt-1 text-[11px] leading-snug text-[var(--text-secondary)]">
+            Data tabel masih bisa dipakai. Klik ulang untuk memuat marker.
+          </div>
+          <button
+            type="button"
+            onClick={onRetry}
+            className="mt-2 rounded-md border border-amber-300/30 px-2.5 py-1 text-[10px] font-semibold text-amber-200 transition-colors hover:bg-amber-300/10"
+          >
+            Retry
+          </button>
         </div>
       )}
       <div ref={mapContainer} className="w-full h-full" />

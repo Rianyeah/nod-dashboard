@@ -10,12 +10,37 @@ import { useMapData } from '../hooks/useMapData';
 import { fetchLatestPeriod, fetchSiteAvailability, fetchSiteDetail, fetchTrend } from '../services/api';
 import { ChevronDown, ChevronUp, GripHorizontal } from 'lucide-react';
 
+function normalizeSiteFocusData(site, siteId) {
+  if (!site) return null;
+  return {
+    site_id: site.site_id || site.Siteid || siteId,
+    site_name: site.site_name || site['Site Name'] || '',
+    latitude: site.latitude ?? site.Latitude,
+    longitude: site.longitude ?? site.Longitude,
+    kabupaten: site.kabupaten || site['Kabupaten/KOTA'] || '',
+    site_class: site.site_class || site['Site Class'] || '',
+    status_site: site.status_site || site['Status Site'] || '',
+    nop: site.nop || site.NOP || '',
+    cluster: site.cluster || site['New Cluster'] || '',
+    type_site: site.type_site || site['Type Site'] || '',
+    avg_availability: site.avg_availability,
+    total_outage_menit: site.total_outage_menit,
+    jumlah_cell: site.jumlah_cell,
+    rca_dominan: site.rca_dominan,
+  };
+}
+
+function hasCoordinates(site) {
+  return Number.isFinite(Number(site?.latitude)) && Number.isFinite(Number(site?.longitude));
+}
+
 export default function DashboardPage() {
   const [bulan, setBulan] = useState(() => Number(import.meta.env.VITE_DEFAULT_BULAN) || null);
   const [tahun, setTahun] = useState(() => Number(import.meta.env.VITE_DEFAULT_TAHUN) || null);
   const [nop, setNop] = useState(null);
   const [selectedSiteId, setSelectedSiteId] = useState(null);
   const [selectedSiteFocusKey, setSelectedSiteFocusKey] = useState(0);
+  const [selectedSiteFallback, setSelectedSiteFallback] = useState(null);
   const [siteDetail, setSiteDetail] = useState(null);
   const [siteDetailTrend, setSiteDetailTrend] = useState([]);
   const [siteDetailDaily, setSiteDetailDaily] = useState([]);
@@ -29,7 +54,12 @@ export default function DashboardPage() {
   const [isDraggingSidebar, setIsDraggingSidebar] = useState(false);
   const [isDraggingTable, setIsDraggingTable] = useState(false);
 
-  const { sites: rawSites, loading: mapLoading } = useMapData(bulan, tahun);
+  const {
+    sites,
+    loading: mapLoading,
+    error: mapError,
+    refetch: refetchMapData,
+  } = useMapData(bulan, tahun, nop);
 
   useEffect(() => {
     let cancelled = false;
@@ -54,24 +84,37 @@ export default function DashboardPage() {
     };
   }, []);
 
-  // Filter sites by NOP if selected
-  const sites = useMemo(() => {
-    if (!nop) return rawSites;
-    return rawSites.filter(s => s.nop === nop);
-  }, [rawSites, nop]);
-
   const handleSiteClick = useCallback((siteId) => {
     setSelectedSiteId(siteId);
   }, []);
 
-  const handleTableSiteSelect = useCallback((siteId) => {
+  const handleTableSiteSelect = useCallback(async (siteOrId) => {
+    const siteId = typeof siteOrId === 'string' ? siteOrId : siteOrId?.site_id;
+    if (!siteId) return;
+
     setShowModal(false);
     setSiteDetail(null);
     setSiteDetailTrend([]);
     setSiteDetailDaily([]);
+
+    let focusFallback = normalizeSiteFocusData(
+      typeof siteOrId === 'string' ? null : siteOrId,
+      siteId,
+    );
+
+    if (!hasCoordinates(focusFallback)) {
+      try {
+        const detail = await fetchSiteDetail(siteId, bulan, tahun);
+        focusFallback = normalizeSiteFocusData(detail, siteId);
+      } catch (err) {
+        console.error('Failed to load site coordinate fallback:', err);
+      }
+    }
+
+    setSelectedSiteFallback(hasCoordinates(focusFallback) ? focusFallback : null);
     setSelectedSiteId(siteId);
     setSelectedSiteFocusKey(key => key + 1);
-  }, []);
+  }, [bulan, tahun]);
 
   const handleSiteSelect = useCallback(async (siteId) => {
     try {
@@ -188,6 +231,9 @@ export default function DashboardPage() {
               onSiteClick={handleSiteClick}
               selectedSiteId={selectedSiteId}
               selectedSiteFocusKey={selectedSiteFocusKey}
+              selectedSiteFallback={selectedSiteFallback}
+              error={mapError}
+              onRetry={refetchMapData}
               bulan={bulan}
               tahun={tahun}
             />
@@ -223,7 +269,7 @@ export default function DashboardPage() {
                 className="flex h-full items-center justify-between rounded-lg px-3 text-left text-[10px] uppercase tracking-widest text-[var(--text-secondary)] transition-colors hover:bg-white/[0.04]"
               >
                 <span className="font-semibold">Daftar Site</span>
-                <span className="font-mono text-[var(--text-muted)]">{sites.length.toLocaleString()} sites</span>
+                <span className="font-mono text-[var(--text-muted)]">{sites.length.toLocaleString()} markers</span>
               </button>
             ) : (
               <div className="flex-1 overflow-hidden">
@@ -233,7 +279,7 @@ export default function DashboardPage() {
                   tahun={tahun}
                   filters={tableFilters}
                   onSiteSelect={handleTableSiteSelect}
-                  siteCount={sites.length}
+                  siteCount={null}
                   toolbar={<FilterPanel filters={filters} onFilterChange={setFilters} />}
                 />
               </div>

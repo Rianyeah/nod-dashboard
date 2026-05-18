@@ -4,7 +4,7 @@ import { fetchMapSites } from '../services/api';
 /**
  * Custom hook for fetching map site data.
  */
-export function useMapData(bulan, tahun) {
+export function useMapData(bulan, tahun, nop) {
   const [sites, setSites] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -18,7 +18,7 @@ export function useMapData(bulan, tahun) {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchMapSites(bulan, tahun);
+      const data = await fetchMapSites(bulan, tahun, nop);
       setSites(data);
     } catch (err) {
       setError(err.message || 'Gagal memuat data peta');
@@ -26,10 +26,10 @@ export function useMapData(bulan, tahun) {
     } finally {
       setLoading(false);
     }
-  }, [bulan, tahun]);
+  }, [bulan, tahun, nop]);
 
   useEffect(() => {
-    loadData();
+    Promise.resolve().then(loadData);
   }, [loadData]);
 
   return { sites, loading, error, refetch: loadData };

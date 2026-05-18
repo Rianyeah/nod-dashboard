@@ -114,9 +114,10 @@ SELECT
     agg.jumlah_cell,
     agg.rca_dominan
 FROM data_site_master m
-LEFT JOIN site_month agg ON agg."SITE ID" = m."Siteid"
+JOIN site_month agg ON agg."SITE ID" = m."Siteid"
 WHERE NULLIF(NULLIF(m."Latitude", '#N/A'), '') IS NOT NULL
   AND NULLIF(NULLIF(m."Longitude", '#N/A'), '') IS NOT NULL
+{{filters}}
 """
 
 # Query 2 - Summary Card Dashboard
@@ -305,6 +306,8 @@ SITES_LIST_QUERY = f"""
 SELECT
     m."Siteid",
     m."Site Name",
+    NULLIF(NULLIF(m."Latitude", '#N/A'), '')::FLOAT AS latitude,
+    NULLIF(NULLIF(m."Longitude", '#N/A'), '')::FLOAT AS longitude,
     m."Kabupaten/KOTA" AS kabupaten,
     m."Site Class",
     m."Status Site",

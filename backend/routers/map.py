@@ -18,12 +18,19 @@ router = APIRouter(prefix="/map", tags=["Map"])
 async def get_map_sites(
     bulan: int = Query(..., ge=1, le=12, description="Bulan (1-12)"),
     tahun: int = Query(..., ge=2020, description="Tahun"),
+    nop: str = Query(None),
     session: AsyncSession = Depends(get_session),
 ):
     """Get all sites with avg availability for map markers."""
+    filters = ""
+    params = {"bulan": bulan, "tahun": tahun}
+    if nop:
+        filters = ' AND m."NOP" = :nop'
+        params["nop"] = nop
+
     result = await session.execute(
-        text(MAP_SITES_QUERY),
-        {"bulan": bulan, "tahun": tahun},
+        text(MAP_SITES_QUERY.format(filters=filters)),
+        params,
     )
     rows = result.mappings().all()
 

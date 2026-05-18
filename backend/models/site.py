@@ -27,6 +27,8 @@ class SiteListItem(BaseModel):
     """Site summary for table display."""
     site_id: str
     site_name: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     kabupaten: Optional[str] = None
     site_class: Optional[str] = None
     status_site: Optional[str] = None
