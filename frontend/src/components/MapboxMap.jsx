@@ -266,11 +266,15 @@ export default function MapboxMap({
   const cameraProgrammatic = useRef(false);
   const lastFocusedRequest = useRef(null);
   const allSectorsLoadedRef = useRef(false);
+  const currentNopRef = useRef(nop || null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [sectorGeoJson, setSectorGeoJson] = useState(EMPTY_GEOJSON);
   const [shouldLoadAllSectors, setShouldLoadAllSectors] = useState(false);
+  const [allSectorLoadNop, setAllSectorLoadNop] = useState(null);
   const [allSectorsLoaded, setAllSectorsLoaded] = useState(false);
   const sitesGeoJson = useMemo(() => buildSitesGeoJson(sites), [sites]);
+
+  currentNopRef.current = nop || null;
 
   useEffect(() => {
     sitesRef.current = sites || [];
@@ -279,6 +283,7 @@ export default function MapboxMap({
   useEffect(() => {
     setSectorGeoJson(EMPTY_GEOJSON);
     setShouldLoadAllSectors(false);
+    setAllSectorLoadNop(null);
     allSectorsLoadedRef.current = false;
     setAllSectorsLoaded(false);
   }, [nop]);
@@ -289,6 +294,7 @@ export default function MapboxMap({
     const triggerSectorLoad = () => {
       if (map.current?.getZoom() >= SECTOR_MIN_ZOOM) {
         setShouldLoadAllSectors(true);
+        setAllSectorLoadNop({ nop: nop || null });
       }
     };
 
@@ -298,15 +304,15 @@ export default function MapboxMap({
       map.current?.off('zoomend', triggerSectorLoad);
       map.current?.off('moveend', triggerSectorLoad);
     };
-  }, [mapLoaded]);
+  }, [mapLoaded, nop]);
 
   useEffect(() => {
-    if (!shouldLoadAllSectors) return;
+    if (!allSectorLoadNop) return;
     let cancelled = false;
 
-    fetchMapSectors({ nop })
+    fetchMapSectors({ nop: allSectorLoadNop.nop })
       .then((geoJson) => {
-        if (!cancelled) {
+        if (!cancelled && currentNopRef.current === allSectorLoadNop.nop) {
           setSectorGeoJson(geoJson || EMPTY_GEOJSON);
           allSectorsLoadedRef.current = true;
           setAllSectorsLoaded(true);
@@ -314,7 +320,7 @@ export default function MapboxMap({
       })
       .catch((err) => {
         console.error('Failed to load sector polygons:', err);
-        if (!cancelled) {
+        if (!cancelled && currentNopRef.current === allSectorLoadNop.nop) {
           allSectorsLoadedRef.current = false;
           setAllSectorsLoaded(false);
         }
@@ -323,7 +329,7 @@ export default function MapboxMap({
     return () => {
       cancelled = true;
     };
-  }, [nop, shouldLoadAllSectors]);
+  }, [allSectorLoadNop]);
 
   useEffect(() => {
     if (!selectedSiteId || allSectorsLoaded) return;
