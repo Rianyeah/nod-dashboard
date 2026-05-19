@@ -315,6 +315,7 @@ export default function MapboxMap({
     fetchMapSectors({ nop: allSectorLoadNop.nop })
       .then((geoJson) => {
         if (!cancelled && currentNopRef.current === allSectorLoadNop.nop) {
+          allSectorsLoadedRef.current = true;
           setSectorState({
             nop: allSectorLoadNop.nop,
             geoJson: geoJson || EMPTY_GEOJSON,
@@ -325,6 +326,7 @@ export default function MapboxMap({
       .catch((err) => {
         console.error('Failed to load sector polygons:', err);
         if (!cancelled && currentNopRef.current === allSectorLoadNop.nop) {
+          allSectorsLoadedRef.current = false;
           setSectorState({
             nop: allSectorLoadNop.nop,
             geoJson: EMPTY_GEOJSON,
@@ -344,21 +346,27 @@ export default function MapboxMap({
 
     fetchMapSectors({ nop: normalizedNop, siteId: selectedSiteId })
       .then((geoJson) => {
-        if (!cancelled && currentNopRef.current === normalizedNop && !allSectorsLoadedRef.current) {
-          setSectorState({
-            nop: normalizedNop,
-            geoJson: geoJson || EMPTY_GEOJSON,
-            allLoaded: false,
+        if (!cancelled && currentNopRef.current === normalizedNop) {
+          setSectorState(prev => {
+            if (prev.nop === normalizedNop && prev.allLoaded) return prev;
+            return {
+              nop: normalizedNop,
+              geoJson: geoJson || EMPTY_GEOJSON,
+              allLoaded: false,
+            };
           });
         }
       })
       .catch((err) => {
         console.error('Failed to load selected sector polygons:', err);
-        if (!cancelled && currentNopRef.current === normalizedNop && !allSectorsLoadedRef.current) {
-          setSectorState({
-            nop: normalizedNop,
-            geoJson: EMPTY_GEOJSON,
-            allLoaded: false,
+        if (!cancelled && currentNopRef.current === normalizedNop) {
+          setSectorState(prev => {
+            if (prev.nop === normalizedNop && prev.allLoaded) return prev;
+            return {
+              nop: normalizedNop,
+              geoJson: EMPTY_GEOJSON,
+              allLoaded: false,
+            };
           });
         }
       });

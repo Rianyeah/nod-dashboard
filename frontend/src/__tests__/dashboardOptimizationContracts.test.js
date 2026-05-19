@@ -79,5 +79,7 @@ describe('dashboard loading optimization contracts', () => {
     assert.match(map, /if\s*\(!allSectorLoadNop\)\s*return/);
     assert.match(map, /fetchMapSectors\(\{\s*nop:\s*allSectorLoadNop\.nop\s*\}\)/);
     assert.match(map, /setSectorState\(\{\s*nop:\s*allSectorLoadNop\.nop/);
+    assert.match(map, /allSectorsLoadedRef\.current\s*=\s*true/);
+    assert.match(map, /setSectorState\(prev\s*=>\s*\{[\s\S]*?prev\.nop\s*===\s*normalizedNop\s*&&\s*prev\.allLoaded/);
   });
 });
