@@ -50,4 +50,19 @@ describe('dashboard loading optimization contracts', () => {
     assert.match(map, /setFilter\('sector-selected-fill'/);
     assert.match(dashboard, /nop=\{nop\}/);
   });
+
+  it('lazy-loads all sector polygons only after zoom threshold or selected-site focus', () => {
+    const map = src('components', 'MapboxMap.jsx');
+
+    assert.doesNotMatch(
+      map,
+      /useEffect\(\(\)\s*=>\s*\{[\s\S]*?fetchMapSectors\(\{\s*nop\s*\}\)[\s\S]*?\},\s*\[\s*nop\s*\]\s*\)/,
+    );
+    assert.match(map, /const\s+\[shouldLoadAllSectors,\s*setShouldLoadAllSectors\]\s*=\s*useState\(false\)/);
+    assert.match(map, /getZoom\(\)\s*>=\s*SECTOR_MIN_ZOOM/);
+    assert.match(map, /map\.current\.on\('(?:zoomend|moveend)'/);
+    assert.match(map, /fetchMapSectors\(\{\s*nop\s*\}\)/);
+    assert.match(map, /fetchMapSectors\(\{\s*nop,\s*siteId:\s*selectedSiteId\s*\}\)/);
+    assert.match(map, /setSectorGeoJson\(EMPTY_GEOJSON\)/);
+  });
 });

@@ -265,8 +265,11 @@ export default function MapboxMap({
   const dailyAvailabilityCache = useRef(new Map());
   const cameraProgrammatic = useRef(false);
   const lastFocusedRequest = useRef(null);
+  const allSectorsLoadedRef = useRef(false);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [sectorGeoJson, setSectorGeoJson] = useState(EMPTY_GEOJSON);
+  const [shouldLoadAllSectors, setShouldLoadAllSectors] = useState(false);
+  const [allSectorsLoaded, setAllSectorsLoaded] = useState(false);
   const sitesGeoJson = useMemo(() => buildSitesGeoJson(sites), [sites]);
 
   useEffect(() => {
@@ -274,21 +277,75 @@ export default function MapboxMap({
   }, [sites]);
 
   useEffect(() => {
+    setSectorGeoJson(EMPTY_GEOJSON);
+    setShouldLoadAllSectors(false);
+    allSectorsLoadedRef.current = false;
+    setAllSectorsLoaded(false);
+  }, [nop]);
+
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+
+    const triggerSectorLoad = () => {
+      if (map.current?.getZoom() >= SECTOR_MIN_ZOOM) {
+        setShouldLoadAllSectors(true);
+      }
+    };
+
+    map.current.on('zoomend', triggerSectorLoad);
+    map.current.on('moveend', triggerSectorLoad);
+    return () => {
+      map.current?.off('zoomend', triggerSectorLoad);
+      map.current?.off('moveend', triggerSectorLoad);
+    };
+  }, [mapLoaded]);
+
+  useEffect(() => {
+    if (!shouldLoadAllSectors) return;
     let cancelled = false;
 
     fetchMapSectors({ nop })
       .then((geoJson) => {
-        if (!cancelled) setSectorGeoJson(geoJson || EMPTY_GEOJSON);
+        if (!cancelled) {
+          setSectorGeoJson(geoJson || EMPTY_GEOJSON);
+          allSectorsLoadedRef.current = true;
+          setAllSectorsLoaded(true);
+        }
       })
       .catch((err) => {
         console.error('Failed to load sector polygons:', err);
-        if (!cancelled) setSectorGeoJson(EMPTY_GEOJSON);
+        if (!cancelled) {
+          allSectorsLoadedRef.current = false;
+          setAllSectorsLoaded(false);
+        }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [nop]);
+  }, [nop, shouldLoadAllSectors]);
+
+  useEffect(() => {
+    if (!selectedSiteId || allSectorsLoaded) return;
+    let cancelled = false;
+
+    fetchMapSectors({ nop, siteId: selectedSiteId })
+      .then((geoJson) => {
+        if (!cancelled && !allSectorsLoadedRef.current) {
+          setSectorGeoJson(geoJson || EMPTY_GEOJSON);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to load selected sector polygons:', err);
+        if (!cancelled && !allSectorsLoadedRef.current) {
+          setSectorGeoJson(EMPTY_GEOJSON);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [nop, selectedSiteId, allSectorsLoaded]);
 
   useEffect(() => {
     if (map.current || !mapContainer.current) return;

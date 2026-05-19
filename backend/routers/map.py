@@ -11,6 +11,7 @@ from database import get_session
 from queries.sql_queries import MAP_SITES_QUERY, POPUP_DETAIL_QUERY, MAP_SECTORS_QUERY
 from models.site import SiteMapFeature, SiteDetail
 from sector_geometry import sector_row_to_feature
+from security import verify_dashboard_token
 
 router = APIRouter(prefix="/map", tags=["Map"])
 
@@ -61,7 +62,7 @@ async def get_map_sites(
     return sites
 
 
-@router.get("/sectors")
+@router.get("/sectors", dependencies=[Depends(verify_dashboard_token)])
 async def get_map_sectors(
     site_id: str = Query(None),
     nop: str = Query(None),

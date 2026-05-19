@@ -5,11 +5,10 @@ Network Operation Dashboard — Backend API.
 import os
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
-from fastapi import FastAPI, Depends, HTTPException, status, Security
+from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
-from security import verify_n8n_key
+from security import DASHBOARD_TOKEN, verify_n8n_key
 
 load_dotenv()
 
@@ -17,7 +16,6 @@ API_PREFIX = os.getenv("API_PREFIX", "/api/v1")
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
 DASHBOARD_USER = os.getenv("DASHBOARD_USER", "admin")
 DASHBOARD_PASS = os.getenv("DASHBOARD_PASS", "admin123")
-DASHBOARD_TOKEN = "nod-dashboard-token-123"  # Simple fixed token for valid session
 
 
 @asynccontextmanager
@@ -73,16 +71,6 @@ async def login(credentials: LoginRequest):
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Incorrect username or password",
     )
-
-security = HTTPBearer()
-
-def verify_token(credentials: HTTPAuthorizationCredentials = Security(security)):
-    if credentials.credentials != DASHBOARD_TOKEN:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication credentials",
-        )
-    return credentials.credentials
 
 # ---------- N8N Webhook ----------
 
