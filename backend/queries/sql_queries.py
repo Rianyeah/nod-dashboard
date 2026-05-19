@@ -122,6 +122,29 @@ WHERE NULLIF(NULLIF(m."Latitude", '#N/A'), '') IS NOT NULL
 {{filters}}
 """
 
+# Query - Sector antenna polygons
+MAP_SECTORS_QUERY = """
+SELECT
+    site_id,
+    cell_name,
+    sector_base,
+    band,
+    site_type,
+    latitude_fix,
+    longitude_fix,
+    azimuth,
+    beamwidth,
+    radius
+FROM ransys_gabungan
+WHERE latitude_fix IS NOT NULL
+  AND longitude_fix IS NOT NULL
+  AND azimuth IS NOT NULL
+  AND longitude_fix BETWEEN -180 AND 180
+  AND latitude_fix BETWEEN -90 AND 90
+{filters}
+ORDER BY site_id, sector_base, band, cell_name
+"""
+
 # Query 2 - Summary Card Dashboard
 SUMMARY_CARD_QUERY = f"""
 SELECT
