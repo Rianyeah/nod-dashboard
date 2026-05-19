@@ -58,12 +58,12 @@ describe('dashboard loading optimization contracts', () => {
       map,
       /useEffect\(\(\)\s*=>\s*\{[\s\S]*?fetchMapSectors\(\{\s*nop\s*\}\)[\s\S]*?\},\s*\[\s*nop\s*\]\s*\)/,
     );
-    assert.match(map, /const\s+\[shouldLoadAllSectors,\s*setShouldLoadAllSectors\]\s*=\s*useState\(false\)/);
+    assert.match(map, /const\s+\[sectorState,\s*setSectorState\]\s*=\s*useState\(\{/);
     assert.match(map, /getZoom\(\)\s*>=\s*SECTOR_MIN_ZOOM/);
     assert.match(map, /map\.current\.on\('(?:zoomend|moveend)'/);
     assert.match(map, /fetchMapSectors\(\{\s*nop:\s*allSectorLoadNop\.nop\s*\}\)/);
-    assert.match(map, /fetchMapSectors\(\{\s*nop,\s*siteId:\s*selectedSiteId\s*\}\)/);
-    assert.match(map, /setSectorGeoJson\(EMPTY_GEOJSON\)/);
+    assert.match(map, /fetchMapSectors\(\{\s*nop:\s*normalizedNop,\s*siteId:\s*selectedSiteId\s*\}\)/);
+    assert.match(map, /sectorState\.nop\s*===\s*normalizedNop\s*\?\s*sectorState\.geoJson\s*:\s*EMPTY_GEOJSON/);
   });
 
   it('scopes full-sector lazy loading to the NOP that crossed the zoom threshold', () => {
@@ -74,9 +74,10 @@ describe('dashboard loading optimization contracts', () => {
       /useEffect\(\(\)\s*=>\s*\{[\s\S]*?if\s*\(!shouldLoadAllSectors\)\s*return;[\s\S]*?fetchMapSectors\(\{\s*nop\s*\}\)[\s\S]*?\},\s*\[\s*nop,\s*shouldLoadAllSectors\s*\]\s*\)/,
     );
     assert.match(map, /const\s+\[allSectorLoadNop,\s*setAllSectorLoadNop\]\s*=\s*useState\(null\)/);
-    assert.match(map, /setAllSectorLoadNop\(null\)/);
-    assert.match(map, /setAllSectorLoadNop\(\{\s*nop:\s*nop\s*\|\|\s*null\s*\}\)/);
+    assert.match(map, /const\s+normalizedNop\s*=\s*nop\s*\|\|\s*null/);
+    assert.match(map, /setAllSectorLoadNop\(\{\s*nop:\s*normalizedNop\s*\}\)/);
     assert.match(map, /if\s*\(!allSectorLoadNop\)\s*return/);
     assert.match(map, /fetchMapSectors\(\{\s*nop:\s*allSectorLoadNop\.nop\s*\}\)/);
+    assert.match(map, /setSectorState\(\{\s*nop:\s*allSectorLoadNop\.nop/);
   });
 });

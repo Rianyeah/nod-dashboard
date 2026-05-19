@@ -268,33 +268,35 @@ export default function MapboxMap({
   const allSectorsLoadedRef = useRef(false);
   const currentNopRef = useRef(nop || null);
   const [mapLoaded, setMapLoaded] = useState(false);
-  const [sectorGeoJson, setSectorGeoJson] = useState(EMPTY_GEOJSON);
-  const [shouldLoadAllSectors, setShouldLoadAllSectors] = useState(false);
+  const [sectorState, setSectorState] = useState({
+    nop: nop || null,
+    geoJson: EMPTY_GEOJSON,
+    allLoaded: false,
+  });
   const [allSectorLoadNop, setAllSectorLoadNop] = useState(null);
-  const [allSectorsLoaded, setAllSectorsLoaded] = useState(false);
+  const normalizedNop = nop || null;
+  const sectorGeoJson = sectorState.nop === normalizedNop ? sectorState.geoJson : EMPTY_GEOJSON;
+  const allSectorsLoaded = sectorState.nop === normalizedNop && sectorState.allLoaded;
   const sitesGeoJson = useMemo(() => buildSitesGeoJson(sites), [sites]);
-
-  currentNopRef.current = nop || null;
 
   useEffect(() => {
     sitesRef.current = sites || [];
   }, [sites]);
 
   useEffect(() => {
-    setSectorGeoJson(EMPTY_GEOJSON);
-    setShouldLoadAllSectors(false);
-    setAllSectorLoadNop(null);
-    allSectorsLoadedRef.current = false;
-    setAllSectorsLoaded(false);
-  }, [nop]);
+    currentNopRef.current = normalizedNop;
+  }, [normalizedNop]);
+
+  useEffect(() => {
+    allSectorsLoadedRef.current = allSectorsLoaded;
+  }, [allSectorsLoaded]);
 
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
 
     const triggerSectorLoad = () => {
       if (map.current?.getZoom() >= SECTOR_MIN_ZOOM) {
-        setShouldLoadAllSectors(true);
-        setAllSectorLoadNop({ nop: nop || null });
+        setAllSectorLoadNop({ nop: normalizedNop });
       }
     };
 
@@ -304,7 +306,7 @@ export default function MapboxMap({
       map.current?.off('zoomend', triggerSectorLoad);
       map.current?.off('moveend', triggerSectorLoad);
     };
-  }, [mapLoaded, nop]);
+  }, [mapLoaded, normalizedNop]);
 
   useEffect(() => {
     if (!allSectorLoadNop) return;
@@ -313,16 +315,21 @@ export default function MapboxMap({
     fetchMapSectors({ nop: allSectorLoadNop.nop })
       .then((geoJson) => {
         if (!cancelled && currentNopRef.current === allSectorLoadNop.nop) {
-          setSectorGeoJson(geoJson || EMPTY_GEOJSON);
-          allSectorsLoadedRef.current = true;
-          setAllSectorsLoaded(true);
+          setSectorState({
+            nop: allSectorLoadNop.nop,
+            geoJson: geoJson || EMPTY_GEOJSON,
+            allLoaded: true,
+          });
         }
       })
       .catch((err) => {
         console.error('Failed to load sector polygons:', err);
         if (!cancelled && currentNopRef.current === allSectorLoadNop.nop) {
-          allSectorsLoadedRef.current = false;
-          setAllSectorsLoaded(false);
+          setSectorState({
+            nop: allSectorLoadNop.nop,
+            geoJson: EMPTY_GEOJSON,
+            allLoaded: false,
+          });
         }
       });
 
@@ -335,23 +342,31 @@ export default function MapboxMap({
     if (!selectedSiteId || allSectorsLoaded) return;
     let cancelled = false;
 
-    fetchMapSectors({ nop, siteId: selectedSiteId })
+    fetchMapSectors({ nop: normalizedNop, siteId: selectedSiteId })
       .then((geoJson) => {
-        if (!cancelled && !allSectorsLoadedRef.current) {
-          setSectorGeoJson(geoJson || EMPTY_GEOJSON);
+        if (!cancelled && currentNopRef.current === normalizedNop && !allSectorsLoadedRef.current) {
+          setSectorState({
+            nop: normalizedNop,
+            geoJson: geoJson || EMPTY_GEOJSON,
+            allLoaded: false,
+          });
         }
       })
       .catch((err) => {
         console.error('Failed to load selected sector polygons:', err);
-        if (!cancelled && !allSectorsLoadedRef.current) {
-          setSectorGeoJson(EMPTY_GEOJSON);
+        if (!cancelled && currentNopRef.current === normalizedNop && !allSectorsLoadedRef.current) {
+          setSectorState({
+            nop: normalizedNop,
+            geoJson: EMPTY_GEOJSON,
+            allLoaded: false,
+          });
         }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [nop, selectedSiteId, allSectorsLoaded]);
+  }, [normalizedNop, selectedSiteId, allSectorsLoaded]);
 
   useEffect(() => {
     if (map.current || !mapContainer.current) return;
