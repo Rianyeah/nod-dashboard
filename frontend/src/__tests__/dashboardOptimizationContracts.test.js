@@ -34,4 +34,20 @@ describe('dashboard loading optimization contracts', () => {
     assert.match(map, /dailyAvailabilityCache/);
     assert.match(map, /source\.setData\(sitesGeoJson\)/);
   });
+
+  it('renders sector antenna polygon layers from backend GeoJSON', () => {
+    const api = src('services', 'api.js');
+    const map = src('components', 'MapboxMap.jsx');
+    const dashboard = src('pages', 'DashboardPage.jsx');
+
+    assert.match(api, /fetchMapSectors/);
+    assert.match(api, /\/map\/sectors/);
+    assert.match(map, /SECTOR_SOURCE_ID/);
+    assert.match(map, /sector-fill/);
+    assert.match(map, /sector-selected-fill/);
+    assert.match(map, /minzoom:\s*12/);
+    assert.match(map, /selectedSiteId/);
+    assert.match(map, /setFilter\('sector-selected-fill'/);
+    assert.match(dashboard, /nop=\{nop\}/);
+  });
 });

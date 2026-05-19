@@ -255,6 +255,7 @@ export default function DashboardPage() {
               onRetry={refetchMapData}
               bulan={bulan}
               tahun={tahun}
+              nop={nop}
             />
           </div>
 

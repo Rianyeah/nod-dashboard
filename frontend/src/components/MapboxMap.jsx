@@ -2,13 +2,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { getMarkerColor } from '../utils/mapColors';
-import { fetchSiteAvailability } from '../services/api';
+import { fetchMapSectors, fetchSiteAvailability } from '../services/api';
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN;
 
 const SITE_LAYER_IDS = ['site-pin-label', 'site-pin', 'site-pin-halo'];
 const RADIUS_SOURCE_ID = 'site-radius-source';
 const RADIUS_LAYER_IDS = ['site-radius-fill', 'site-radius-glow', 'site-radius-outline'];
+const SECTOR_SOURCE_ID = 'sector-source';
+const SECTOR_LAYER_IDS = ['sector-selected-outline', 'sector-selected-fill', 'sector-outline', 'sector-fill'];
+const SECTOR_MIN_ZOOM = 12;
 const LEGACY_LAYER_IDS = ['clusters', 'cluster-count', 'unclustered-point', 'unclustered-label', 'unclustered-glow'];
 const DEFAULT_PITCH = 2;
 const FOCUSED_PITCH = 55;
@@ -23,6 +26,8 @@ function emptyFeatureCollection() {
     features: [],
   };
 }
+
+const EMPTY_GEOJSON = emptyFeatureCollection();
 
 function applyDuskScene(mapInstance) {
   if (typeof mapInstance.setConfigProperty === 'function') {
@@ -249,6 +254,7 @@ export default function MapboxMap({
   selectedSiteFallback,
   bulan,
   tahun,
+  nop,
 }) {
   const mapContainer = useRef(null);
   const map = useRef(null);
@@ -260,11 +266,29 @@ export default function MapboxMap({
   const cameraProgrammatic = useRef(false);
   const lastFocusedRequest = useRef(null);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [sectorGeoJson, setSectorGeoJson] = useState(EMPTY_GEOJSON);
   const sitesGeoJson = useMemo(() => buildSitesGeoJson(sites), [sites]);
 
   useEffect(() => {
     sitesRef.current = sites || [];
   }, [sites]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    fetchMapSectors({ nop })
+      .then((geoJson) => {
+        if (!cancelled) setSectorGeoJson(geoJson || EMPTY_GEOJSON);
+      })
+      .catch((err) => {
+        console.error('Failed to load sector polygons:', err);
+        if (!cancelled) setSectorGeoJson(EMPTY_GEOJSON);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [nop]);
 
   useEffect(() => {
     if (map.current || !mapContainer.current) return;
@@ -587,16 +611,88 @@ export default function MapboxMap({
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
 
-    [...SITE_LAYER_IDS, ...RADIUS_LAYER_IDS, ...LEGACY_LAYER_IDS].forEach(id => {
+    [...SITE_LAYER_IDS, ...RADIUS_LAYER_IDS, ...SECTOR_LAYER_IDS, ...LEGACY_LAYER_IDS].forEach(id => {
       if (map.current.getLayer(id)) map.current.removeLayer(id);
     });
     if (map.current.getSource(RADIUS_SOURCE_ID)) map.current.removeSource(RADIUS_SOURCE_ID);
+    if (map.current.getSource(SECTOR_SOURCE_ID)) map.current.removeSource(SECTOR_SOURCE_ID);
     if (map.current.getSource('sites-source')) map.current.removeSource('sites-source');
 
     map.current.addSource('sites-source', {
       type: 'geojson',
       data: emptyFeatureCollection(),
       cluster: false,
+    });
+
+    map.current.addSource(SECTOR_SOURCE_ID, {
+      type: 'geojson',
+      data: EMPTY_GEOJSON,
+    });
+
+    map.current.addLayer({
+      id: 'sector-fill',
+      type: 'fill',
+      source: SECTOR_SOURCE_ID,
+      minzoom: SECTOR_MIN_ZOOM,
+      slot: 'top',
+      paint: {
+        'fill-color': [
+          'match',
+          ['get', 'band'],
+          'L900', '#F59E0B',
+          'L1800', '#3B82F6',
+          'L2100', '#22D3EE',
+          'L2300', '#A78BFA',
+          '#64748B',
+        ],
+        'fill-opacity': 0.2,
+      },
+    });
+
+    map.current.addLayer({
+      id: 'sector-outline',
+      type: 'line',
+      source: SECTOR_SOURCE_ID,
+      minzoom: SECTOR_MIN_ZOOM,
+      slot: 'top',
+      paint: {
+        'line-color': [
+          'match',
+          ['get', 'band'],
+          'L900', '#FBBF24',
+          'L1800', '#60A5FA',
+          'L2100', '#67E8F9',
+          'L2300', '#C4B5FD',
+          '#94A3B8',
+        ],
+        'line-width': 1.2,
+        'line-opacity': 0.72,
+      },
+    });
+
+    map.current.addLayer({
+      id: 'sector-selected-fill',
+      type: 'fill',
+      source: SECTOR_SOURCE_ID,
+      slot: 'top',
+      filter: ['==', ['get', 'site_id'], ''],
+      paint: {
+        'fill-color': '#F59E0B',
+        'fill-opacity': 0.42,
+      },
+    });
+
+    map.current.addLayer({
+      id: 'sector-selected-outline',
+      type: 'line',
+      source: SECTOR_SOURCE_ID,
+      slot: 'top',
+      filter: ['==', ['get', 'site_id'], ''],
+      paint: {
+        'line-color': '#FDE68A',
+        'line-width': 2.6,
+        'line-opacity': 0.95,
+      },
     });
 
     map.current.addLayer({
@@ -679,6 +775,23 @@ export default function MapboxMap({
     const source = map.current.getSource('sites-source');
     if (source) source.setData(sitesGeoJson);
   }, [sitesGeoJson, mapLoaded]);
+
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+    const source = map.current.getSource(SECTOR_SOURCE_ID);
+    if (source) source.setData(sectorGeoJson);
+  }, [sectorGeoJson, mapLoaded]);
+
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+    const filter = ['==', ['get', 'site_id'], selectedSiteId || ''];
+    if (map.current.getLayer('sector-selected-fill')) {
+      map.current.setFilter('sector-selected-fill', filter);
+    }
+    if (map.current.getLayer('sector-selected-outline')) {
+      map.current.setFilter('sector-selected-outline', filter);
+    }
+  }, [selectedSiteId, mapLoaded]);
 
   return (
     <div className="relative w-full h-full rounded-xl overflow-hidden border border-white/[0.06]">

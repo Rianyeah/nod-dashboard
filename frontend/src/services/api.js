@@ -46,6 +46,17 @@ export async function fetchMapSites(bulan, tahun, nop) {
   return data;
 }
 
+export async function fetchMapSectors({ nop, siteId } = {}) {
+  const { data } = await api.get('/map/sectors', {
+    params: {
+      nop: nop || undefined,
+      site_id: siteId || undefined,
+    },
+    timeout: 60000,
+  });
+  return data;
+}
+
 export async function fetchSitePopup(siteId, bulan, tahun) {
   const { data } = await api.get(`/map/sites/${siteId}/popup`, { params: { bulan, tahun } });
   return data;
