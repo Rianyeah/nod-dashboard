@@ -19,6 +19,11 @@ const PITCH_ZOOM_THRESHOLD = 11;
 const FOCUS_ZOOM = 13;
 const FOCUS_DURATION_MS = 1400;
 const NEIGHBOR_RADIUS_KM = 1;
+const MAX_NEIGHBOR_CARDS = 8;
+const NEIGHBOR_CARD_WIDTH = 126;
+const NEIGHBOR_CARD_HEIGHT = 96;
+const POPUP_SAFE_PADDING = 18;
+const POPUP_PAN_DURATION_MS = 320;
 
 function emptyFeatureCollection() {
   return {
@@ -211,6 +216,31 @@ function distanceKm(from, to) {
   return 2 * earthRadiusKm * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+function rectsIntersect(a, b, padding = 0) {
+  if (!a || !b) return false;
+  return !(
+    a.right + padding < b.left
+    || a.left - padding > b.right
+    || a.bottom + padding < b.top
+    || a.top - padding > b.bottom
+  );
+}
+
+function escapeHtml(str) {
+  if (typeof str !== 'string') return str;
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function escapeJsQuote(str) {
+  if (typeof str !== 'string') return str;
+  return str.replace(/'/g, "\\'");
+}
+
 function createCircleFeature(center, radiusKm, steps = 96) {
   const [longitude, latitude] = center;
   const coordinates = [];
@@ -255,6 +285,7 @@ export default function MapboxMap({
   bulan,
   tahun,
   nop,
+  layoutResizeKey = 0,
 }) {
   const mapContainer = useRef(null);
   const map = useRef(null);
@@ -267,6 +298,11 @@ export default function MapboxMap({
   const lastFocusedRequest = useRef(null);
   const allSectorsLoadedRef = useRef(false);
   const currentNopRef = useRef(nop || null);
+  const activePopupSiteId = useRef(null);
+  const activePopupSiteData = useRef(null);
+  const resizeFrame = useRef(null);
+  const popupDragCleanup = useRef(null);
+  const popupDragOffset = useRef({ x: 0, y: 0 });
   const [mapLoaded, setMapLoaded] = useState(false);
   const [sectorState, setSectorState] = useState({
     nop: nop || null,
@@ -282,6 +318,42 @@ export default function MapboxMap({
   useEffect(() => {
     sitesRef.current = sites || [];
   }, [sites]);
+
+  const scheduleMapResize = useCallback((delay = 0) => {
+    if (!map.current || typeof window === 'undefined') return;
+
+    const resize = () => {
+      if (!map.current) return;
+      if (resizeFrame.current) window.cancelAnimationFrame(resizeFrame.current);
+
+      resizeFrame.current = window.requestAnimationFrame(() => {
+        resizeFrame.current = null;
+        map.current?.resize();
+      });
+    };
+
+    if (delay > 0) {
+      window.setTimeout(resize, delay);
+      return;
+    }
+
+    resize();
+  }, []);
+
+  useEffect(() => {
+    const node = mapContainer.current;
+    if (!node || typeof ResizeObserver === 'undefined') return undefined;
+
+    const observer = new ResizeObserver(() => scheduleMapResize());
+    observer.observe(node);
+
+    return () => observer.disconnect();
+  }, [scheduleMapResize]);
+
+  useEffect(() => {
+    scheduleMapResize();
+    scheduleMapResize(340);
+  }, [layoutResizeKey, scheduleMapResize]);
 
   useEffect(() => {
     currentNopRef.current = normalizedNop;
@@ -300,11 +372,17 @@ export default function MapboxMap({
       }
     };
 
-    map.current.on('zoomend', triggerSectorLoad);
-    map.current.on('moveend', triggerSectorLoad);
+    triggerSectorLoad();
+
+    const onZoomOrMove = () => {
+      triggerSectorLoad();
+    };
+
+    map.current.on('zoomend', onZoomOrMove);
+    map.current.on('moveend', onZoomOrMove);
     return () => {
-      map.current?.off('zoomend', triggerSectorLoad);
-      map.current?.off('moveend', triggerSectorLoad);
+      map.current?.off('zoomend', onZoomOrMove);
+      map.current?.off('moveend', onZoomOrMove);
     };
   }, [mapLoaded, normalizedNop]);
 
@@ -405,10 +483,18 @@ export default function MapboxMap({
       setMapLoaded(true);
     });
     return () => {
+      popupDragCleanup.current?.();
+      popupDragCleanup.current = null;
       popup.current?.remove();
       popup.current = null;
+      activePopupSiteId.current = null;
+      activePopupSiteData.current = null;
       neighborMarkers.current.forEach(marker => marker.remove());
       neighborMarkers.current = [];
+      if (resizeFrame.current && typeof window !== 'undefined') {
+        window.cancelAnimationFrame(resizeFrame.current);
+        resizeFrame.current = null;
+      }
       map.current?.remove();
       map.current = null;
     };
@@ -424,6 +510,42 @@ export default function MapboxMap({
     if (source) source.setData(emptyFeatureCollection());
   }, []);
 
+  const getMainPopupRect = useCallback(() => {
+    const popupElement = popup.current?.getElement();
+    if (!popupElement) return null;
+
+    const shell = popupElement.querySelector('.nod-popup-shell');
+    return (shell || popupElement).getBoundingClientRect();
+  }, []);
+
+  const ensurePopupVisible = useCallback(() => {
+    if (!map.current || !mapContainer.current || !popup.current) return;
+
+    const mapRect = mapContainer.current.getBoundingClientRect();
+    const popupRect = getMainPopupRect();
+    if (!popupRect) return;
+    let panX = 0;
+    let panY = 0;
+
+    const leftOverflow = mapRect.left + POPUP_SAFE_PADDING - popupRect.left;
+    const rightOverflow = popupRect.right - (mapRect.right - POPUP_SAFE_PADDING);
+    const topOverflow = mapRect.top + POPUP_SAFE_PADDING - popupRect.top;
+    const bottomOverflow = popupRect.bottom - (mapRect.bottom - POPUP_SAFE_PADDING);
+
+    if (leftOverflow > 0) panX = -leftOverflow;
+    else if (rightOverflow > 0) panX = rightOverflow;
+
+    if (topOverflow > 0) panY = -topOverflow;
+    else if (bottomOverflow > 0) panY = bottomOverflow;
+
+    if (panX !== 0 || panY !== 0) {
+      map.current.panBy([panX, panY], {
+        duration: POPUP_PAN_DURATION_MS,
+        essential: true,
+      });
+    }
+  }, [getMainPopupRect]);
+
   const updateRadius = useCallback((coordinates) => {
     if (!map.current) return;
 
@@ -431,6 +553,10 @@ export default function MapboxMap({
       type: 'FeatureCollection',
       features: [createCircleFeature(coordinates, NEIGHBOR_RADIUS_KM)],
     };
+
+    const radiusBeforeLayer = map.current.getLayer('sector-fill')
+      ? 'sector-fill'
+      : (map.current.getLayer('site-pin-halo') ? 'site-pin-halo' : undefined);
 
     if (map.current.getSource(RADIUS_SOURCE_ID)) {
       map.current.getSource(RADIUS_SOURCE_ID).setData(radiusGeoJson);
@@ -449,6 +575,12 @@ export default function MapboxMap({
         map.current.setPaintProperty('site-radius-outline', 'line-width', 5);
         map.current.setPaintProperty('site-radius-outline', 'line-opacity', 1);
       }
+
+      RADIUS_LAYER_IDS.forEach((layerId) => {
+        if (map.current.getLayer(layerId) && radiusBeforeLayer) {
+          map.current.moveLayer(layerId, radiusBeforeLayer);
+        }
+      });
       return;
     }
 
@@ -456,8 +588,6 @@ export default function MapboxMap({
       type: 'geojson',
       data: radiusGeoJson,
     });
-
-    const beforePinLayer = map.current.getLayer('site-pin-halo') ? 'site-pin-halo' : undefined;
 
     map.current.addLayer({
       id: 'site-radius-fill',
@@ -468,7 +598,7 @@ export default function MapboxMap({
         'fill-color': '#F97316',
         'fill-opacity': 0.28,
       },
-    }, beforePinLayer);
+    }, radiusBeforeLayer);
 
     map.current.addLayer({
       id: 'site-radius-glow',
@@ -481,7 +611,7 @@ export default function MapboxMap({
         'line-opacity': 0.32,
         'line-blur': 3,
       },
-    });
+    }, radiusBeforeLayer);
 
     map.current.addLayer({
       id: 'site-radius-outline',
@@ -493,14 +623,17 @@ export default function MapboxMap({
         'line-width': 5,
         'line-opacity': 1,
       },
-    });
+    }, radiusBeforeLayer);
   }, []);
 
   const renderNeighborMarkers = useCallback((siteData) => {
     const currentSites = sitesRef.current;
-    if (!map.current || !currentSites.length) return;
+    if (!map.current || !mapContainer.current || !currentSites.length) return;
 
     clearNeighborMarkers();
+
+    const mapRect = mapContainer.current.getBoundingClientRect();
+    const mainPopupRect = getMainPopupRect();
 
     const center = {
       latitude: Number(siteData.latitude),
@@ -519,13 +652,29 @@ export default function MapboxMap({
       .filter(site => site.distance <= NEIGHBOR_RADIUS_KM)
       .sort((a, b) => a.distance - b.distance);
 
-    neighborMarkers.current = neighbors.map((site) => {
+    const visibleNeighbors = [];
+    for (const site of neighbors) {
+      const point = map.current.project([Number(site.longitude), Number(site.latitude)]);
+      const estimatedRect = {
+        left: mapRect.left + point.x - NEIGHBOR_CARD_WIDTH / 2,
+        right: mapRect.left + point.x + NEIGHBOR_CARD_WIDTH / 2,
+        top: mapRect.top + point.y - NEIGHBOR_CARD_HEIGHT - 12,
+        bottom: mapRect.top + point.y - 12,
+      };
+
+      if (rectsIntersect(estimatedRect, mainPopupRect, 12)) continue;
+
+      visibleNeighbors.push(site);
+      if (visibleNeighbors.length >= MAX_NEIGHBOR_CARDS) break;
+    }
+
+    neighborMarkers.current = visibleNeighbors.map((site) => {
       const element = document.createElement('div');
       element.className = 'nod-neighbor-card';
-      element.style.zIndex = '4';
+      element.style.zIndex = '12';
       element.innerHTML = `
         <div style="
-          min-width:118px;
+          width:118px;
           padding:8px 9px;
           border:1px solid rgba(147,197,253,0.34);
           border-radius:8px;
@@ -558,29 +707,110 @@ export default function MapboxMap({
         .setLngLat([site.longitude, site.latitude])
         .addTo(map.current);
     });
-  }, [clearNeighborMarkers]);
+  }, [clearNeighborMarkers, getMainPopupRect]);
+
+  const enablePopupDrag = useCallback(() => {
+    popupDragCleanup.current?.();
+    popupDragCleanup.current = null;
+
+    const popupElement = popup.current?.getElement();
+    const shell = popupElement?.querySelector('.nod-popup-shell');
+    const handle = popupElement?.querySelector('.nod-popup-drag-handle');
+    if (!shell || !handle) return;
+
+    const applyPopupDragOffset = () => {
+      popup.current?.setOffset({
+        top: [popupDragOffset.current.x, 16 + popupDragOffset.current.y],
+      });
+    };
+
+    applyPopupDragOffset();
+
+    let dragging = false;
+    let startClientX = 0;
+    let startClientY = 0;
+    let startOffset = { x: 0, y: 0 };
+
+    const onPointerMove = (event) => {
+      if (!dragging) return;
+      event.preventDefault();
+      popupDragOffset.current = {
+        x: startOffset.x + event.clientX - startClientX,
+        y: startOffset.y + event.clientY - startClientY,
+      };
+      applyPopupDragOffset();
+    };
+
+    const onPointerUp = () => {
+      if (!dragging) return;
+      dragging = false;
+      shell.classList.remove('nod-popup-dragging');
+      map.current?.dragPan?.enable();
+      document.removeEventListener('pointermove', onPointerMove);
+      document.removeEventListener('pointerup', onPointerUp);
+      if (activePopupSiteData.current) {
+        renderNeighborMarkers(activePopupSiteData.current);
+      }
+    };
+
+    const onPointerDown = (event) => {
+      if (event.button != null && event.button !== 0) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      dragging = true;
+      startClientX = event.clientX;
+      startClientY = event.clientY;
+      startOffset = { ...popupDragOffset.current };
+      shell.classList.add('nod-popup-dragging');
+      clearNeighborMarkers();
+      map.current?.dragPan?.disable();
+      document.addEventListener('pointermove', onPointerMove);
+      document.addEventListener('pointerup', onPointerUp);
+    };
+
+    handle.addEventListener('pointerdown', onPointerDown);
+
+    popupDragCleanup.current = () => {
+      handle.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('pointermove', onPointerMove);
+      document.removeEventListener('pointerup', onPointerUp);
+      if (dragging) map.current?.dragPan?.enable();
+    };
+  }, [clearNeighborMarkers, renderNeighborMarkers]);
 
   const openSitePopup = useCallback((siteData, coordinates) => {
     if (!map.current) return;
 
     const p = siteData;
+    const escapedSiteId = escapeHtml(p.site_id);
+    const escapedSiteIdJs = escapeJsQuote(p.site_id);
+    const escapedSiteName = escapeHtml(p.site_name);
+    const escapedSiteClass = escapeHtml(p.site_class);
+
     const avail = formatAvailability(p.avg_availability);
     const outage = p.total_outage_menit != null ? `${Math.round(p.total_outage_menit)} min` : 'N/A';
     const chartId = `nod-popup-daily-${String(p.site_id).replace(/[^a-zA-Z0-9_-]/g, '-')}`;
 
     popup.current?.remove();
+    popupDragCleanup.current?.();
+    popupDragCleanup.current = null;
+    popupDragOffset.current = { x: 0, y: 0 };
+    activePopupSiteId.current = p.site_id;
+    activePopupSiteData.current = p;
+
     popup.current = new mapboxgl.Popup({
       anchor: 'top',
       offset: { top: [0, 16] },
       maxWidth: '258px',
       className: 'nod-popup',
     }).setLngLat(coordinates).setHTML(`
-      <div style="padding:12px;font-family:Inter,sans-serif;width:248px">
-        <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">
+      <div class="nod-popup-shell" style="padding:12px;font-family:Inter,sans-serif;width:248px">
+        <div class="nod-popup-drag-handle" style="display:flex;align-items:center;gap:7px;margin-bottom:8px;padding-right:18px">
           <span style="width:8px;height:8px;border-radius:50%;background:${p.color};box-shadow:0 0 8px ${p.color}"></span>
-          <span style="font-size:13px;font-weight:800;color:#F1F5F9;line-height:1">${p.site_id}</span>
+          <span style="font-size:13px;font-weight:800;color:#F1F5F9;line-height:1">${escapedSiteId}</span>
         </div>
-        <p style="font-size:10px;color:#94A3B8;margin:0 0 10px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.site_name}</p>
+        <p style="font-size:10px;color:#94A3B8;margin:0 0 10px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapedSiteName}</p>
         <div id="${chartId}" style="margin-bottom:10px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.04);border-radius:8px;padding:8px 9px">
           <div style="height:65px;display:flex;align-items:center;justify-content:center;color:#64748B;font-size:10px">Memuat daily trend...</div>
         </div>
@@ -592,9 +822,9 @@ export default function MapboxMap({
           <span style="color:#64748B">Cell</span>
           <b style="color:#F1F5F9;text-align:right">${formatCell(p.jumlah_cell)}</b>
           <span style="color:#64748B">Class</span>
-          <b style="color:#F1F5F9;text-align:right">${p.site_class || '-'}</b>
+          <b style="color:#F1F5F9;text-align:right">${escapedSiteClass || '-'}</b>
         </div>
-        <button onclick="window.dispatchEvent(new CustomEvent('open-site-detail',{detail:'${p.site_id}'}))"
+        <button onclick="window.dispatchEvent(new CustomEvent('open-site-detail',{detail:'${escapedSiteIdJs}'}))"
           style="margin-top:10px;width:100%;padding:7px;background:linear-gradient(135deg,#1E40AF,#3B82F6);color:#fff;border:none;border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:0.2px;transition:opacity 0.2s"
           onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
           Lihat Detail Lengkap
@@ -602,9 +832,16 @@ export default function MapboxMap({
       </div>
     `).addTo(map.current);
 
-    popup.current.getElement().style.zIndex = '30';
+    popup.current.getElement().style.zIndex = '40';
+    enablePopupDrag();
+    window.requestAnimationFrame(() => ensurePopupVisible());
+    window.setTimeout(ensurePopupVisible, POPUP_PAN_DURATION_MS + 60);
 
     popup.current.on('close', () => {
+      popupDragCleanup.current?.();
+      popupDragCleanup.current = null;
+      activePopupSiteId.current = null;
+      activePopupSiteData.current = null;
       clearNeighborMarkers();
     });
 
@@ -630,7 +867,7 @@ export default function MapboxMap({
           }
         });
     }
-  }, [bulan, tahun, clearNeighborMarkers]);
+  }, [bulan, tahun, clearNeighborMarkers, enablePopupDrag, ensurePopupVisible]);
 
   const focusSite = useCallback((siteData, coordinates, { notify = false } = {}) => {
     if (!map.current) return;
@@ -654,7 +891,10 @@ export default function MapboxMap({
     map.current.once('moveend', () => {
       cameraProgrammatic.current = false;
       openSitePopup(siteData, coordinates);
-      renderNeighborMarkers(siteData);
+      window.setTimeout(() => {
+        if (activePopupSiteId.current !== siteData.site_id) return;
+        renderNeighborMarkers(siteData);
+      }, POPUP_PAN_DURATION_MS + 80);
     });
   }, [onSiteClick, openSitePopup, clearNeighborMarkers, clearRadius, updateRadius, renderNeighborMarkers]);
 
