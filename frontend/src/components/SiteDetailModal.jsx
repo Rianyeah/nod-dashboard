@@ -142,10 +142,10 @@ function minutesLabel(value) {
   return `${Math.floor(minutes / 60).toLocaleString()} jam ${Math.round(minutes % 60)} min`;
 }
 
-const CHART_WIDTH = 280;
-const CHART_HEIGHT = 92;
-const CHART_PADDING_X = 28;
-const CHART_PADDING_Y = 14;
+const CHART_WIDTH = 250;
+const CHART_HEIGHT = 68;
+const CHART_PADDING_X = 20;
+const CHART_PADDING_Y = 10;
 
 function buildSparklinePoints(
   rows,
@@ -199,8 +199,8 @@ function TrendCard({ title, rows, valueKey, labelKey, accent = '#34D399', headli
     : rows;
 
   return (
-    <div className="rounded-lg border border-white/[0.07] bg-white/[0.035] p-4">
-      <div className="mb-3 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
+    <div className="rounded-lg border border-white/[0.07] bg-white/[0.035] p-3">
+      <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
         <h3 className="min-w-0 text-[10px] font-black uppercase tracking-[0.12em] text-[var(--text-secondary)]">{title}</h3>
         <span className="whitespace-nowrap font-mono text-xs font-black" style={{ color: accent }}>
           {Number.isFinite(displayValue) ? `${headlinePrefix}${displayValue.toFixed(2)}%` : 'N/A'}
@@ -209,7 +209,7 @@ function TrendCard({ title, rows, valueKey, labelKey, accent = '#34D399', headli
 
       {path ? (
         <>
-          <svg viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} className="h-[86px] w-full">
+          <svg viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} className="h-[62px] w-full">
             <defs>
               <linearGradient id={`trend-fill-${title.replace(/\s+/g, '-')}`} x1="0" x2="0" y1="0" y2="1">
                 <stop offset="0%" stopColor={accent} stopOpacity="0.36" />
@@ -229,7 +229,7 @@ function TrendCard({ title, rows, valueKey, labelKey, accent = '#34D399', headli
               />
             ))}
           </svg>
-          <div className="mt-2 flex justify-between gap-2 px-1 text-[9px] font-semibold text-[var(--text-muted)]">
+          <div className="mt-1 flex justify-between gap-2 px-1 text-[9px] font-semibold text-[var(--text-muted)]">
             {labelRows.map((row, index) => (
               <span key={`${title}-${index}`} className="truncate">
                 {labelKey(row)}
@@ -238,7 +238,7 @@ function TrendCard({ title, rows, valueKey, labelKey, accent = '#34D399', headli
           </div>
         </>
       ) : (
-        <div className="flex h-[104px] items-center justify-center text-xs text-[var(--text-muted)]">
+        <div className="flex h-[80px] items-center justify-center text-xs text-[var(--text-muted)]">
           Data trend tidak tersedia
         </div>
       )}
@@ -249,9 +249,9 @@ function TrendCard({ title, rows, valueKey, labelKey, accent = '#34D399', headli
 function InfoRow({ label, value }) {
   if (isEmptyValue(value)) return null;
   return (
-    <div className="grid grid-cols-[145px_minmax(0,1fr)] gap-5 border-b border-white/[0.05] py-1.5 last:border-0">
-      <span className="text-[11px] text-[var(--text-muted)]">{label}</span>
-      <span className="min-w-0 text-right text-[11px] font-semibold text-[var(--text-primary)] break-words">
+    <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-3 border-b border-white/[0.05] py-1 last:border-0">
+      <span className="text-[10px] text-[var(--text-muted)]">{label}</span>
+      <span className="min-w-0 text-right text-[10px] font-semibold leading-snug text-[var(--text-primary)] break-words">
         {formatValue(value)}
       </span>
     </div>
@@ -261,20 +261,20 @@ function InfoRow({ label, value }) {
 function Section({ icon: Icon, title, children }) {
   return (
     <section className="rounded-lg border border-white/[0.07] bg-white/[0.025] overflow-hidden">
-      <div className="flex items-center gap-2 border-b border-white/[0.06] bg-white/[0.03] px-4 py-2">
-        <Icon className="h-3.5 w-3.5 text-[var(--primary-light)]" />
-        <h4 className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--text-secondary)]">{title}</h4>
+      <div className="flex items-center gap-2 border-b border-white/[0.06] bg-white/[0.03] px-3 py-1.5">
+        <Icon className="h-3 w-3 text-[var(--primary-light)]" />
+        <h4 className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--text-secondary)]">{title}</h4>
       </div>
-      <div className="px-4 py-2">{children}</div>
+      <div className="px-3 py-1.5">{children}</div>
     </section>
   );
 }
 
-function MetricCard({ label, value, color }) {
+function CompactMetricCard({ label, value, color }) {
   return (
-    <div className="flex aspect-square min-h-[86px] flex-col justify-between rounded-lg border border-white/[0.07] bg-white/[0.035] p-3">
+    <div className="flex min-h-[58px] flex-col justify-between rounded-lg border border-white/[0.07] bg-white/[0.035] p-3">
       <div className="text-[10px] leading-tight text-[var(--text-muted)]">{label}</div>
-      <div className="font-mono text-base font-bold leading-tight" style={{ color }}>
+      <div className="font-mono text-sm font-bold leading-tight" style={{ color }}>
         {value}
       </div>
     </div>
@@ -322,17 +322,17 @@ export default function SiteDetailModal({ data, trendData = [], dailyData = [], 
     .sort((a, b) => Number(a.tgl) - Number(b.tgl));
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-8 animate-fade-in" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in" onClick={onClose}>
       <div className="absolute inset-0 bg-black/72 backdrop-blur-sm" />
 
       <div
-        className="relative flex max-h-[calc(100vh-64px)] w-full max-w-[calc(100vw-72px)] flex-col overflow-hidden rounded-xl border border-white/[0.08] bg-[var(--bg-surface)] shadow-2xl animate-fade-in-scale xl:max-w-6xl"
+        className="relative flex max-h-[calc(100vh-48px)] w-full max-w-[1080px] flex-col overflow-hidden rounded-xl border border-white/[0.08] bg-[var(--bg-surface)] shadow-2xl animate-fade-in-scale"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="shrink-0 border-b border-white/[0.08] bg-gradient-to-r from-[var(--bg-surface)] to-[var(--bg-elevated)] px-8 py-6">
+        <div className="shrink-0 border-b border-white/[0.08] bg-gradient-to-r from-[var(--bg-surface)] to-[var(--bg-elevated)] px-5 py-4">
           <button
             onClick={onClose}
-            className="absolute right-4 top-4 flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg transition-colors hover:bg-white/[0.08]"
+            className="absolute right-3 top-3 flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg transition-colors hover:bg-white/[0.08]"
             aria-label="Tutup detail site"
           >
             <X className="h-4 w-4 text-[var(--text-muted)]" />
@@ -344,15 +344,15 @@ export default function SiteDetailModal({ data, trendData = [], dailyData = [], 
               style={{ backgroundColor: availColor, boxShadow: `0 0 12px ${availColor}` }}
             />
             <div className="min-w-0">
-              <h2 className="font-mono text-xl font-black leading-tight text-white">{siteId}</h2>
-              <p className="mt-1 truncate text-sm text-[var(--text-muted)]">{siteName}</p>
+              <h2 className="font-mono text-lg font-black leading-tight text-white">{siteId}</h2>
+              <p className="mt-1 truncate text-xs text-[var(--text-muted)]">{siteName}</p>
             </div>
           </div>
 
         </div>
 
-        <div className="flex-1 overflow-y-auto px-8 py-6">
-          <div className="mb-6 grid gap-4 lg:grid-cols-[1fr_1fr_0.95fr]">
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+          <div className="mb-4 grid gap-3 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,0.92fr)_320px]">
             <TrendCard
               title="Avg Avail 6 Month"
               rows={sixMonthTrend}
@@ -370,18 +370,18 @@ export default function SiteDetailModal({ data, trendData = [], dailyData = [], 
               headlineValue={avail}
               headlinePrefix="Month Avg "
             />
-            <div className="rounded-lg border border-white/[0.07] bg-white/[0.035] p-4">
-              <h3 className="mb-3 text-[10px] font-black uppercase tracking-[0.12em] text-[var(--text-secondary)]">Monthly Scorecard</h3>
-              <div className="grid grid-cols-2 gap-3">
-                <MetricCard label="Availability" value={avail != null && !Number.isNaN(avail) ? `${avail.toFixed(2)}%` : 'N/A'} color={availColor} />
-                <MetricCard label="Total Outage" value={minutesLabel(data.total_outage_menit)} color="var(--danger)" />
-                <MetricCard label="Total Cell" value={data.jumlah_cell ?? '-'} color="var(--primary-light)" />
-                <MetricCard label="Hari Data" value={data.jumlah_hari_data ?? '-'} color="var(--text-primary)" />
+            <div className="rounded-lg border border-white/[0.07] bg-white/[0.035] p-3">
+              <h3 className="mb-2 text-[10px] font-black uppercase tracking-[0.12em] text-[var(--text-secondary)]">Monthly Scorecard</h3>
+              <div className="grid grid-cols-2 gap-2">
+                <CompactMetricCard label="Availability" value={avail != null && !Number.isNaN(avail) ? `${avail.toFixed(2)}%` : 'N/A'} color={availColor} />
+                <CompactMetricCard label="Total Outage" value={minutesLabel(data.total_outage_menit)} color="var(--danger)" />
+                <CompactMetricCard label="Total Cell" value={data.jumlah_cell ?? '-'} color="var(--primary-light)" />
+                <CompactMetricCard label="Hari Data" value={data.jumlah_hari_data ?? '-'} color="var(--text-primary)" />
               </div>
             </div>
           </div>
 
-          <div className="grid gap-5 lg:grid-cols-2">
+          <div className="grid gap-3 lg:grid-cols-2">
             {FIELD_GROUPS.map((group) => {
               const rows = group.fields
                 .map(([label, keys]) => [label, getFirstValue(data, keys)])

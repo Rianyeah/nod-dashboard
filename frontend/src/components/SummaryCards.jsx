@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Radio, Activity, TrendingUp, TrendingDown, Zap, Signal } from 'lucide-react';
 import { fetchSummary } from '../services/api';
 
-export default function SummaryCards({ bulan, tahun }) {
+export default function SummaryCards({ bulan, tahun, filters = {} }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -16,7 +16,7 @@ export default function SummaryCards({ bulan, tahun }) {
     Promise.resolve()
       .then(() => {
         if (!cancelled) setLoading(true);
-        return fetchSummary(bulan, tahun);
+        return fetchSummary(bulan, tahun, filters);
       })
       .then((summary) => {
         if (!cancelled) setData(summary);
@@ -29,7 +29,7 @@ export default function SummaryCards({ bulan, tahun }) {
     return () => {
       cancelled = true;
     };
-  }, [bulan, tahun]);
+  }, [bulan, tahun, filters]);
 
   if (loading) {
     return (

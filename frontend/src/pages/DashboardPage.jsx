@@ -54,6 +54,11 @@ export default function DashboardPage() {
   const [isTableCollapsed, setIsTableCollapsed] = useState(false);
   const [isDraggingSidebar, setIsDraggingSidebar] = useState(false);
   const [isDraggingTable, setIsDraggingTable] = useState(false);
+  const [layoutResizeKey, setLayoutResizeKey] = useState(0);
+
+  const bumpLayoutResizeKey = useCallback(() => {
+    setLayoutResizeKey(key => key + 1);
+  }, []);
 
   const {
     sites,
@@ -177,7 +182,10 @@ export default function DashboardPage() {
       const newWidth = Math.max(252, Math.min(e.clientX, 380));
       setSidebarWidth(newWidth);
     };
-    const handleMouseUp = () => setIsDraggingSidebar(false);
+    const handleMouseUp = () => {
+      setIsDraggingSidebar(false);
+      bumpLayoutResizeKey();
+    };
 
     if (isDraggingSidebar) {
       window.addEventListener('mousemove', handleMouseMove);
@@ -187,7 +195,7 @@ export default function DashboardPage() {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDraggingSidebar]);
+  }, [isDraggingSidebar, bumpLayoutResizeKey]);
 
   // Handle Table Resize
   useEffect(() => {
@@ -198,7 +206,10 @@ export default function DashboardPage() {
       const newHeightPercent = Math.max(24, Math.min((newHeightPx / windowHeight) * 100, 45));
       setTableHeight(newHeightPercent);
     };
-    const handleMouseUp = () => setIsDraggingTable(false);
+    const handleMouseUp = () => {
+      setIsDraggingTable(false);
+      bumpLayoutResizeKey();
+    };
 
     if (isDraggingTable) {
       window.addEventListener('mousemove', handleMouseMove);
@@ -208,7 +219,7 @@ export default function DashboardPage() {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDraggingTable, isTableCollapsed]);
+  }, [isDraggingTable, isTableCollapsed, bumpLayoutResizeKey]);
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-[var(--bg-base)]">
@@ -255,7 +266,7 @@ export default function DashboardPage() {
               onRetry={refetchMapData}
               bulan={bulan}
               tahun={tahun}
-              nop={nop}
+              layoutResizeKey={layoutResizeKey}
             />
           </div>
 
@@ -267,7 +278,10 @@ export default function DashboardPage() {
             <button
               type="button"
               onMouseDown={(e) => e.stopPropagation()}
-              onClick={() => setIsTableCollapsed(value => !value)}
+              onClick={() => {
+                setIsTableCollapsed(value => !value);
+                bumpLayoutResizeKey();
+              }}
               className="inline-flex h-4 items-center gap-1 rounded-full border border-white/[0.08] bg-[var(--bg-surface)]/95 px-2 text-[9px] font-semibold uppercase tracking-wider text-[var(--text-muted)] shadow-lg transition-colors hover:border-[var(--primary)]/30 hover:text-[var(--primary-light)]"
               aria-label={isTableCollapsed ? 'Expand daftar site table' : 'Collapse daftar site table'}
             >
@@ -281,6 +295,11 @@ export default function DashboardPage() {
           <div
             className={`overflow-hidden flex flex-col rounded-xl border border-white/[0.06] bg-[var(--bg-surface)]/30 transition-[height,min-height] duration-300 ${isTableCollapsed ? 'min-h-[42px] p-1.5' : 'min-h-[228px] p-2'}`}
             style={{ height: isTableCollapsed ? '42px' : `${tableHeight}%` }}
+            onTransitionEnd={(event) => {
+              if (event.propertyName === 'height' || event.propertyName === 'min-height') {
+                bumpLayoutResizeKey();
+              }
+            }}
           >
             {isTableCollapsed ? (
               <button

@@ -94,6 +94,30 @@ html, body, #root {
   border-top-color: var(--bg-surface) !important;
 }
 
+.nod-popup {
+  z-index: 40 !important;
+}
+
+.nod-neighbor-card {
+  position: relative;
+  z-index: 12;
+}
+
+.nod-popup-shell {
+  will-change: transform;
+}
+
+.nod-popup-drag-handle {
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.nod-popup-dragging .nod-popup-drag-handle,
+.nod-popup-drag-handle:active {
+  cursor: grabbing;
+}
+
 .mapboxgl-popup-close-button {
   font-size: 18px;
   color: var(--text-secondary);

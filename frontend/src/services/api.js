@@ -64,8 +64,10 @@ export async function fetchSitePopup(siteId, bulan, tahun) {
 
 // ===== Availability =====
 
-export async function fetchSummary(bulan, tahun) {
-  const { data } = await api.get('/availability/summary', { params: { bulan, tahun } });
+export async function fetchSummary(bulan, tahun, filters = {}) {
+  const { data } = await api.get('/availability/summary', {
+    params: { bulan, tahun, ...filters },
+  });
   return data;
 }
 
@@ -89,8 +91,10 @@ export async function fetchTrend(siteId, tahun, bulan) {
   return data;
 }
 
-export async function fetchWorstSites(bulan, tahun, limit = 10) {
-  const { data } = await api.get('/availability/worst', { params: { bulan, tahun, limit } });
+export async function fetchWorstSites(bulan, tahun, limit = 10, filters = {}) {
+  const { data } = await api.get('/availability/worst', {
+    params: { bulan, tahun, limit, ...filters },
+  });
   return data;
 }
 

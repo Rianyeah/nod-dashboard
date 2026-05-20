@@ -56,7 +56,7 @@ function formatSiteLabel(site) {
   return String(label || '-').replace(/\s+/g, '_').toUpperCase();
 }
 
-export default function WorstSitesPanel({ bulan, tahun }) {
+export default function WorstSitesPanel({ bulan, tahun, filters = {} }) {
   const [sites, setSites] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -77,7 +77,7 @@ export default function WorstSitesPanel({ bulan, tahun }) {
     Promise.resolve()
       .then(() => {
         if (!cancelled) setLoading(true);
-        return fetchWorstSites(bulan, tahun, 10);
+        return fetchWorstSites(bulan, tahun, 10, filters);
       })
       .then((nextSites) => {
         if (!cancelled) setSites(nextSites);
@@ -93,7 +93,7 @@ export default function WorstSitesPanel({ bulan, tahun }) {
     return () => {
       cancelled = true;
     };
-  }, [bulan, tahun]);
+  }, [bulan, tahun, filters]);
 
   return (
     <section className="rounded-lg border border-white/[0.08] bg-[var(--bg-glass)]/80 overflow-hidden flex min-h-0 flex-1 flex-col">
