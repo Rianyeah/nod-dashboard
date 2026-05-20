@@ -51,6 +51,16 @@ describe('dashboard loading optimization contracts', () => {
     assert.match(dashboard, /nop=\{nop\}/);
   });
 
+  it('keeps selected-site radius below sector antenna polygons', () => {
+    const map = src('components', 'MapboxMap.jsx');
+
+    assert.match(map, /radiusBeforeLayer/);
+    assert.match(map, /map\.current\.getLayer\('sector-fill'\)/);
+    assert.match(map, /map\.current\.moveLayer\(layerId,\s*radiusBeforeLayer\)/);
+    assert.match(map, /map\.current\.addLayer\(\{[\s\S]*?id:\s*'site-radius-fill'[\s\S]*?\},\s*radiusBeforeLayer\)/);
+    assert.match(map, /triggerSectorLoad\(\)/);
+  });
+
   it('lazy-loads all sector polygons only after zoom threshold or selected-site focus', () => {
     const map = src('components', 'MapboxMap.jsx');
 
@@ -81,5 +91,57 @@ describe('dashboard loading optimization contracts', () => {
     assert.match(map, /setSectorState\(\{\s*nop:\s*allSectorLoadNop\.nop/);
     assert.match(map, /allSectorsLoadedRef\.current\s*=\s*true/);
     assert.match(map, /setSectorState\(prev\s*=>\s*\{[\s\S]*?prev\.nop\s*===\s*normalizedNop\s*&&\s*prev\.allLoaded/);
+  });
+
+  it('resizes Mapbox when the dashboard layout changes', () => {
+    const dashboard = src('pages', 'DashboardPage.jsx');
+    const map = src('components', 'MapboxMap.jsx');
+
+    assert.match(dashboard, /layoutResizeKey/);
+    assert.match(dashboard, /bumpLayoutResizeKey/);
+    assert.match(dashboard, /layoutResizeKey=\{layoutResizeKey\}/);
+    assert.match(map, /ResizeObserver/);
+    assert.match(map, /layoutResizeKey/);
+    assert.match(map, /requestAnimationFrame/);
+    assert.match(map, /map\.current\?\.resize\(\)/);
+  });
+
+  it('keeps the main popup visible inside the map viewport', () => {
+    const map = src('components', 'MapboxMap.jsx');
+
+    assert.match(map, /ensurePopupVisible/);
+    assert.match(map, /getBoundingClientRect/);
+    assert.match(map, /panBy/);
+    assert.match(map, /POPUP_SAFE_PADDING/);
+  });
+
+  it('limits neighbor popup cards and avoids covering the main popup', () => {
+    const map = src('components', 'MapboxMap.jsx');
+
+    assert.match(map, /MAX_NEIGHBOR_CARDS/);
+    assert.match(map, /mainPopupRect/);
+    assert.match(map, /rectsIntersect/);
+    assert.match(map, /nod-neighbor-card/);
+  });
+
+  it('supports dragging the main site popup to an adjusted position', () => {
+    const map = src('components', 'MapboxMap.jsx');
+
+    assert.match(map, /enablePopupDrag/);
+    assert.match(map, /popupDragCleanup/);
+    assert.match(map, /popupDragOffset/);
+    assert.match(map, /nod-popup-drag-handle/);
+    assert.match(map, /pointerdown/);
+    assert.match(map, /pointermove/);
+  });
+
+  it('keeps the detail site modal compact and information dense', () => {
+    const modal = src('components', 'SiteDetailModal.jsx');
+
+    assert.match(modal, /max-w-\[1080px\]/);
+    assert.match(modal, /CompactMetricCard/);
+    assert.match(modal, /xl:grid-cols-\[minmax\(0,0\.92fr\)_minmax\(0,0\.92fr\)_320px\]/);
+    assert.match(modal, /CHART_HEIGHT = 68/);
+    assert.match(modal, /px-5 py-4/);
   });
 });
