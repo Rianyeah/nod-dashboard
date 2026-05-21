@@ -95,12 +95,14 @@ from routers import map as map_router
 from routers import availability as availability_router
 from routers import sites as sites_router
 from routers import admin as admin_router
+from routers import reporting as reporting_router
 
 # NOTE: Token auth removed for initial deployment — dashboard is internal
 app.include_router(map_router.router, prefix=API_PREFIX)
 app.include_router(availability_router.router, prefix=API_PREFIX)
 app.include_router(sites_router.router, prefix=API_PREFIX)
 app.include_router(admin_router.router, prefix=API_PREFIX)
+app.include_router(reporting_router.router, prefix=API_PREFIX)
 
 
 # ---------- Serve Frontend Static Files (Production) ----------

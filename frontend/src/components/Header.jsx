@@ -1,4 +1,5 @@
-import { Globe, ChevronDown, MapPin } from 'lucide-react';
+import { Globe, ChevronDown, MapPin, BarChart3 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const BULAN_OPTIONS = [
   { value: 1, label: 'Januari' },
@@ -63,6 +64,14 @@ export default function Header({ bulan, tahun, nop, nopOptions = [], onBulanChan
               Jawa Timur — Monitoring Availability Site
             </p>
           </div>
+          {/* Nav Link to Reporting */}
+          <Link
+            to="/reporting"
+            className="ml-3 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--text-muted)] hover:text-[var(--primary-light)] hover:bg-[var(--primary)]/10 border border-transparent hover:border-[var(--primary)]/20 transition-all duration-200"
+          >
+            <BarChart3 className="w-3.5 h-3.5" />
+            Reporting
+          </Link>
         </div>
 
         {/* Right — Filters */}

@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import DashboardPage from './pages/DashboardPage';
+import NetworkReportingPage from './pages/NetworkReportingPage';
 import LoginPage from './pages/LoginPage';
 
 // Simple PrivateRoute wrapper
@@ -18,6 +19,14 @@ export default function App() {
           element={
             <PrivateRoute>
               <DashboardPage />
+            </PrivateRoute>
+          } 
+        />
+        <Route 
+          path="/reporting" 
+          element={
+            <PrivateRoute>
+              <NetworkReportingPage />
             </PrivateRoute>
           } 
         />

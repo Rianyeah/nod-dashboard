@@ -129,4 +129,42 @@ export async function healthCheck() {
   return data;
 }
 
+// ===== Reporting =====
+
+export async function fetchReportingAvailableMonths() {
+  const { data } = await api.get('/reporting/available-months');
+  return data;
+}
+
+export async function fetchReportingScorecards(trxMonth) {
+  const { data } = await api.get('/reporting/scorecards', {
+    params: { trx_month: trxMonth },
+  });
+  return data;
+}
+
+export async function fetchRevenueByKabupaten(trxMonth) {
+  const { data } = await api.get('/reporting/revenue-by-kabupaten', {
+    params: { trx_month: trxMonth },
+  });
+  return data;
+}
+
+export async function fetchSiteClassByKabupaten(trxMonth) {
+  const { data } = await api.get('/reporting/site-class-by-kabupaten', {
+    params: { trx_month: trxMonth },
+  });
+  return data;
+}
+
+export async function fetchBatteryByKabupaten() {
+  const { data } = await api.get('/reporting/battery-by-kabupaten');
+  return data;
+}
+
+export async function fetchRevenueTrend() {
+  const { data } = await api.get('/reporting/trend');
+  return data;
+}
+
 export default api;
