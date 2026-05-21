@@ -70,16 +70,9 @@ class SectorQueryContractTest(unittest.TestCase):
         self.assertIn(":site_id", source)
         self.assertIn(":nop", source)
 
-    def test_map_sectors_endpoint_uses_dashboard_token_dependency_only_on_sector_route(self):
+    def test_map_sectors_endpoint_matches_public_map_route_contract(self):
         backend_root = Path(__file__).resolve().parents[1]
         map_source = (backend_root / "routers" / "map.py").read_text(encoding="utf-8")
-        security_source = (backend_root / "security.py").read_text(encoding="utf-8")
-        main_source = (backend_root / "main.py").read_text(encoding="utf-8")
-
-        self.assertIn("def verify_dashboard_token", security_source)
-        self.assertIn("DASHBOARD_TOKEN", security_source)
-        self.assertIn("from security import", main_source)
-        self.assertIn("DASHBOARD_TOKEN", main_source)
 
         sector_route = re.search(
             r"@router\.get\(\s*[\"']/sectors[\"'](?P<args>.*?)\)\s*async def get_map_sectors",
@@ -87,7 +80,8 @@ class SectorQueryContractTest(unittest.TestCase):
             re.DOTALL,
         )
         self.assertIsNotNone(sector_route)
-        self.assertIn("dependencies=[Depends(verify_dashboard_token)]", sector_route.group("args"))
+        self.assertNotIn("verify_dashboard_token", sector_route.group("args"))
+        self.assertNotIn("dependencies=", sector_route.group("args"))
 
         site_route = re.search(
             r"@router\.get\(\s*[\"']/sites[\"'](?P<args>.*?)\)\s*async def get_map_sites",

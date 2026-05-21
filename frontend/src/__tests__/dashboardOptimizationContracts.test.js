@@ -45,7 +45,7 @@ describe('dashboard loading optimization contracts', () => {
     assert.match(map, /SECTOR_SOURCE_ID/);
     assert.match(map, /sector-fill/);
     assert.match(map, /sector-selected-fill/);
-    assert.match(map, /minzoom:\s*12/);
+    assert.match(map, /minzoom:\s*10/);
     assert.match(map, /selectedSiteId/);
     assert.match(map, /setFilter\('sector-selected-fill'/);
     assert.match(dashboard, /nop=\{nop\}/);

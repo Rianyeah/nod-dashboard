@@ -11,7 +11,7 @@ const RADIUS_SOURCE_ID = 'site-radius-source';
 const RADIUS_LAYER_IDS = ['site-radius-fill', 'site-radius-glow', 'site-radius-outline'];
 const SECTOR_SOURCE_ID = 'sector-source';
 const SECTOR_LAYER_IDS = ['sector-selected-outline', 'sector-selected-fill', 'sector-outline', 'sector-fill'];
-const SECTOR_MIN_ZOOM = 12;
+const SECTOR_MIN_ZOOM = 10;
 const LEGACY_LAYER_IDS = ['clusters', 'cluster-count', 'unclustered-point', 'unclustered-label', 'unclustered-glow'];
 const DEFAULT_PITCH = 2;
 const FOCUSED_PITCH = 55;
@@ -967,11 +967,16 @@ export default function MapboxMap({
           ['get', 'band'],
           'L900', '#F59E0B',
           'L1800', '#3B82F6',
-          'L2100', '#22D3EE',
-          'L2300', '#A78BFA',
+          'L2100', '#10B981',
+          'L2300', '#A855F7',
           '#64748B',
         ],
-        'fill-opacity': 0.2,
+        'fill-opacity': [
+          'interpolate', ['linear'], ['zoom'],
+          10, 0.25,
+          13, 0.38,
+          16, 0.30,
+        ],
       },
     });
 
@@ -985,14 +990,19 @@ export default function MapboxMap({
         'line-color': [
           'match',
           ['get', 'band'],
-          'L900', '#FBBF24',
-          'L1800', '#60A5FA',
-          'L2100', '#67E8F9',
+          'L900', '#FCD34D',
+          'L1800', '#93C5FD',
+          'L2100', '#6EE7B7',
           'L2300', '#C4B5FD',
           '#94A3B8',
         ],
-        'line-width': 1.2,
-        'line-opacity': 0.72,
+        'line-width': [
+          'interpolate', ['linear'], ['zoom'],
+          10, 1.0,
+          13, 1.8,
+          16, 2.4,
+        ],
+        'line-opacity': 0.88,
       },
     });
 
@@ -1003,8 +1013,16 @@ export default function MapboxMap({
       slot: 'top',
       filter: ['==', ['get', 'site_id'], ''],
       paint: {
-        'fill-color': '#F59E0B',
-        'fill-opacity': 0.42,
+        'fill-color': [
+          'match',
+          ['get', 'band'],
+          'L900', '#F59E0B',
+          'L1800', '#3B82F6',
+          'L2100', '#10B981',
+          'L2300', '#A855F7',
+          '#F59E0B',
+        ],
+        'fill-opacity': 0.55,
       },
     });
 
@@ -1016,7 +1034,7 @@ export default function MapboxMap({
       filter: ['==', ['get', 'site_id'], ''],
       paint: {
         'line-color': '#FDE68A',
-        'line-width': 2.6,
+        'line-width': 3.2,
         'line-opacity': 0.95,
       },
     });
@@ -1119,6 +1137,13 @@ export default function MapboxMap({
     }
   }, [selectedSiteId, mapLoaded]);
 
+  const BAND_LEGEND = [
+    { band: 'L900', color: '#F59E0B', label: '900 MHz' },
+    { band: 'L1800', color: '#3B82F6', label: '1800 MHz' },
+    { band: 'L2100', color: '#10B981', label: '2100 MHz' },
+    { band: 'L2300', color: '#A855F7', label: '2300 MHz' },
+  ];
+
   return (
     <div className="relative w-full h-full rounded-xl overflow-hidden border border-white/[0.06]">
       {loading && (
@@ -1144,6 +1169,23 @@ export default function MapboxMap({
           </button>
         </div>
       )}
+      {/* Sector Band Legend */}
+      <div className="absolute bottom-3 left-3 z-10 rounded-lg border border-white/[0.10] bg-[#0F172A]/85 px-3 py-2.5 shadow-xl backdrop-blur-md">
+        <p className="text-[9px] font-semibold uppercase tracking-widest text-slate-400 mb-1.5">
+          Sector Bands
+        </p>
+        <div className="flex flex-col gap-1">
+          {BAND_LEGEND.map(({ band, color, label }) => (
+            <div key={band} className="flex items-center gap-2">
+              <span
+                className="w-2.5 h-2.5 rounded-sm shrink-0"
+                style={{ backgroundColor: color, boxShadow: `0 0 6px ${color}66` }}
+              />
+              <span className="text-[10px] text-slate-300 font-medium">{label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
       <div ref={mapContainer} className="w-full h-full" />
     </div>
   );

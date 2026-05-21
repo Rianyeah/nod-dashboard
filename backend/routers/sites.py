@@ -7,6 +7,7 @@ GET /sites/filters/options  — Dropdown filter options
 """
 import math
 from fastapi import APIRouter, Depends, Query, HTTPException
+import runtime_compat  # noqa: F401
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 

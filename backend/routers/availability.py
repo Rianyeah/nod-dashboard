@@ -7,6 +7,7 @@ GET /availability/trend/{id}      — 12-month trend
 GET /availability/worst           — Worst performing sites
 """
 from fastapi import APIRouter, Depends, Query, HTTPException
+import runtime_compat  # noqa: F401
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 

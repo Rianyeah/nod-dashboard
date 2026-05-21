@@ -14,11 +14,19 @@ from sector_geometry import (
 
 class SectorGeometryTest(unittest.TestCase):
     def test_radius_clamp_uses_min_max_and_fallback(self):
-        self.assertEqual(clamp_render_radius_m(None), 180.0)
-        self.assertEqual(clamp_render_radius_m("bad"), 180.0)
-        self.assertEqual(clamp_render_radius_m(10), 120.0)
-        self.assertEqual(clamp_render_radius_m(240), 240.0)
-        self.assertEqual(clamp_render_radius_m(900), 480.0)
+        # Without band, falls back to FALLBACK_RENDER_RADIUS_M = 600.0
+        self.assertEqual(clamp_render_radius_m(None), 600.0)
+        self.assertEqual(clamp_render_radius_m("bad"), 600.0)
+        # Value below MIN_RENDER_RADIUS_M (350) falls back to band default
+        self.assertEqual(clamp_render_radius_m(10), 600.0)
+        # Per-band defaults when value is below minimum
+        self.assertEqual(clamp_render_radius_m(100, band="L900"), 1200.0)
+        self.assertEqual(clamp_render_radius_m(100, band="L1800"), 800.0)
+        self.assertEqual(clamp_render_radius_m(100, band="L2300"), 450.0)
+        # Value within range is kept
+        self.assertEqual(clamp_render_radius_m(500), 500.0)
+        # Value above MAX_RENDER_RADIUS_M (1500) is clamped
+        self.assertEqual(clamp_render_radius_m(2000), 1500.0)
 
     def test_destination_point_moves_north_from_center(self):
         longitude, latitude = destination_point(113.0, -7.0, 0, 1000)
@@ -61,7 +69,8 @@ class SectorGeometryTest(unittest.TestCase):
         self.assertEqual(feature["properties"]["site_id"], "BGL001")
         self.assertEqual(feature["properties"]["band"], "L900")
         self.assertEqual(feature["properties"]["sector_base"], 1)
-        self.assertEqual(feature["properties"]["render_radius_m"], 120.0)
+        # L900 band with radius=120 (below MIN_RENDER_RADIUS_M 350) → uses band default 1200.0
+        self.assertEqual(feature["properties"]["render_radius_m"], 1200.0)
 
         ring = feature["geometry"]["coordinates"][0]
         self.assertEqual(ring[0], [113.043529, -7.747718])
@@ -74,7 +83,7 @@ class SectorGeometryTest(unittest.TestCase):
             113.043529,
             -7.747718,
             30,
-            120,
+            1200.0,
         )
         self.assertAlmostEqual(middle_arc_point[0], expected_lng, places=6)
         self.assertAlmostEqual(middle_arc_point[1], expected_lat, places=6)

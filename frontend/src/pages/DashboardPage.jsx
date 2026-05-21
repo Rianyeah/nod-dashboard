@@ -240,8 +240,8 @@ export default function DashboardPage() {
           style={{ width: sidebarWidth }}
         >
           <div className="p-2.5 overflow-y-auto flex-1 flex flex-col gap-2.5">
-            <SummaryCards bulan={bulan} tahun={tahun} />
-            <WorstSitesPanel bulan={bulan} tahun={tahun} />
+            <SummaryCards bulan={bulan} tahun={tahun} filters={nop ? { nop } : {}} />
+            <WorstSitesPanel bulan={bulan} tahun={tahun} filters={nop ? { nop } : {}} />
           </div>
         </aside>
 
@@ -266,6 +266,7 @@ export default function DashboardPage() {
               onRetry={refetchMapData}
               bulan={bulan}
               tahun={tahun}
+              nop={nop}
               layoutResizeKey={layoutResizeKey}
             />
           </div>

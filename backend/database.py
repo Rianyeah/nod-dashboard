@@ -4,6 +4,7 @@ Uses SQLAlchemy 2.0 async engine with asyncpg driver.
 """
 import os
 from dotenv import load_dotenv
+import runtime_compat  # noqa: F401
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 
 load_dotenv()

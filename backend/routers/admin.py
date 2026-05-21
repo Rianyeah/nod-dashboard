@@ -5,6 +5,7 @@ from time import perf_counter
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
+import runtime_compat  # noqa: F401
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 

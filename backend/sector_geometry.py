@@ -3,10 +3,19 @@ from typing import Any, Mapping
 
 
 EARTH_RADIUS_M = 6371000.0
-MIN_RENDER_RADIUS_M = 120.0
-MAX_RENDER_RADIUS_M = 480.0
-FALLBACK_RENDER_RADIUS_M = 180.0
+MIN_RENDER_RADIUS_M = 350.0
+MAX_RENDER_RADIUS_M = 1500.0
+FALLBACK_RENDER_RADIUS_M = 600.0
 DEFAULT_ARC_STEPS = 16
+
+# Per-band visualization radius — reflects real RF propagation characteristics.
+# Low-band (L900) propagates farthest; ultra-high (L2300) is shortest.
+BAND_RENDER_RADIUS_M: dict[str, float] = {
+    "L900": 1200.0,
+    "L1800": 800.0,
+    "L2100": 600.0,
+    "L2300": 450.0,
+}
 
 
 def _to_float(value: Any) -> float | None:
@@ -21,10 +30,18 @@ def _to_float(value: Any) -> float | None:
     return numeric
 
 
-def clamp_render_radius_m(value: Any) -> float:
+def render_radius_for_band(band: Any) -> float:
+    """Return the visualization render radius for a given frequency band."""
+    key = str(band or "").strip().upper()
+    return BAND_RENDER_RADIUS_M.get(key, FALLBACK_RENDER_RADIUS_M)
+
+
+def clamp_render_radius_m(value: Any, band: Any = None) -> float:
+    """Clamp a radius value within bounds, falling back to per-band default."""
+    band_default = render_radius_for_band(band)
     numeric = _to_float(value)
-    if numeric is None:
-        return FALLBACK_RENDER_RADIUS_M
+    if numeric is None or numeric < MIN_RENDER_RADIUS_M:
+        return band_default
     return min(max(numeric, MIN_RENDER_RADIUS_M), MAX_RENDER_RADIUS_M)
 
 
@@ -79,7 +96,7 @@ def sector_row_to_feature(
     if longitude < -180 or longitude > 180 or latitude < -90 or latitude > 90:
         return None
 
-    render_radius_m = clamp_render_radius_m(_row_value(row, "radius"))
+    render_radius_m = clamp_render_radius_m(_row_value(row, "radius"), band=_row_value(row, "band"))
     half_width = max(min(beamwidth, 360.0), 1.0) / 2.0
     start_bearing = azimuth - half_width
     end_bearing = azimuth + half_width
