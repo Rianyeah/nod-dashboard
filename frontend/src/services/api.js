@@ -136,34 +136,38 @@ export async function fetchReportingAvailableMonths() {
   return data;
 }
 
-export async function fetchReportingScorecards(trxMonth) {
+export async function fetchReportingScorecards(trxMonth, nop) {
   const { data } = await api.get('/reporting/scorecards', {
-    params: { trx_month: trxMonth },
+    params: { trx_month: trxMonth, nop: nop || undefined },
   });
   return data;
 }
 
-export async function fetchRevenueByKabupaten(trxMonth) {
+export async function fetchRevenueByKabupaten(trxMonth, nop) {
   const { data } = await api.get('/reporting/revenue-by-kabupaten', {
-    params: { trx_month: trxMonth },
+    params: { trx_month: trxMonth, nop: nop || undefined },
   });
   return data;
 }
 
-export async function fetchSiteClassByKabupaten(trxMonth) {
+export async function fetchSiteClassByKabupaten(trxMonth, nop) {
   const { data } = await api.get('/reporting/site-class-by-kabupaten', {
-    params: { trx_month: trxMonth },
+    params: { trx_month: trxMonth, nop: nop || undefined },
   });
   return data;
 }
 
-export async function fetchBatteryByKabupaten() {
-  const { data } = await api.get('/reporting/battery-by-kabupaten');
+export async function fetchBatteryByKabupaten(nop) {
+  const { data } = await api.get('/reporting/battery-by-kabupaten', {
+    params: { nop: nop || undefined },
+  });
   return data;
 }
 
-export async function fetchRevenueTrend() {
-  const { data } = await api.get('/reporting/trend');
+export async function fetchRevenueTrend(nop) {
+  const { data } = await api.get('/reporting/trend', {
+    params: { nop: nop || undefined },
+  });
   return data;
 }
 

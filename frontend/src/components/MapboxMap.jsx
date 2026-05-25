@@ -673,28 +673,15 @@ export default function MapboxMap({
       element.className = 'nod-neighbor-card';
       element.style.zIndex = '12';
       element.innerHTML = `
-        <div style="
-          width:118px;
-          padding:8px 9px;
-          border:1px solid rgba(147,197,253,0.34);
-          border-radius:8px;
-          background:rgba(15,23,42,0.72);
-          box-shadow:0 10px 24px rgba(0,0,0,0.28);
-          backdrop-filter:blur(8px);
-          color:#E2E8F0;
-          font-family:Inter,sans-serif;
-          font-size:10px;
-          line-height:1.25;
-          pointer-events:none;
-        ">
+        <div class="nod-neighbor-card-shell">
           <div style="display:flex;align-items:center;gap:5px;margin-bottom:6px">
             <span style="width:6px;height:6px;border-radius:999px;background:${getMarkerColor(site.avg_availability, site.status_site)}"></span>
-            <strong style="font-size:10px;color:#F8FAFC">${site.site_id}</strong>
+            <strong class="nod-neighbor-card-id">${site.site_id}</strong>
           </div>
           <div style="display:grid;grid-template-columns:auto 1fr;gap:3px 8px">
-            <span style="color:#94A3B8">Avail</span><b style="text-align:right;color:${getMarkerColor(site.avg_availability, site.status_site)}">${formatAvailability(site.avg_availability)}</b>
-            <span style="color:#94A3B8">Cell</span><b style="text-align:right">${formatCell(site.jumlah_cell)}</b>
-            <span style="color:#94A3B8">Outage</span><b style="text-align:right">${formatOutageMinutes(site.total_outage_menit)}</b>
+            <span class="nod-neighbor-card-label">Avail</span><b style="text-align:right;color:${getMarkerColor(site.avg_availability, site.status_site)}">${formatAvailability(site.avg_availability)}</b>
+            <span class="nod-neighbor-card-label">Cell</span><b style="text-align:right">${formatCell(site.jumlah_cell)}</b>
+            <span class="nod-neighbor-card-label">Outage</span><b style="text-align:right">${formatOutageMinutes(site.total_outage_menit)}</b>
           </div>
         </div>
       `;
@@ -1170,8 +1157,8 @@ export default function MapboxMap({
         </div>
       )}
       {/* Sector Band Legend */}
-      <div className="absolute bottom-3 left-3 z-10 rounded-lg border border-white/[0.10] bg-[#0F172A]/85 px-3 py-2.5 shadow-xl backdrop-blur-md">
-        <p className="text-[9px] font-semibold uppercase tracking-widest text-slate-400 mb-1.5">
+      <div className="nod-sector-legend absolute bottom-3 left-3 z-10 px-3 py-2.5">
+        <p className="nod-sector-legend-title text-[9px] font-semibold uppercase tracking-widest mb-1.5">
           Sector Bands
         </p>
         <div className="flex flex-col gap-1">
@@ -1181,7 +1168,7 @@ export default function MapboxMap({
                 className="w-2.5 h-2.5 rounded-sm shrink-0"
                 style={{ backgroundColor: color, boxShadow: `0 0 6px ${color}66` }}
               />
-              <span className="text-[10px] text-slate-300 font-medium">{label}</span>
+              <span className="nod-sector-legend-item text-[10px] font-medium">{label}</span>
             </div>
           ))}
         </div>

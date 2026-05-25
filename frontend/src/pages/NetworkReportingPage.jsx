@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   BarChart3,
-  Globe,
   Radio,
   DollarSign,
   HardDrive,
@@ -12,17 +11,19 @@ import {
   TrendingUp,
   Battery,
   Layers,
-  Download,
+  MapPin,
 } from 'lucide-react';
 import {
-  AreaChart,
+  ComposedChart,
   Area,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
+import Breadcrumb from '../components/Breadcrumb';
 import {
   fetchReportingAvailableMonths,
   fetchReportingScorecards,
@@ -30,6 +31,7 @@ import {
   fetchSiteClassByKabupaten,
   fetchBatteryByKabupaten,
   fetchRevenueTrend,
+  fetchFilterOptions,
 } from '../services/api';
 import {
   formatRevenue,
@@ -110,6 +112,24 @@ function BatteryBadge({ value, type }) {
   );
 }
 
+/* ─── Availability Badge ───────────────────────────────── */
+function AvailabilityBadge({ value }) {
+  if (value == null) return <span className="text-[var(--text-muted)]">—</span>;
+  const v = Number(value);
+  let bg, text;
+  if (v >= 99.5) { bg = 'rgba(16, 185, 129, 0.15)'; text = '#10B981'; }
+  else if (v >= 95) { bg = 'rgba(245, 158, 11, 0.15)'; text = '#F59E0B'; }
+  else { bg = 'rgba(239, 68, 68, 0.12)'; text = '#EF4444'; }
+  return (
+    <span
+      className="inline-flex items-center justify-center min-w-[52px] px-2 py-0.5 rounded-md text-xs font-semibold font-mono tabular-nums"
+      style={{ backgroundColor: bg, color: text }}
+    >
+      {v.toFixed(2)}%
+    </span>
+  );
+}
+
 /* ─── Table Section Wrapper ────────────────────────────── */
 function TableSection({ title, icon: Icon, children, delay = 0 }) {
   return (
@@ -117,9 +137,9 @@ function TableSection({ title, icon: Icon, children, delay = 0 }) {
       className="glass-card overflow-hidden animate-fade-in"
       style={{ animationDelay: `${delay}ms` }}
     >
-      <div className="px-4 py-3 border-b border-white/[0.06] flex items-center gap-2">
+      <div className="px-4 py-3 border-b border-[var(--border)] flex items-center gap-2">
         <Icon className="size-4 text-[var(--primary-light)]" />
-        <h2 className="text-sm font-semibold text-white tracking-wide">{title}</h2>
+        <h2 className="text-sm font-semibold text-[var(--text-primary)] tracking-wide">{title}</h2>
       </div>
       <div className="overflow-x-auto">{children}</div>
     </div>
@@ -129,15 +149,27 @@ function TableSection({ title, icon: Icon, children, delay = 0 }) {
 /* ─── Trend Chart Custom Tooltip ───────────────────────── */
 function TrendTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
+  const rev = payload.find(p => p.dataKey === 'total_revenue');
+  const pld = payload.find(p => p.dataKey === 'total_payload');
+  const avail = payload.find(p => p.dataKey === 'avg_availability');
   return (
     <div className="glass-card p-3 !border-[var(--primary)]/20 text-xs space-y-1">
-      <p className="font-semibold text-white">{label}</p>
-      <p className="text-[var(--primary-light)]">
-        Revenue: {formatRevenue(payload[0]?.value)}
-      </p>
-      <p className="text-emerald-400">
-        Payload: {formatPayload(payload[1]?.value)}
-      </p>
+      <p className="font-semibold text-[var(--text-primary)]">{label}</p>
+      {rev && (
+        <p className="text-[var(--primary-light)]">
+          Revenue: {formatRevenue(rev.value)}
+        </p>
+      )}
+      {pld && (
+        <p className="text-emerald-400">
+          Payload: {formatPayload(pld.value)}
+        </p>
+      )}
+      {avail && avail.value != null && (
+        <p className="text-amber-400">
+          Availability: {Number(avail.value).toFixed(2)}%
+        </p>
+      )}
     </div>
   );
 }
@@ -146,12 +178,42 @@ function TrendTooltip({ active, payload, label }) {
 /* ═══════════════════════════════════════════════════════════
    MAIN PAGE COMPONENT
    ═══════════════════════════════════════════════════════ */
+function availabilityDomainMin(dataMin) {
+  const value = Number.isFinite(dataMin) ? dataMin : 95;
+  return Math.max(0, Math.floor(value * 10) / 10 - 0.1);
+}
+
+function availabilityDomainMax(dataMax) {
+  const value = Number.isFinite(dataMax) ? dataMax : 100;
+  return Math.min(100, Math.ceil(value * 10) / 10 + 0.1);
+}
+
+function getPaddedDomain(rows, key) {
+  const values = rows
+    .map(row => Number(row?.[key]))
+    .filter(Number.isFinite);
+
+  if (!values.length) return [0, 'auto'];
+
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min;
+  const fallbackPad = Math.max(Math.abs(max) * 0.04, 1);
+  const padding = range > 0 ? range * 0.18 : fallbackPad;
+  const lower = Math.max(0, min - padding);
+  const upper = max + padding;
+
+  return [Math.floor(lower), Math.ceil(upper)];
+}
+
 export default function NetworkReportingPage() {
   const navigate = useNavigate();
 
   // State
   const [availableMonths, setAvailableMonths] = useState([]);
   const [selectedMonth, setSelectedMonth] = useState(null);
+  const [selectedNop, setSelectedNop] = useState(null);
+  const [nopOptions, setNopOptions] = useState([]);
   const [scorecards, setScorecards] = useState(null);
   const [revenueData, setRevenueData] = useState([]);
   const [siteClassData, setSiteClassData] = useState([]);
@@ -159,6 +221,18 @@ export default function NetworkReportingPage() {
   const [trendData, setTrendData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTable, setActiveTable] = useState('revenue');
+
+  // Load shared filter options on mount
+  useEffect(() => {
+    let cancelled = false;
+    fetchFilterOptions()
+      .then((options) => {
+        if (cancelled) return;
+        setNopOptions(options?.nop || []);
+      })
+      .catch(console.error);
+    return () => { cancelled = true; };
+  }, []);
 
   // Load available months on mount
   useEffect(() => {
@@ -173,19 +247,19 @@ export default function NetworkReportingPage() {
     return () => { cancelled = true; };
   }, []);
 
-  // Load trend data once on mount
+  // Load trend data whenever the reporting NOP changes
   useEffect(() => {
-    fetchRevenueTrend()
+    fetchRevenueTrend(selectedNop)
       .then(setTrendData)
       .catch(console.error);
-  }, []);
+  }, [selectedNop]);
 
-  // Load battery data once on mount (not period-dependent)
+  // Load battery data whenever the reporting NOP changes
   useEffect(() => {
-    fetchBatteryByKabupaten()
+    fetchBatteryByKabupaten(selectedNop)
       .then(setBatteryData)
       .catch(console.error);
-  }, []);
+  }, [selectedNop]);
 
   // Load period-dependent data when selectedMonth changes
   useEffect(() => {
@@ -194,9 +268,9 @@ export default function NetworkReportingPage() {
 
     setLoading(true);
     Promise.all([
-      fetchReportingScorecards(selectedMonth),
-      fetchRevenueByKabupaten(selectedMonth),
-      fetchSiteClassByKabupaten(selectedMonth),
+      fetchReportingScorecards(selectedMonth, selectedNop),
+      fetchRevenueByKabupaten(selectedMonth, selectedNop),
+      fetchSiteClassByKabupaten(selectedMonth, selectedNop),
     ])
       .then(([sc, rev, cls]) => {
         if (cancelled) return;
@@ -210,12 +284,12 @@ export default function NetworkReportingPage() {
       });
 
     return () => { cancelled = true; };
-  }, [selectedMonth]);
+  }, [selectedMonth, selectedNop]);
 
   // Compute totals for revenue table
   const revenueTotals = useMemo(() => {
     if (!revenueData.length) return null;
-    return revenueData.reduce(
+    const totals = revenueData.reduce(
       (acc, row) => {
         acc.total_sites += row.total_sites;
         acc.rev += row.rev;
@@ -226,10 +300,16 @@ export default function NetworkReportingPage() {
         acc.rev_ir += row.rev_ir;
         acc.payload += row.payload;
         acc.traffic += row.traffic;
+        if (row.avg_availability != null) {
+          acc._avail_sum += row.avg_availability * row.total_sites;
+          acc._avail_count += row.total_sites;
+        }
         return acc;
       },
-      { total_sites: 0, rev: 0, rev_voice: 0, rev_bb: 0, rev_dig: 0, rev_sms: 0, rev_ir: 0, payload: 0, traffic: 0 },
+      { total_sites: 0, rev: 0, rev_voice: 0, rev_bb: 0, rev_dig: 0, rev_sms: 0, rev_ir: 0, payload: 0, traffic: 0, _avail_sum: 0, _avail_count: 0 },
     );
+    totals.avg_availability = totals._avail_count > 0 ? totals._avail_sum / totals._avail_count : null;
+    return totals;
   }, [revenueData]);
 
   // Compute totals for site class table
@@ -264,6 +344,9 @@ export default function NetworkReportingPage() {
     );
   }, [batteryData]);
 
+  const revenueDomain = useMemo(() => getPaddedDomain(trendData, 'total_revenue'), [trendData]);
+  const payloadDomain = useMemo(() => getPaddedDomain(trendData, 'total_payload'), [trendData]);
+
   // Format month label
   const formatMonthLabel = useCallback((val) => {
     if (!val) return '';
@@ -272,14 +355,14 @@ export default function NetworkReportingPage() {
     return `${months[parseInt(m, 10) - 1]} ${y}`;
   }, []);
 
-  const thClass = 'px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] bg-white/[0.02] whitespace-nowrap sticky top-0 z-10';
+  const thClass = 'px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] bg-[var(--bg-elevated)] whitespace-nowrap sticky top-0 z-10';
   const tdClass = 'px-3 py-2 text-sm text-[var(--text-secondary)] whitespace-nowrap font-mono tabular-nums';
-  const trHoverClass = 'hover:bg-white/[0.03] transition-colors';
+  const trHoverClass = 'hover:bg-[var(--bg-hover)]/50 transition-colors';
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-[var(--bg-base)]">
       {/* Header */}
-      <header className="relative bg-gradient-to-r from-[#0A0E1A] via-[#111827] to-[#0A0E1A] border-b border-white/[0.06]">
+      <header className="relative bg-gradient-to-r from-[var(--bg-base)] via-[var(--bg-surface)] to-[var(--bg-base)] border-b border-[var(--border)]">
         <div className="absolute inset-0 opacity-[0.03]"
           style={{
             backgroundImage: `linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px),
@@ -294,7 +377,7 @@ export default function NetworkReportingPage() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate('/dashboard')}
-              className="w-9 h-9 bg-white/[0.06] rounded-xl flex items-center justify-center border border-white/10 hover:bg-white/10 hover:border-[var(--primary)]/30 transition-all duration-200"
+              className="w-9 h-9 bg-[var(--bg-elevated)] rounded-xl flex items-center justify-center border border-[var(--border-light)] hover:bg-[var(--bg-hover)] hover:border-[var(--primary)]/30 transition-all duration-200"
               title="Back to Dashboard"
             >
               <ArrowLeft className="w-4 h-4 text-[var(--text-secondary)]" />
@@ -303,7 +386,7 @@ export default function NetworkReportingPage() {
               <BarChart3 className="w-5 h-5 text-[var(--primary-light)]" />
             </div>
             <div>
-              <h1 className="text-base font-bold tracking-tight text-white">
+              <h1 className="text-base font-bold tracking-tight text-[var(--text-primary)]">
                 NETWORK REPORTING
               </h1>
               <p className="text-[11px] text-[var(--text-muted)] tracking-wide">
@@ -314,6 +397,23 @@ export default function NetworkReportingPage() {
 
           {/* Right — Period Selector */}
           <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <MapPin className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+              <div className="relative">
+                <select
+                  id="reporting-nop"
+                  value={selectedNop || ''}
+                  onChange={(e) => setSelectedNop(e.target.value || null)}
+                  className="appearance-none bg-[var(--bg-elevated)] text-[var(--text-primary)] border border-[var(--border-light)] rounded-lg pl-3 pr-8 py-2 text-sm cursor-pointer hover:bg-[var(--bg-hover)] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/40 focus:border-[var(--primary)]/40 backdrop-blur-sm min-w-[140px]"
+                >
+                  <option value="">Semua NOP</option>
+                  {nopOptions.map((n) => (
+                    <option key={n} value={n}>{n.replace('NOP ', '')}</option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none opacity-50 text-[var(--text-muted)]" />
+              </div>
+            </div>
             <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider font-medium">
               Periode
             </span>
@@ -322,17 +422,18 @@ export default function NetworkReportingPage() {
                 id="reporting-period"
                 value={selectedMonth || ''}
                 onChange={(e) => setSelectedMonth(e.target.value)}
-                className="appearance-none bg-white/[0.06] text-white border border-white/10 rounded-lg pl-3 pr-8 py-2 text-sm cursor-pointer hover:bg-white/10 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/40 focus:border-[var(--primary)]/40 backdrop-blur-sm min-w-[140px]"
+                className="appearance-none bg-[var(--bg-elevated)] text-[var(--text-primary)] border border-[var(--border-light)] rounded-lg pl-3 pr-8 py-2 text-sm cursor-pointer hover:bg-[var(--bg-hover)] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/40 focus:border-[var(--primary)]/40 backdrop-blur-sm min-w-[140px]"
               >
                 {availableMonths.map((m) => (
                   <option key={m} value={m}>{formatMonthLabel(m)}</option>
                 ))}
               </select>
-              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none opacity-50 text-white" />
+              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none opacity-50 text-[var(--text-muted)]" />
             </div>
           </div>
         </div>
       </header>
+      <Breadcrumb />
 
       {/* Main Content — Scrollable */}
       <main className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -394,13 +495,13 @@ export default function NetworkReportingPage() {
           )}
         </div>
 
-        {/* Revenue Trend Chart */}
+        {/* Performance Trend Chart */}
         {trendData.length > 0 && (
           <div className="glass-card p-4 animate-fade-in" style={{ animationDelay: '300ms' }}>
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <TrendingUp className="size-4 text-[var(--primary-light)]" />
-                <h2 className="text-sm font-semibold text-white tracking-wide">Revenue Trend</h2>
+                <h2 className="text-sm font-semibold text-[var(--text-primary)] tracking-wide">Performance Trend</h2>
               </div>
               <div className="flex items-center gap-3 text-[10px] text-[var(--text-muted)]">
                 <span className="flex items-center gap-1">
@@ -409,10 +510,13 @@ export default function NetworkReportingPage() {
                 <span className="flex items-center gap-1">
                   <span className="w-2 h-2 rounded-full bg-emerald-400" /> Payload
                 </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-4 h-0.5 rounded-full" style={{ backgroundColor: '#D97706' }} /> Availability
+                </span>
               </div>
             </div>
-            <ResponsiveContainer width="100%" height={180}>
-              <AreaChart data={trendData} margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
+            <ResponsiveContainer width="100%" height={200}>
+              <ComposedChart data={trendData} margin={{ top: 5, right: 60, left: 10, bottom: 0 }}>
                 <defs>
                   <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3} />
@@ -433,6 +537,7 @@ export default function NetworkReportingPage() {
                 />
                 <YAxis
                   yAxisId="rev"
+                  domain={revenueDomain}
                   tickFormatter={(v) => `${(v / 1e9).toFixed(0)}M`}
                   tick={{ fontSize: 10, fill: '#64748B' }}
                   axisLine={false}
@@ -442,11 +547,22 @@ export default function NetworkReportingPage() {
                 <YAxis
                   yAxisId="pld"
                   orientation="right"
+                  domain={payloadDomain}
                   tickFormatter={(v) => `${(v / 1_048_576).toFixed(0)}GB`}
                   tick={{ fontSize: 10, fill: '#64748B' }}
                   axisLine={false}
                   tickLine={false}
                   width={50}
+                />
+                <YAxis
+                  yAxisId="avail"
+                  orientation="right"
+                  tickFormatter={(v) => `${v}%`}
+                  tick={{ fontSize: 10, fill: '#D97706' }}
+                  axisLine={false}
+                  tickLine={false}
+                  domain={[availabilityDomainMin, availabilityDomainMax]}
+                  width={45}
                 />
                 <Tooltip content={<TrendTooltip />} />
                 <Area
@@ -465,13 +581,25 @@ export default function NetworkReportingPage() {
                   strokeWidth={2}
                   fill="url(#pldGrad)"
                 />
-              </AreaChart>
+                <Line
+                  yAxisId="avail"
+                  type="monotone"
+                  dataKey="avg_availability"
+                  stroke="#D97706"
+                  strokeWidth={4}
+                  strokeLinecap="round"
+                  dot={{ fill: '#D97706', r: 3, strokeWidth: 0 }}
+                  activeDot={{ fill: '#D97706', r: 5, strokeWidth: 2, stroke: 'var(--bg-surface)' }}
+                  connectNulls
+                  isAnimationActive={false}
+                />
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
         )}
 
         {/* Tab Switcher */}
-        <div className="flex items-center gap-1 bg-white/[0.03] rounded-xl p-1 w-fit">
+        <div className="flex items-center gap-1 bg-[var(--bg-elevated)] rounded-xl p-1 w-fit">
           {[
             { key: 'revenue', label: 'Revenue & Payload', icon: DollarSign },
             { key: 'siteclass', label: 'Site Class', icon: Layers },
@@ -483,7 +611,7 @@ export default function NetworkReportingPage() {
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
                 activeTable === tab.key
                   ? 'bg-[var(--primary)]/15 text-[var(--primary-light)] border border-[var(--primary)]/20'
-                  : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-white/[0.04]'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'
               }`}
             >
               <tab.icon className="size-3.5" />
@@ -513,12 +641,13 @@ export default function NetworkReportingPage() {
                     <th className={`${thClass} text-right`}>Rev IR</th>
                     <th className={`${thClass} text-right`}>Payload</th>
                     <th className={`${thClass} text-right`}>Traffic</th>
+                    <th className={`${thClass} text-center`}>Availability</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/[0.04]">
+                <tbody className="divide-y divide-[var(--border)]">
                   {revenueData.map((row, i) => (
                     <tr key={row.kabupaten} className={trHoverClass} style={{ animationDelay: `${i * 40}ms` }}>
-                      <td className={`${tdClass} text-white font-semibold font-sans`}>{row.kabupaten}</td>
+                      <td className={`${tdClass} text-[var(--text-primary)] font-semibold font-sans`}>{row.kabupaten}</td>
                       <td className={`${tdClass} text-right`}>{formatNumber(row.total_sites)}</td>
                       <td className={`${tdClass} text-right text-emerald-400 font-semibold`}>{formatRevenueShort(row.rev)}</td>
                       <td className={`${tdClass} text-right`}>{formatRevenueShort(row.rev_voice)}</td>
@@ -528,14 +657,15 @@ export default function NetworkReportingPage() {
                       <td className={`${tdClass} text-right`}>{formatRevenueShort(row.rev_ir)}</td>
                       <td className={`${tdClass} text-right text-cyan-400`}>{formatPayload(row.payload)}</td>
                       <td className={`${tdClass} text-right`}>{formatTraffic(row.traffic)}</td>
+                      <td className={`${tdClass} text-center`}><AvailabilityBadge value={row.avg_availability} /></td>
                     </tr>
                   ))}
                 </tbody>
                 {revenueTotals && (
                   <tfoot>
-                    <tr className="bg-white/[0.04] border-t-2 border-[var(--primary)]/20">
-                      <td className={`${tdClass} text-white font-bold font-sans`}>TOTAL</td>
-                      <td className={`${tdClass} text-right font-bold text-white`}>{formatNumber(revenueTotals.total_sites)}</td>
+                    <tr className="bg-[var(--bg-elevated)] border-t-2 border-[var(--primary)]/20">
+                      <td className={`${tdClass} text-[var(--text-primary)] font-bold font-sans`}>TOTAL</td>
+                      <td className={`${tdClass} text-right font-bold text-[var(--text-primary)]`}>{formatNumber(revenueTotals.total_sites)}</td>
                       <td className={`${tdClass} text-right font-bold text-emerald-400`}>{formatRevenueShort(revenueTotals.rev)}</td>
                       <td className={`${tdClass} text-right font-bold`}>{formatRevenueShort(revenueTotals.rev_voice)}</td>
                       <td className={`${tdClass} text-right font-bold`}>{formatRevenueShort(revenueTotals.rev_bb)}</td>
@@ -544,6 +674,7 @@ export default function NetworkReportingPage() {
                       <td className={`${tdClass} text-right font-bold`}>{formatRevenueShort(revenueTotals.rev_ir)}</td>
                       <td className={`${tdClass} text-right font-bold text-cyan-400`}>{formatPayload(revenueTotals.payload)}</td>
                       <td className={`${tdClass} text-right font-bold`}>{formatTraffic(revenueTotals.traffic)}</td>
+                      <td className={`${tdClass} text-center font-bold`}><AvailabilityBadge value={revenueTotals.avg_availability} /></td>
                     </tr>
                   </tfoot>
                 )}
@@ -572,29 +703,29 @@ export default function NetworkReportingPage() {
                     <th className={`${thClass} text-right`}>Total</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/[0.04]">
+                <tbody className="divide-y divide-[var(--border)]">
                   {siteClassData.map((row, i) => (
                     <tr key={row.kabupaten} className={trHoverClass}>
-                      <td className={`${tdClass} text-white font-semibold font-sans`}>{row.kabupaten}</td>
+                      <td className={`${tdClass} text-[var(--text-primary)] font-semibold font-sans`}>{row.kabupaten}</td>
                       <td className={`${tdClass} text-center`}><ClassBadge value={row.diamond} type="diamond" /></td>
                       <td className={`${tdClass} text-center`}><ClassBadge value={row.platinum} type="platinum" /></td>
                       <td className={`${tdClass} text-center`}><ClassBadge value={row.gold} type="gold" /></td>
                       <td className={`${tdClass} text-center`}><ClassBadge value={row.silver} type="silver" /></td>
                       <td className={`${tdClass} text-center`}><ClassBadge value={row.bronze} type="bronze" /></td>
-                      <td className={`${tdClass} text-right font-bold text-white`}>{row.total}</td>
+                      <td className={`${tdClass} text-right font-bold text-[var(--text-primary)]`}>{row.total}</td>
                     </tr>
                   ))}
                 </tbody>
                 {siteClassTotals && (
                   <tfoot>
-                    <tr className="bg-white/[0.04] border-t-2 border-[var(--primary)]/20">
-                      <td className={`${tdClass} text-white font-bold font-sans`}>TOTAL</td>
+                    <tr className="bg-[var(--bg-elevated)] border-t-2 border-[var(--primary)]/20">
+                      <td className={`${tdClass} text-[var(--text-primary)] font-bold font-sans`}>TOTAL</td>
                       <td className={`${tdClass} text-center`}><ClassBadge value={siteClassTotals.diamond} type="diamond" /></td>
                       <td className={`${tdClass} text-center`}><ClassBadge value={siteClassTotals.platinum} type="platinum" /></td>
                       <td className={`${tdClass} text-center`}><ClassBadge value={siteClassTotals.gold} type="gold" /></td>
                       <td className={`${tdClass} text-center`}><ClassBadge value={siteClassTotals.silver} type="silver" /></td>
                       <td className={`${tdClass} text-center`}><ClassBadge value={siteClassTotals.bronze} type="bronze" /></td>
-                      <td className={`${tdClass} text-right font-bold text-white`}>{siteClassTotals.total}</td>
+                      <td className={`${tdClass} text-right font-bold text-[var(--text-primary)]`}>{siteClassTotals.total}</td>
                     </tr>
                   </tfoot>
                 )}
@@ -616,25 +747,25 @@ export default function NetworkReportingPage() {
                   <th className={`${thClass} text-right`}>Total</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/[0.04]">
+              <tbody className="divide-y divide-[var(--border)]">
                 {batteryData.map((row) => (
                   <tr key={row.kabupaten} className={trHoverClass}>
-                    <td className={`${tdClass} text-white font-semibold font-sans`}>{row.kabupaten}</td>
+                    <td className={`${tdClass} text-[var(--text-primary)] font-semibold font-sans`}>{row.kabupaten}</td>
                     <td className={`${tdClass} text-center`}><BatteryBadge value={row.lithium} type="lithium" /></td>
                     <td className={`${tdClass} text-center`}><BatteryBadge value={row.vrla} type="vrla" /></td>
                     <td className={`${tdClass} text-center`}><BatteryBadge value={row.tidak_ada} type="tidak_ada" /></td>
-                    <td className={`${tdClass} text-right font-bold text-white`}>{row.total}</td>
+                    <td className={`${tdClass} text-right font-bold text-[var(--text-primary)]`}>{row.total}</td>
                   </tr>
                 ))}
               </tbody>
               {batteryTotals && (
                 <tfoot>
-                  <tr className="bg-white/[0.04] border-t-2 border-[var(--primary)]/20">
-                    <td className={`${tdClass} text-white font-bold font-sans`}>TOTAL</td>
+                  <tr className="bg-[var(--bg-elevated)] border-t-2 border-[var(--primary)]/20">
+                    <td className={`${tdClass} text-[var(--text-primary)] font-bold font-sans`}>TOTAL</td>
                     <td className={`${tdClass} text-center`}><BatteryBadge value={batteryTotals.lithium} type="lithium" /></td>
                     <td className={`${tdClass} text-center`}><BatteryBadge value={batteryTotals.vrla} type="vrla" /></td>
                     <td className={`${tdClass} text-center`}><BatteryBadge value={batteryTotals.tidak_ada} type="tidak_ada" /></td>
-                    <td className={`${tdClass} text-right font-bold text-white`}>{batteryTotals.total}</td>
+                    <td className={`${tdClass} text-right font-bold text-[var(--text-primary)]`}>{batteryTotals.total}</td>
                   </tr>
                 </tfoot>
               )}

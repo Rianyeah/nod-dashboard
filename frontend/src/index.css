@@ -46,6 +46,155 @@
   --radius-xl: 20px;
 }
 
+/* ===== Light Mode Overrides ===== */
+[data-theme="light"] {
+  /* Brand palette — keep consistent */
+  --primary: #2563EB;
+  --primary-light: #3B82F6;
+  --primary-dark: #1D4ED8;
+  --accent: #D97706;
+  --accent-light: #F59E0B;
+
+  /* Status — slightly deeper for contrast on light bg */
+  --success: #059669;
+  --warning: #D97706;
+  --danger: #DC2626;
+  --info: #0891B2;
+
+  /* Light backgrounds */
+  --bg-base: #F1F5F9;
+  --bg-surface: #FFFFFF;
+  --bg-elevated: #F8FAFC;
+  --bg-hover: #E2E8F0;
+  --bg-glass: rgba(255, 255, 255, 0.75);
+
+  /* Text */
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --text-muted: #94A3B8;
+
+  /* Borders */
+  --border: rgba(0, 0, 0, 0.08);
+  --border-light: rgba(0, 0, 0, 0.12);
+  --border-focus: rgba(37, 99, 235, 0.5);
+
+  /* Shadows & Glow */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.12);
+  --shadow-glow: 0 0 20px rgba(37, 99, 235, 0.08);
+}
+
+/* Glass card — light mode */
+[data-theme="light"] .glass-card {
+  background: var(--bg-glass);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+
+[data-theme="light"] .glass-card:hover {
+  border-color: var(--border-light);
+  box-shadow: var(--shadow-md);
+}
+
+/* Skeleton — light mode */
+[data-theme="light"] .skeleton {
+  background: linear-gradient(90deg, rgba(0,0,0,0.04) 25%, rgba(0,0,0,0.08) 50%, rgba(0,0,0,0.04) 75%);
+  background-size: 200% 100%;
+}
+
+/* Scrollbar — light mode */
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+/* Mapbox — light mode */
+[data-theme="light"] .mapboxgl-popup-content {
+  background: var(--bg-surface) !important;
+  color: var(--text-primary) !important;
+  box-shadow: var(--shadow-lg) !important;
+  border: 1px solid var(--border-light) !important;
+}
+
+[data-theme="light"] .mapboxgl-popup-tip {
+  border-top-color: var(--bg-surface) !important;
+}
+
+[data-theme="light"] .mapboxgl-ctrl-group {
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
+}
+
+[data-theme="light"] .mapboxgl-ctrl-group button:hover {
+  background: var(--bg-elevated) !important;
+}
+
+[data-theme="light"] .mapboxgl-ctrl-group button .mapboxgl-ctrl-icon {
+  filter: none;
+}
+
+[data-theme="light"] .mapboxgl-ctrl-attrib {
+  background: rgba(241, 245, 249, 0.9) !important;
+  color: var(--text-muted) !important;
+}
+
+[data-theme="light"] .mapboxgl-popup-close-button {
+  color: var(--text-secondary);
+}
+
+[data-theme="light"] .mapboxgl-popup-close-button:hover {
+  color: var(--danger);
+}
+
+[data-theme="light"] .nod-neighbor-card-shell {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(37, 99, 235, 0.22);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+  color: var(--text-secondary);
+}
+
+[data-theme="light"] .nod-neighbor-card-id {
+  color: var(--text-primary);
+}
+
+[data-theme="light"] .nod-neighbor-card-label {
+  color: var(--text-muted);
+}
+
+[data-theme="light"] .nod-sector-legend {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(0, 0, 0, 0.12);
+  box-shadow: var(--shadow-md);
+}
+
+[data-theme="light"] .nod-sector-legend-title {
+  color: var(--text-muted);
+}
+
+[data-theme="light"] .nod-sector-legend-item {
+  color: var(--text-secondary);
+}
+
+/* Utility — light mode */
+[data-theme="light"] .text-glow {
+  text-shadow: none;
+}
+
+[data-theme="light"] .border-glow {
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.15), var(--shadow-glow);
+}
+
+[data-theme="light"] select option {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+
 /* ===== Global Reset ===== */
 *, *::before, *::after {
   box-sizing: border-box;
@@ -101,6 +250,48 @@ html, body, #root {
 .nod-neighbor-card {
   position: relative;
   z-index: 12;
+}
+
+.nod-neighbor-card-shell {
+  width: 118px;
+  padding: 8px 9px;
+  border: 1px solid rgba(147, 197, 253, 0.34);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.76);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #E2E8F0;
+  font-family: Inter, sans-serif;
+  font-size: 10px;
+  line-height: 1.25;
+  pointer-events: none;
+}
+
+.nod-neighbor-card-id {
+  font-size: 10px;
+  color: #F8FAFC;
+}
+
+.nod-neighbor-card-label {
+  color: #94A3B8;
+}
+
+.nod-sector-legend {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.85);
+  box-shadow: var(--shadow-lg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.nod-sector-legend-title {
+  color: #94A3B8;
+}
+
+.nod-sector-legend-item {
+  color: #CBD5E1;
 }
 
 .nod-popup-shell {
