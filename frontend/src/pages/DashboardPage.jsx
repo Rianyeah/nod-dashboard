@@ -6,9 +6,12 @@ import SiteTable from '../components/SiteTable';
 import FilterPanel from '../components/FilterPanel';
 import SiteDetailModal from '../components/SiteDetailModal';
 import WorstSitesPanel from '../components/WorstSitesPanel';
+import Breadcrumb from '../components/Breadcrumb';
 import { useMapData } from '../hooks/useMapData';
 import { fetchFilterOptions, fetchLatestPeriod, fetchSiteAvailability, fetchSiteDetail, fetchTrend } from '../services/api';
 import { ChevronDown, ChevronUp, GripHorizontal } from 'lucide-react';
+
+const EMPTY_FILTERS = {};
 
 function normalizeSiteFocusData(site, siteId) {
   if (!site) return null;
@@ -170,6 +173,8 @@ export default function DashboardPage() {
     return f;
   }, [filters, nop]);
 
+  const sidebarFilters = useMemo(() => (nop ? { nop } : EMPTY_FILTERS), [nop]);
+
   const tableKey = useMemo(
     () => `${bulan || 'none'}-${tahun || 'none'}-${JSON.stringify(tableFilters)}`,
     [bulan, tahun, tableFilters],
@@ -232,16 +237,17 @@ export default function DashboardPage() {
         onTahunChange={setTahun}
         onNopChange={setNop}
       />
+      <Breadcrumb />
 
       <main className="flex-1 flex overflow-hidden p-2 gap-1.5 min-h-0">
         {/* Left Sidebar */}
         <aside
-          className="shrink-0 rounded-xl border border-white/[0.06] bg-[var(--bg-surface)]/50 flex flex-col overflow-hidden"
+          className="shrink-0 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)]/50 flex flex-col overflow-hidden"
           style={{ width: sidebarWidth }}
         >
           <div className="p-2.5 overflow-y-auto flex-1 flex flex-col gap-2.5">
-            <SummaryCards bulan={bulan} tahun={tahun} filters={nop ? { nop } : {}} />
-            <WorstSitesPanel bulan={bulan} tahun={tahun} filters={nop ? { nop } : {}} />
+            <SummaryCards bulan={bulan} tahun={tahun} filters={sidebarFilters} />
+            <WorstSitesPanel bulan={bulan} tahun={tahun} filters={sidebarFilters} />
           </div>
         </aside>
 
@@ -283,7 +289,7 @@ export default function DashboardPage() {
                 setIsTableCollapsed(value => !value);
                 bumpLayoutResizeKey();
               }}
-              className="inline-flex h-4 items-center gap-1 rounded-full border border-white/[0.08] bg-[var(--bg-surface)]/95 px-2 text-[9px] font-semibold uppercase tracking-wider text-[var(--text-muted)] shadow-lg transition-colors hover:border-[var(--primary)]/30 hover:text-[var(--primary-light)]"
+              className="inline-flex h-4 items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--bg-surface)]/95 px-2 text-[9px] font-semibold uppercase tracking-wider text-[var(--text-muted)] shadow-lg transition-colors hover:border-[var(--primary)]/30 hover:text-[var(--primary-light)]"
               aria-label={isTableCollapsed ? 'Expand daftar site table' : 'Collapse daftar site table'}
             >
               <GripHorizontal className="h-3 w-3" />
@@ -294,7 +300,7 @@ export default function DashboardPage() {
 
           {/* Bottom Table */}
           <div
-            className={`overflow-hidden flex flex-col rounded-xl border border-white/[0.06] bg-[var(--bg-surface)]/30 transition-[height,min-height] duration-300 ${isTableCollapsed ? 'min-h-[42px] p-1.5' : 'min-h-[228px] p-2'}`}
+            className={`overflow-hidden flex flex-col rounded-xl border border-[var(--border)] bg-[var(--bg-surface)]/30 transition-[height,min-height] duration-300 ${isTableCollapsed ? 'min-h-[42px] p-1.5' : 'min-h-[228px] p-2'}`}
             style={{ height: isTableCollapsed ? '42px' : `${tableHeight}%` }}
             onTransitionEnd={(event) => {
               if (event.propertyName === 'height' || event.propertyName === 'min-height') {
@@ -306,7 +312,7 @@ export default function DashboardPage() {
               <button
                 type="button"
                 onClick={() => setIsTableCollapsed(false)}
-                className="flex h-full items-center justify-between rounded-lg px-3 text-left text-[10px] uppercase tracking-widest text-[var(--text-secondary)] transition-colors hover:bg-white/[0.04]"
+                className="flex h-full items-center justify-between rounded-lg px-3 text-left text-[10px] uppercase tracking-widest text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-hover)]"
               >
                 <span className="font-semibold">Daftar Site</span>
                 <span className="font-mono text-[var(--text-muted)]">{sites.length.toLocaleString()} markers</span>

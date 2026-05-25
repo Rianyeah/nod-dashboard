@@ -32,6 +32,7 @@ class RevenueByKabupaten(BaseModel):
     trf_2g: int = 0
     trf_3g: int = 0
     trf_4g: int = 0
+    avg_availability: Optional[float] = None
 
 
 class SiteClassByKabupaten(BaseModel):
@@ -60,3 +61,4 @@ class RevenueTrendItem(BaseModel):
     total_revenue: int = 0
     total_payload: int = 0
     total_traffic: int = 0
+    avg_availability: Optional[float] = None

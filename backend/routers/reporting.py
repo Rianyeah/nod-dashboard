@@ -28,13 +28,25 @@ router = APIRouter(prefix="/reporting", tags=["Reporting"])
 
 # ---------- SQL Queries ----------
 
+def build_nop_filter(nop: str | None, alias: str = "d") -> str:
+    if not nop:
+        return ""
+    filters = {
+        "d": ' AND d."NOP" = :nop',
+        "d2": ' AND d2."NOP" = :nop',
+    }
+    return filters[alias]
+
+
 SCORECARDS_QUERY = """
 SELECT
     COUNT(DISTINCT t.site_id) AS total_sites,
     COALESCE(SUM(t.rev), 0) AS total_revenue,
     COALESCE(SUM(t.payload), 0) AS total_payload
 FROM traktor_data t
+LEFT JOIN data_site_master d ON t.site_id = d."Siteid"
 WHERE t.trx_month = :trx_month
+{nop_filter}
 """
 
 AVAILABILITY_SCORECARD_QUERY = """
@@ -44,8 +56,10 @@ SELECT
             SUM(total_time_in_minutes) - SUM(total_outage_menit)
         ) / NULLIF(SUM(total_time_in_minutes), 0) * 100.0
     , 4) AS avg_availability
-FROM site_month_metrics
-WHERE tahun = :tahun AND bulan = :bulan
+FROM site_month_metrics smm
+LEFT JOIN data_site_master d ON smm.site_id = d."Siteid"
+WHERE smm.tahun = :tahun AND smm.bulan = :bulan
+{nop_filter}
 """
 
 REVENUE_BY_KABUPATEN_QUERY = """
@@ -66,12 +80,29 @@ SELECT
     COALESCE(SUM(t.traffic), 0) AS traffic,
     COALESCE(SUM(t.trf_2g), 0) AS trf_2g,
     COALESCE(SUM(t.trf_3g), 0) AS trf_3g,
-    COALESCE(SUM(t.trf_4g), 0) AS trf_4g
+    COALESCE(SUM(t.trf_4g), 0) AS trf_4g,
+    avail.avg_availability
 FROM traktor_data t
 JOIN data_site_master d ON t.site_id = d."Siteid"
+LEFT JOIN (
+    SELECT
+        d2."Kabupaten/KOTA" AS kabupaten,
+        ROUND(
+            (SUM(smm.total_time_in_minutes) - SUM(smm.total_outage_menit))
+            / NULLIF(SUM(smm.total_time_in_minutes), 0) * 100.0
+        , 4) AS avg_availability
+    FROM site_month_metrics smm
+    JOIN data_site_master d2 ON smm.site_id = d2."Siteid"
+    WHERE smm.tahun = CAST(SPLIT_PART(:trx_month, '-', 1) AS INTEGER)
+      AND smm.bulan = CAST(SPLIT_PART(:trx_month, '-', 2) AS INTEGER)
+      AND d2."Kabupaten/KOTA" IS NOT NULL
+      {availability_nop_filter}
+    GROUP BY d2."Kabupaten/KOTA"
+) avail ON avail.kabupaten = d."Kabupaten/KOTA"
 WHERE t.trx_month = :trx_month
   AND d."Kabupaten/KOTA" IS NOT NULL
-GROUP BY d."Kabupaten/KOTA"
+  {nop_filter}
+GROUP BY d."Kabupaten/KOTA", avail.avg_availability
 ORDER BY rev DESC
 """
 
@@ -89,6 +120,7 @@ JOIN data_site_master d ON t.site_id = d."Siteid"
 WHERE t.trx_month = :trx_month
   AND d."Kabupaten/KOTA" IS NOT NULL
   AND d."Site Class" NOT LIKE '#N/A%'
+  {nop_filter}
 GROUP BY d."Kabupaten/KOTA"
 ORDER BY d."Kabupaten/KOTA"
 """
@@ -102,19 +134,66 @@ SELECT
     COUNT(DISTINCT d."Siteid") AS total
 FROM data_site_master d
 WHERE d."Kabupaten/KOTA" IS NOT NULL
+{nop_filter}
 GROUP BY d."Kabupaten/KOTA"
 ORDER BY d."Kabupaten/KOTA"
 """
 
 REVENUE_TREND_QUERY = """
+WITH revenue AS (
+    SELECT
+        t.trx_month,
+        CAST(SPLIT_PART(t.trx_month, '-', 1) AS INTEGER) AS tahun,
+        CAST(SPLIT_PART(t.trx_month, '-', 2) AS INTEGER) AS bulan,
+        COALESCE(SUM(t.rev), 0) AS total_revenue,
+        COALESCE(SUM(t.payload), 0) AS total_payload,
+        COALESCE(SUM(t.traffic), 0) AS total_traffic
+    FROM traktor_data t
+    LEFT JOIN data_site_master d ON t.site_id = d."Siteid"
+    WHERE 1 = 1
+      {nop_filter}
+    GROUP BY t.trx_month
+),
+availability_cache AS (
+    SELECT
+        CONCAT(smm.tahun::TEXT, '-', LPAD(smm.bulan::TEXT, 2, '0')) AS trx_month,
+        ROUND(
+            (
+                SUM(smm.total_time_in_minutes) - SUM(smm.total_outage_menit)
+            ) / NULLIF(SUM(smm.total_time_in_minutes), 0) * 100.0
+        , 4) AS avg_availability
+    FROM site_month_metrics smm
+    LEFT JOIN data_site_master d ON smm.site_id = d."Siteid"
+    WHERE 1 = 1
+      {availability_nop_filter}
+    GROUP BY smm.tahun, smm.bulan
+),
+availability_logs AS (
+    SELECT
+        CONCAT(a."Tahun"::TEXT, '-', LPAD(a."Bulan"::TEXT, 2, '0')) AS trx_month,
+        ROUND(AVG(NULLIF(a.availability::TEXT, '')::NUMERIC), 4) AS avg_availability
+    FROM availability_logs_jatim a
+    LEFT JOIN data_site_master d ON a."SITE ID" = d."Siteid"
+    WHERE a.availability IS NOT NULL
+      {availability_nop_filter}
+    GROUP BY a."Tahun", a."Bulan"
+),
+availability AS (
+    SELECT
+        COALESCE(c.trx_month, l.trx_month) AS trx_month,
+        COALESCE(c.avg_availability, l.avg_availability) AS avg_availability
+    FROM availability_cache c
+    FULL OUTER JOIN availability_logs l ON l.trx_month = c.trx_month
+)
 SELECT
-    t.trx_month,
-    COALESCE(SUM(t.rev), 0) AS total_revenue,
-    COALESCE(SUM(t.payload), 0) AS total_payload,
-    COALESCE(SUM(t.traffic), 0) AS total_traffic
-FROM traktor_data t
-GROUP BY t.trx_month
-ORDER BY t.trx_month
+    r.trx_month,
+    r.total_revenue,
+    r.total_payload,
+    r.total_traffic,
+    avail.avg_availability
+FROM revenue r
+LEFT JOIN availability avail ON avail.trx_month = r.trx_month
+ORDER BY r.trx_month
 """
 
 AVAILABLE_MONTHS_QUERY = """
@@ -139,13 +218,15 @@ async def get_available_months(
 @router.get("/scorecards", response_model=ReportingScorecard)
 async def get_scorecards(
     trx_month: str = Query(..., description="Period in YYYY-MM format"),
+    nop: str = Query(None),
     session: AsyncSession = Depends(get_session),
 ):
     """Scorecard KPIs: total sites, revenue, payload, availability."""
     # Revenue/payload from traktor_data
+    params = {"trx_month": trx_month, "nop": nop}
     result = await session.execute(
-        text(SCORECARDS_QUERY),
-        {"trx_month": trx_month},
+        text(SCORECARDS_QUERY.format(nop_filter=build_nop_filter(nop, "d"))),
+        params,
     )
     row = result.mappings().first()
 
@@ -160,8 +241,8 @@ async def get_scorecards(
         tahun = int(parts[0])
         bulan = int(parts[1])
         avail_result = await session.execute(
-            text(AVAILABILITY_SCORECARD_QUERY),
-            {"tahun": tahun, "bulan": bulan},
+            text(AVAILABILITY_SCORECARD_QUERY.format(nop_filter=build_nop_filter(nop, "d"))),
+            {"tahun": tahun, "bulan": bulan, "nop": nop},
         )
         avail_row = avail_result.mappings().first()
         if avail_row and avail_row["avg_availability"] is not None:
@@ -180,12 +261,16 @@ async def get_scorecards(
 @router.get("/revenue-by-kabupaten", response_model=list[RevenueByKabupaten])
 async def get_revenue_by_kabupaten(
     trx_month: str = Query(..., description="Period in YYYY-MM format"),
+    nop: str = Query(None),
     session: AsyncSession = Depends(get_session),
 ):
     """Revenue & payload breakdown pivot by Kabupaten/Kota."""
     result = await session.execute(
-        text(REVENUE_BY_KABUPATEN_QUERY),
-        {"trx_month": trx_month},
+        text(REVENUE_BY_KABUPATEN_QUERY.format(
+            nop_filter=build_nop_filter(nop, "d"),
+            availability_nop_filter=build_nop_filter(nop, "d2"),
+        )),
+        {"trx_month": trx_month, "nop": nop},
     )
     rows = result.mappings().all()
 
@@ -208,6 +293,7 @@ async def get_revenue_by_kabupaten(
             trf_2g=int(row.get("trf_2g") or 0),
             trf_3g=int(row.get("trf_3g") or 0),
             trf_4g=int(row.get("trf_4g") or 0),
+            avg_availability=float(row["avg_availability"]) if row.get("avg_availability") is not None else None,
         )
         for row in rows
     ]
@@ -216,12 +302,13 @@ async def get_revenue_by_kabupaten(
 @router.get("/site-class-by-kabupaten", response_model=list[SiteClassByKabupaten])
 async def get_site_class_by_kabupaten(
     trx_month: str = Query(..., description="Period in YYYY-MM format"),
+    nop: str = Query(None),
     session: AsyncSession = Depends(get_session),
 ):
     """Site class distribution cross-tab by Kabupaten/Kota."""
     result = await session.execute(
-        text(SITE_CLASS_BY_KABUPATEN_QUERY),
-        {"trx_month": trx_month},
+        text(SITE_CLASS_BY_KABUPATEN_QUERY.format(nop_filter=build_nop_filter(nop, "d"))),
+        {"trx_month": trx_month, "nop": nop},
     )
     rows = result.mappings().all()
 
@@ -241,10 +328,14 @@ async def get_site_class_by_kabupaten(
 
 @router.get("/battery-by-kabupaten", response_model=list[BatteryByKabupaten])
 async def get_battery_by_kabupaten(
+    nop: str = Query(None),
     session: AsyncSession = Depends(get_session),
 ):
     """Battery type distribution cross-tab by Kabupaten/Kota."""
-    result = await session.execute(text(BATTERY_BY_KABUPATEN_QUERY))
+    result = await session.execute(
+        text(BATTERY_BY_KABUPATEN_QUERY.format(nop_filter=build_nop_filter(nop, "d"))),
+        {"nop": nop},
+    )
     rows = result.mappings().all()
 
     return [
@@ -261,10 +352,17 @@ async def get_battery_by_kabupaten(
 
 @router.get("/trend", response_model=list[RevenueTrendItem])
 async def get_revenue_trend(
+    nop: str = Query(None),
     session: AsyncSession = Depends(get_session),
 ):
     """Monthly revenue/payload/traffic trend across all available months."""
-    result = await session.execute(text(REVENUE_TREND_QUERY))
+    result = await session.execute(
+        text(REVENUE_TREND_QUERY.format(
+            nop_filter=build_nop_filter(nop, "d"),
+            availability_nop_filter=build_nop_filter(nop, "d"),
+        )),
+        {"nop": nop},
+    )
     rows = result.mappings().all()
 
     return [
@@ -273,6 +371,7 @@ async def get_revenue_trend(
             total_revenue=int(row.get("total_revenue") or 0),
             total_payload=int(row.get("total_payload") or 0),
             total_traffic=int(row.get("total_traffic") or 0),
+            avg_availability=float(row["avg_availability"]) if row.get("avg_availability") is not None else None,
         )
         for row in rows
     ]
