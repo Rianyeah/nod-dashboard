@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
 from database import get_session
+from queries.metrics_cache import ensure_site_month_metrics
 from queries.sql_queries import MAP_SITES_QUERY, POPUP_DETAIL_QUERY, MAP_SECTORS_QUERY
 from models.site import SiteMapFeature, SiteDetail
 from sector_geometry import sector_row_to_feature
@@ -24,6 +25,8 @@ async def get_map_sites(
     session: AsyncSession = Depends(get_session),
 ):
     """Get all sites with avg availability for map markers."""
+    await ensure_site_month_metrics(session, bulan, tahun)
+
     filters = ""
     params = {"bulan": bulan, "tahun": tahun}
     if nop:

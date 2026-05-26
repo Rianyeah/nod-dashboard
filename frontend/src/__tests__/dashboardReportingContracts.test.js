@@ -75,4 +75,76 @@ describe('dashboard and reporting visual/data contracts', () => {
     assert.match(page, /domain=\{revenueDomain\}/);
     assert.match(page, /domain=\{payloadDomain\}/);
   });
+
+  it('uses Rupiah-friendly reporting icons and compact right-side chart axes', () => {
+    const page = src('pages', 'NetworkReportingPage.jsx');
+
+    assert.match(page, /Banknote/);
+    assert.doesNotMatch(page, /DollarSign/);
+    assert.match(page, /formatPayloadAxisTick/);
+    assert.match(page, /formatAvailabilityAxisTick/);
+    assert.match(page, /tickFormatter=\{formatPayloadAxisTick\}/);
+    assert.match(page, /tickFormatter=\{formatAvailabilityAxisTick\}/);
+  });
+
+  it('shows previous-month deltas on scorecards and key revenue table metrics', () => {
+    const page = src('pages', 'NetworkReportingPage.jsx');
+
+    assert.match(page, /previousMonth/);
+    assert.match(page, /fetchReportingScorecards\(previousMonth,\s*selectedNop\)/);
+    assert.match(page, /fetchRevenueByKabupaten\(previousMonth,\s*selectedNop\)/);
+    assert.match(page, /MetricDelta/);
+    assert.match(page, /DeltaValue/);
+    assert.match(page, /getDelta/);
+    assert.match(page, /deltaFormatter=\{formatRevenueShort\}/);
+    assert.match(page, /deltaFormatter=\{formatPayload\}/);
+    assert.match(page, /deltaFormatter=\{formatPercent\}/);
+  });
+
+  it('keeps revenue detail columns collapsed behind a table toggle after availability', () => {
+    const page = src('pages', 'NetworkReportingPage.jsx');
+
+    assert.match(page, /showRevenueDetails/);
+    assert.match(page, /setShowRevenueDetails/);
+    assert.match(page, /aria-expanded=\{showRevenueDetails\}/);
+    assert.match(page, /Detail Revenue/);
+    assert.match(page, /showRevenueDetails\s*&&[\s\S]*Rev Voice/);
+    assert.match(page, /Availability[\s\S]*showRevenueDetails\s*&&[\s\S]*Rev Voice/);
+  });
+
+  it('adds an executive insight band above the performance chart', () => {
+    const page = src('pages', 'NetworkReportingPage.jsx');
+
+    assert.match(page, /Executive Insight/);
+    assert.match(page, /performanceInsights/);
+    assert.match(page, /reporting-executive-insight/);
+    assert.match(page, /insight-card-grid/);
+    assert.match(page, /<ExecutiveInsightPanel insights=\{performanceInsights\} \/>[\s\S]*\{\/\* Performance Trend Chart \*\/\}/);
+    assert.doesNotMatch(page, /<h2[^>]*>Performance Trend<\/h2>[\s\S]*<ExecutiveInsightPanel insights=\{performanceInsights\} \/>/);
+    assert.doesNotMatch(page, /lg:grid-cols-\[3fr_1fr\]/);
+    assert.match(page, /InsightCard/);
+    assert.match(page, /Auto-generated dari data/);
+    assert.match(page, /Revenue melampaui target bulan ini|Revenue belum mencapai target/);
+    assert.match(page, /Availability turun/);
+    assert.match(page, /Payload.*tertinggi/);
+    assert.match(page, /getRevenueContributorInsight/);
+    assert.match(page, /getAvailabilityTrendInsight/);
+    assert.match(page, /getPayloadPeakInsight/);
+    assert.match(page, /REVENUE_TARGET/);
+  });
+
+  it('adds a print-to-PDF export action for the reporting page', () => {
+    const page = src('pages', 'NetworkReportingPage.jsx');
+    const css = src('index.css');
+
+    assert.match(page, /FileDown/);
+    assert.match(page, /handleExportPdf/);
+    assert.match(page, /window\.print\(\)/);
+    assert.match(page, /aria-label="Export reporting to PDF"/);
+    assert.match(page, /Export PDF/);
+    assert.match(page, /reporting-export-root/);
+    assert.match(css, /@media print/);
+    assert.match(css, /\.reporting-no-print/);
+    assert.match(css, /\.reporting-export-root/);
+  });
 });

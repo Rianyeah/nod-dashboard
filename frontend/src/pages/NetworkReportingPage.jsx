@@ -3,15 +3,19 @@ import { useNavigate } from 'react-router-dom';
 import {
   BarChart3,
   Radio,
-  DollarSign,
+  Banknote,
   HardDrive,
   Activity,
+  AlertTriangle,
+  CheckCircle2,
   ChevronDown,
+  ChevronRight,
   ArrowLeft,
   TrendingUp,
   Battery,
   Layers,
   MapPin,
+  FileDown,
 } from 'lucide-react';
 import {
   ComposedChart,
@@ -42,8 +46,179 @@ import {
   formatNumber,
 } from '../utils/formatters';
 
+const REVENUE_TARGET = 90_000_000_000;
+
+function getDelta(current, previous) {
+  if (current == null || previous == null) return null;
+  const currentNumber = Number(current);
+  const previousNumber = Number(previous);
+  if (!Number.isFinite(currentNumber) || !Number.isFinite(previousNumber)) return null;
+  return currentNumber - previousNumber;
+}
+
+function formatSignedDelta(delta, formatter) {
+  if (delta == null) return null;
+  const sign = delta > 0 ? '+' : delta < 0 ? '-' : '';
+  return `${sign}${formatter(Math.abs(delta))}`;
+}
+
+function formatSignedPercentPoint(delta) {
+  if (delta == null || !Number.isFinite(Number(delta))) return null;
+  const sign = delta > 0 ? '+' : delta < 0 ? '-' : '';
+  return `${sign}${Math.abs(Number(delta)).toFixed(2).replace('.', ',')} ppt`;
+}
+
+function formatPayloadAxisTick(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return '';
+  const gb = num / 1_048_576;
+  if (gb >= 1_000) return `${(gb / 1_000).toFixed(1).replace('.', ',')}TB`;
+  return `${Math.round(gb).toLocaleString('id-ID')}GB`;
+}
+
+function formatAvailabilityAxisTick(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return '';
+  const fixed = num.toFixed(1).replace(/\.0$/, '');
+  return `${fixed}%`;
+}
+
+function MetricDelta({ delta, formatter }) {
+  const label = formatSignedDelta(delta, formatter);
+  if (!label) {
+    return <span className="text-[10px] text-[var(--text-muted)]">vs prev: -</span>;
+  }
+
+  const colorClass = delta < 0 ? 'text-red-400' : delta > 0 ? 'text-emerald-400' : 'text-[var(--text-muted)]';
+  return (
+    <span className={`text-[10px] font-semibold font-mono tabular-nums ${colorClass}`}>
+      {label} MoM
+    </span>
+  );
+}
+
+function DeltaValue({ delta, formatter }) {
+  const label = formatSignedDelta(delta, formatter);
+  if (!label) return null;
+
+  const colorClass = delta < 0 ? 'text-red-400' : delta > 0 ? 'text-emerald-400' : 'text-[var(--text-muted)]';
+  return (
+    <span className={`block text-[10px] leading-4 font-semibold ${colorClass}`}>
+      {label}
+    </span>
+  );
+}
+
+function buildRevenueTotals(rows) {
+  if (!rows.length) return null;
+  const totals = rows.reduce(
+    (acc, row) => {
+      acc.total_sites += row.total_sites;
+      acc.rev += row.rev;
+      acc.rev_voice += row.rev_voice;
+      acc.rev_bb += row.rev_bb;
+      acc.rev_dig += row.rev_dig;
+      acc.rev_sms += row.rev_sms;
+      acc.rev_ir += row.rev_ir;
+      acc.payload += row.payload;
+      acc.traffic += row.traffic;
+      if (row.avg_availability != null) {
+        acc._avail_sum += row.avg_availability * row.total_sites;
+        acc._avail_count += row.total_sites;
+      }
+      return acc;
+    },
+    { total_sites: 0, rev: 0, rev_voice: 0, rev_bb: 0, rev_dig: 0, rev_sms: 0, rev_ir: 0, payload: 0, traffic: 0, _avail_sum: 0, _avail_count: 0 },
+  );
+  totals.avg_availability = totals._avail_count > 0 ? totals._avail_sum / totals._avail_count : null;
+  return totals;
+}
+
+function getRevenueContributorInsight(currentTotals, previousTotals) {
+  if (!currentTotals || !previousTotals) return 'Kontributor belum tersedia untuk periode pembanding.';
+
+  const details = [
+    ['Revenue Voice', 'rev_voice'],
+    ['Revenue BB', 'rev_bb'],
+    ['Revenue Digital', 'rev_dig'],
+    ['Revenue SMS', 'rev_sms'],
+    ['Revenue IR', 'rev_ir'],
+  ]
+    .map(([label, key]) => ({
+      label,
+      delta: getDelta(currentTotals[key], previousTotals[key]),
+    }))
+    .filter((item) => item.delta != null)
+    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+
+  const top = details[0];
+  if (!top) return 'Belum ada detail kontributor revenue.';
+
+  const direction = top.delta >= 0 ? 'naik' : 'turun';
+  return `Kontributor terbesar: ${top.label} ${direction} ${formatSignedDelta(top.delta, formatRevenueShort)}.`;
+}
+
+function getAvailabilityTrendInsight({ trendData, currentIndex, currentAvailability, areaRows }) {
+  if (currentAvailability == null) {
+    return {
+      title: 'Availability belum tersedia',
+      body: 'Data availability belum masuk untuk periode terpilih.',
+      chip: 'Perlu validasi data',
+    };
+  }
+
+  let declinePairs = 0;
+  for (let i = currentIndex; i > 0; i -= 1) {
+    const current = Number(trendData[i]?.avg_availability);
+    const previous = Number(trendData[i - 1]?.avg_availability);
+    if (!Number.isFinite(current) || !Number.isFinite(previous) || current >= previous) break;
+    declinePairs += 1;
+  }
+  const monthsInTrend = declinePairs > 0 ? declinePairs + 1 : 1;
+
+  const weakestAreas = areaRows
+    .filter((row) => row.avg_availability != null)
+    .toSorted((a, b) => Number(a.avg_availability) - Number(b.avg_availability))
+    .slice(0, 3)
+    .map((row) => `${row.kabupaten} (${Number(row.avg_availability).toFixed(2)}%)`);
+
+  return {
+    title: declinePairs > 0
+      ? `Availability turun ${monthsInTrend} bulan berturut-turut`
+      : 'Availability stabil bulan ini',
+    body: weakestAreas.length
+      ? `Area perlu monitoring: ${weakestAreas.join(', ')}.`
+      : 'Tidak ada area prioritas yang menonjol pada data kabupaten/kota.',
+    chip: declinePairs > 0 ? 'Perlu monitoring' : 'SLA terjaga',
+  };
+}
+
+function getPayloadPeakInsight({ trendData, currentIndex, currentPayload, payloadDelta }) {
+  if (currentPayload == null) {
+    return {
+      title: 'Payload belum tersedia',
+      body: 'Data payload belum masuk untuk periode terpilih.',
+      chip: 'Pantau data',
+    };
+  }
+
+  const windowRows = trendData.slice(Math.max(0, currentIndex - 5), currentIndex + 1);
+  const maxPayload = Math.max(...windowRows.map((row) => Number(row.total_payload)).filter(Number.isFinite));
+  const isPeak = Number(currentPayload) >= maxPayload;
+
+  return {
+    title: isPeak
+      ? `Payload ${formatPayload(currentPayload)} - tertinggi 6 bulan`
+      : `Payload ${formatPayload(currentPayload)} masih di bawah puncak 6 bulan`,
+    body: payloadDelta == null
+      ? 'Belum ada pembanding bulan sebelumnya.'
+      : `${payloadDelta >= 0 ? 'Naik' : 'Turun'} ${formatSignedDelta(payloadDelta, formatPayload)} dari bulan sebelumnya. Review kapasitas jika tren berlanjut.`,
+    chip: isPeak ? 'Perlu antisipasi' : 'Dalam kendali',
+  };
+}
+
 /* ─── Scorecard Component ──────────────────────────────── */
-function Scorecard({ title, value, subtitle, icon: Icon, accent, glow, delay = 0 }) {
+function Scorecard({ title, value, subtitle, icon: Icon, accent, glow, delta, deltaFormatter, delay = 0 }) {
   return (
     <div
       className="glass-card p-4 animate-fade-in cursor-default group"
@@ -63,9 +238,12 @@ function Scorecard({ title, value, subtitle, icon: Icon, accent, glow, delay = 0
           <p className="text-xl font-bold font-mono tracking-tight" style={{ color: accent }}>
             {value}
           </p>
-          {subtitle && (
-            <p className="text-[10px] text-[var(--text-muted)] truncate">{subtitle}</p>
-          )}
+          <div className="flex items-center gap-2 min-h-4">
+            {subtitle && (
+              <p className="text-[10px] text-[var(--text-muted)] truncate">{subtitle}</p>
+            )}
+            {deltaFormatter && <MetricDelta delta={delta} formatter={deltaFormatter} />}
+          </div>
         </div>
       </div>
     </div>
@@ -131,15 +309,18 @@ function AvailabilityBadge({ value }) {
 }
 
 /* ─── Table Section Wrapper ────────────────────────────── */
-function TableSection({ title, icon: Icon, children, delay = 0 }) {
+function TableSection({ title, icon: Icon, action, children, delay = 0 }) {
   return (
     <div
       className="glass-card overflow-hidden animate-fade-in"
       style={{ animationDelay: `${delay}ms` }}
     >
-      <div className="px-4 py-3 border-b border-[var(--border)] flex items-center gap-2">
-        <Icon className="size-4 text-[var(--primary-light)]" />
-        <h2 className="text-sm font-semibold text-[var(--text-primary)] tracking-wide">{title}</h2>
+      <div className="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Icon className="size-4 text-[var(--primary-light)]" />
+          <h2 className="text-sm font-semibold text-[var(--text-primary)] tracking-wide">{title}</h2>
+        </div>
+        {action}
       </div>
       <div className="overflow-x-auto">{children}</div>
     </div>
@@ -171,6 +352,64 @@ function TrendTooltip({ active, payload, label }) {
         </p>
       )}
     </div>
+  );
+}
+
+const INSIGHT_TONES = {
+  success: {
+    shell: 'border-emerald-500/45 bg-emerald-50/80 dark:bg-emerald-500/10',
+    text: 'text-emerald-700 dark:text-emerald-300',
+    chip: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300',
+  },
+  warning: {
+    shell: 'border-amber-500/45 bg-amber-50/80 dark:bg-amber-500/10',
+    text: 'text-amber-700 dark:text-amber-300',
+    chip: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
+  },
+  info: {
+    shell: 'border-blue-500/45 bg-blue-50/80 dark:bg-blue-500/10',
+    text: 'text-blue-700 dark:text-blue-300',
+    chip: 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300',
+  },
+};
+
+function InsightCard({ label, title, body, chip, tone = 'info', icon: Icon = TrendingUp }) {
+  const colors = INSIGHT_TONES[tone] || INSIGHT_TONES.info;
+  return (
+    <article className={`rounded-lg border p-3 ${colors.shell}`}>
+      <div className="flex items-start gap-2">
+        <Icon className={`mt-0.5 size-4 shrink-0 ${colors.text}`} />
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">{label}</p>
+          <h3 className={`mt-0.5 text-sm font-bold leading-5 ${colors.text}`}>{title}</h3>
+          <p className="mt-1 text-[11px] leading-5 text-[var(--text-secondary)]">{body}</p>
+          {chip && (
+            <span className={`mt-2 inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${colors.chip}`}>
+              {chip}
+            </span>
+          )}
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function ExecutiveInsightPanel({ insights }) {
+  return (
+    <section className="reporting-executive-insight glass-card p-4 animate-fade-in">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">Executive Insight</p>
+          <h3 className="text-sm font-semibold text-[var(--text-primary)]">{insights.periodLabel}</h3>
+        </div>
+        <span className="text-[10px] text-[var(--text-muted)] whitespace-nowrap">Auto-generated dari data</span>
+      </div>
+      <div className="insight-card-grid grid grid-cols-1 lg:grid-cols-3 gap-3">
+        {insights.cards.map((item) => (
+          <InsightCard key={item.label} {...item} />
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -215,12 +454,21 @@ export default function NetworkReportingPage() {
   const [selectedNop, setSelectedNop] = useState(null);
   const [nopOptions, setNopOptions] = useState([]);
   const [scorecards, setScorecards] = useState(null);
+  const [previousScorecards, setPreviousScorecards] = useState(null);
   const [revenueData, setRevenueData] = useState([]);
+  const [previousRevenueData, setPreviousRevenueData] = useState([]);
   const [siteClassData, setSiteClassData] = useState([]);
   const [batteryData, setBatteryData] = useState([]);
   const [trendData, setTrendData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTable, setActiveTable] = useState('revenue');
+  const [showRevenueDetails, setShowRevenueDetails] = useState(false);
+
+  const previousMonth = useMemo(() => {
+    const selectedIndex = availableMonths.indexOf(selectedMonth);
+    if (selectedIndex < 0) return null;
+    return availableMonths[selectedIndex + 1] || null;
+  }, [availableMonths, selectedMonth]);
 
   // Load shared filter options on mount
   useEffect(() => {
@@ -266,17 +514,22 @@ export default function NetworkReportingPage() {
     if (!selectedMonth) return;
     let cancelled = false;
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     Promise.all([
       fetchReportingScorecards(selectedMonth, selectedNop),
       fetchRevenueByKabupaten(selectedMonth, selectedNop),
       fetchSiteClassByKabupaten(selectedMonth, selectedNop),
+      previousMonth ? fetchReportingScorecards(previousMonth, selectedNop) : Promise.resolve(null),
+      previousMonth ? fetchRevenueByKabupaten(previousMonth, selectedNop) : Promise.resolve([]),
     ])
-      .then(([sc, rev, cls]) => {
+      .then(([sc, rev, cls, prevSc, prevRev]) => {
         if (cancelled) return;
         setScorecards(sc);
         setRevenueData(rev);
         setSiteClassData(cls);
+        setPreviousScorecards(prevSc);
+        setPreviousRevenueData(prevRev || []);
       })
       .catch(console.error)
       .finally(() => {
@@ -284,33 +537,20 @@ export default function NetworkReportingPage() {
       });
 
     return () => { cancelled = true; };
-  }, [selectedMonth, selectedNop]);
+  }, [selectedMonth, selectedNop, previousMonth]);
 
   // Compute totals for revenue table
   const revenueTotals = useMemo(() => {
-    if (!revenueData.length) return null;
-    const totals = revenueData.reduce(
-      (acc, row) => {
-        acc.total_sites += row.total_sites;
-        acc.rev += row.rev;
-        acc.rev_voice += row.rev_voice;
-        acc.rev_bb += row.rev_bb;
-        acc.rev_dig += row.rev_dig;
-        acc.rev_sms += row.rev_sms;
-        acc.rev_ir += row.rev_ir;
-        acc.payload += row.payload;
-        acc.traffic += row.traffic;
-        if (row.avg_availability != null) {
-          acc._avail_sum += row.avg_availability * row.total_sites;
-          acc._avail_count += row.total_sites;
-        }
-        return acc;
-      },
-      { total_sites: 0, rev: 0, rev_voice: 0, rev_bb: 0, rev_dig: 0, rev_sms: 0, rev_ir: 0, payload: 0, traffic: 0, _avail_sum: 0, _avail_count: 0 },
-    );
-    totals.avg_availability = totals._avail_count > 0 ? totals._avail_sum / totals._avail_count : null;
-    return totals;
+    return buildRevenueTotals(revenueData);
   }, [revenueData]);
+
+  const previousRevenueTotals = useMemo(() => {
+    return buildRevenueTotals(previousRevenueData);
+  }, [previousRevenueData]);
+
+  const revenuePreviousByKabupaten = useMemo(() => {
+    return new Map(previousRevenueData.map((row) => [row.kabupaten, row]));
+  }, [previousRevenueData]);
 
   // Compute totals for site class table
   const siteClassTotals = useMemo(() => {
@@ -355,12 +595,103 @@ export default function NetworkReportingPage() {
     return `${months[parseInt(m, 10) - 1]} ${y}`;
   }, []);
 
+  const handleExportPdf = useCallback(() => {
+    const previousTitle = document.title;
+    const periodLabel = formatMonthLabel(selectedMonth) || 'Reporting';
+    const nopLabel = selectedNop ? selectedNop.replace('NOP ', '') : 'Semua NOP';
+
+    document.title = `Network Reporting - ${periodLabel} - ${nopLabel}`;
+    window.print();
+    document.title = previousTitle;
+  }, [formatMonthLabel, selectedMonth, selectedNop]);
+
+  const performanceInsights = useMemo(() => {
+    const selectedIndex = trendData.findIndex((row) => row.trx_month === selectedMonth);
+    const currentIndex = selectedIndex >= 0 ? selectedIndex : trendData.length - 1;
+    const current = trendData[currentIndex];
+    const previous = trendData[currentIndex - 1];
+
+    const currentRevenue = current?.total_revenue ?? scorecards?.total_revenue;
+    const currentPayload = current?.total_payload ?? scorecards?.total_payload;
+    const revenueDelta = getDelta(currentRevenue, previous?.total_revenue);
+    const payloadDelta = getDelta(currentPayload, previous?.total_payload);
+    const availability = current?.avg_availability ?? scorecards?.avg_availability;
+    const availabilityDelta = getDelta(availability, previous?.avg_availability);
+    const targetDelta = currentRevenue == null ? null : currentRevenue - REVENUE_TARGET;
+    const targetPercent = currentRevenue == null ? null : (currentRevenue / REVENUE_TARGET - 1) * 100;
+    const revenueTargetMet = targetDelta != null && targetDelta >= 0;
+    let monthsAboveTarget = 0;
+    for (let i = currentIndex; i >= 0; i -= 1) {
+      if (Number(trendData[i]?.total_revenue) < REVENUE_TARGET) break;
+      monthsAboveTarget += 1;
+    }
+
+    const availabilityInsight = getAvailabilityTrendInsight({
+      trendData,
+      currentIndex,
+      currentAvailability: availability,
+      areaRows: revenueData,
+    });
+    const payloadInsight = getPayloadPeakInsight({
+      trendData,
+      currentIndex,
+      currentPayload,
+      payloadDelta,
+    });
+    const selectedNopLabel = selectedNop ? selectedNop.replace('NOP ', '') : 'Semua NOP';
+
+    return {
+      periodLabel: `${formatMonthLabel(selectedMonth)} - ${selectedNopLabel}`,
+      cards: [
+        {
+          label: 'Revenue',
+          title: revenueTargetMet
+            ? 'Revenue melampaui target bulan ini'
+            : 'Revenue belum mencapai target',
+          body: currentRevenue == null
+            ? 'Data revenue belum tersedia untuk periode terpilih.'
+            : `${formatRevenue(currentRevenue)} (${formatSignedDelta(revenueDelta, formatRevenueShort) || '0'} MoM) ${revenueTargetMet ? 'melampaui' : 'di bawah'} target ${formatRevenue(REVENUE_TARGET)} sebesar ${targetPercent == null ? '-' : `${targetPercent.toFixed(1).replace('.', ',')}%`}. ${getRevenueContributorInsight(revenueTotals, previousRevenueTotals)}`,
+          chip: revenueTargetMet
+            ? `${monthsAboveTarget || 1} bulan di atas target`
+            : `Gap ${formatRevenueShort(Math.abs(targetDelta || 0))}`,
+          tone: revenueTargetMet ? 'success' : 'warning',
+          icon: revenueTargetMet ? CheckCircle2 : AlertTriangle,
+        },
+        {
+          label: 'Availability',
+          title: availabilityInsight.title,
+          body: `${availability == null ? '-' : formatPercent(availability)} (${formatSignedPercentPoint(availabilityDelta) || '0 ppt'} MoM). ${availabilityInsight.body}`,
+          chip: availabilityInsight.chip,
+          tone: availability == null || availability < 99.5 ? 'warning' : 'success',
+          icon: availability == null || availability < 99.5 ? AlertTriangle : CheckCircle2,
+        },
+        {
+          label: 'Payload Peak',
+          title: payloadInsight.title,
+          body: payloadInsight.body,
+          chip: payloadInsight.chip,
+          tone: 'info',
+          icon: BarChart3,
+        },
+      ],
+    };
+  }, [
+    formatMonthLabel,
+    previousRevenueTotals,
+    revenueData,
+    revenueTotals,
+    scorecards,
+    selectedMonth,
+    selectedNop,
+    trendData,
+  ]);
+
   const thClass = 'px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] bg-[var(--bg-elevated)] whitespace-nowrap sticky top-0 z-10';
   const tdClass = 'px-3 py-2 text-sm text-[var(--text-secondary)] whitespace-nowrap font-mono tabular-nums';
   const trHoverClass = 'hover:bg-[var(--bg-hover)]/50 transition-colors';
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-[var(--bg-base)]">
+    <div className="reporting-export-root h-screen flex flex-col overflow-hidden bg-[var(--bg-base)]">
       {/* Header */}
       <header className="relative bg-gradient-to-r from-[var(--bg-base)] via-[var(--bg-surface)] to-[var(--bg-base)] border-b border-[var(--border)]">
         <div className="absolute inset-0 opacity-[0.03]"
@@ -397,6 +728,15 @@ export default function NetworkReportingPage() {
 
           {/* Right — Period Selector */}
           <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleExportPdf}
+              aria-label="Export reporting to PDF"
+              className="reporting-no-print inline-flex items-center gap-1.5 rounded-lg border border-[var(--border-light)] bg-[var(--bg-elevated)] px-3 py-2 text-xs font-semibold text-[var(--text-secondary)] transition-all duration-200 hover:border-[var(--primary)]/35 hover:bg-[var(--bg-hover)] hover:text-[var(--primary-light)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/35"
+            >
+              <FileDown className="size-3.5" />
+              Export PDF
+            </button>
             <div className="flex items-center gap-1.5">
               <MapPin className="w-3.5 h-3.5 text-[var(--text-muted)]" />
               <div className="relative">
@@ -450,15 +790,19 @@ export default function NetworkReportingPage() {
                 icon={Radio}
                 accent="var(--primary)"
                 glow="rgba(59, 130, 246, 0.15)"
+                delta={getDelta(scorecards?.total_sites, previousScorecards?.total_sites)}
+                deltaFormatter={formatNumber}
                 delay={0}
               />
               <Scorecard
                 title="Total Revenue"
                 value={formatRevenue(scorecards?.total_revenue)}
                 subtitle={`${formatRevenueShort(scorecards?.total_revenue)} total`}
-                icon={DollarSign}
+                icon={Banknote}
                 accent="#10B981"
                 glow="rgba(16, 185, 129, 0.15)"
+                delta={getDelta(scorecards?.total_revenue, previousScorecards?.total_revenue)}
+                deltaFormatter={formatRevenueShort}
                 delay={80}
               />
               <Scorecard
@@ -468,6 +812,8 @@ export default function NetworkReportingPage() {
                 icon={HardDrive}
                 accent="var(--info)"
                 glow="rgba(6, 182, 212, 0.15)"
+                delta={getDelta(scorecards?.total_payload, previousScorecards?.total_payload)}
+                deltaFormatter={formatPayload}
                 delay={160}
               />
               <Scorecard
@@ -489,11 +835,17 @@ export default function NetworkReportingPage() {
                       ? 'rgba(245, 158, 11, 0.15)'
                       : 'rgba(239, 68, 68, 0.15)'
                 }
+                delta={getDelta(scorecards?.avg_availability, previousScorecards?.avg_availability)}
+                deltaFormatter={formatPercent}
                 delay={240}
               />
             </>
           )}
         </div>
+
+        {trendData.length > 0 && (
+          <ExecutiveInsightPanel insights={performanceInsights} />
+        )}
 
         {/* Performance Trend Chart */}
         {trendData.length > 0 && (
@@ -515,93 +867,95 @@ export default function NetworkReportingPage() {
                 </span>
               </div>
             </div>
-            <ResponsiveContainer width="100%" height={200}>
-              <ComposedChart data={trendData} margin={{ top: 5, right: 60, left: 10, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="pldGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#34D399" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#34D399" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                <XAxis
-                  dataKey="trx_month"
-                  tickFormatter={formatMonthLabel}
-                  tick={{ fontSize: 10, fill: '#64748B' }}
-                  axisLine={{ stroke: 'rgba(255,255,255,0.06)' }}
-                  tickLine={false}
-                />
-                <YAxis
-                  yAxisId="rev"
-                  domain={revenueDomain}
-                  tickFormatter={(v) => `${(v / 1e9).toFixed(0)}M`}
-                  tick={{ fontSize: 10, fill: '#64748B' }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={50}
-                />
-                <YAxis
-                  yAxisId="pld"
-                  orientation="right"
-                  domain={payloadDomain}
-                  tickFormatter={(v) => `${(v / 1_048_576).toFixed(0)}GB`}
-                  tick={{ fontSize: 10, fill: '#64748B' }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={50}
-                />
-                <YAxis
-                  yAxisId="avail"
-                  orientation="right"
-                  tickFormatter={(v) => `${v}%`}
-                  tick={{ fontSize: 10, fill: '#D97706' }}
-                  axisLine={false}
-                  tickLine={false}
-                  domain={[availabilityDomainMin, availabilityDomainMax]}
-                  width={45}
-                />
-                <Tooltip content={<TrendTooltip />} />
-                <Area
-                  yAxisId="rev"
-                  type="monotone"
-                  dataKey="total_revenue"
-                  stroke="#3B82F6"
-                  strokeWidth={2}
-                  fill="url(#revGrad)"
-                />
-                <Area
-                  yAxisId="pld"
-                  type="monotone"
-                  dataKey="total_payload"
-                  stroke="#34D399"
-                  strokeWidth={2}
-                  fill="url(#pldGrad)"
-                />
-                <Line
-                  yAxisId="avail"
-                  type="monotone"
-                  dataKey="avg_availability"
-                  stroke="#D97706"
-                  strokeWidth={4}
-                  strokeLinecap="round"
-                  dot={{ fill: '#D97706', r: 3, strokeWidth: 0 }}
-                  activeDot={{ fill: '#D97706', r: 5, strokeWidth: 2, stroke: 'var(--bg-surface)' }}
-                  connectNulls
-                  isAnimationActive={false}
-                />
-              </ComposedChart>
-            </ResponsiveContainer>
+            <div className="chart min-w-0">
+                <ResponsiveContainer width="100%" height={240}>
+                  <ComposedChart data={trendData} margin={{ top: 5, right: 60, left: 10, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="pldGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#34D399" stopOpacity={0.2} />
+                      <stop offset="95%" stopColor="#34D399" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                  <XAxis
+                    dataKey="trx_month"
+                    tickFormatter={formatMonthLabel}
+                    tick={{ fontSize: 10, fill: '#64748B' }}
+                    axisLine={{ stroke: 'rgba(255,255,255,0.06)' }}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    yAxisId="rev"
+                    domain={revenueDomain}
+                    tickFormatter={(v) => `${(v / 1e9).toFixed(0)}M`}
+                    tick={{ fontSize: 10, fill: '#64748B' }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={50}
+                  />
+                  <YAxis
+                    yAxisId="pld"
+                    orientation="right"
+                    domain={payloadDomain}
+                    tickFormatter={formatPayloadAxisTick}
+                    tick={{ fontSize: 10, fill: '#64748B' }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={42}
+                  />
+                  <YAxis
+                    yAxisId="avail"
+                    orientation="right"
+                    tickFormatter={formatAvailabilityAxisTick}
+                    tick={{ fontSize: 10, fill: '#D97706' }}
+                    axisLine={false}
+                    tickLine={false}
+                    domain={[availabilityDomainMin, availabilityDomainMax]}
+                    width={34}
+                  />
+                  <Tooltip content={<TrendTooltip />} />
+                  <Area
+                    yAxisId="rev"
+                    type="monotone"
+                    dataKey="total_revenue"
+                    stroke="#3B82F6"
+                    strokeWidth={2}
+                    fill="url(#revGrad)"
+                  />
+                  <Area
+                    yAxisId="pld"
+                    type="monotone"
+                    dataKey="total_payload"
+                    stroke="#34D399"
+                    strokeWidth={2}
+                    fill="url(#pldGrad)"
+                  />
+                  <Line
+                    yAxisId="avail"
+                    type="monotone"
+                    dataKey="avg_availability"
+                    stroke="#D97706"
+                    strokeWidth={4}
+                    strokeLinecap="round"
+                    dot={{ fill: '#D97706', r: 3, strokeWidth: 0 }}
+                    activeDot={{ fill: '#D97706', r: 5, strokeWidth: 2, stroke: 'var(--bg-surface)' }}
+                    connectNulls
+                    isAnimationActive={false}
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         )}
 
         {/* Tab Switcher */}
         <div className="flex items-center gap-1 bg-[var(--bg-elevated)] rounded-xl p-1 w-fit">
           {[
-            { key: 'revenue', label: 'Revenue & Payload', icon: DollarSign },
+            { key: 'revenue', label: 'Revenue & Payload', icon: Banknote },
             { key: 'siteclass', label: 'Site Class', icon: Layers },
             { key: 'battery', label: 'Battery Type', icon: Battery },
           ].map((tab) => (
@@ -622,7 +976,22 @@ export default function NetworkReportingPage() {
 
         {/* Revenue & Payload Table */}
         {activeTable === 'revenue' && (
-          <TableSection title="Revenue & Payload by Kabupaten/Kota" icon={DollarSign} delay={400}>
+          <TableSection
+            title="Revenue & Payload by Kabupaten/Kota"
+            icon={Banknote}
+            delay={400}
+            action={
+              <button
+                type="button"
+                onClick={() => setShowRevenueDetails((value) => !value)}
+                aria-expanded={showRevenueDetails}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border-light)] bg-[var(--bg-elevated)] px-2.5 py-1 text-[11px] font-semibold text-[var(--text-secondary)] hover:text-[var(--primary-light)] hover:border-[var(--primary)]/30 transition-colors"
+              >
+                {showRevenueDetails ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+                Detail Revenue
+              </button>
+            }
+          >
             {loading ? (
               <div className="p-4 space-y-2">
                 {[1, 2, 3, 4, 5, 6].map((i) => <div key={i} className="skeleton h-10 rounded-lg" />)}
@@ -634,47 +1003,80 @@ export default function NetworkReportingPage() {
                     <th className={thClass}>Kabupaten/Kota</th>
                     <th className={`${thClass} text-right`}>Sites</th>
                     <th className={`${thClass} text-right`}>Revenue Total</th>
-                    <th className={`${thClass} text-right`}>Rev Voice</th>
-                    <th className={`${thClass} text-right`}>Rev BB</th>
-                    <th className={`${thClass} text-right`}>Rev Digital</th>
-                    <th className={`${thClass} text-right`}>Rev SMS</th>
-                    <th className={`${thClass} text-right`}>Rev IR</th>
                     <th className={`${thClass} text-right`}>Payload</th>
                     <th className={`${thClass} text-right`}>Traffic</th>
                     <th className={`${thClass} text-center`}>Availability</th>
+                    {showRevenueDetails && (
+                      <>
+                        <th className={`${thClass} text-right`}>Rev Voice</th>
+                        <th className={`${thClass} text-right`}>Rev BB</th>
+                        <th className={`${thClass} text-right`}>Rev Digital</th>
+                        <th className={`${thClass} text-right`}>Rev SMS</th>
+                        <th className={`${thClass} text-right`}>Rev IR</th>
+                      </>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border)]">
-                  {revenueData.map((row, i) => (
-                    <tr key={row.kabupaten} className={trHoverClass} style={{ animationDelay: `${i * 40}ms` }}>
-                      <td className={`${tdClass} text-[var(--text-primary)] font-semibold font-sans`}>{row.kabupaten}</td>
-                      <td className={`${tdClass} text-right`}>{formatNumber(row.total_sites)}</td>
-                      <td className={`${tdClass} text-right text-emerald-400 font-semibold`}>{formatRevenueShort(row.rev)}</td>
-                      <td className={`${tdClass} text-right`}>{formatRevenueShort(row.rev_voice)}</td>
-                      <td className={`${tdClass} text-right`}>{formatRevenueShort(row.rev_bb)}</td>
-                      <td className={`${tdClass} text-right`}>{formatRevenueShort(row.rev_dig)}</td>
-                      <td className={`${tdClass} text-right`}>{formatRevenueShort(row.rev_sms)}</td>
-                      <td className={`${tdClass} text-right`}>{formatRevenueShort(row.rev_ir)}</td>
-                      <td className={`${tdClass} text-right text-cyan-400`}>{formatPayload(row.payload)}</td>
-                      <td className={`${tdClass} text-right`}>{formatTraffic(row.traffic)}</td>
-                      <td className={`${tdClass} text-center`}><AvailabilityBadge value={row.avg_availability} /></td>
-                    </tr>
-                  ))}
+                  {revenueData.map((row, i) => {
+                    const previousRow = revenuePreviousByKabupaten.get(row.kabupaten);
+                    return (
+                      <tr key={row.kabupaten} className={trHoverClass} style={{ animationDelay: `${i * 40}ms` }}>
+                        <td className={`${tdClass} text-[var(--text-primary)] font-semibold font-sans`}>{row.kabupaten}</td>
+                        <td className={`${tdClass} text-right`}>{formatNumber(row.total_sites)}</td>
+                        <td className={`${tdClass} text-right text-emerald-400 font-semibold`}>
+                          {formatRevenueShort(row.rev)}
+                          <DeltaValue delta={getDelta(row.rev, previousRow?.rev)} formatter={formatRevenueShort} />
+                        </td>
+                        <td className={`${tdClass} text-right text-cyan-400`}>
+                          {formatPayload(row.payload)}
+                          <DeltaValue delta={getDelta(row.payload, previousRow?.payload)} formatter={formatPayload} />
+                        </td>
+                        <td className={`${tdClass} text-right`}>{formatTraffic(row.traffic)}</td>
+                        <td className={`${tdClass} text-center`}>
+                          <AvailabilityBadge value={row.avg_availability} />
+                          <DeltaValue delta={getDelta(row.avg_availability, previousRow?.avg_availability)} formatter={formatPercent} />
+                        </td>
+                        {showRevenueDetails && (
+                          <>
+                            <td className={`${tdClass} text-right`}>{formatRevenueShort(row.rev_voice)}</td>
+                            <td className={`${tdClass} text-right`}>{formatRevenueShort(row.rev_bb)}</td>
+                            <td className={`${tdClass} text-right`}>{formatRevenueShort(row.rev_dig)}</td>
+                            <td className={`${tdClass} text-right`}>{formatRevenueShort(row.rev_sms)}</td>
+                            <td className={`${tdClass} text-right`}>{formatRevenueShort(row.rev_ir)}</td>
+                          </>
+                        )}
+                      </tr>
+                    );
+                  })}
                 </tbody>
                 {revenueTotals && (
                   <tfoot>
                     <tr className="bg-[var(--bg-elevated)] border-t-2 border-[var(--primary)]/20">
                       <td className={`${tdClass} text-[var(--text-primary)] font-bold font-sans`}>TOTAL</td>
                       <td className={`${tdClass} text-right font-bold text-[var(--text-primary)]`}>{formatNumber(revenueTotals.total_sites)}</td>
-                      <td className={`${tdClass} text-right font-bold text-emerald-400`}>{formatRevenueShort(revenueTotals.rev)}</td>
-                      <td className={`${tdClass} text-right font-bold`}>{formatRevenueShort(revenueTotals.rev_voice)}</td>
-                      <td className={`${tdClass} text-right font-bold`}>{formatRevenueShort(revenueTotals.rev_bb)}</td>
-                      <td className={`${tdClass} text-right font-bold`}>{formatRevenueShort(revenueTotals.rev_dig)}</td>
-                      <td className={`${tdClass} text-right font-bold`}>{formatRevenueShort(revenueTotals.rev_sms)}</td>
-                      <td className={`${tdClass} text-right font-bold`}>{formatRevenueShort(revenueTotals.rev_ir)}</td>
-                      <td className={`${tdClass} text-right font-bold text-cyan-400`}>{formatPayload(revenueTotals.payload)}</td>
+                      <td className={`${tdClass} text-right font-bold text-emerald-400`}>
+                        {formatRevenueShort(revenueTotals.rev)}
+                        <DeltaValue delta={getDelta(revenueTotals.rev, previousRevenueTotals?.rev)} formatter={formatRevenueShort} />
+                      </td>
+                      <td className={`${tdClass} text-right font-bold text-cyan-400`}>
+                        {formatPayload(revenueTotals.payload)}
+                        <DeltaValue delta={getDelta(revenueTotals.payload, previousRevenueTotals?.payload)} formatter={formatPayload} />
+                      </td>
                       <td className={`${tdClass} text-right font-bold`}>{formatTraffic(revenueTotals.traffic)}</td>
-                      <td className={`${tdClass} text-center font-bold`}><AvailabilityBadge value={revenueTotals.avg_availability} /></td>
+                      <td className={`${tdClass} text-center font-bold`}>
+                        <AvailabilityBadge value={revenueTotals.avg_availability} />
+                        <DeltaValue delta={getDelta(revenueTotals.avg_availability, previousRevenueTotals?.avg_availability)} formatter={formatPercent} />
+                      </td>
+                      {showRevenueDetails && (
+                        <>
+                          <td className={`${tdClass} text-right font-bold`}>{formatRevenueShort(revenueTotals.rev_voice)}</td>
+                          <td className={`${tdClass} text-right font-bold`}>{formatRevenueShort(revenueTotals.rev_bb)}</td>
+                          <td className={`${tdClass} text-right font-bold`}>{formatRevenueShort(revenueTotals.rev_dig)}</td>
+                          <td className={`${tdClass} text-right font-bold`}>{formatRevenueShort(revenueTotals.rev_sms)}</td>
+                          <td className={`${tdClass} text-right font-bold`}>{formatRevenueShort(revenueTotals.rev_ir)}</td>
+                        </>
+                      )}
                     </tr>
                   </tfoot>
                 )}
@@ -704,7 +1106,7 @@ export default function NetworkReportingPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border)]">
-                  {siteClassData.map((row, i) => (
+                  {siteClassData.map((row) => (
                     <tr key={row.kabupaten} className={trHoverClass}>
                       <td className={`${tdClass} text-[var(--text-primary)] font-semibold font-sans`}>{row.kabupaten}</td>
                       <td className={`${tdClass} text-center`}><ClassBadge value={row.diamond} type="diamond" /></td>
