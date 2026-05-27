@@ -47,6 +47,16 @@ class ReportingNopContractTest(unittest.TestCase):
         self.assertIn("coalesce(c.avg_availability, l.avg_availability)", self.normalized)
         self.assertIn('a."site id" = d."siteid"', self.normalized)
 
+    def test_reporting_scorecard_and_table_availability_use_log_fallback(self):
+        scorecard_query = self.source.split('AVAILABILITY_SCORECARD_QUERY = """', 1)[1].split('"""', 1)[0].lower()
+        revenue_query = self.source.split('REVENUE_BY_KABUPATEN_QUERY = """', 1)[1].split('"""', 1)[0].lower()
+
+        self.assertIn("availability_logs_jatim", scorecard_query)
+        self.assertIn("coalesce(c.avg_availability, l.avg_availability)", scorecard_query)
+        self.assertIn("availability_logs_jatim", revenue_query)
+        self.assertIn("coalesce(c.avg_availability, l.avg_availability)", revenue_query)
+        self.assertIn('a."site id" = d2."siteid"', revenue_query)
+
     def test_reporting_endpoints_pass_nop_params_to_sql(self):
         self.assertIn("build_nop_filter", self.source)
         self.assertGreaterEqual(self.source.count('"nop": nop'), 5)

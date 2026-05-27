@@ -22,6 +22,55 @@ DASHBOARD_PASS = os.getenv("DASHBOARD_PASS", "admin123")
 async def lifespan(app: FastAPI):
     """Application lifespan — startup & shutdown."""
     print("[NOD] Backend starting up...")
+
+    # Auto-populate site_month_metrics for any months missing from the cache
+    try:
+        from database import engine as _engine
+        from sqlalchemy.ext.asyncio import AsyncSession as _AS
+        from sqlalchemy.orm import sessionmaker as _sm
+        from sqlalchemy import text as _text
+        from queries.metrics_cache import (
+            BOOTSTRAP_SITE_MONTH_METRICS_STATEMENTS,
+            REFRESH_SITE_MONTH_DELETE_QUERY,
+            REFRESH_SITE_MONTH_INSERT_QUERY,
+        )
+
+        _SessionLocal = _sm(_engine, class_=_AS, expire_on_commit=False)
+        async with _SessionLocal() as session:
+            # Ensure cache table + indexes exist
+            for stmt in BOOTSTRAP_SITE_MONTH_METRICS_STATEMENTS:
+                await session.execute(_text(stmt))
+            await session.commit()
+
+            # Find (tahun, bulan) combos in raw logs but missing from cache
+            missing_query = _text("""
+                SELECT DISTINCT a."Tahun"::INT AS tahun, a."Bulan"::INT AS bulan
+                FROM availability_logs_jatim a
+                WHERE a."Tahun" IS NOT NULL AND a."Bulan" IS NOT NULL
+                  AND NOT EXISTS (
+                      SELECT 1 FROM site_month_metrics m
+                      WHERE m.tahun = a."Tahun"::INT AND m.bulan = a."Bulan"::INT
+                  )
+                ORDER BY tahun, bulan
+            """)
+            result = await session.execute(missing_query)
+            missing_periods = result.fetchall()
+
+            if missing_periods:
+                print(f"[NOD] Auto-refreshing metrics cache for {len(missing_periods)} missing period(s)...")
+                for row in missing_periods:
+                    params = {"tahun": row.tahun, "bulan": row.bulan}
+                    await session.execute(_text(REFRESH_SITE_MONTH_DELETE_QUERY), params)
+                    ins_result = await session.execute(_text(REFRESH_SITE_MONTH_INSERT_QUERY), params)
+                    count = len(ins_result.scalars().all())
+                    print(f"[NOD]   -> {row.tahun}-{str(row.bulan).zfill(2)}: {count} sites cached")
+                await session.commit()
+                print("[NOD] Metrics cache auto-refresh complete.")
+            else:
+                print("[NOD] Metrics cache is up-to-date.")
+    except Exception as exc:
+        print(f"[NOD] WARNING: Auto-refresh metrics cache failed: {exc}")
+
     yield
     print("[NOD] Backend shutting down...")
 
