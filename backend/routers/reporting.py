@@ -50,19 +50,70 @@ WHERE t.trx_month = :trx_month
 """
 
 AVAILABILITY_SCORECARD_QUERY = """
+WITH availability_cache AS (
+    SELECT
+        ROUND(
+            (
+                SUM(smm.total_time_in_minutes) - SUM(smm.total_outage_menit)
+            ) / NULLIF(SUM(smm.total_time_in_minutes), 0) * 100.0
+        , 4) AS avg_availability
+    FROM site_month_metrics smm
+    LEFT JOIN data_site_master d ON smm.site_id = d."Siteid"
+    WHERE smm.tahun = :tahun AND smm.bulan = :bulan
+    {nop_filter}
+),
+availability_logs AS (
+    SELECT
+        ROUND(AVG(NULLIF(a.availability::TEXT, '')::NUMERIC), 4) AS avg_availability
+    FROM availability_logs_jatim a
+    LEFT JOIN data_site_master d ON a."SITE ID" = d."Siteid"
+    WHERE a.availability IS NOT NULL
+      AND a."Tahun" = :tahun
+      AND a."Bulan" = :bulan
+    {nop_filter}
+)
 SELECT
-    ROUND(
-        (
-            SUM(total_time_in_minutes) - SUM(total_outage_menit)
-        ) / NULLIF(SUM(total_time_in_minutes), 0) * 100.0
-    , 4) AS avg_availability
-FROM site_month_metrics smm
-LEFT JOIN data_site_master d ON smm.site_id = d."Siteid"
-WHERE smm.tahun = :tahun AND smm.bulan = :bulan
-{nop_filter}
+    COALESCE(c.avg_availability, l.avg_availability) AS avg_availability
+FROM availability_cache c
+CROSS JOIN availability_logs l
 """
 
 REVENUE_BY_KABUPATEN_QUERY = """
+WITH availability_cache AS (
+    SELECT
+        d2."Kabupaten/KOTA" AS kabupaten,
+        ROUND(
+            (SUM(smm.total_time_in_minutes) - SUM(smm.total_outage_menit))
+            / NULLIF(SUM(smm.total_time_in_minutes), 0) * 100.0
+        , 4) AS avg_availability
+    FROM site_month_metrics smm
+    JOIN data_site_master d2 ON smm.site_id = d2."Siteid"
+    WHERE smm.tahun = CAST(SPLIT_PART(:trx_month, '-', 1) AS INTEGER)
+      AND smm.bulan = CAST(SPLIT_PART(:trx_month, '-', 2) AS INTEGER)
+      AND d2."Kabupaten/KOTA" IS NOT NULL
+      {availability_nop_filter}
+    GROUP BY d2."Kabupaten/KOTA"
+),
+availability_logs AS (
+    SELECT
+        d2."Kabupaten/KOTA" AS kabupaten,
+        ROUND(AVG(NULLIF(a.availability::TEXT, '')::NUMERIC), 4) AS avg_availability
+    FROM availability_logs_jatim a
+    JOIN data_site_master d2 ON a."SITE ID" = d2."Siteid"
+    WHERE a.availability IS NOT NULL
+      AND a."Tahun" = CAST(SPLIT_PART(:trx_month, '-', 1) AS INTEGER)
+      AND a."Bulan" = CAST(SPLIT_PART(:trx_month, '-', 2) AS INTEGER)
+      AND d2."Kabupaten/KOTA" IS NOT NULL
+      {availability_nop_filter}
+    GROUP BY d2."Kabupaten/KOTA"
+),
+availability AS (
+    SELECT
+        COALESCE(c.kabupaten, l.kabupaten) AS kabupaten,
+        COALESCE(c.avg_availability, l.avg_availability) AS avg_availability
+    FROM availability_cache c
+    FULL OUTER JOIN availability_logs l ON l.kabupaten = c.kabupaten
+)
 SELECT
     d."Kabupaten/KOTA" AS kabupaten,
     COUNT(DISTINCT t.site_id) AS total_sites,
@@ -84,21 +135,7 @@ SELECT
     avail.avg_availability
 FROM traktor_data t
 JOIN data_site_master d ON t.site_id = d."Siteid"
-LEFT JOIN (
-    SELECT
-        d2."Kabupaten/KOTA" AS kabupaten,
-        ROUND(
-            (SUM(smm.total_time_in_minutes) - SUM(smm.total_outage_menit))
-            / NULLIF(SUM(smm.total_time_in_minutes), 0) * 100.0
-        , 4) AS avg_availability
-    FROM site_month_metrics smm
-    JOIN data_site_master d2 ON smm.site_id = d2."Siteid"
-    WHERE smm.tahun = CAST(SPLIT_PART(:trx_month, '-', 1) AS INTEGER)
-      AND smm.bulan = CAST(SPLIT_PART(:trx_month, '-', 2) AS INTEGER)
-      AND d2."Kabupaten/KOTA" IS NOT NULL
-      {availability_nop_filter}
-    GROUP BY d2."Kabupaten/KOTA"
-) avail ON avail.kabupaten = d."Kabupaten/KOTA"
+LEFT JOIN availability avail ON avail.kabupaten = d."Kabupaten/KOTA"
 WHERE t.trx_month = :trx_month
   AND d."Kabupaten/KOTA" IS NOT NULL
   {nop_filter}

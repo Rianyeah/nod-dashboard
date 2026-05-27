@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
 from database import get_session
+from queries.metrics_cache import ensure_site_month_metrics
 from queries.sql_queries import (
     SITES_LIST_QUERY,
     SITES_COUNT_QUERY,
@@ -169,6 +170,8 @@ async def list_sites(
         bulan = now.month
     if tahun is None:
         tahun = now.year
+
+    await ensure_site_month_metrics(session, bulan, tahun)
 
     filters, filter_params = _build_filters(kabupaten, cluster, status, kelas, nop)
     search_filter, search_params = _build_search_filter(q)

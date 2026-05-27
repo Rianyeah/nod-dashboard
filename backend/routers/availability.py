@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
 from database import get_session
+from queries.metrics_cache import ensure_site_month_metrics
 from queries.sql_queries import (
     SUMMARY_CARD_QUERY,
     LATEST_PERIOD_QUERY,
@@ -63,6 +64,8 @@ async def get_summary(
     session: AsyncSession = Depends(get_session),
 ):
     """Summary card: total sites, avg availability, total outage."""
+    await ensure_site_month_metrics(session, bulan, tahun)
+
     from routers.sites import _build_filters
     filters, filter_params = _build_filters(kabupaten, cluster, status, kelas, nop)
 
@@ -177,6 +180,8 @@ async def get_worst_sites(
     session: AsyncSession = Depends(get_session),
 ):
     """Sites with worst availability."""
+    await ensure_site_month_metrics(session, bulan, tahun)
+
     result = await session.execute(
         text(WORST_SITES_QUERY),
         {"bulan": bulan, "tahun": tahun, "limit_val": limit},

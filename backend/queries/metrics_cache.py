@@ -2,6 +2,8 @@
 SQL used to bootstrap and refresh the precomputed monthly site metrics cache.
 """
 
+from sqlalchemy import text
+
 from queries.sql_queries import MONTH_MINUTES_EXPR
 
 
@@ -118,3 +120,50 @@ FROM site_raw sr
 LEFT JOIN rca_ranked rr ON rr."SITE ID" = sr."SITE ID" AND rr.rn = 1
 RETURNING site_id
 """
+
+
+METRICS_CACHE_PERIOD_STATUS_QUERY = """
+SELECT
+    raw.raw_sites,
+    cache.cached_sites
+FROM (
+    SELECT COUNT(DISTINCT "SITE ID")::INT AS raw_sites
+    FROM availability_logs_jatim
+    WHERE "Bulan" = :bulan AND "Tahun" = :tahun
+) raw
+CROSS JOIN (
+    SELECT COUNT(*)::INT AS cached_sites
+    FROM site_month_metrics
+    WHERE bulan = :bulan AND tahun = :tahun
+) cache
+"""
+
+
+METRICS_CACHE_PERIOD_LOCK_QUERY = """
+SELECT pg_advisory_xact_lock(48001, (:tahun * 100 + :bulan))
+"""
+
+
+async def ensure_site_month_metrics(session, bulan: int, tahun: int) -> int:
+    """Refresh one monthly metrics cache period when raw logs exist but cache rows do not."""
+    params = {"bulan": int(bulan), "tahun": int(tahun)}
+
+    try:
+        await session.execute(text(METRICS_CACHE_PERIOD_LOCK_QUERY), params)
+        result = await session.execute(text(METRICS_CACHE_PERIOD_STATUS_QUERY), params)
+        status = result.mappings().first() or {}
+        raw_sites = int(status.get("raw_sites") or 0)
+        cached_sites = int(status.get("cached_sites") or 0)
+
+        if raw_sites <= 0 or cached_sites >= raw_sites:
+            await session.commit()
+            return 0
+
+        await session.execute(text(REFRESH_SITE_MONTH_DELETE_QUERY), params)
+        insert_result = await session.execute(text(REFRESH_SITE_MONTH_INSERT_QUERY), params)
+        refreshed_sites = len(insert_result.scalars().all())
+        await session.commit()
+        return refreshed_sites
+    except Exception:
+        await session.rollback()
+        raise

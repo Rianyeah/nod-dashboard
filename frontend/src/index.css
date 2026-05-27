@@ -431,6 +431,78 @@ select option {
   color: var(--text-primary);
 }
 
+/* ===== SiteDetailModal ===== */
+.site-detail-scroll {
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0px,
+    black 8px,
+    black calc(100% - 32px),
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0px,
+    black 8px,
+    black calc(100% - 32px),
+    transparent 100%
+  );
+}
+
+/* Light-mode modal card adjustments */
+[data-theme="light"] .site-detail-modal {
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
+/* Reporting PDF export */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 10mm;
+  }
+
+  html,
+  body,
+  #root {
+    width: auto !important;
+    height: auto !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+  }
+
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .reporting-no-print {
+    display: none !important;
+  }
+
+  .reporting-export-root {
+    height: auto !important;
+    min-height: auto !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+  }
+
+  .reporting-export-root main {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .reporting-export-root .glass-card,
+  .reporting-export-root table,
+  .reporting-export-root .chart {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .reporting-export-root .glass-card {
+    box-shadow: none !important;
+  }
+}
+
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

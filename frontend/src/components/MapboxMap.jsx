@@ -193,7 +193,7 @@ function dailySparklineHtml(rows = [], monthAvailability = null) {
   return `
     <div>
       <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;margin-bottom:6px">
-        <span style="font-size:9px;color:#64748B;text-transform:uppercase;letter-spacing:.08em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Daily Availability</span>
+        <span style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Daily Availability</span>
         <b style="font-size:10px;color:#34D399;white-space:nowrap">Month Avg ${monthAvg}%</b>
       </div>
       <svg width="218" height="48" viewBox="0 0 218 48" style="display:block;width:100%;height:48px;overflow:visible">
@@ -795,21 +795,21 @@ export default function MapboxMap({
       <div class="nod-popup-shell" style="padding:12px;font-family:Inter,sans-serif;width:248px">
         <div class="nod-popup-drag-handle" style="display:flex;align-items:center;gap:7px;margin-bottom:8px;padding-right:18px">
           <span style="width:8px;height:8px;border-radius:50%;background:${p.color};box-shadow:0 0 8px ${p.color}"></span>
-          <span style="font-size:13px;font-weight:800;color:#F1F5F9;line-height:1">${escapedSiteId}</span>
+          <span style="font-size:13px;font-weight:800;color:var(--text-primary);line-height:1">${escapedSiteId}</span>
         </div>
-        <p style="font-size:10px;color:#94A3B8;margin:0 0 10px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapedSiteName}</p>
-        <div id="${chartId}" style="margin-bottom:10px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.04);border-radius:8px;padding:8px 9px">
-          <div style="height:65px;display:flex;align-items:center;justify-content:center;color:#64748B;font-size:10px">Memuat daily trend...</div>
+        <p style="font-size:10px;color:var(--text-muted);margin:0 0 10px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapedSiteName}</p>
+        <div id="${chartId}" style="margin-bottom:10px;border:1px solid var(--border);background:var(--bg-elevated);border-radius:8px;padding:8px 9px">
+          <div style="height:65px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:10px">Memuat daily trend...</div>
         </div>
         <div style="display:grid;grid-template-columns:auto 1fr;gap:5px 10px;font-size:10px;align-items:center">
-          <span style="color:#64748B">Avail</span>
+          <span style="color:var(--text-muted)">Avail</span>
           <b style="color:${p.color};font-size:13px;text-align:right">${avail}</b>
-          <span style="color:#64748B">Outage</span>
-          <b style="color:#F1F5F9;text-align:right">${outage}</b>
-          <span style="color:#64748B">Cell</span>
-          <b style="color:#F1F5F9;text-align:right">${formatCell(p.jumlah_cell)}</b>
-          <span style="color:#64748B">Class</span>
-          <b style="color:#F1F5F9;text-align:right">${escapedSiteClass || '-'}</b>
+          <span style="color:var(--text-muted)">Outage</span>
+          <b style="color:var(--text-primary);text-align:right">${outage}</b>
+          <span style="color:var(--text-muted)">Cell</span>
+          <b style="color:var(--text-primary);text-align:right">${formatCell(p.jumlah_cell)}</b>
+          <span style="color:var(--text-muted)">Class</span>
+          <b style="color:var(--text-primary);text-align:right">${escapedSiteClass || '-'}</b>
         </div>
         <button onclick="window.dispatchEvent(new CustomEvent('open-site-detail',{detail:'${escapedSiteIdJs}'}))"
           style="margin-top:10px;width:100%;padding:7px;background:linear-gradient(135deg,#1E40AF,#3B82F6);color:#fff;border:none;border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:0.2px;transition:opacity 0.2s"
@@ -850,7 +850,7 @@ export default function MapboxMap({
         .catch(() => {
           const chartEl = document.getElementById(chartId);
           if (chartEl) {
-            chartEl.innerHTML = '<div style="height:65px;display:flex;align-items:center;justify-content:center;color:#F87171;font-size:10px">Daily trend gagal dimuat</div>';
+            chartEl.innerHTML = '<div style="height:65px;display:flex;align-items:center;justify-content:center;color:var(--danger);font-size:10px">Daily trend gagal dimuat</div>';
           }
         });
     }
@@ -948,6 +948,7 @@ export default function MapboxMap({
       source: SECTOR_SOURCE_ID,
       minzoom: SECTOR_MIN_ZOOM,
       slot: 'top',
+      filter: ['==', ['get', 'site_id'], ''],
       paint: {
         'fill-color': [
           'match',
@@ -973,6 +974,7 @@ export default function MapboxMap({
       source: SECTOR_SOURCE_ID,
       minzoom: SECTOR_MIN_ZOOM,
       slot: 'top',
+      filter: ['==', ['get', 'site_id'], ''],
       paint: {
         'line-color': [
           'match',
@@ -1116,12 +1118,12 @@ export default function MapboxMap({
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
     const filter = ['==', ['get', 'site_id'], selectedSiteId || ''];
-    if (map.current.getLayer('sector-selected-fill')) {
-      map.current.setFilter('sector-selected-fill', filter);
-    }
-    if (map.current.getLayer('sector-selected-outline')) {
-      map.current.setFilter('sector-selected-outline', filter);
-    }
+    // Apply filter to ALL sector layers so only the selected site's sectors are visible
+    ['sector-fill', 'sector-outline', 'sector-selected-fill', 'sector-selected-outline'].forEach(layerId => {
+      if (map.current.getLayer(layerId)) {
+        map.current.setFilter(layerId, filter);
+      }
+    });
   }, [selectedSiteId, mapLoaded]);
 
   const BAND_LEGEND = [
