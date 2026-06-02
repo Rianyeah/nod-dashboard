@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
 
+const E2E_BASE_URL = process.env.E2E_BASE_URL || 'http://127.0.0.1:5173';
+
 test.use({
   channel: 'chrome'
 });
@@ -8,6 +10,7 @@ async function authenticate(page, theme = 'dark') {
   await page.addInitScript(({ selectedTheme }) => {
     localStorage.setItem('nod_auth_token', 'test-token');
     localStorage.setItem('nod_theme', selectedTheme);
+    localStorage.setItem('nod_last_activity', String(Date.now()));
   }, { selectedTheme: theme });
 }
 
@@ -136,4 +139,63 @@ test('Reporting NOP filter is sent to scorecards chart and tables', async ({ pag
     'site-class-by-kabupaten',
     'trend',
   ]);
+});
+
+test('Impact Service filters are sent to scorecards charts table and modal', async ({ page }) => {
+  const filteredRequests = new Set();
+  let filterBounds = null;
+
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if (!url.pathname.includes('/api/v1/impact-service/')) return;
+    if (url.pathname.endsWith('/filters')) return;
+    if (url.searchParams.get('start_date') && url.searchParams.get('end_date')) {
+      filteredRequests.add(url.pathname.replace('/api/v1/impact-service/', ''));
+    }
+  });
+  page.on('response', async (response) => {
+    const url = new URL(response.url());
+    if (!url.pathname.endsWith('/api/v1/impact-service/filters')) return;
+    expect(response.headers()['content-type'] || '').toContain('application/json');
+    filterBounds = await response.json();
+  });
+
+  await authenticate(page, 'light');
+  await page.goto(`${E2E_BASE_URL}/impact-service`);
+  await expect(page.getByRole('heading', { name: 'Impact Service' })).toBeVisible({ timeout: 20000 });
+  await expect(page.locator('#impact-start-date')).toBeVisible();
+  await expect(page.locator('#impact-end-date')).toBeVisible();
+  await expect(page.locator('#impact-nop')).toBeVisible();
+
+  await page.waitForFunction(() => {
+    const select = document.querySelector('#impact-nop');
+    return select && select.options.length > 1;
+  });
+  await expect.poll(() => filterBounds?.max_date).toBeTruthy();
+  await expect(page.locator('#impact-start-date')).toHaveValue(filterBounds.max_date);
+  await expect(page.locator('#impact-end-date')).toHaveValue(filterBounds.max_date);
+
+  await page.locator('#impact-end-date').fill(filterBounds.min_date);
+  await expect(page.locator('#impact-start-date')).toHaveValue(filterBounds.min_date);
+  await expect(page.locator('#impact-end-date')).toHaveValue(filterBounds.min_date);
+  await expect(page.getByText('Rentang tanggal tidak valid')).toHaveCount(0);
+
+  await page.locator('#impact-nop').selectOption({ index: 1 });
+  await expect(page.getByText('Alarm Detail Table')).toBeVisible({ timeout: 20000 });
+
+  await expect.poll(() => Array.from(filteredRequests).sort()).toEqual([
+    'alarms',
+    'daily-trend',
+    'distributions',
+    'summary',
+    'top-alarms',
+    'top-sites',
+  ]);
+
+  const firstRow = page.locator('[data-testid="impact-alarm-row"]').first();
+  await expect(firstRow).toBeVisible({ timeout: 20000 });
+  await firstRow.click();
+  await expect(page.getByRole('dialog', { name: /Alarm Detail/ })).toBeVisible({ timeout: 20000 });
+
+  await expect.poll(() => Array.from(filteredRequests).some((path) => /^alarms\/\d+$/.test(path))).toBeTruthy();
 });

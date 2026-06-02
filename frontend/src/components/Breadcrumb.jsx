@@ -4,6 +4,9 @@ import { ChevronRight, Home } from 'lucide-react';
 const ROUTE_LABELS = {
   dashboard: 'Dashboard',
   reporting: 'Reporting',
+  'impact-service': 'Impact Service',
+  'transport-quality': 'Transport Quality',
+  'ticketing': 'Ticketing',
 };
 
 export default function Breadcrumb() {

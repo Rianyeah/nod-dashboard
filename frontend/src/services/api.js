@@ -171,4 +171,109 @@ export async function fetchRevenueTrend(nop) {
   return data;
 }
 
+// ===== Impact Service =====
+
+export async function fetchImpactServiceFilters() {
+  const { data } = await api.get('/impact-service/filters', {
+    params: { _: Date.now() },
+    headers: { 'Cache-Control': 'no-cache' },
+  });
+  return data;
+}
+
+export async function fetchImpactServiceSummary(params) {
+  const { data } = await api.get('/impact-service/summary', { params: params });
+  return data;
+}
+
+export async function fetchImpactServiceDailyTrend(params) {
+  const { data } = await api.get('/impact-service/daily-trend', { params: params });
+  return data;
+}
+
+export async function fetchImpactServiceDistributions(params) {
+  const { data } = await api.get('/impact-service/distributions', { params: params });
+  return data;
+}
+
+export async function fetchImpactServiceTopAlarms(params) {
+  const { data } = await api.get('/impact-service/top-alarms', { params: params });
+  return data;
+}
+
+export async function fetchImpactServiceTopSites(params) {
+  const { data } = await api.get('/impact-service/top-sites', { params: params });
+  return data;
+}
+
+export async function fetchImpactServiceAlarms(params) {
+  const { data } = await api.get('/impact-service/alarms', { params: params });
+  return data;
+}
+
+export async function fetchImpactServiceAlarmDetail(alarmId, params) {
+  const { data } = await api.get(`/impact-service/alarms/${alarmId}`, { params: params });
+  return data;
+}
+
+// ===== Transport Quality =====
+
+export async function fetchTransportQualityFilters() {
+  const { data } = await api.get('/transport-quality/filters', {
+    params: { _: Date.now() },
+    headers: { 'Cache-Control': 'no-cache' },
+  });
+  return data;
+}
+
+export async function fetchTransportQualitySummary(params) {
+  const { data } = await api.get('/transport-quality/summary', { params: params });
+  return data;
+}
+
+export async function fetchTransportQualityTrend(params) {
+  const { data } = await api.get('/transport-quality/trend', { params: params });
+  return data;
+}
+
+export async function fetchTransportQualityDistributions(params) {
+  const { data } = await api.get('/transport-quality/distributions', { params: params });
+  return data;
+}
+
+export async function fetchTransportQualityBreakdowns(params) {
+  const { data } = await api.get('/transport-quality/breakdowns', { params: params });
+  return data;
+}
+
+export async function fetchTransportQualityPrioritySites(params) {
+  const { data } = await api.get('/transport-quality/priority-sites', { params: params });
+  return data;
+}
+
+// ===== Ticketing =====
+
+export async function fetchTicketingFilters() {
+  const { data } = await api.get('/ticketing/filters', {
+    params: { _: Date.now() },
+    headers: { 'Cache-Control': 'no-cache' },
+  });
+  return data;
+}
+
+export async function fetchTicketingDashboard(params) {
+  const { data } = await api.get('/ticketing/dashboard', { params: params });
+  return data;
+}
+
+export async function fetchTicketingTickets(params) {
+  const { data } = await api.get('/ticketing/tickets', { params: params });
+  return data;
+}
+
+export async function fetchTicketingTicketDetail(ticketNumberSwfm) {
+  const { data } = await api.get(`/ticketing/tickets/${encodeURIComponent(ticketNumberSwfm)}`);
+  return data;
+}
+
 export default api;
