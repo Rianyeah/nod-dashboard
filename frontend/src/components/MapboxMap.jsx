@@ -3,6 +3,7 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { getMarkerColor } from '../utils/mapColors';
 import { fetchMapSectors, fetchSiteAvailability } from '../services/api';
+import { Layers, Globe2, Satellite } from 'lucide-react';
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN;
 
@@ -304,6 +305,10 @@ export default function MapboxMap({
   const popupDragCleanup = useRef(null);
   const popupDragOffset = useRef({ x: 0, y: 0 });
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [mapStyle, setMapStyle] = useState('standard');
+  const [showSectors, setShowSectors] = useState(true);
+  const mapStyleRef = useRef('standard');
+  const showSectorsRef = useRef(true);
   const [sectorState, setSectorState] = useState({
     nop: nop || null,
     geoJson: EMPTY_GEOJSON,
@@ -477,7 +482,11 @@ export default function MapboxMap({
     });
     map.current.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'top-right');
     map.current.addControl(new mapboxgl.FullscreenControl(), 'top-right');
-    map.current.on('style.load', () => applyDuskScene(map.current));
+    map.current.on('style.load', () => {
+      if (mapStyleRef.current === 'standard') {
+        applyDuskScene(map.current);
+      }
+    });
     map.current.on('load', () => {
       applyDuskScene(map.current);
       setMapLoaded(true);
@@ -1126,6 +1135,217 @@ export default function MapboxMap({
     });
   }, [selectedSiteId, mapLoaded]);
 
+  // --- Sector layer visibility toggle ---
+  useEffect(() => {
+    showSectorsRef.current = showSectors;
+    if (!map.current || !mapLoaded) return;
+    const visibility = showSectors ? 'visible' : 'none';
+    SECTOR_LAYER_IDS.forEach(layerId => {
+      if (map.current.getLayer(layerId)) {
+        map.current.setLayoutProperty(layerId, 'visibility', visibility);
+      }
+    });
+  }, [showSectors, mapLoaded]);
+
+  // --- Basemap style toggle handler ---
+  const handleToggleMapStyle = useCallback(() => {
+    if (!map.current) return;
+    const newStyle = mapStyle === 'standard' ? 'satellite' : 'standard';
+    setMapStyle(newStyle);
+    mapStyleRef.current = newStyle;
+
+    const styleUrl = newStyle === 'satellite'
+      ? 'mapbox://styles/mapbox/satellite-streets-v12'
+      : 'mapbox://styles/mapbox/standard';
+
+    // Save current camera state
+    const center = map.current.getCenter();
+    const zoom = map.current.getZoom();
+    const pitch = map.current.getPitch();
+    const bearing = map.current.getBearing();
+
+    map.current.setStyle(styleUrl, {
+      diff: false,
+      ...(newStyle === 'standard' ? {
+        config: {
+          basemap: {
+            lightPreset: 'dusk',
+            showPointOfInterestLabels: false,
+            showTransitLabels: false,
+          },
+        },
+      } : {}),
+    });
+
+    map.current.once('style.load', () => {
+      // Restore camera
+      map.current.jumpTo({ center, zoom, pitch, bearing });
+
+      // Re-apply dusk scene for standard style
+      if (newStyle === 'standard') {
+        applyDuskScene(map.current);
+      }
+
+      // Re-add all custom sources and layers
+      // Sites source
+      if (!map.current.getSource('sites-source')) {
+        map.current.addSource('sites-source', {
+          type: 'geojson',
+          data: sitesGeoJson || emptyFeatureCollection(),
+          cluster: false,
+        });
+      }
+
+      // Sector source
+      if (!map.current.getSource(SECTOR_SOURCE_ID)) {
+        map.current.addSource(SECTOR_SOURCE_ID, {
+          type: 'geojson',
+          data: sectorGeoJson || EMPTY_GEOJSON,
+        });
+      }
+
+      const sectorVisibility = showSectorsRef.current ? 'visible' : 'none';
+
+      // Re-add sector layers
+      if (!map.current.getLayer('sector-fill')) {
+        map.current.addLayer({
+          id: 'sector-fill',
+          type: 'fill',
+          source: SECTOR_SOURCE_ID,
+          minzoom: SECTOR_MIN_ZOOM,
+          slot: 'top',
+          layout: { visibility: sectorVisibility },
+          filter: ['==', ['get', 'site_id'], selectedSiteId || ''],
+          paint: {
+            'fill-color': [
+              'match', ['get', 'band'],
+              'L900', '#F59E0B', 'L1800', '#3B82F6',
+              'L2100', '#10B981', 'L2300', '#A855F7', '#64748B',
+            ],
+            'fill-opacity': ['interpolate', ['linear'], ['zoom'], 10, 0.25, 13, 0.38, 16, 0.30],
+          },
+        });
+      }
+      if (!map.current.getLayer('sector-outline')) {
+        map.current.addLayer({
+          id: 'sector-outline',
+          type: 'line',
+          source: SECTOR_SOURCE_ID,
+          minzoom: SECTOR_MIN_ZOOM,
+          slot: 'top',
+          layout: { visibility: sectorVisibility },
+          filter: ['==', ['get', 'site_id'], selectedSiteId || ''],
+          paint: {
+            'line-color': [
+              'match', ['get', 'band'],
+              'L900', '#FCD34D', 'L1800', '#93C5FD',
+              'L2100', '#6EE7B7', 'L2300', '#C4B5FD', '#94A3B8',
+            ],
+            'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1.0, 13, 1.8, 16, 2.4],
+            'line-opacity': 0.88,
+          },
+        });
+      }
+      if (!map.current.getLayer('sector-selected-fill')) {
+        map.current.addLayer({
+          id: 'sector-selected-fill',
+          type: 'fill',
+          source: SECTOR_SOURCE_ID,
+          slot: 'top',
+          layout: { visibility: sectorVisibility },
+          filter: ['==', ['get', 'site_id'], selectedSiteId || ''],
+          paint: {
+            'fill-color': [
+              'match', ['get', 'band'],
+              'L900', '#F59E0B', 'L1800', '#3B82F6',
+              'L2100', '#10B981', 'L2300', '#A855F7', '#F59E0B',
+            ],
+            'fill-opacity': 0.55,
+          },
+        });
+      }
+      if (!map.current.getLayer('sector-selected-outline')) {
+        map.current.addLayer({
+          id: 'sector-selected-outline',
+          type: 'line',
+          source: SECTOR_SOURCE_ID,
+          slot: 'top',
+          layout: { visibility: sectorVisibility },
+          filter: ['==', ['get', 'site_id'], selectedSiteId || ''],
+          paint: { 'line-color': '#FDE68A', 'line-width': 3.2, 'line-opacity': 0.95 },
+        });
+      }
+
+      // Re-add site layers
+      if (!map.current.getLayer('site-pin-halo')) {
+        map.current.addLayer({
+          id: 'site-pin-halo',
+          type: 'circle',
+          source: 'sites-source',
+          slot: 'top',
+          paint: {
+            'circle-color': ['get', 'color'],
+            'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 8, 10, 12, 14, 16],
+            'circle-opacity': 0.34,
+            'circle-blur': 0.55,
+          },
+        });
+      }
+      if (!map.current.getLayer('site-pin')) {
+        map.current.addLayer({
+          id: 'site-pin',
+          type: 'circle',
+          source: 'sites-source',
+          slot: 'top',
+          paint: {
+            'circle-color': ['get', 'color'],
+            'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 4.6, 10, 6.2, 14, 7.6],
+            'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 6, 1.3, 10, 1.8],
+            'circle-stroke-color': 'rgba(255,255,255,0.94)',
+            'circle-opacity': 0.95,
+          },
+        });
+      }
+      if (!map.current.getLayer('site-pin-label')) {
+        map.current.addLayer({
+          id: 'site-pin-label',
+          type: 'symbol',
+          source: 'sites-source',
+          minzoom: 10,
+          slot: 'top',
+          layout: {
+            'text-field': ['get', 'site_id'],
+            'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
+            'text-size': 11,
+            'text-offset': [0, 1.2],
+            'text-anchor': 'top',
+          },
+          paint: {
+            'text-color': '#ffffff',
+            'text-halo-color': 'rgba(0, 0, 0, 0.8)',
+            'text-halo-width': 2,
+          },
+        });
+      }
+
+      // Re-attach click handlers for site pins
+      const handleSiteClick = (e) => {
+        const p = e.features[0].properties;
+        const c = e.features[0].geometry.coordinates.slice();
+        focusSiteRef.current?.(p, c, { notify: true });
+      };
+      const setPointerCursor = () => { map.current.getCanvas().style.cursor = 'pointer'; };
+      const clearPointerCursor = () => { map.current.getCanvas().style.cursor = ''; };
+
+      map.current.on('click', 'site-pin', handleSiteClick);
+      map.current.on('click', 'site-pin-label', handleSiteClick);
+      ['site-pin', 'site-pin-label'].forEach(layer => {
+        map.current.on('mouseenter', layer, setPointerCursor);
+        map.current.on('mouseleave', layer, clearPointerCursor);
+      });
+    });
+  }, [mapStyle, sitesGeoJson, sectorGeoJson, selectedSiteId]);
+
   const BAND_LEGEND = [
     { band: 'L900', color: '#F59E0B', label: '900 MHz' },
     { band: 'L1800', color: '#3B82F6', label: '1800 MHz' },
@@ -1158,23 +1378,60 @@ export default function MapboxMap({
           </button>
         </div>
       )}
-      {/* Sector Band Legend */}
-      <div className="nod-sector-legend absolute bottom-3 left-3 z-10 px-3 py-2.5">
-        <p className="nod-sector-legend-title text-[9px] font-semibold uppercase tracking-widest mb-1.5">
-          Sector Bands
-        </p>
-        <div className="flex flex-col gap-1">
-          {BAND_LEGEND.map(({ band, color, label }) => (
-            <div key={band} className="flex items-center gap-2">
-              <span
-                className="w-2.5 h-2.5 rounded-sm shrink-0"
-                style={{ backgroundColor: color, boxShadow: `0 0 6px ${color}66` }}
-              />
-              <span className="nod-sector-legend-item text-[10px] font-medium">{label}</span>
-            </div>
-          ))}
+      {/* Sector Band Legend — hidden when sectors are off */}
+      {showSectors && (
+        <div className="nod-sector-legend absolute bottom-3 left-3 z-10 px-3 py-2.5">
+          <p className="nod-sector-legend-title text-[9px] font-semibold uppercase tracking-widest mb-1.5">
+            Sector Bands
+          </p>
+          <div className="flex flex-col gap-1">
+            {BAND_LEGEND.map(({ band, color, label }) => (
+              <div key={band} className="flex items-center gap-2">
+                <span
+                  className="w-2.5 h-2.5 rounded-sm shrink-0"
+                  style={{ backgroundColor: color, boxShadow: `0 0 6px ${color}66` }}
+                />
+                <span className="nod-sector-legend-item text-[10px] font-medium">{label}</span>
+              </div>
+            ))}
+          </div>
         </div>
+      )}
+
+      {/* Map Control Toggles — bottom right */}
+      <div className="absolute bottom-3 right-3 z-10 flex flex-col gap-2">
+        {/* Basemap Toggle */}
+        <button
+          type="button"
+          onClick={handleToggleMapStyle}
+          className="nod-map-toggle"
+          title={mapStyle === 'standard' ? 'Switch to Satellite' : 'Switch to Standard'}
+          aria-label="Toggle map basemap"
+        >
+          {mapStyle === 'standard'
+            ? <Satellite className="w-4 h-4" />
+            : <Globe2 className="w-4 h-4" />
+          }
+          <span className="text-[10px] font-semibold">
+            {mapStyle === 'standard' ? 'Satellite' : 'Standard'}
+          </span>
+        </button>
+
+        {/* Sector Layer Toggle */}
+        <button
+          type="button"
+          onClick={() => setShowSectors(v => !v)}
+          className={`nod-map-toggle ${showSectors ? 'nod-map-toggle--active' : ''}`}
+          title={showSectors ? 'Hide Sector Coverage' : 'Show Sector Coverage'}
+          aria-label="Toggle sector layer visibility"
+        >
+          <Layers className="w-4 h-4" />
+          <span className="text-[10px] font-semibold">
+            {showSectors ? 'Sectors On' : 'Sectors Off'}
+          </span>
+        </button>
       </div>
+
       <div ref={mapContainer} className="w-full h-full" />
     </div>
   );

@@ -1,6 +1,7 @@
-import { ChevronDown, MapPin, BarChart3, Sun, Moon } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { ChevronDown, MapPin, BarChart3, AlertTriangle, Activity, TicketCheck, Sun, Moon, LogOut } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTheme } from '../hooks/useTheme';
+import { authLogout } from '../services/api';
 
 const BULAN_OPTIONS = [
   { value: 1, label: 'Januari' },
@@ -38,6 +39,12 @@ function SelectDropdown({ id, value, onChange, children, className = '' }) {
 
 export default function Header({ bulan, tahun, nop, nopOptions = [], onBulanChange, onTahunChange, onNopChange }) {
   const { theme, toggleTheme } = useTheme();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    authLogout();
+    navigate('/login', { replace: true });
+  };
 
   return (
     <header className="relative bg-gradient-to-r from-[var(--bg-base)] via-[var(--bg-surface)] to-[var(--bg-base)] border-b border-[var(--border)]">
@@ -78,6 +85,27 @@ export default function Header({ bulan, tahun, nop, nopOptions = [], onBulanChan
           >
             <BarChart3 className="w-3.5 h-3.5" />
             Reporting
+          </Link>
+          <Link
+            to="/impact-service"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--text-muted)] hover:text-[var(--primary-light)] hover:bg-[var(--primary)]/10 border border-transparent hover:border-[var(--primary)]/20 transition-all duration-200"
+          >
+            <AlertTriangle className="w-3.5 h-3.5" />
+            Impact Service
+          </Link>
+          <Link
+            to="/transport-quality"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--text-muted)] hover:text-[var(--primary-light)] hover:bg-[var(--primary)]/10 border border-transparent hover:border-[var(--primary)]/20 transition-all duration-200"
+          >
+            <Activity className="w-3.5 h-3.5" />
+            Transport Quality
+          </Link>
+          <Link
+            to="/ticketing"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--text-muted)] hover:text-[var(--primary-light)] hover:bg-[var(--primary)]/10 border border-transparent hover:border-[var(--primary)]/20 transition-all duration-200"
+          >
+            <TicketCheck className="w-3.5 h-3.5" />
+            Ticketing
           </Link>
 
           {/* Theme Toggle */}
@@ -133,6 +161,21 @@ export default function Header({ bulan, tahun, nop, nopOptions = [], onBulanChan
               <option key={t} value={t}>{t}</option>
             ))}
           </SelectDropdown>
+
+          {/* Divider */}
+          <div className="w-px h-6 bg-[var(--border-light)] mx-1" />
+
+          {/* Logout */}
+          <button
+            id="header-logout"
+            onClick={handleLogout}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--text-muted)] hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all duration-200"
+            title="Logout"
+            aria-label="Logout"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            Logout
+          </button>
         </div>
       </div>
     </header>

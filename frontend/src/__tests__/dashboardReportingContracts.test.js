@@ -6,6 +6,7 @@ import { resolve } from 'node:path';
 
 const src = (...parts) => readFileSync(resolve(process.cwd(), 'src', ...parts), 'utf8');
 const publicFile = (...parts) => resolve(process.cwd(), 'public', ...parts);
+const srcPath = (...parts) => resolve(process.cwd(), 'src', ...parts);
 
 describe('dashboard and reporting visual/data contracts', () => {
   it('uses the Telkomsel logo asset in the dashboard header', () => {
@@ -146,5 +147,85 @@ describe('dashboard and reporting visual/data contracts', () => {
     assert.match(css, /@media print/);
     assert.match(css, /\.reporting-no-print/);
     assert.match(css, /\.reporting-export-root/);
+  });
+
+  it('wires the Impact Service route, navigation, global filters, and API params', () => {
+    const app = src('App.jsx');
+    const header = src('components', 'Header.jsx');
+    const impactPagePath = srcPath('pages', 'ImpactServicePage.jsx');
+    assert.equal(existsSync(impactPagePath), true);
+    const page = readFileSync(impactPagePath, 'utf8');
+    const api = src('services', 'api.js');
+
+    assert.match(app, /ImpactServicePage/);
+    assert.match(app, /path="\/impact-service"/);
+    assert.match(header, /to="\/impact-service"/);
+    assert.match(header, /Impact Service/);
+
+    assert.match(page, /id="impact-start-date"/);
+    assert.match(page, /id="impact-end-date"/);
+    assert.match(page, /id="impact-nop"/);
+    assert.match(page, /const latestDate = [a-zA-Z0-9_]+\.max_date/);
+    assert.match(page, /setStartDate\(latestDate\)/);
+    assert.match(page, /setEndDate\(latestDate\)/);
+    assert.match(page, /handleStartDateChange/);
+    assert.match(page, /handleEndDateChange/);
+    assert.match(page, /ImpactServiceErrorBoundary/);
+    assert.match(page, /componentDidCatch/);
+    assert.match(page, /fetchImpactServiceSummary\(queryParams\)/);
+    assert.match(page, /fetchImpactServiceDailyTrend\(queryParams\)/);
+    assert.match(page, /fetchImpactServiceDistributions\(queryParams\)/);
+    assert.match(page, /fetchImpactServiceTopAlarms\(queryParams\)/);
+    assert.match(page, /fetchImpactServiceTopSites\(queryParams\)/);
+    assert.match(page, /fetchImpactServiceAlarms\(queryParams\)/);
+    assert.match(page, /fetchImpactServiceAlarmDetail\(selectedAlarmId,\s*queryParams\)/);
+
+    for (const fn of [
+      'fetchImpactServiceFilters',
+      'fetchImpactServiceSummary',
+      'fetchImpactServiceDailyTrend',
+      'fetchImpactServiceDistributions',
+      'fetchImpactServiceTopAlarms',
+      'fetchImpactServiceTopSites',
+      'fetchImpactServiceAlarms',
+      'fetchImpactServiceAlarmDetail',
+    ]) {
+      assert.match(api, new RegExp(`export async function ${fn}`));
+    }
+
+    assert.match(api, /\/impact-service\/summary/);
+    assert.match(api, /\/impact-service\/filters',\s*\{/);
+    assert.match(api, /Date\.now\(\)/);
+    assert.match(api, /Cache-Control': 'no-cache'/);
+    assert.match(api, /params:\s*params/);
+  });
+
+  it('renders the Impact Service operational dashboard sections', () => {
+    const impactPagePath = srcPath('pages', 'ImpactServicePage.jsx');
+    assert.equal(existsSync(impactPagePath), true);
+    const page = readFileSync(impactPagePath, 'utf8');
+
+    for (const label of [
+      'Alarm Impact Service',
+      'Impacted Site',
+      'OPEN Alarm',
+      'CLEAR Alarm',
+      'SOW TSEL',
+      'Daily Alarm Trend',
+      'Status by Severity',
+      'Category Distribution',
+      'Aging Range',
+      'NOP Contribution',
+      'Top Impacted Sites',
+      'Top Alarm Names',
+      'Alarm Detail Table',
+    ]) {
+      assert.match(page, new RegExp(label));
+    }
+
+    assert.match(page, /ResponsiveContainer/);
+    assert.match(page, /BarChart/);
+    assert.match(page, /row\.id/);
+    assert.match(page, /setSelectedAlarmId/);
   });
 });

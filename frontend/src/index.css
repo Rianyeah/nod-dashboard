@@ -294,6 +294,77 @@ html, body, #root {
   color: #CBD5E1;
 }
 
+/* ===== Map Toggle Controls ===== */
+.nod-map-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.78);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #CBD5E1;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  font-family: 'Inter', sans-serif;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.nod-map-toggle:hover {
+  background: rgba(15, 23, 42, 0.92);
+  border-color: rgba(59, 130, 246, 0.35);
+  color: #F1F5F9;
+  box-shadow: 0 2px 12px rgba(59, 130, 246, 0.18);
+}
+
+.nod-map-toggle:active {
+  transform: scale(0.97);
+}
+
+.nod-map-toggle--active {
+  border-color: rgba(59, 130, 246, 0.4);
+  background: rgba(59, 130, 246, 0.18);
+  color: #93C5FD;
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.15);
+}
+
+.nod-map-toggle--active:hover {
+  background: rgba(59, 130, 246, 0.28);
+  border-color: rgba(59, 130, 246, 0.5);
+  color: #BFDBFE;
+}
+
+/* Light mode map toggles */
+[data-theme="light"] .nod-map-toggle {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: rgba(0, 0, 0, 0.12);
+  color: #475569;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .nod-map-toggle:hover {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(37, 99, 235, 0.3);
+  color: #1E40AF;
+  box-shadow: 0 2px 12px rgba(37, 99, 235, 0.1);
+}
+
+[data-theme="light"] .nod-map-toggle--active {
+  background: rgba(37, 99, 235, 0.1);
+  border-color: rgba(37, 99, 235, 0.3);
+  color: #2563EB;
+}
+
+[data-theme="light"] .nod-map-toggle--active:hover {
+  background: rgba(37, 99, 235, 0.16);
+  border-color: rgba(37, 99, 235, 0.45);
+  color: #1D4ED8;
+}
+
 .nod-popup-shell {
   will-change: transform;
 }

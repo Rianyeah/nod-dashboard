@@ -145,6 +145,9 @@ from routers import availability as availability_router
 from routers import sites as sites_router
 from routers import admin as admin_router
 from routers import reporting as reporting_router
+from routers import impact_service as impact_service_router
+from routers import transport_quality as transport_quality_router
+from routers import ticketing as ticketing_router
 
 # NOTE: Token auth removed for initial deployment — dashboard is internal
 app.include_router(map_router.router, prefix=API_PREFIX)
@@ -152,6 +155,9 @@ app.include_router(availability_router.router, prefix=API_PREFIX)
 app.include_router(sites_router.router, prefix=API_PREFIX)
 app.include_router(admin_router.router, prefix=API_PREFIX)
 app.include_router(reporting_router.router, prefix=API_PREFIX)
+app.include_router(impact_service_router.router, prefix=API_PREFIX)
+app.include_router(transport_quality_router.router, prefix=API_PREFIX)
+app.include_router(ticketing_router.router, prefix=API_PREFIX)
 
 
 # ---------- Serve Frontend Static Files (Production) ----------
@@ -170,6 +176,10 @@ if FRONTEND_DIST.exists():
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
         """Serve frontend SPA for any non-API route."""
+        api_prefix_path = API_PREFIX.strip("/")
+        if full_path == api_prefix_path or full_path.startswith(f"{api_prefix_path}/"):
+            raise HTTPException(status_code=404, detail="API route not found")
+
         file_path = FRONTEND_DIST / full_path
         if file_path.exists() and file_path.is_file():
             return FileResponse(str(file_path))
