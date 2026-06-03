@@ -231,6 +231,46 @@ export async function fetchImpactServiceAlarmDetail(alarmId, params) {
   return data;
 }
 
+// ===== Activity ENOM =====
+
+export async function fetchActivityEnomFilters() {
+  const { data } = await api.get('/activity-enom/filters', {
+    params: { _: Date.now() },
+    headers: { 'Cache-Control': 'no-cache' },
+  });
+  return data;
+}
+
+export async function fetchActivityEnomSummary(params) {
+  const { data } = await api.get('/activity-enom/summary', { params: params });
+  return data;
+}
+
+export async function fetchActivityEnomTrend(params) {
+  const { data } = await api.get('/activity-enom/trend', { params: params });
+  return data;
+}
+
+export async function fetchActivityEnomBreakdowns(params) {
+  const { data } = await api.get('/activity-enom/breakdowns', { params: params });
+  return data;
+}
+
+export async function fetchActivityEnomTopActivities(params) {
+  const { data } = await api.get('/activity-enom/top-activities', { params: params });
+  return data;
+}
+
+export async function fetchActivityEnomActivities(params) {
+  const { data } = await api.get('/activity-enom/activities', { params: params });
+  return data;
+}
+
+export async function fetchActivityEnomActivityDetail(activityId, params) {
+  const { data } = await api.get(`/activity-enom/activities/${activityId}`, { params: params });
+  return data;
+}
+
 // ===== Transport Quality =====
 
 export async function fetchTransportQualityFilters() {

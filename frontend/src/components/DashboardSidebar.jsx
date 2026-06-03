@@ -6,6 +6,7 @@ import {
   BarChart3,
   ChevronLeft,
   ChevronRight,
+  ClipboardList,
   Home,
   LogOut,
   Map,
@@ -24,6 +25,7 @@ const NAV_ITEMS = [
   { to: '/site-map', label: 'Site Map', icon: Map },
   { to: '/reporting', label: 'Reporting', icon: BarChart3 },
   { to: '/impact-service', label: 'Impact Service', icon: AlertTriangle },
+  { to: '/activity-enom', label: 'Activity ENOM', icon: ClipboardList },
   { to: '/transport-quality', label: 'Transport Quality', icon: Activity },
   { to: '/ticketing', label: 'Ticketing', icon: TicketCheck },
 ];
