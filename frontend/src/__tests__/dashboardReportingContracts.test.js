@@ -151,7 +151,7 @@ describe('dashboard and reporting visual/data contracts', () => {
 
   it('wires the Impact Service route, navigation, global filters, and API params', () => {
     const app = src('App.jsx');
-    const header = src('components', 'Header.jsx');
+    const sidebar = src('components', 'DashboardSidebar.jsx');
     const impactPagePath = srcPath('pages', 'ImpactServicePage.jsx');
     assert.equal(existsSync(impactPagePath), true);
     const page = readFileSync(impactPagePath, 'utf8');
@@ -159,15 +159,18 @@ describe('dashboard and reporting visual/data contracts', () => {
 
     assert.match(app, /ImpactServicePage/);
     assert.match(app, /path="\/impact-service"/);
-    assert.match(header, /to="\/impact-service"/);
-    assert.match(header, /Impact Service/);
+    assert.match(sidebar, /to: '\/impact-service'/);
+    assert.match(sidebar, /Impact Service/);
 
     assert.match(page, /id="impact-start-date"/);
     assert.match(page, /id="impact-end-date"/);
     assert.match(page, /id="impact-nop"/);
-    assert.match(page, /const latestDate = [a-zA-Z0-9_]+\.max_date/);
-    assert.match(page, /setStartDate\(latestDate\)/);
-    assert.match(page, /setEndDate\(latestDate\)/);
+    assert.match(page, /default_date:\s*filters\?\.default_date\s*\|\|\s*null/);
+    assert.match(page, /has_today_data:\s*Boolean\(filters\?\.has_today_data\)/);
+    assert.match(page, /const defaultDate = [a-zA-Z0-9_]+\.default_date \|\| [a-zA-Z0-9_]+\.max_date/);
+    assert.match(page, /setStartDate\(defaultDate\)/);
+    assert.match(page, /setEndDate\(defaultDate\)/);
+    assert.doesNotMatch(page, /max=\{filterOptions\.max_date \|\| undefined\}/);
     assert.match(page, /handleStartDateChange/);
     assert.match(page, /handleEndDateChange/);
     assert.match(page, /ImpactServiceErrorBoundary/);

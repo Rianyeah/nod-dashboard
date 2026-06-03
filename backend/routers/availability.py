@@ -176,15 +176,19 @@ async def get_trend(
 async def get_worst_sites(
     bulan: int = Query(..., ge=1, le=12),
     tahun: int = Query(..., ge=2020),
+    nop: str = Query(None),
     limit: int = Query(10, ge=1, le=100),
     session: AsyncSession = Depends(get_session),
 ):
     """Sites with worst availability."""
     await ensure_site_month_metrics(session, bulan, tahun)
 
+    from routers.sites import _build_filters
+    filters, filter_params = _build_filters(nop=nop)
+
     result = await session.execute(
-        text(WORST_SITES_QUERY),
-        {"bulan": bulan, "tahun": tahun, "limit_val": limit},
+        text(WORST_SITES_QUERY.format(filters=filters)),
+        {"bulan": bulan, "tahun": tahun, "limit_val": limit, **filter_params},
     )
     rows = result.mappings().all()
 

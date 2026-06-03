@@ -70,7 +70,7 @@ export default function LoginPage() {
 
     try {
       await authLogin(username, password);
-      navigate('/dashboard');
+      navigate('/home');
     } catch {
       setError('Invalid username or password.');
     } finally {

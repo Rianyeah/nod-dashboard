@@ -129,6 +129,21 @@ export async function healthCheck() {
   return data;
 }
 
+// ===== Overview =====
+
+export async function fetchOverview({ bulan, tahun, nop } = {}) {
+  const { data } = await api.get('/overview', {
+    params: {
+      bulan: bulan || undefined,
+      tahun: tahun || undefined,
+      nop: nop || undefined,
+      _: Date.now(),
+    },
+    headers: { 'Cache-Control': 'no-cache' },
+  });
+  return data;
+}
+
 // ===== Reporting =====
 
 export async function fetchReportingAvailableMonths() {

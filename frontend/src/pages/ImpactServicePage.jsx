@@ -31,6 +31,13 @@ import {
   YAxis,
 } from 'recharts';
 import Breadcrumb from '../components/Breadcrumb';
+import { useDashboardThemeTokens } from '../hooks/useDashboardThemeTokens';
+import {
+  DashboardChartPanel,
+  DashboardChartTooltip,
+  DashboardKpiCard,
+  DashboardStatusBadge,
+} from '../components/ui/DashboardPrimitives';
 import {
   fetchImpactServiceAlarmDetail,
   fetchImpactServiceAlarms,
@@ -113,38 +120,15 @@ function asDisplay(value) {
 
 function Scorecard({ title, value, subtitle, icon: Icon, accent, glow }) {
   return (
-    <div className="glass-card p-4 animate-fade-in">
-      <div className="flex items-center gap-3">
-        <div
-          className="size-10 shrink-0 rounded-xl flex items-center justify-center transition-transform duration-300"
-          style={{ backgroundColor: glow, boxShadow: `0 0 16px ${glow}` }}
-        >
-          <Icon className="size-5" style={{ color: accent }} />
-        </div>
-        <div className="min-w-0">
-          <p className="text-[10px] uppercase tracking-widest text-[var(--text-muted)] font-semibold">{title}</p>
-          <p className="mt-0.5 font-mono text-xl font-bold tabular-nums tracking-tight" style={{ color: accent }}>
-            {value}
-          </p>
-          <p className="text-[10px] text-[var(--text-muted)] truncate">{subtitle}</p>
-        </div>
-      </div>
-    </div>
+    <DashboardKpiCard title={title} value={value} subtitle={subtitle} icon={Icon} accent={accent} glow={glow} className="animate-fade-in" />
   );
 }
 
 function ChartCard({ title, icon: Icon, children, action }) {
   return (
-    <section className="glass-card p-4 min-w-0 animate-fade-in">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 min-w-0">
-          <Icon className="size-4 text-[var(--primary-light)] shrink-0" />
-          <h2 className="text-sm font-semibold text-[var(--text-primary)] tracking-wide truncate">{title}</h2>
-        </div>
-        {action}
-      </div>
+    <DashboardChartPanel title={title} icon={Icon} action={action} className="animate-fade-in">
       {children}
-    </section>
+    </DashboardChartPanel>
   );
 }
 
@@ -159,14 +143,7 @@ function ChartEmpty({ label = 'Data belum tersedia untuk filter ini.' }) {
 function ImpactTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="glass-card p-3 !border-[var(--primary)]/20 text-xs space-y-1">
-      <p className="font-semibold text-[var(--text-primary)]">{label}</p>
-      {payload.map((item) => (
-        <p key={item.dataKey} style={{ color: item.color }}>
-          {item.name}: {formatNumber(item.value)}
-        </p>
-      ))}
-    </div>
+    <DashboardChartTooltip active={active} payload={payload} label={label} valueFormatter={formatNumber} />
   );
 }
 
@@ -179,11 +156,7 @@ function StatusBadge({ value }) {
       ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
       : 'bg-[var(--bg-elevated)] text-[var(--text-muted)] border-[var(--border)]';
 
-  return (
-    <span className={`inline-flex min-w-[58px] justify-center rounded-md border px-2 py-0.5 text-[10px] font-bold ${classes}`}>
-      {status || '-'}
-    </span>
-  );
+  return <DashboardStatusBadge tone={isOpen ? 'danger' : status === 'CLEAR' ? 'success' : 'neutral'}>{status || '-'}</DashboardStatusBadge>;
 }
 
 function SeverityBadge({ value }) {
@@ -194,11 +167,7 @@ function SeverityBadge({ value }) {
       ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
       : 'bg-[var(--primary)]/10 text-[var(--primary-light)] border-[var(--primary)]/20';
 
-  return (
-    <span className={`inline-flex rounded-md border px-2 py-0.5 text-[10px] font-semibold ${classes}`}>
-      {severity || '-'}
-    </span>
-  );
+  return <DashboardStatusBadge tone={severity === 'Critical' ? 'danger' : severity === 'Major' ? 'warning' : 'info'}>{severity || '-'}</DashboardStatusBadge>;
 }
 
 function AlarmDetailModal({ detail, loading, onClose }) {
@@ -235,7 +204,7 @@ function AlarmDetailModal({ detail, loading, onClose }) {
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--overlay-scrim)] p-4 backdrop-blur-sm">
       <section
         role="dialog"
         aria-modal="true"
@@ -282,7 +251,15 @@ function AlarmDetailModal({ detail, loading, onClose }) {
 
 function ImpactServiceDashboard() {
   const navigate = useNavigate();
-  const [filterOptions, setFilterOptions] = useState({ min_date: null, max_date: null, nops: [] });
+  const themeTokens = useDashboardThemeTokens();
+  const [filterOptions, setFilterOptions] = useState({
+    min_date: null,
+    max_date: null,
+    today: null,
+    default_date: null,
+    has_today_data: false,
+    nops: [],
+  });
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [selectedNop, setSelectedNop] = useState(null);
@@ -322,16 +299,19 @@ function ImpactServiceDashboard() {
         const normalizedFilters = {
           min_date: filters?.min_date || null,
           max_date: filters?.max_date || null,
+          today: filters?.today || null,
+          default_date: filters?.default_date || null,
+          has_today_data: Boolean(filters?.has_today_data),
           nops: Array.isArray(filters?.nops) ? filters.nops : [],
         };
         if (!normalizedFilters.max_date) {
           throw new Error('Impact Service filter response is missing max_date');
         }
 
-        const latestDate = normalizedFilters.max_date;
+        const defaultDate = normalizedFilters.default_date || normalizedFilters.max_date;
         setFilterOptions(normalizedFilters);
-        setStartDate(latestDate);
-        setEndDate(latestDate);
+        setStartDate(defaultDate);
+        setEndDate(defaultDate);
         setFiltersLoaded(true);
       })
       .catch((err) => {
@@ -484,11 +464,11 @@ function ImpactServiceDashboard() {
 
   const nopOrSiteData = selectedNop
     ? topSites.map((site) => ({
-        label: site.site_id,
-        total: site.total,
-        open: site.open,
-        clear: site.clear,
-      }))
+      label: site.site_id,
+      total: site.total,
+      open: site.open,
+      clear: site.clear,
+    }))
     : distributions.by_nop;
 
   const nopOrSiteTitle = selectedNop ? 'Top Impacted Sites' : 'NOP Contribution';
@@ -508,7 +488,7 @@ function ImpactServiceDashboard() {
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => navigate('/dashboard')}
+              onClick={() => navigate('/home')}
               className="inline-flex size-9 items-center justify-center rounded-lg border border-[var(--border-light)] text-[var(--text-muted)] transition-colors hover:border-[var(--primary)]/30 hover:bg-[var(--primary)]/10 hover:text-[var(--primary-light)]"
               aria-label="Back to dashboard"
             >
@@ -531,7 +511,6 @@ function ImpactServiceDashboard() {
                 type="date"
                 value={startDate}
                 min={filterOptions.min_date || undefined}
-                max={filterOptions.max_date || undefined}
                 onChange={handleStartDateChange}
                 className="rounded-lg border border-[var(--border-light)] bg-[var(--bg-elevated)] px-3 py-2 text-sm normal-case tracking-normal text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/40"
               />
@@ -543,7 +522,6 @@ function ImpactServiceDashboard() {
                 type="date"
                 value={endDate}
                 min={filterOptions.min_date || undefined}
-                max={filterOptions.max_date || undefined}
                 onChange={handleEndDateChange}
                 className="rounded-lg border border-[var(--border-light)] bg-[var(--bg-elevated)] px-3 py-2 text-sm normal-case tracking-normal text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/40"
               />
@@ -595,9 +573,9 @@ function ImpactServiceDashboard() {
             {dailyTrend.length ? (
               <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={dailyTrend} margin={{ top: 12, right: 18, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.16)" />
-                  <XAxis dataKey="tanggal" tickFormatter={formatDateLabel} tick={{ fontSize: 10, fill: '#94A3B8' }} />
-                  <YAxis tick={{ fontSize: 10, fill: '#94A3B8' }} width={44} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={themeTokens.chartGrid} vertical={false} />
+                  <XAxis dataKey="tanggal" tickFormatter={formatDateLabel} tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
+                  <YAxis tick={{ fontSize: 10, fill: themeTokens.axisTick }} width={44} />
                   <Tooltip content={<ImpactTooltip />} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
                   <Bar dataKey="open" name="OPEN" stackId="status" fill={STATUS_COLORS.open} radius={[4, 4, 0, 0]} />
@@ -613,9 +591,9 @@ function ImpactServiceDashboard() {
             {distributions.by_severity.length ? (
               <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={distributions.by_severity} layout="vertical" margin={{ top: 6, right: 22, left: 18, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.16)" />
-                  <XAxis type="number" tick={{ fontSize: 10, fill: '#94A3B8' }} />
-                  <YAxis type="category" dataKey="label" width={72} tick={{ fontSize: 10, fill: '#94A3B8' }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={themeTokens.chartGrid} vertical={false} />
+                  <XAxis type="number" tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
+                  <YAxis type="category" dataKey="label" width={72} tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
                   <Tooltip content={<ImpactTooltip />} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
                   <Bar dataKey="open" name="OPEN" stackId="status" fill={STATUS_COLORS.open} radius={[0, 4, 4, 0]} />
@@ -629,9 +607,9 @@ function ImpactServiceDashboard() {
             {distributions.by_category.length ? (
               <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={distributions.by_category.slice(0, 8)} layout="vertical" margin={{ top: 6, right: 22, left: 110, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.16)" />
-                  <XAxis type="number" tick={{ fontSize: 10, fill: '#94A3B8' }} />
-                  <YAxis type="category" dataKey="label" width={160} tick={{ fontSize: 10, fill: '#94A3B8' }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={themeTokens.chartGrid} vertical={false} />
+                  <XAxis type="number" tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
+                  <YAxis type="category" dataKey="label" width={160} tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
                   <Tooltip content={<ImpactTooltip />} />
                   <Bar dataKey="total" name="Total" fill={STATUS_COLORS.total} radius={[0, 4, 4, 0]} />
                 </BarChart>
@@ -643,9 +621,9 @@ function ImpactServiceDashboard() {
             {distributions.by_aging_range.length ? (
               <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={distributions.by_aging_range} margin={{ top: 12, right: 18, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.16)" />
-                  <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#94A3B8' }} />
-                  <YAxis tick={{ fontSize: 10, fill: '#94A3B8' }} width={44} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={themeTokens.chartGrid} vertical={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
+                  <YAxis tick={{ fontSize: 10, fill: themeTokens.axisTick }} width={44} />
                   <Tooltip content={<ImpactTooltip />} />
                   <Bar dataKey="total" name="Total" fill={STATUS_COLORS.warning} radius={[4, 4, 0, 0]}>
                     <LabelList dataKey="total" position="top" formatter={formatNumber} fill="var(--text-muted)" fontSize={10} />
@@ -659,9 +637,9 @@ function ImpactServiceDashboard() {
             {nopOrSiteData.length ? (
               <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={nopOrSiteData.slice(0, 10)} layout="vertical" margin={{ top: 6, right: 22, left: 48, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.16)" />
-                  <XAxis type="number" tick={{ fontSize: 10, fill: '#94A3B8' }} />
-                  <YAxis type="category" dataKey="label" width={90} tick={{ fontSize: 10, fill: '#94A3B8' }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={themeTokens.chartGrid} vertical={false} />
+                  <XAxis type="number" tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
+                  <YAxis type="category" dataKey="label" width={90} tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
                   <Tooltip content={<ImpactTooltip />} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
                   <Bar dataKey="open" name="OPEN" stackId="status" fill={STATUS_COLORS.open} radius={[0, 4, 4, 0]} />

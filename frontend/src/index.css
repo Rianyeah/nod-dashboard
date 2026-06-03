@@ -1,12 +1,12 @@
 @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
-/* ===== NOD Dark Design System ===== */
+/* ===== NOC Dashboard Design System ===== */
 :root {
   /* Brand palette */
-  --primary: #3B82F6;
-  --primary-light: #60A5FA;
-  --primary-dark: #1E40AF;
+  --primary: #0EA5E9;
+  --primary-light: #38BDF8;
+  --primary-dark: #0284C7;
   --accent: #F59E0B;
   --accent-light: #FBBF24;
 
@@ -14,75 +14,129 @@
   --success: #10B981;
   --warning: #F59E0B;
   --danger: #EF4444;
-  --info: #06B6D4;
+  --info: #0EA5E9;
 
   /* Dark backgrounds */
-  --bg-base: #0A0E1A;
-  --bg-surface: #111827;
-  --bg-elevated: #1F2937;
-  --bg-hover: #374151;
-  --bg-glass: rgba(17, 24, 39, 0.7);
+  --bg-base: #12141C;
+  --bg-surface: #1A1D26;
+  --bg-elevated: #202431;
+  --bg-hover: #252B3A;
+  --bg-glass: rgba(26, 29, 38, 0.82);
+  --bg-header: rgba(26, 29, 38, 0.88);
+  --bg-sidebar: rgba(26, 29, 38, 0.94);
+  --surface-soft: rgba(255, 255, 255, 0.035);
+  --surface-muted: rgba(255, 255, 255, 0.055);
 
   /* Text */
-  --text-primary: #F1F5F9;
+  --text-primary: #F8FAFC;
   --text-secondary: #94A3B8;
   --text-muted: #64748B;
 
   /* Borders */
-  --border: rgba(255, 255, 255, 0.06);
+  --border: rgba(255, 255, 255, 0.05);
   --border-light: rgba(255, 255, 255, 0.1);
-  --border-focus: rgba(59, 130, 246, 0.5);
+  --border-focus: rgba(14, 165, 233, 0.42);
 
   /* Shadows & Glow */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
-  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.6);
-  --shadow-glow: 0 0 20px rgba(59, 130, 246, 0.15);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.28);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.24);
+  --shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.32);
+  --shadow-card: 0 14px 36px rgba(0, 0, 0, 0.22);
+  --shadow-glow: 0 0 24px rgba(14, 165, 233, 0.14);
 
   /* Radius */
-  --radius-sm: 6px;
-  --radius-md: 10px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
   --radius-lg: 14px;
-  --radius-xl: 20px;
+  --radius-xl: 16px;
+
+  /* Charts */
+  --chart-grid: rgba(255, 255, 255, 0.035);
+  --chart-grid-strong: rgba(255, 255, 255, 0.08);
+  --chart-axis: #94A3B8;
+  --chart-tooltip-bg: #111827;
+  --chart-tooltip-border: rgba(255, 255, 255, 0.1);
+  --chart-cursor: rgba(14, 165, 233, 0.08);
+  --chart-area-primary: rgba(14, 165, 233, 0.20);
+
+  /* Tables, controls, overlays, badges */
+  --table-header-bg: rgba(255, 255, 255, 0.035);
+  --table-row-hover: rgba(14, 165, 233, 0.08);
+  --table-row-critical: rgba(239, 68, 68, 0.07);
+  --control-bg: rgba(255, 255, 255, 0.045);
+  --control-bg-hover: rgba(255, 255, 255, 0.075);
+  --control-border: rgba(255, 255, 255, 0.08);
+  --overlay-scrim: rgba(2, 6, 23, 0.64);
+  --badge-critical-bg: rgba(239, 68, 68, 0.12);
+  --badge-warning-bg: rgba(245, 158, 11, 0.12);
+  --badge-success-bg: rgba(16, 185, 129, 0.12);
+  --badge-info-bg: rgba(14, 165, 233, 0.12);
 }
 
 /* ===== Light Mode Overrides ===== */
 [data-theme="light"] {
-  /* Brand palette — keep consistent */
-  --primary: #2563EB;
-  --primary-light: #3B82F6;
-  --primary-dark: #1D4ED8;
-  --accent: #D97706;
+  /* Brand palette */
+  --primary: #0284C7;
+  --primary-light: #0EA5E9;
+  --primary-dark: #0369A1;
+  --accent: #F59E0B;
   --accent-light: #F59E0B;
 
-  /* Status — slightly deeper for contrast on light bg */
-  --success: #059669;
-  --warning: #D97706;
-  --danger: #DC2626;
-  --info: #0891B2;
+  /* Status */
+  --success: #10B981;
+  --warning: #F59E0B;
+  --danger: #EF4444;
+  --info: #0284C7;
 
   /* Light backgrounds */
-  --bg-base: #F1F5F9;
+  --bg-base: #F8FAFC;
   --bg-surface: #FFFFFF;
   --bg-elevated: #F8FAFC;
-  --bg-hover: #E2E8F0;
-  --bg-glass: rgba(255, 255, 255, 0.75);
+  --bg-hover: #EAF2F8;
+  --bg-glass: rgba(255, 255, 255, 0.94);
+  --bg-header: rgba(255, 255, 255, 0.96);
+  --bg-sidebar: rgba(255, 255, 255, 0.98);
+  --surface-soft: rgba(15, 23, 42, 0.025);
+  --surface-muted: rgba(15, 23, 42, 0.045);
 
   /* Text */
   --text-primary: #0F172A;
-  --text-secondary: #475569;
+  --text-secondary: #64748B;
   --text-muted: #94A3B8;
 
   /* Borders */
-  --border: rgba(0, 0, 0, 0.08);
-  --border-light: rgba(0, 0, 0, 0.12);
-  --border-focus: rgba(37, 99, 235, 0.5);
+  --border: rgba(15, 23, 42, 0.08);
+  --border-light: rgba(15, 23, 42, 0.12);
+  --border-focus: rgba(2, 132, 199, 0.42);
 
   /* Shadows & Glow */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
-  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.12);
-  --shadow-glow: 0 0 20px rgba(37, 99, 235, 0.08);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.03);
+  --shadow-lg: 0 18px 44px rgba(15, 23, 42, 0.12);
+  --shadow-card: 0 4px 12px rgba(0, 0, 0, 0.03);
+  --shadow-glow: 0 0 20px rgba(2, 132, 199, 0.08);
+
+  /* Charts */
+  --chart-grid: rgba(15, 23, 42, 0.06);
+  --chart-grid-strong: rgba(15, 23, 42, 0.12);
+  --chart-axis: #64748B;
+  --chart-tooltip-bg: #FFFFFF;
+  --chart-tooltip-border: rgba(15, 23, 42, 0.12);
+  --chart-cursor: rgba(2, 132, 199, 0.08);
+  --chart-area-primary: rgba(2, 132, 199, 0.16);
+
+  /* Tables, controls, overlays, badges */
+  --table-header-bg: rgba(15, 23, 42, 0.035);
+  --table-row-hover: rgba(2, 132, 199, 0.07);
+  --table-row-critical: rgba(239, 68, 68, 0.06);
+  --control-bg: rgba(248, 250, 252, 0.92);
+  --control-bg-hover: #FFFFFF;
+  --control-border: rgba(15, 23, 42, 0.12);
+  --overlay-scrim: rgba(15, 23, 42, 0.44);
+  --badge-critical-bg: rgba(239, 68, 68, 0.10);
+  --badge-warning-bg: rgba(245, 158, 11, 0.12);
+  --badge-success-bg: rgba(16, 185, 129, 0.10);
+  --badge-info-bg: rgba(2, 132, 199, 0.10);
 }
 
 /* Glass card — light mode */
@@ -216,16 +270,38 @@ html, body, #root {
 /* ===== Glass Card ===== */
 .glass-card {
   background: var(--bg-glass);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  transition: all 0.2s ease;
+  box-shadow: var(--shadow-card);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
 
 .glass-card:hover {
   border-color: var(--border-light);
-  box-shadow: var(--shadow-glow);
+  box-shadow: var(--shadow-card), var(--shadow-glow);
+}
+
+.dashboard-panel {
+  background: var(--bg-glass);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.dashboard-control {
+  background: var(--control-bg);
+  border: 1px solid var(--control-border);
+  color: var(--text-primary);
+}
+
+.dashboard-control:hover {
+  background: var(--control-bg-hover);
+}
+
+.dashboard-table-row:hover {
+  background: var(--table-row-hover);
 }
 
 /* ===== Mapbox Overrides (Dark) ===== */
@@ -234,7 +310,7 @@ html, body, #root {
   color: var(--text-primary) !important;
   border-radius: var(--radius-lg) !important;
   padding: 0 !important;
-  box-shadow: var(--shadow-lg), 0 0 30px rgba(59, 130, 246, 0.1) !important;
+  box-shadow: var(--shadow-lg), 0 0 30px rgba(14, 165, 233, 0.1) !important;
   border: 1px solid var(--border-light) !important;
   overflow: hidden;
 }

@@ -10,7 +10,7 @@ const srcPath = (...parts) => resolve(process.cwd(), 'src', ...parts);
 describe('Transport Quality dashboard contracts', () => {
   it('wires the route, navigation, breadcrumb label, and API functions', () => {
     const app = src('App.jsx');
-    const header = src('components', 'Header.jsx');
+    const sidebar = src('components', 'DashboardSidebar.jsx');
     const breadcrumb = src('components', 'Breadcrumb.jsx');
     const api = src('services', 'api.js');
     const pagePath = srcPath('pages', 'TransportQualityPage.jsx');
@@ -18,8 +18,8 @@ describe('Transport Quality dashboard contracts', () => {
     assert.equal(existsSync(pagePath), true);
     assert.match(app, /TransportQualityPage/);
     assert.match(app, /path="\/transport-quality"/);
-    assert.match(header, /to="\/transport-quality"/);
-    assert.match(header, /Transport Quality/);
+    assert.match(sidebar, /to: '\/transport-quality'/);
+    assert.match(sidebar, /Transport Quality/);
     assert.match(breadcrumb, /'transport-quality': 'Transport Quality'/);
 
     for (const fn of [

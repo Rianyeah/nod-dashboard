@@ -96,8 +96,8 @@ export default function WorstSitesPanel({ bulan, tahun, filters = {} }) {
   }, [bulan, tahun, filters]);
 
   return (
-    <section className="rounded-lg border border-[var(--border)] bg-[var(--bg-glass)]/80 overflow-hidden flex min-h-0 flex-1 flex-col">
-      <div className="px-3 py-2.5 border-b border-[var(--border)] flex items-center gap-2">
+    <section className="glass-card flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="flex items-center gap-2 border-b border-[var(--border)] px-4 py-3">
         <AlertTriangle className="w-3.5 h-3.5 text-[var(--danger)]" />
         <h3 className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-widest">
           Top 10 Worst Sites
@@ -121,7 +121,7 @@ export default function WorstSitesPanel({ bulan, tahun, filters = {} }) {
             return (
               <article
                 key={site.site_id}
-                className="rounded-lg border bg-[var(--bg-surface)] p-3 shadow-sm"
+                className="rounded-lg border bg-[var(--surface-soft)] p-3 shadow-sm"
                 style={{
                   borderColor: classStyle.border,
                   boxShadow: `inset 3px 0 0 ${classStyle.color}66`,

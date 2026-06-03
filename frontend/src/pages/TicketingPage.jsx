@@ -38,6 +38,13 @@ import {
   YAxis,
 } from 'recharts';
 import Breadcrumb from '../components/Breadcrumb';
+import { useDashboardThemeTokens } from '../hooks/useDashboardThemeTokens';
+import {
+  DashboardChartPanel,
+  DashboardChartTooltip,
+  DashboardKpiCard,
+  DashboardStatusBadge,
+} from '../components/ui/DashboardPrimitives';
 import {
   fetchTicketingDashboard,
   fetchTicketingFilters,
@@ -147,40 +154,17 @@ function filterErrorMessage(err) {
 
 function Scorecard({ title, value, subtitle, icon: Icon, accent, glow, children }) {
   return (
-    <div className="glass-card min-w-0 p-4">
-      <div className="flex items-center gap-3">
-        <div
-          className="flex size-10 shrink-0 items-center justify-center rounded-xl"
-          style={{ backgroundColor: glow, boxShadow: `0 0 16px ${glow}` }}
-        >
-          <Icon className="size-5" style={{ color: accent }} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[10px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">{title}</p>
-          {children || (
-            <p className="mt-0.5 truncate font-mono text-xl font-bold tabular-nums tracking-tight" style={{ color: accent }}>
-              {value}
-            </p>
-          )}
-          <p className="truncate text-[10px] text-[var(--text-muted)]">{subtitle}</p>
-        </div>
-      </div>
-    </div>
+    <DashboardKpiCard title={title} value={value} subtitle={subtitle} icon={Icon} accent={accent} glow={glow}>
+      {children}
+    </DashboardKpiCard>
   );
 }
 
 function ChartCard({ title, icon: Icon, children, action }) {
   return (
-    <section className="glass-card min-w-0 p-4">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <Icon className="size-4 shrink-0 text-[var(--primary-light)]" />
-          <h2 className="truncate text-sm font-semibold tracking-wide text-[var(--text-primary)]">{title}</h2>
-        </div>
-        {action}
-      </div>
+    <DashboardChartPanel title={title} icon={Icon} action={action}>
       {children}
-    </section>
+    </DashboardChartPanel>
   );
 }
 
@@ -195,14 +179,7 @@ function ChartEmpty({ label = 'Data belum tersedia untuk filter ini.' }) {
 function TicketingTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="glass-card space-y-1 p-3 text-xs !border-[var(--primary)]/20">
-      <p className="font-semibold text-[var(--text-primary)]">{label}</p>
-      {payload.map((item) => (
-        <p key={item.dataKey} style={{ color: item.color }}>
-          {item.name}: {formatNumber(item.value)}
-        </p>
-      ))}
-    </div>
+    <DashboardChartTooltip active={active} payload={payload} label={label} valueFormatter={formatNumber} />
   );
 }
 
@@ -248,9 +225,9 @@ function StatusBadge({ value }) {
       ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
       : 'border-amber-500/30 bg-amber-500/10 text-amber-300';
   return (
-    <span className={`inline-flex min-w-[62px] justify-center rounded-md border px-2 py-0.5 text-[10px] font-bold ${classes}`}>
+    <DashboardStatusBadge tone={status === 'OUT SLA' || status === 'CANCELED' ? 'danger' : status === 'IN SLA' || status === 'CLOSED' ? 'success' : 'warning'}>
       {status}
-    </span>
+    </DashboardStatusBadge>
   );
 }
 
@@ -282,7 +259,7 @@ function TicketDetailModal({ detail, loading, onClose }) {
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--overlay-scrim)] p-4 backdrop-blur-sm" onClick={onClose}>
       <section className="glass-card max-h-[86vh] w-full max-w-4xl overflow-hidden" onClick={(event) => event.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4">
           <div>
@@ -331,6 +308,7 @@ function TicketDetailModal({ detail, loading, onClose }) {
 
 function TicketingDashboard() {
   const navigate = useNavigate();
+  const themeTokens = useDashboardThemeTokens();
   const [filterOptions, setFilterOptions] = useState({
     years: [],
     months: [],
@@ -480,7 +458,7 @@ function TicketingDashboard() {
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => navigate('/dashboard')}
+              onClick={() => navigate('/home')}
               className="flex size-9 items-center justify-center rounded-lg border border-[var(--border-light)] text-[var(--text-muted)] transition-colors hover:border-[var(--primary)]/30 hover:text-[var(--primary-light)]"
               aria-label="Back to dashboard"
             >
@@ -600,9 +578,9 @@ function TicketingDashboard() {
             {dashboard?.trend?.length ? (
               <ResponsiveContainer width="100%" height={220}>
                 <LineChart data={dashboard.trend} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-                  <CartesianGrid stroke="var(--border)" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
-                  <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
+                  <CartesianGrid stroke={themeTokens.chartGrid} vertical={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
+                  <YAxis tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
                   <Tooltip content={<TicketingTooltip />} />
                   <Legend />
                   <Line type="monotone" dataKey="bps" name="BPS" stroke={COLORS.bps} strokeWidth={2.4} dot={false} activeDot={{ r: 4 }} />
@@ -616,9 +594,9 @@ function TicketingDashboard() {
             {dashboard?.sla_distribution?.length ? (
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={dashboard.sla_distribution} layout="vertical" margin={{ left: 12, right: 12 }}>
-                  <CartesianGrid stroke="var(--border)" horizontal={false} />
-                  <XAxis type="number" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
-                  <YAxis type="category" dataKey="label" width={92} tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
+                  <CartesianGrid stroke={themeTokens.chartGrid} horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
+                  <YAxis type="category" dataKey="label" width={92} tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
                   <Tooltip content={<TicketingTooltip />} />
                   <Bar dataKey="tickets" name="Tickets" radius={[0, 4, 4, 0]}>
                     {dashboard.sla_distribution.map((entry, index) => (
@@ -634,9 +612,9 @@ function TicketingDashboard() {
             {dashboard?.visiting_backup_distribution?.length ? (
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={dashboard.visiting_backup_distribution.slice(0, 6)} layout="vertical" margin={{ left: 12, right: 12 }}>
-                  <CartesianGrid stroke="var(--border)" horizontal={false} />
-                  <XAxis type="number" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
-                  <YAxis type="category" dataKey="label" width={92} tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
+                  <CartesianGrid stroke={themeTokens.chartGrid} horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
+                  <YAxis type="category" dataKey="label" width={92} tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
                   <Tooltip content={<TicketingTooltip />} />
                   <Legend />
                   <Bar dataKey="visiting_site" name="Visiting Site" fill={COLORS.bps} radius={[0, 4, 4, 0]} />
@@ -652,9 +630,9 @@ function TicketingDashboard() {
             {dashboard?.location_breakdown?.length ? (
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={dashboard.location_breakdown} layout="vertical" margin={{ left: 12 }}>
-                  <CartesianGrid stroke="var(--border)" horizontal={false} />
-                  <XAxis type="number" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
-                  <YAxis type="category" dataKey="label" width={100} tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
+                  <CartesianGrid stroke={themeTokens.chartGrid} horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
+                  <YAxis type="category" dataKey="label" width={100} tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
                   <Tooltip content={<TicketingTooltip />} />
                   <Bar dataKey="tickets" name="Tickets" fill={COLORS.bps} radius={[0, 4, 4, 0]} />
                 </BarChart>
@@ -666,9 +644,9 @@ function TicketingDashboard() {
             {dashboard?.rc_category_pareto?.length ? (
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={dashboard.rc_category_pareto}>
-                  <CartesianGrid stroke="var(--border)" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
-                  <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
+                  <CartesianGrid stroke={themeTokens.chartGrid} vertical={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
+                  <YAxis tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
                   <Tooltip content={<TicketingTooltip />} />
                   <Bar dataKey="tickets" name="Tickets" fill={COLORS.bps} radius={[4, 4, 0, 0]}>
                     <LabelList dataKey="cumulative_rate" position="top" formatter={(value) => `${value}%`} fontSize={10} />

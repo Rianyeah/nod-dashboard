@@ -1,16 +1,18 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import DashboardPage from './pages/DashboardPage';
+import HomePage from './pages/HomePage';
+import SiteMapPage from './pages/SiteMapPage';
 import NetworkReportingPage from './pages/NetworkReportingPage';
 import ImpactServicePage from './pages/ImpactServicePage';
 import TransportQualityPage from './pages/TransportQualityPage';
 import TicketingPage from './pages/TicketingPage';
 import LoginPage from './pages/LoginPage';
 import { useSessionTimeout } from './hooks/useSessionTimeout';
+import { AppShell } from './components/DashboardSidebar';
 
 // Simple PrivateRoute wrapper
 function PrivateRoute({ children }) {
   const isAuthenticated = !!localStorage.getItem('nod_auth_token');
-  return isAuthenticated ? children : <Navigate to="/login" />;
+  return isAuthenticated ? <AppShell>{children}</AppShell> : <Navigate to="/login" />;
 }
 
 // Session guard — must be inside <Router> to use useNavigate()
@@ -26,13 +28,22 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route
-            path="/dashboard"
+            path="/home"
             element={
               <PrivateRoute>
-                <DashboardPage />
+                <HomePage />
               </PrivateRoute>
             }
           />
+          <Route
+            path="/site-map"
+            element={
+              <PrivateRoute>
+                <SiteMapPage />
+              </PrivateRoute>
+            }
+          />
+          <Route path="/dashboard" element={<Navigate to="/site-map" replace />} />
           <Route
             path="/reporting"
             element={
@@ -65,7 +76,7 @@ export default function App() {
               </PrivateRoute>
             }
           />
-          <Route path="/" element={<Navigate to="/dashboard" />} />
+          <Route path="/" element={<Navigate to="/home" />} />
         </Routes>
       </SessionGuard>
     </Router>

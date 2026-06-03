@@ -70,6 +70,24 @@ class ImpactServiceContractTest(unittest.TestCase):
         self.assertIn("from alarm_impact_service", nop_query)
         self.assertIn("where nop is not null", nop_query)
 
+    def test_filters_expose_today_aware_default_date(self):
+        source = self.read_router_source()
+        models_source = MODELS.read_text(encoding="utf-8").lower()
+        filters_query = source.split('FILTERS_QUERY = """', 1)[1].split('"""', 1)[0].lower()
+
+        self.assertIn("cast(:today as date) as today", filters_query)
+        self.assertIn("has_today_data", filters_query)
+        self.assertIn("default_date", filters_query)
+        self.assertIn("where tanggal = cast(:today as date)", filters_query)
+        self.assertIn("then cast(:today as date)", filters_query)
+        self.assertIn("else max(tanggal)", filters_query)
+        self.assertIn("get_jakarta_today", source)
+        self.assertIn('"today": get_jakarta_today()', source)
+
+        self.assertIn("today: optional[date]", models_source)
+        self.assertIn("default_date: optional[date]", models_source)
+        self.assertIn("has_today_data: bool", models_source)
+
     def test_endpoint_contracts_are_present(self):
         source = self.read_router_source()
 

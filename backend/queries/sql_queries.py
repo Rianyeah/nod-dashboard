@@ -320,6 +320,7 @@ SELECT
 FROM site_month_metrics agg
 JOIN data_site_master m ON m."Siteid" = agg.site_id
 WHERE agg.tahun = :tahun AND agg.bulan = :bulan
+{{filters}}
 ORDER BY avg_availability ASC
 LIMIT :limit_val
 """

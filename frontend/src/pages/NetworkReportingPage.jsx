@@ -28,6 +28,8 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import Breadcrumb from '../components/Breadcrumb';
+import { useDashboardThemeTokens } from '../hooks/useDashboardThemeTokens';
+import { DashboardChartPanel, DashboardChartTooltip, DashboardKpiCard } from '../components/ui/DashboardPrimitives';
 import {
   fetchReportingAvailableMonths,
   fetchReportingScorecards,
@@ -220,33 +222,24 @@ function getPayloadPeakInsight({ trendData, currentIndex, currentPayload, payloa
 /* ─── Scorecard Component ──────────────────────────────── */
 function Scorecard({ title, value, subtitle, icon: Icon, accent, glow, delta, deltaFormatter, delay = 0 }) {
   return (
-    <div
-      className="glass-card p-4 animate-fade-in cursor-default group"
+    <DashboardKpiCard
+      title={title}
+      value={value}
+      subtitle={subtitle}
+      icon={Icon}
+      accent={accent}
+      glow={glow}
+      className="animate-fade-in cursor-default"
       style={{ animationDelay: `${delay}ms` }}
     >
-      <div className="flex items-center gap-3">
-        <div
-          className="size-10 rounded-xl flex items-center justify-center shrink-0 transition-all duration-300 group-hover:scale-110"
-          style={{ backgroundColor: glow, boxShadow: `0 0 16px ${glow}` }}
-        >
-          <Icon className="size-5" style={{ color: accent }} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-widest">
-            {title}
-          </p>
-          <p className="text-xl font-bold font-mono tracking-tight" style={{ color: accent }}>
-            {value}
-          </p>
-          <div className="flex items-center gap-2 min-h-4">
-            {subtitle && (
-              <p className="text-[10px] text-[var(--text-muted)] truncate">{subtitle}</p>
-            )}
-            {deltaFormatter && <MetricDelta delta={delta} formatter={deltaFormatter} />}
-          </div>
-        </div>
+      <p className="mt-2 font-mono text-[28px] font-bold leading-none tabular-nums tracking-tight" style={{ color: accent }}>
+        {value}
+      </p>
+      <div className="mt-2 flex min-h-4 items-center gap-2">
+        {subtitle && <p className="truncate text-[10px] text-[var(--text-muted)]">{subtitle}</p>}
+        {deltaFormatter && <MetricDelta delta={delta} formatter={deltaFormatter} />}
       </div>
-    </div>
+    </DashboardKpiCard>
   );
 }
 
@@ -334,24 +327,15 @@ function TrendTooltip({ active, payload, label }) {
   const pld = payload.find(p => p.dataKey === 'total_payload');
   const avail = payload.find(p => p.dataKey === 'avg_availability');
   return (
-    <div className="glass-card p-3 !border-[var(--primary)]/20 text-xs space-y-1">
-      <p className="font-semibold text-[var(--text-primary)]">{label}</p>
-      {rev && (
-        <p className="text-[var(--primary-light)]">
-          Revenue: {formatRevenue(rev.value)}
-        </p>
-      )}
-      {pld && (
-        <p className="text-emerald-400">
-          Payload: {formatPayload(pld.value)}
-        </p>
-      )}
-      {avail && avail.value != null && (
-        <p className="text-amber-400">
-          Availability: {Number(avail.value).toFixed(2)}%
-        </p>
-      )}
-    </div>
+    <DashboardChartTooltip
+      active={active}
+      label={label}
+      payload={[
+        rev && { ...rev, name: 'Revenue', value: formatRevenue(rev.value), color: 'var(--primary-light)' },
+        pld && { ...pld, name: 'Payload', value: formatPayload(pld.value), color: 'var(--success)' },
+        avail && avail.value != null && { ...avail, name: 'Availability', value: `${Number(avail.value).toFixed(2)}%`, color: 'var(--warning)' },
+      ].filter(Boolean)}
+    />
   );
 }
 
@@ -446,6 +430,7 @@ function getPaddedDomain(rows, key) {
 }
 
 export default function NetworkReportingPage() {
+  const themeTokens = useDashboardThemeTokens();
   const navigate = useNavigate();
 
   // State
@@ -707,7 +692,7 @@ export default function NetworkReportingPage() {
           {/* Left — Logo & Title */}
           <div className="flex items-center gap-3">
             <button
-              onClick={() => navigate('/dashboard')}
+              onClick={() => navigate('/home')}
               className="w-9 h-9 bg-[var(--bg-elevated)] rounded-xl flex items-center justify-center border border-[var(--border-light)] hover:bg-[var(--bg-hover)] hover:border-[var(--primary)]/30 transition-all duration-200"
               title="Back to Dashboard"
             >
@@ -849,12 +834,11 @@ export default function NetworkReportingPage() {
 
         {/* Performance Trend Chart */}
         {trendData.length > 0 && (
-          <div className="glass-card p-4 animate-fade-in" style={{ animationDelay: '300ms' }}>
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <TrendingUp className="size-4 text-[var(--primary-light)]" />
-                <h2 className="text-sm font-semibold text-[var(--text-primary)] tracking-wide">Performance Trend</h2>
-              </div>
+          <DashboardChartPanel
+            title="Performance Trend"
+            icon={TrendingUp}
+            className="animate-fade-in"
+            action={(
               <div className="flex items-center gap-3 text-[10px] text-[var(--text-muted)]">
                 <span className="flex items-center gap-1">
                   <span className="w-2 h-2 rounded-full bg-[var(--primary)]" /> Revenue
@@ -866,10 +850,12 @@ export default function NetworkReportingPage() {
                   <span className="w-4 h-0.5 rounded-full" style={{ backgroundColor: '#D97706' }} /> Availability
                 </span>
               </div>
-            </div>
+            )}
+            style={{ animationDelay: '300ms' }}
+          >
             <div className="chart min-w-0">
-                <ResponsiveContainer width="100%" height={240}>
-                  <ComposedChart data={trendData} margin={{ top: 5, right: 60, left: 10, bottom: 0 }}>
+              <ResponsiveContainer width="100%" height={240}>
+                <ComposedChart data={trendData} margin={{ top: 5, right: 60, left: 10, bottom: 0 }}>
                   <defs>
                     <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3} />
@@ -880,19 +866,19 @@ export default function NetworkReportingPage() {
                       <stop offset="95%" stopColor="#34D399" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                  <CartesianGrid strokeDasharray="3 3" stroke={themeTokens.chartGrid} vertical={false} />
                   <XAxis
                     dataKey="trx_month"
                     tickFormatter={formatMonthLabel}
-                    tick={{ fontSize: 10, fill: '#64748B' }}
-                    axisLine={{ stroke: 'rgba(255,255,255,0.06)' }}
+                    tick={{ fontSize: 10, fill: themeTokens.axisTick }}
+                    axisLine={{ stroke: themeTokens.chartGridStrong }}
                     tickLine={false}
                   />
                   <YAxis
                     yAxisId="rev"
                     domain={revenueDomain}
                     tickFormatter={(v) => `${(v / 1e9).toFixed(0)}M`}
-                    tick={{ fontSize: 10, fill: '#64748B' }}
+                    tick={{ fontSize: 10, fill: themeTokens.axisTick }}
                     axisLine={false}
                     tickLine={false}
                     width={50}
@@ -902,7 +888,7 @@ export default function NetworkReportingPage() {
                     orientation="right"
                     domain={payloadDomain}
                     tickFormatter={formatPayloadAxisTick}
-                    tick={{ fontSize: 10, fill: '#64748B' }}
+                    tick={{ fontSize: 10, fill: themeTokens.axisTick }}
                     axisLine={false}
                     tickLine={false}
                     width={42}
@@ -911,7 +897,7 @@ export default function NetworkReportingPage() {
                     yAxisId="avail"
                     orientation="right"
                     tickFormatter={formatAvailabilityAxisTick}
-                    tick={{ fontSize: 10, fill: '#D97706' }}
+                    tick={{ fontSize: 10, fill: themeTokens.warning }}
                     axisLine={false}
                     tickLine={false}
                     domain={[availabilityDomainMin, availabilityDomainMax]}
@@ -949,7 +935,7 @@ export default function NetworkReportingPage() {
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
-          </div>
+          </DashboardChartPanel>
         )}
 
         {/* Tab Switcher */}
@@ -962,11 +948,10 @@ export default function NetworkReportingPage() {
             <button
               key={tab.key}
               onClick={() => setActiveTable(tab.key)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
-                activeTable === tab.key
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${activeTable === tab.key
                   ? 'bg-[var(--primary)]/15 text-[var(--primary-light)] border border-[var(--primary)]/20'
                   : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'
-              }`}
+                }`}
             >
               <tab.icon className="size-3.5" />
               {tab.label}

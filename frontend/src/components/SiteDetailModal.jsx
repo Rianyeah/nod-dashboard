@@ -25,6 +25,7 @@ import {
 
 const EMPTY_VALUES = new Set(['', '#N/A', 'N/A', '#REF!', null, undefined]);
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+const CHART_HEIGHT = 68;
 
 const FIELD_GROUPS = [
   {
@@ -216,7 +217,7 @@ function TrendCard({ title, chartData, accent = '#34D399', headlineValue = null,
       </div>
 
       {hasData ? (
-        <ResponsiveContainer width="100%" height={120}>
+        <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
           <AreaChart data={chartData} margin={{ top: 5, right: 8, left: -20, bottom: 0 }}>
             <defs>
               <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
@@ -261,7 +262,7 @@ function TrendCard({ title, chartData, accent = '#34D399', headlineValue = null,
           </AreaChart>
         </ResponsiveContainer>
       ) : (
-        <div className="flex h-[120px] items-center justify-center text-xs text-[var(--text-muted)]">
+        <div className="flex h-[68px] items-center justify-center text-xs text-[var(--text-muted)]">
           Data trend tidak tersedia
         </div>
       )}
@@ -443,7 +444,7 @@ export default function SiteDetailModal({ data, trendData = [], dailyData = [], 
       aria-modal="true"
       aria-labelledby={`${modalId}-title`}
     >
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-[var(--overlay-scrim)] backdrop-blur-sm" />
 
       <div
         className="site-detail-modal relative flex max-h-[calc(100vh-48px)] w-full max-w-[1080px] flex-col overflow-hidden rounded-xl border border-[var(--border-light)] bg-[var(--bg-surface)] shadow-2xl animate-fade-in-scale"
@@ -518,7 +519,7 @@ export default function SiteDetailModal({ data, trendData = [], dailyData = [], 
           </div>
 
           {/* ── Info Sections Grid ─── */}
-          <div className="grid gap-3 lg:grid-cols-2">
+          <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,0.92fr)_320px]">
             {FIELD_GROUPS.map((group) => {
               const rows = group.fields
                 .map(([label, keys]) => [label, getFirstValue(data, keys)])
