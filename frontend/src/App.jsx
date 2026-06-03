@@ -3,6 +3,7 @@ import HomePage from './pages/HomePage';
 import SiteMapPage from './pages/SiteMapPage';
 import NetworkReportingPage from './pages/NetworkReportingPage';
 import ImpactServicePage from './pages/ImpactServicePage';
+import ActivityEnomPage from './pages/ActivityEnomPage';
 import TransportQualityPage from './pages/TransportQualityPage';
 import TicketingPage from './pages/TicketingPage';
 import LoginPage from './pages/LoginPage';
@@ -57,6 +58,14 @@ export default function App() {
             element={
               <PrivateRoute>
                 <ImpactServicePage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/activity-enom"
+            element={
+              <PrivateRoute>
+                <ActivityEnomPage />
               </PrivateRoute>
             }
           />
