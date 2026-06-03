@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine } from 'recharts';
 import { fetchTrend } from '../services/api';
 import { BarChart2 } from 'lucide-react';
+import { useDashboardThemeTokens } from '../hooks/useDashboardThemeTokens';
+import { DashboardChartTooltip } from './ui/DashboardPrimitives';
 
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
 
@@ -17,16 +19,17 @@ const CustomTooltip = ({ active, payload, label }) => {
   const val = payload[0]?.value;
   const tooltipLabel = payload[0]?.payload?.tooltipLabel || label;
   return (
-    <div className="min-w-[82px] rounded-md border border-white/[0.12] bg-[#0F172A]/95 px-3 py-2 text-xs shadow-xl">
-      <p className="mb-1 whitespace-nowrap text-[10px] text-[var(--text-muted)]">{tooltipLabel}</p>
-      <p className="whitespace-nowrap font-mono text-sm font-bold leading-none" style={{ color: getBarColor(val) }}>
-        {val != null ? `${val}%` : 'N/A'}
-      </p>
-    </div>
+    <DashboardChartTooltip
+      active={active}
+      payload={[{ ...payload[0], name: 'Availability', value: val, color: getBarColor(val) }]}
+      label={tooltipLabel}
+      valueFormatter={(value) => (value != null ? `${value}%` : 'N/A')}
+    />
   );
 };
 
 export default function AvailabilityChart({ siteId, bulan, tahun }) {
+  const themeTokens = useDashboardThemeTokens();
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -93,15 +96,15 @@ export default function AvailabilityChart({ siteId, bulan, tahun }) {
       ) : (
         <ResponsiveContainer width="100%" height={150}>
           <BarChart data={chartData} margin={{ top: 5, right: 12, left: -22, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke={themeTokens.chartGrid} vertical={false} />
             <XAxis
               dataKey="name"
-              tick={{ fontSize: 9, fill: '#64748B' }}
-              axisLine={{ stroke: 'rgba(255,255,255,0.06)' }}
+              tick={{ fontSize: 9, fill: themeTokens.axisTick }}
+              axisLine={{ stroke: themeTokens.chartGridStrong }}
               tickLine={false}
             />
             <YAxis
-              tick={{ fontSize: 9, fill: '#64748B' }}
+              tick={{ fontSize: 9, fill: themeTokens.axisTick }}
               domain={[(dataMin) => Math.min(90, Math.max(0, Math.floor(dataMin) - 2)), 100]}
               unit="%"
               axisLine={false}
@@ -112,7 +115,7 @@ export default function AvailabilityChart({ siteId, bulan, tahun }) {
               allowEscapeViewBox={{ x: true, y: true }}
               wrapperStyle={{ outline: 'none', zIndex: 20 }}
               offset={12}
-              cursor={{ fill: 'rgba(255,255,255,0.03)' }}
+              cursor={{ fill: themeTokens.cursorFill }}
             />
             <ReferenceLine y={99.5} stroke="rgba(16, 185, 129, 0.3)" strokeDasharray="3 3" />
             <ReferenceLine y={95} stroke="rgba(245, 158, 11, 0.3)" strokeDasharray="3 3" />

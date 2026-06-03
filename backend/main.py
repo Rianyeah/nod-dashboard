@@ -148,6 +148,7 @@ from routers import reporting as reporting_router
 from routers import impact_service as impact_service_router
 from routers import transport_quality as transport_quality_router
 from routers import ticketing as ticketing_router
+from routers import overview as overview_router
 
 # NOTE: Token auth removed for initial deployment — dashboard is internal
 app.include_router(map_router.router, prefix=API_PREFIX)
@@ -158,6 +159,7 @@ app.include_router(reporting_router.router, prefix=API_PREFIX)
 app.include_router(impact_service_router.router, prefix=API_PREFIX)
 app.include_router(transport_quality_router.router, prefix=API_PREFIX)
 app.include_router(ticketing_router.router, prefix=API_PREFIX)
+app.include_router(overview_router.router, prefix=API_PREFIX)
 
 
 # ---------- Serve Frontend Static Files (Production) ----------

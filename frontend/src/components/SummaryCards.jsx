@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Radio, Activity, TrendingUp, TrendingDown, Zap, Signal } from 'lucide-react';
 import { fetchSummary } from '../services/api';
+import { DashboardKpiCard } from './ui/DashboardPrimitives';
 
 export default function SummaryCards({ bulan, tahun, filters = {} }) {
   const [data, setData] = useState(null);
@@ -87,33 +88,17 @@ export default function SummaryCards({ bulan, tahun, filters = {} }) {
   return (
     <div className="flex flex-col gap-2">
       {cards.map((card, i) => (
-        <div
+        <DashboardKpiCard
           key={card.title}
-          className="glass-card p-3 animate-fade-in cursor-default group"
+          title={card.title}
+          value={card.value}
+          subtitle={card.subtitle}
+          icon={card.icon}
+          accent={card.accent}
+          glow={card.glow}
+          className="animate-fade-in cursor-default"
           style={{ animationDelay: `${i * 80}ms` }}
-        >
-          <div className="flex items-center gap-2.5">
-            <div
-              className="size-8 rounded-lg flex items-center justify-center shrink-0 transition-all duration-300 group-hover:scale-105"
-              style={{ backgroundColor: card.glow, boxShadow: `0 0 12px ${card.glow}` }}
-            >
-              <card.icon className="size-4" style={{ color: card.accent }} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-widest">
-                {card.title}
-              </p>
-              <p className="text-base font-bold font-mono tracking-tight" style={{ color: card.accent }}>
-                {card.value}
-              </p>
-              {card.subtitle && (
-                <p className="text-[10px] text-[var(--text-muted)] truncate">
-                  {card.subtitle}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
+        />
       ))}
     </div>
   );

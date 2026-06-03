@@ -33,6 +33,13 @@ import {
   YAxis,
 } from 'recharts';
 import Breadcrumb from '../components/Breadcrumb';
+import { useDashboardThemeTokens } from '../hooks/useDashboardThemeTokens';
+import {
+  DashboardChartPanel,
+  DashboardChartTooltip,
+  DashboardKpiCard,
+  DashboardStatusBadge,
+} from '../components/ui/DashboardPrimitives';
 import {
   fetchTransportQualityBreakdowns,
   fetchTransportQualityDistributions,
@@ -127,38 +134,15 @@ function optionList(values = []) {
 
 function Scorecard({ title, value, subtitle, icon: Icon, accent, glow }) {
   return (
-    <div className="glass-card min-w-0 p-4">
-      <div className="flex items-center gap-3">
-        <div
-          className="flex size-10 shrink-0 items-center justify-center rounded-xl"
-          style={{ backgroundColor: glow, boxShadow: `0 0 16px ${glow}` }}
-        >
-          <Icon className="size-5" style={{ color: accent }} />
-        </div>
-        <div className="min-w-0">
-          <p className="truncate text-[10px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">{title}</p>
-          <p className="mt-0.5 truncate font-mono text-xl font-bold tabular-nums tracking-tight" style={{ color: accent }}>
-            {value}
-          </p>
-          <p className="truncate text-[10px] text-[var(--text-muted)]">{subtitle}</p>
-        </div>
-      </div>
-    </div>
+    <DashboardKpiCard title={title} value={value} subtitle={subtitle} icon={Icon} accent={accent} glow={glow} />
   );
 }
 
 function ChartCard({ title, icon: Icon, children, action }) {
   return (
-    <section className="glass-card min-w-0 p-4">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <Icon className="size-4 shrink-0 text-[var(--primary-light)]" />
-          <h2 className="truncate text-sm font-semibold tracking-wide text-[var(--text-primary)]">{title}</h2>
-        </div>
-        {action}
-      </div>
+    <DashboardChartPanel title={title} icon={Icon} action={action}>
       {children}
-    </section>
+    </DashboardChartPanel>
   );
 }
 
@@ -173,14 +157,7 @@ function ChartEmpty({ label = 'Data belum tersedia untuk filter ini.' }) {
 function TransportTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="glass-card space-y-1 p-3 text-xs !border-[var(--primary)]/20">
-      <p className="font-semibold text-[var(--text-primary)]">{label}</p>
-      {payload.map((item) => (
-        <p key={item.dataKey} style={{ color: item.color }}>
-          {item.name}: {formatNumber(item.value)}
-        </p>
-      ))}
-    </div>
+    <DashboardChartTooltip active={active} payload={payload} label={label} valueFormatter={formatNumber} />
   );
 }
 
@@ -211,9 +188,7 @@ function PriorityBadge({ value }) {
       ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
       : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
   return (
-    <span className={`inline-flex min-w-10 justify-center rounded-md border px-2 py-0.5 text-[10px] font-bold ${classes}`}>
-      {priority}
-    </span>
+    <DashboardStatusBadge tone={priority === 'P1' ? 'danger' : priority === 'P2' ? 'warning' : 'success'}>{priority}</DashboardStatusBadge>
   );
 }
 
@@ -226,9 +201,7 @@ function StatusBadge({ value, fail }) {
       ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
       : 'border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)]';
   return (
-    <span className={`inline-flex min-w-[48px] justify-center rounded-md border px-2 py-0.5 text-[10px] font-semibold ${classes}`}>
-      {label}
-    </span>
+    <DashboardStatusBadge tone={isFail ? 'danger' : label === 'PASS' ? 'success' : 'neutral'}>{label}</DashboardStatusBadge>
   );
 }
 
@@ -242,6 +215,7 @@ function MetricCell({ value, bad, suffix = '', digits = 2 }) {
 
 function TransportQualityDashboard() {
   const navigate = useNavigate();
+  const themeTokens = useDashboardThemeTokens();
   const [filterOptions, setFilterOptions] = useState({
     periods: [],
     nops: [],
@@ -428,7 +402,7 @@ function TransportQualityDashboard() {
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => navigate('/dashboard')}
+              onClick={() => navigate('/home')}
               className="flex size-9 items-center justify-center rounded-lg border border-[var(--border-light)] text-[var(--text-muted)] transition-colors hover:border-[var(--primary)]/30 hover:text-[var(--primary-light)]"
               aria-label="Back to dashboard"
             >
@@ -505,9 +479,9 @@ function TransportQualityDashboard() {
             {trend.length ? (
               <ResponsiveContainer width="100%" height={300}>
                 <LineChart data={trend} margin={{ top: 14, right: 18, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.16)" />
-                  <XAxis dataKey="date" tickFormatter={formatDateLabel} tick={{ fontSize: 10, fill: '#94A3B8' }} />
-                  <YAxis tick={{ fontSize: 10, fill: '#94A3B8' }} width={42} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={themeTokens.chartGrid} vertical={false} />
+                  <XAxis dataKey="date" tickFormatter={formatDateLabel} tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
+                  <YAxis tick={{ fontSize: 10, fill: themeTokens.axisTick }} width={42} />
                   <Tooltip content={<TransportTooltip />} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
                   <Line type="monotone" dataKey="avg_packet_loss" name="Avg PL %" stroke={QUALITY_COLORS.packetLoss} strokeWidth={2} dot={false} />
@@ -552,9 +526,9 @@ function TransportQualityDashboard() {
               {distributions.by_packet_loss.length ? (
                 <ResponsiveContainer width="100%" height={260}>
                   <BarChart data={distributions.by_packet_loss} margin={{ top: 12, right: 16, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.16)" />
-                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#94A3B8' }} />
-                    <YAxis tick={{ fontSize: 10, fill: '#94A3B8' }} width={42} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={themeTokens.chartGrid} vertical={false} />
+                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
+                    <YAxis tick={{ fontSize: 10, fill: themeTokens.axisTick }} width={42} />
                     <Tooltip content={<TransportTooltip />} />
                     <Bar dataKey="records" name="PL records" fill={QUALITY_COLORS.total} radius={[4, 4, 0, 0]}>
                       <LabelList dataKey="records" position="top" formatter={formatNumber} fill="var(--text-muted)" fontSize={10} />
@@ -565,9 +539,9 @@ function TransportQualityDashboard() {
               {distributions.by_latency.length ? (
                 <ResponsiveContainer width="100%" height={260}>
                   <BarChart data={distributions.by_latency} margin={{ top: 12, right: 16, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.16)" />
-                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#94A3B8' }} />
-                    <YAxis tick={{ fontSize: 10, fill: '#94A3B8' }} width={42} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={themeTokens.chartGrid} vertical={false} />
+                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
+                    <YAxis tick={{ fontSize: 10, fill: themeTokens.axisTick }} width={42} />
                     <Tooltip content={<TransportTooltip />} />
                     <Bar dataKey="records" name="Latency records" fill={QUALITY_COLORS.latency} radius={[4, 4, 0, 0]}>
                       <LabelList dataKey="records" position="top" formatter={formatNumber} fill="var(--text-muted)" fontSize={10} />
@@ -582,9 +556,9 @@ function TransportQualityDashboard() {
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
               <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={(breakdowns.by_nop || []).slice(0, 8)} layout="vertical" margin={{ top: 6, right: 18, left: 58, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.16)" />
-                  <XAxis type="number" tick={{ fontSize: 10, fill: '#94A3B8' }} />
-                  <YAxis type="category" dataKey="label" width={88} tick={{ fontSize: 10, fill: '#94A3B8' }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={themeTokens.chartGrid} vertical={false} />
+                  <XAxis type="number" tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
+                  <YAxis type="category" dataKey="label" width={88} tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
                   <Tooltip content={<TransportTooltip />} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
                   <Bar dataKey="p1_sites" name="P1" stackId="issues" fill={QUALITY_COLORS.p1} radius={[0, 4, 4, 0]} />
@@ -593,9 +567,9 @@ function TransportQualityDashboard() {
               </ResponsiveContainer>
               <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={(breakdowns.by_kabupaten || []).slice(0, 8)} layout="vertical" margin={{ top: 6, right: 18, left: 82, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.16)" />
-                  <XAxis type="number" tick={{ fontSize: 10, fill: '#94A3B8' }} />
-                  <YAxis type="category" dataKey="label" width={112} tick={{ fontSize: 10, fill: '#94A3B8' }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={themeTokens.chartGrid} vertical={false} />
+                  <XAxis type="number" tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
+                  <YAxis type="category" dataKey="label" width={112} tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
                   <Tooltip content={<TransportTooltip />} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
                   <Bar dataKey="pl_over_1_sites" name="PL > 1%" fill={QUALITY_COLORS.packetLoss} radius={[0, 4, 4, 0]} />
@@ -636,9 +610,8 @@ function TransportQualityDashboard() {
                 {prioritySites.items.map((row) => (
                   <tr
                     key={row.site_id}
-                    className={`transition-colors hover:bg-[var(--bg-hover)]/45 ${
-                      row.priority_level === 'P1' ? 'bg-red-500/[0.045]' : ''
-                    }`}
+                    className={`transition-colors hover:bg-[var(--bg-hover)]/45 ${row.priority_level === 'P1' ? 'bg-red-500/[0.045]' : ''
+                      }`}
                   >
                     <td className="whitespace-nowrap px-3 py-2 font-mono text-xs font-bold text-[var(--text-primary)]">{row.site_id}</td>
                     <td className="max-w-[220px] truncate px-3 py-2 text-xs text-[var(--text-secondary)]">{asDisplay(row.site_name)}</td>

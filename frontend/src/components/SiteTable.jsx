@@ -91,7 +91,7 @@ export default function SiteTable({ bulan, tahun, filters, onSiteSelect, siteCou
   return (
     <div className="glass-card animate-fade-in flex flex-col h-full overflow-hidden">
       {/* Header */}
-      <div className="px-3 py-2 border-b border-white/[0.06] flex items-center gap-3">
+      <div className="flex items-center gap-3 border-b border-[var(--border)] px-4 py-3">
         <div className="min-w-0 flex items-baseline gap-3">
           <h3 className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-widest shrink-0">Daftar Site</h3>
           <span className="text-[10px] font-mono text-[var(--text-muted)]">
@@ -107,7 +107,7 @@ export default function SiteTable({ bulan, tahun, filters, onSiteSelect, siteCou
             placeholder="Cari site ID, nama, kabupaten..."
             value={search}
             onChange={handleSearchChange}
-            className="w-full pl-9 pr-3 py-1 text-[11px] bg-white/[0.04] border border-white/[0.08] rounded-lg text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)]/40 focus:border-[var(--primary)]/30 transition-all"
+            className="dashboard-control w-full rounded-lg py-1.5 pl-9 pr-3 text-[11px] placeholder:text-[var(--text-muted)] transition-all focus:border-[var(--primary)]/30 focus:outline-none focus:ring-1 focus:ring-[var(--primary)]/40"
           />
           </div>
           {toolbar}
@@ -135,7 +135,7 @@ export default function SiteTable({ bulan, tahun, filters, onSiteSelect, siteCou
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-white/[0.04]">
+          <tbody className="divide-y divide-[var(--border)]">
             {loading ? (
               Array.from({ length: 6 }).map((_, i) => (
                 <tr key={i}><td colSpan={9} className="px-3 py-1.5"><div className="skeleton h-3 rounded" /></td></tr>
@@ -147,7 +147,7 @@ export default function SiteTable({ bulan, tahun, filters, onSiteSelect, siteCou
                 <tr
                   key={site.site_id}
                   onClick={() => onSiteSelect?.(site)}
-                  className="hover:bg-white/[0.03] cursor-pointer transition-colors group"
+                  className="dashboard-table-row cursor-pointer transition-colors group"
                 >
                   <td className="px-3 py-1.5 font-semibold font-mono text-[var(--primary-light)] group-hover:text-[var(--primary)]">{site.site_id}</td>
                   <td className="px-3 py-1.5 truncate max-w-[220px] text-[var(--text-secondary)]">{site.site_name || '-'}</td>
@@ -166,13 +166,13 @@ export default function SiteTable({ bulan, tahun, filters, onSiteSelect, siteCou
       </div>
 
       {/* Pagination */}
-      <div className="px-3 py-1.5 border-t border-white/[0.06] flex items-center justify-between text-[10px] text-[var(--text-muted)]">
+      <div className="flex items-center justify-between border-t border-[var(--border)] px-3 py-2 text-[10px] text-[var(--text-muted)]">
         <span className="font-mono">Page {data.page}/{data.total_pages || 1} · {data.total} sites</span>
         <div className="flex gap-1">
           <button onClick={() => setPage(p => Math.max(1, p-1))} disabled={page <= 1}
-            className="p-1.5 rounded-lg hover:bg-white/[0.06] disabled:opacity-20 transition-colors cursor-pointer disabled:cursor-default"><ChevronLeft className="w-3.5 h-3.5" /></button>
+            className="rounded-lg p-1.5 transition-colors hover:bg-[var(--table-row-hover)] disabled:cursor-default disabled:opacity-20"><ChevronLeft className="w-3.5 h-3.5" /></button>
           <button onClick={() => setPage(p => p+1)} disabled={page >= (data.total_pages||1)}
-            className="p-1.5 rounded-lg hover:bg-white/[0.06] disabled:opacity-20 transition-colors cursor-pointer disabled:cursor-default"><ChevronRight className="w-3.5 h-3.5" /></button>
+            className="rounded-lg p-1.5 transition-colors hover:bg-[var(--table-row-hover)] disabled:cursor-default disabled:opacity-20"><ChevronRight className="w-3.5 h-3.5" /></button>
         </div>
       </div>
     </div>

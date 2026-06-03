@@ -9,6 +9,9 @@ class ImpactServiceFilters(BaseModel):
     """Available filter bounds and NOP values for Impact Service."""
     min_date: Optional[date] = None
     max_date: Optional[date] = None
+    today: Optional[date] = None
+    default_date: Optional[date] = None
+    has_today_data: bool = False
     nops: list[str] = []
 
 

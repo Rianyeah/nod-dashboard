@@ -10,7 +10,7 @@ GET /impact-service/top-sites     - top impacted sites
 GET /impact-service/alarms        - paginated alarm detail table
 GET /impact-service/alarms/{id}   - modal detail for one alarm
 """
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 import math
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -33,6 +33,11 @@ from models.impact_service import (
 )
 
 router = APIRouter(prefix="/impact-service", tags=["Impact Service"])
+JAKARTA_TZ = timezone(timedelta(hours=7))
+
+
+def get_jakarta_today() -> date:
+    return datetime.now(JAKARTA_TZ).date()
 
 
 def build_nop_filter(nop: str | None, alias: str = "a") -> str:
@@ -69,7 +74,13 @@ def build_optional_filters(
 FILTERS_QUERY = """
 SELECT
     MIN(tanggal) AS min_date,
-    MAX(tanggal) AS max_date
+    MAX(tanggal) AS max_date,
+    CAST(:today AS date) AS today,
+    (COUNT(*) FILTER (WHERE tanggal = CAST(:today AS date)) > 0) AS has_today_data,
+    CASE
+        WHEN COUNT(*) FILTER (WHERE tanggal = CAST(:today AS date)) > 0 THEN CAST(:today AS date)
+        ELSE MAX(tanggal)
+    END AS default_date
 FROM alarm_impact_service
 """
 
@@ -362,7 +373,7 @@ async def get_impact_service_filters(
     session: AsyncSession = Depends(get_session),
 ):
     """Date bounds and NOP options for Impact Service filters."""
-    date_result = await session.execute(text(FILTERS_QUERY))
+    date_result = await session.execute(text(FILTERS_QUERY), {"today": get_jakarta_today()})
     date_row = date_result.mappings().first()
     nop_result = await session.execute(text(FILTER_NOPS_QUERY))
     nop_rows = nop_result.mappings().all()
@@ -370,6 +381,9 @@ async def get_impact_service_filters(
     return ImpactServiceFilters(
         min_date=date_row.get("min_date") if date_row else None,
         max_date=date_row.get("max_date") if date_row else None,
+        today=date_row.get("today") if date_row else None,
+        default_date=date_row.get("default_date") if date_row else None,
+        has_today_data=bool(date_row.get("has_today_data")) if date_row else False,
         nops=[row["nop"] for row in nop_rows if row.get("nop")],
     )
 

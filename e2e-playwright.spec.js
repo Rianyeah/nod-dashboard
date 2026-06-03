@@ -172,12 +172,20 @@ test('Impact Service filters are sent to scorecards charts table and modal', asy
     return select && select.options.length > 1;
   });
   await expect.poll(() => filterBounds?.max_date).toBeTruthy();
-  await expect(page.locator('#impact-start-date')).toHaveValue(filterBounds.max_date);
-  await expect(page.locator('#impact-end-date')).toHaveValue(filterBounds.max_date);
+  await expect.poll(() => filterBounds?.default_date).toBeTruthy();
+  const expectedDefaultDate = filterBounds.default_date || filterBounds.max_date;
+  await expect(page.locator('#impact-start-date')).toHaveValue(expectedDefaultDate);
+  await expect(page.locator('#impact-end-date')).toHaveValue(expectedDefaultDate);
+  await expect(page.locator('#impact-start-date')).not.toHaveAttribute('max', filterBounds.max_date);
+  await expect(page.locator('#impact-end-date')).not.toHaveAttribute('max', filterBounds.max_date);
 
   await page.locator('#impact-end-date').fill(filterBounds.min_date);
   await expect(page.locator('#impact-start-date')).toHaveValue(filterBounds.min_date);
   await expect(page.locator('#impact-end-date')).toHaveValue(filterBounds.min_date);
+  await expect(page.getByText('Rentang tanggal tidak valid')).toHaveCount(0);
+
+  await page.locator('#impact-end-date').fill('2026-06-02');
+  await expect(page.locator('#impact-end-date')).toHaveValue('2026-06-02');
   await expect(page.getByText('Rentang tanggal tidak valid')).toHaveCount(0);
 
   await page.locator('#impact-nop').selectOption({ index: 1 });

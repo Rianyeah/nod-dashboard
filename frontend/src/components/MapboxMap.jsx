@@ -1127,12 +1127,10 @@ export default function MapboxMap({
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
     const filter = ['==', ['get', 'site_id'], selectedSiteId || ''];
-    // Apply filter to ALL sector layers so only the selected site's sectors are visible
-    ['sector-fill', 'sector-outline', 'sector-selected-fill', 'sector-selected-outline'].forEach(layerId => {
-      if (map.current.getLayer(layerId)) {
-        map.current.setFilter(layerId, filter);
-      }
-    });
+    if (map.current.getLayer('sector-fill')) map.current.setFilter('sector-fill', filter);
+    if (map.current.getLayer('sector-outline')) map.current.setFilter('sector-outline', filter);
+    if (map.current.getLayer('sector-selected-fill')) map.current.setFilter('sector-selected-fill', filter);
+    if (map.current.getLayer('sector-selected-outline')) map.current.setFilter('sector-selected-outline', filter);
   }, [selectedSiteId, mapLoaded]);
 
   // --- Sector layer visibility toggle ---
@@ -1354,7 +1352,7 @@ export default function MapboxMap({
   ];
 
   return (
-    <div className="relative w-full h-full rounded-xl overflow-hidden border border-white/[0.06]">
+    <div className="relative h-full w-full overflow-hidden rounded-xl border border-[var(--border)]">
       {loading && (
         <div className="absolute inset-0 z-20 bg-[var(--bg-base)]/80 backdrop-blur-sm flex items-center justify-center">
           <div className="flex flex-col items-center gap-3">
