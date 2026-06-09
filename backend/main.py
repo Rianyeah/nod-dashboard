@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from cache import redis_cache
 from security import DASHBOARD_TOKEN, verify_n8n_key
 
 load_dotenv()
@@ -22,6 +23,13 @@ DASHBOARD_PASS = os.getenv("DASHBOARD_PASS", "admin123")
 async def lifespan(app: FastAPI):
     """Application lifespan — startup & shutdown."""
     print("[NOD] Backend starting up...")
+
+    if await redis_cache.connect():
+        print("[NOD] Redis cache connected.")
+    elif redis_cache.enabled:
+        print("[NOD] WARNING: Redis cache is unreachable; continuing without cache.")
+    else:
+        print("[NOD] Redis cache is disabled.")
 
     # Auto-populate site_month_metrics for any months missing from the cache
     try:
@@ -71,8 +79,11 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         print(f"[NOD] WARNING: Auto-refresh metrics cache failed: {exc}")
 
-    yield
-    print("[NOD] Backend shutting down...")
+    try:
+        yield
+    finally:
+        await redis_cache.close()
+        print("[NOD] Backend shutting down...")
 
 
 app = FastAPI(
@@ -99,9 +110,11 @@ async def health_check():
     """Health check endpoint for UptimeRobot."""
     from database import check_db_connection
     db_ok = await check_db_connection()
+    redis_status = await redis_cache.status()
     return {
         "status": "ok" if db_ok else "degraded",
         "database": "connected" if db_ok else "unreachable",
+        "redis": redis_status,
         "service": "nod-backend",
     }
 

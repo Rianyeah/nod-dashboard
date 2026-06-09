@@ -94,12 +94,37 @@ describe('dashboard and reporting visual/data contracts', () => {
     assert.match(page, /previousMonth/);
     assert.match(page, /fetchReportingScorecards\(previousMonth,\s*selectedNop\)/);
     assert.match(page, /fetchRevenueByKabupaten\(previousMonth,\s*selectedNop\)/);
-    assert.match(page, /MetricDelta/);
     assert.match(page, /DeltaValue/);
     assert.match(page, /getDelta/);
-    assert.match(page, /deltaFormatter=\{formatRevenueShort\}/);
-    assert.match(page, /deltaFormatter=\{formatPayload\}/);
-    assert.match(page, /deltaFormatter=\{formatPercent\}/);
+    assert.match(page, /getRelativeChange/);
+    assert.match(page, /formatter=\{formatRevenueShort\}/);
+    assert.match(page, /formatter=\{formatPayload\}/);
+    assert.match(page, /formatter=\{formatPercent\}/);
+  });
+
+  it('defaults Reporting to SIDOARJO and renders site composition, relative MoM, and YTD metadata', () => {
+    const page = src('pages', 'NetworkReportingPage.jsx');
+
+    assert.match(page, /relative z-10 px-3 py-3 flex flex-col gap-3 xl:px-6 xl:flex-row xl:items-center xl:justify-between/);
+    assert.match(page, /reporting-header-controls flex w-full flex-wrap/);
+    assert.match(page, /REPORTING_DEFAULT_NOP\s*=\s*'SIDOARJO'/);
+    assert.match(page, /normalizeReportingNop/);
+    assert.match(page, /setSelectedNop/);
+    assert.match(page, /const \[filtersReady, setFiltersReady\] = useState\(false\)/);
+    assert.match(page, /if \(!filtersReady\) return/);
+    assert.match(page, /if \(!selectedMonth \|\| !filtersReady\) return/);
+    assert.match(page, /epm_sites/);
+    assert.match(page, /non_epm_sites/);
+    assert.match(page, /revenue_ytd/);
+    assert.match(page, /payload_ytd/);
+    assert.match(page, /getRelativeChange/);
+    assert.match(page, /formatRelativePercent/);
+    assert.match(page, /EPM/);
+    assert.match(page, /Site \(non EPM\)/);
+    assert.match(page, /YTD/);
+    assert.doesNotMatch(page, /site dengan data traktor/);
+    assert.doesNotMatch(page, /subtitle="total data usage"/);
+    assert.doesNotMatch(page, /subtitle="rata-rata availability jaringan"/);
   });
 
   it('keeps revenue detail columns collapsed behind a table toggle after availability', () => {
@@ -111,6 +136,21 @@ describe('dashboard and reporting visual/data contracts', () => {
     assert.match(page, /Detail Revenue/);
     assert.match(page, /showRevenueDetails\s*&&[\s\S]*Rev Voice/);
     assert.match(page, /Availability[\s\S]*showRevenueDetails\s*&&[\s\S]*Rev Voice/);
+  });
+
+  it('renames reporting revenue table to Performance Table and adds ticket/proker columns', () => {
+    const page = src('pages', 'NetworkReportingPage.jsx');
+    const api = src('services', 'api.js');
+
+    assert.match(page, /Performance Table/);
+    assert.doesNotMatch(page, /Revenue & Payload by Kabupaten\/Kota/);
+    assert.match(page, /Ticket SWFM/);
+    assert.match(page, /Proker Activity/);
+    assert.match(page, /ticket_swfm_bps/);
+    assert.match(page, /ticket_swfm_ts/);
+    assert.match(page, /proker_open/);
+    assert.match(page, /proker_closed/);
+    assert.match(api, /fetchRevenueByKabupaten/);
   });
 
   it('adds an executive insight band above the performance chart', () => {
@@ -125,13 +165,18 @@ describe('dashboard and reporting visual/data contracts', () => {
     assert.doesNotMatch(page, /lg:grid-cols-\[3fr_1fr\]/);
     assert.match(page, /InsightCard/);
     assert.match(page, /Auto-generated dari data/);
-    assert.match(page, /Revenue melampaui target bulan ini|Revenue belum mencapai target/);
+    assert.match(page, /Revenue melampaui target|Revenue di bawah target/);
     assert.match(page, /Availability turun/);
     assert.match(page, /Payload.*tertinggi/);
     assert.match(page, /getRevenueContributorInsight/);
     assert.match(page, /getAvailabilityTrendInsight/);
     assert.match(page, /getPayloadPeakInsight/);
     assert.match(page, /REVENUE_TARGET/);
+    assert.match(page, /summary/);
+    assert.match(page, /detail/);
+    assert.match(page, /summaryText: 'text-slate-900'/);
+    assert.match(page, /detailText: 'text-slate-700'/);
+    assert.match(page, /labelText: 'text-slate-600'/);
   });
 
   it('adds a print-to-PDF export action for the reporting page', () => {
@@ -214,7 +259,7 @@ describe('dashboard and reporting visual/data contracts', () => {
       'OPEN Alarm',
       'CLEAR Alarm',
       'SOW TSEL',
-      'Daily Alarm Trend',
+      'Last 7 Days Trend',
       'Status by Severity',
       'Category Distribution',
       'Aging Range',
@@ -227,8 +272,54 @@ describe('dashboard and reporting visual/data contracts', () => {
     }
 
     assert.match(page, /ResponsiveContainer/);
-    assert.match(page, /BarChart/);
+    assert.match(page, /ComposedChart/);
+    assert.match(page, /fetchImpactServiceLast7DaysTrend\(last7DaysParams\)/);
     assert.match(page, /row\.id/);
     assert.match(page, /setSelectedAlarmId/);
+
+    const chartSection = page.split('Last 7 Days Trend', 2)[1].split('Category Distribution', 1)[0];
+    assert.ok(chartSection.indexOf('NOP Contribution') < chartSection.indexOf('Status by Severity'));
+
+    const tableHeaders = page.split('Alarm Detail Table', 2)[1].split('<tbody', 1)[0];
+    assert.match(tableHeaders, /Comment/);
+    assert.doesNotMatch(tableHeaders, /Ticket/);
+    assert.doesNotMatch(tableHeaders, /PIC/);
+  });
+
+  it('shows equal-period delta and percentage on every Impact Service scorecard', () => {
+    const page = src('pages', 'ImpactServicePage.jsx');
+
+    for (const contract of [
+      'getImpactDelta',
+      'formatImpactDelta',
+      'isSingleDayRange',
+      'previous_total_alarms',
+      'previous_impacted_sites',
+      'previous_open_alarms',
+      'previous_clear_alarms',
+      'previous_sow_tsel',
+      'vs hari sebelumnya',
+      'vs periode sebelumnya',
+    ]) {
+      assert.match(page, new RegExp(contract));
+    }
+
+    assert.match(page, /previousValue === 0 \? null/);
+    assert.match(page, /rate == null \? '-'/);
+    assert.match(page, /text-emerald-400/);
+    assert.match(page, /text-red-400/);
+    assert.match(page, /text-\[var\(--text-muted\)\]/);
+    assert.match(page, /xl:grid-cols-3 2xl:grid-cols-5/);
+    assert.doesNotMatch(page, /whitespace-nowrap text-\[11px\] font-semibold leading-snug/);
+
+    for (const oldSubtitle of [
+      'total data alarm',
+      'distinct site_id terdampak',
+      'status OPEN',
+      'status CLEAR',
+      'kolom SOW = TSEL',
+    ]) {
+      assert.doesNotMatch(page, new RegExp(oldSubtitle));
+    }
   });
 });

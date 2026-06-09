@@ -9,11 +9,12 @@ GET /reporting/battery-by-kabupaten    — Battery type cross-tab
 GET /reporting/trend                   — Monthly revenue trend
 GET /reporting/available-months        — List of trx_month values
 """
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 import runtime_compat  # noqa: F401
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
+from cache import redis_cache
 from database import get_session
 from models.reporting import (
     ReportingScorecard,
@@ -34,18 +35,44 @@ def build_nop_filter(nop: str | None, alias: str = "d") -> str:
     filters = {
         "d": ' AND d."NOP" = :nop',
         "d2": ' AND d2."NOP" = :nop',
+        "tfc": " AND tfc.nop = :nop",
+        "p": " AND p.nop = :nop",
     }
     return filters[alias]
 
 
 SCORECARDS_QUERY = """
 SELECT
-    COUNT(DISTINCT t.site_id) AS total_sites,
     COALESCE(SUM(t.rev), 0) AS total_revenue,
     COALESCE(SUM(t.payload), 0) AS total_payload
 FROM traktor_data t
 LEFT JOIN data_site_master d ON t.site_id = d."Siteid"
 WHERE t.trx_month = :trx_month
+{nop_filter}
+"""
+
+ACTIVE_MASTER_SITE_BREAKDOWN_QUERY = """
+SELECT
+    COUNT(DISTINCT d."Siteid") AS total_sites,
+    COUNT(DISTINCT CASE
+        WHEN UPPER(TRIM(d."Siteid")) LIKE 'EPM%' THEN d."Siteid"
+    END) AS epm_sites,
+    COUNT(DISTINCT CASE
+        WHEN UPPER(TRIM(d."Siteid")) NOT LIKE 'EPM%' THEN d."Siteid"
+    END) AS non_epm_sites
+FROM data_site_master d
+WHERE d."Status Site" = 'Active'
+{nop_filter}
+"""
+
+YTD_SCORECARDS_QUERY = """
+SELECT
+    COALESCE(SUM(t.rev), 0) AS revenue_ytd,
+    COALESCE(SUM(t.payload), 0) AS payload_ytd
+FROM traktor_data t
+LEFT JOIN data_site_master d ON t.site_id = d."Siteid"
+WHERE CAST(SPLIT_PART(t.trx_month, '-', 1) AS INTEGER) = :tahun
+  AND CAST(SPLIT_PART(t.trx_month, '-', 2) AS INTEGER) <= :bulan
 {nop_filter}
 """
 
@@ -64,7 +91,8 @@ WITH availability_cache AS (
 ),
 availability_logs AS (
     SELECT
-        ROUND(AVG(NULLIF(a.availability::TEXT, '')::NUMERIC), 4) AS avg_availability
+        ROUND(AVG(NULLIF(a.availability::TEXT, '')::NUMERIC), 4) AS avg_availability,
+        COUNT(DISTINCT a."SITE ID") AS total_sites
     FROM availability_logs_jatim a
     LEFT JOIN data_site_master d ON a."SITE ID" = d."Siteid"
     WHERE a.availability IS NOT NULL
@@ -73,7 +101,8 @@ availability_logs AS (
     {nop_filter}
 )
 SELECT
-    COALESCE(c.avg_availability, l.avg_availability) AS avg_availability
+    COALESCE(c.avg_availability, l.avg_availability) AS avg_availability,
+    COALESCE(l.total_sites, 0) AS total_sites
 FROM availability_cache c
 CROSS JOIN availability_logs l
 """
@@ -113,6 +142,30 @@ availability AS (
         COALESCE(c.avg_availability, l.avg_availability) AS avg_availability
     FROM availability_cache c
     FULL OUTER JOIN availability_logs l ON l.kabupaten = c.kabupaten
+),
+ticket_aggregate AS (
+    SELECT
+        COALESCE(NULLIF(TRIM(tfc.kabupaten_kota), ''), 'Unknown') AS kabupaten,
+        COUNT(*) FILTER (WHERE UPPER(TRIM(tfc.kategori_tt)) = 'BPS') AS ticket_swfm_bps,
+        COUNT(*) FILTER (WHERE UPPER(TRIM(tfc.kategori_tt)) LIKE 'TS%') AS ticket_swfm_ts
+    FROM public.ticketing_fault_center tfc
+    WHERE tfc.tahun = CAST(SPLIT_PART(:trx_month, '-', 1) AS INTEGER)
+      AND EXTRACT(MONTH FROM tfc.created_at)::int = CAST(SPLIT_PART(:trx_month, '-', 2) AS INTEGER)
+      AND NULLIF(TRIM(tfc.kabupaten_kota), '') IS NOT NULL
+      {ticket_nop_filter}
+    GROUP BY 1
+),
+proker_aggregate AS (
+    SELECT
+        COALESCE(NULLIF(TRIM(p.kabupaten), ''), 'Unknown') AS kabupaten,
+        COUNT(*) FILTER (WHERE UPPER(TRIM(p.status)) = 'OPEN') AS proker_open,
+        COUNT(*) FILTER (WHERE UPPER(TRIM(p.status)) = 'CLOSE') AS proker_closed
+    FROM public.proker_enom_jatim_2026 p
+    WHERE CAST(SPLIT_PART(:trx_month, '-', 1) AS INTEGER) = 2026
+      AND p.bulan = CAST(SPLIT_PART(:trx_month, '-', 2) AS INTEGER)
+      AND NULLIF(TRIM(p.kabupaten), '') IS NOT NULL
+      {proker_nop_filter}
+    GROUP BY 1
 )
 SELECT
     d."Kabupaten/KOTA" AS kabupaten,
@@ -132,10 +185,16 @@ SELECT
     COALESCE(SUM(t.trf_2g), 0) AS trf_2g,
     COALESCE(SUM(t.trf_3g), 0) AS trf_3g,
     COALESCE(SUM(t.trf_4g), 0) AS trf_4g,
-    avail.avg_availability
+    avail.avg_availability,
+    COALESCE(MAX(tickets.ticket_swfm_bps), 0) AS ticket_swfm_bps,
+    COALESCE(MAX(tickets.ticket_swfm_ts), 0) AS ticket_swfm_ts,
+    COALESCE(MAX(proker.proker_open), 0) AS proker_open,
+    COALESCE(MAX(proker.proker_closed), 0) AS proker_closed
 FROM traktor_data t
 JOIN data_site_master d ON t.site_id = d."Siteid"
 LEFT JOIN availability avail ON avail.kabupaten = d."Kabupaten/KOTA"
+LEFT JOIN ticket_aggregate tickets ON tickets.kabupaten = d."Kabupaten/KOTA"
+LEFT JOIN proker_aggregate proker ON proker.kabupaten = d."Kabupaten/KOTA"
 WHERE t.trx_month = :trx_month
   AND d."Kabupaten/KOTA" IS NOT NULL
   {nop_filter}
@@ -245,11 +304,24 @@ ORDER BY trx_month DESC
 @router.get("/available-months")
 async def get_available_months(
     session: AsyncSession = Depends(get_session),
+    response: Response = None,
 ):
     """List available trx_month values for the period selector."""
+    cache_key = redis_cache.make_key("reporting", "available-months")
+    cache_status, cached_value = await redis_cache.get_json(cache_key)
+    if cache_status == "HIT":
+        if response is not None:
+            response.headers["X-Cache"] = cache_status
+        return cached_value
+
     result = await session.execute(text(AVAILABLE_MONTHS_QUERY))
     rows = result.mappings().all()
-    return [row["trx_month"] for row in rows]
+    payload = [row["trx_month"] for row in rows]
+    if cache_status == "MISS":
+        await redis_cache.set_json(cache_key, payload)
+    if response is not None:
+        response.headers["X-Cache"] = cache_status
+    return payload
 
 
 @router.get("/scorecards", response_model=ReportingScorecard)
@@ -257,8 +329,21 @@ async def get_scorecards(
     trx_month: str = Query(..., description="Period in YYYY-MM format"),
     nop: str = Query(None),
     session: AsyncSession = Depends(get_session),
+    response: Response = None,
 ):
     """Scorecard KPIs: total sites, revenue, payload, availability."""
+    cache_key = redis_cache.make_key(
+        "reporting",
+        "scorecards",
+        trx_month=trx_month,
+        nop=nop or "",
+    )
+    cache_status, cached_value = await redis_cache.get_json(cache_key)
+    if cache_status == "HIT":
+        if response is not None:
+            response.headers["X-Cache"] = cache_status
+        return cached_value
+
     # Revenue/payload from traktor_data
     params = {"trx_month": trx_month, "nop": nop}
     result = await session.execute(
@@ -267,32 +352,59 @@ async def get_scorecards(
     )
     row = result.mappings().first()
 
-    total_sites = int(row["total_sites"]) if row else 0
     total_revenue = int(row["total_revenue"]) if row else 0
     total_payload = int(row["total_payload"]) if row else 0
 
-    # Availability from site_month_metrics (derive bulan/tahun from trx_month)
+    site_result = await session.execute(
+        text(ACTIVE_MASTER_SITE_BREAKDOWN_QUERY.format(nop_filter=build_nop_filter(nop, "d"))),
+        {"nop": nop},
+    )
+    site_row = site_result.mappings().first()
+    total_sites = int(site_row.get("total_sites") or 0) if site_row else 0
+    epm_sites = int(site_row.get("epm_sites") or 0) if site_row else 0
+    non_epm_sites = int(site_row.get("non_epm_sites") or 0) if site_row else 0
+
+    revenue_ytd = 0
+    payload_ytd = 0
     avg_availability = None
     try:
-        parts = trx_month.split("-")
-        tahun = int(parts[0])
-        bulan = int(parts[1])
+        tahun, bulan = (int(part) for part in trx_month.split("-", 1))
+
+        ytd_result = await session.execute(
+            text(YTD_SCORECARDS_QUERY.format(nop_filter=build_nop_filter(nop, "d"))),
+            {"tahun": tahun, "bulan": bulan, "nop": nop},
+        )
+        ytd_row = ytd_result.mappings().first()
+        if ytd_row:
+            revenue_ytd = int(ytd_row.get("revenue_ytd") or 0)
+            payload_ytd = int(ytd_row.get("payload_ytd") or 0)
+
         avail_result = await session.execute(
             text(AVAILABILITY_SCORECARD_QUERY.format(nop_filter=build_nop_filter(nop, "d"))),
             {"tahun": tahun, "bulan": bulan, "nop": nop},
         )
         avail_row = avail_result.mappings().first()
-        if avail_row and avail_row["avg_availability"] is not None:
-            avg_availability = float(avail_row["avg_availability"])
+        if avail_row:
+            if avail_row["avg_availability"] is not None:
+                avg_availability = float(avail_row["avg_availability"])
     except (ValueError, IndexError):
         pass
 
-    return ReportingScorecard(
+    payload = ReportingScorecard(
         total_sites=total_sites,
+        epm_sites=epm_sites,
+        non_epm_sites=non_epm_sites,
         total_revenue=total_revenue,
         total_payload=total_payload,
+        revenue_ytd=revenue_ytd,
+        payload_ytd=payload_ytd,
         avg_availability=avg_availability,
     )
+    if cache_status == "MISS":
+        await redis_cache.set_json(cache_key, payload)
+    if response is not None:
+        response.headers["X-Cache"] = cache_status
+    return payload
 
 
 @router.get("/revenue-by-kabupaten", response_model=list[RevenueByKabupaten])
@@ -300,18 +412,33 @@ async def get_revenue_by_kabupaten(
     trx_month: str = Query(..., description="Period in YYYY-MM format"),
     nop: str = Query(None),
     session: AsyncSession = Depends(get_session),
+    response: Response = None,
 ):
     """Revenue & payload breakdown pivot by Kabupaten/Kota."""
+    cache_key = redis_cache.make_key(
+        "reporting",
+        "revenue-by-kabupaten",
+        trx_month=trx_month,
+        nop=nop or "",
+    )
+    cache_status, cached_value = await redis_cache.get_json(cache_key)
+    if cache_status == "HIT":
+        if response is not None:
+            response.headers["X-Cache"] = cache_status
+        return cached_value
+
     result = await session.execute(
         text(REVENUE_BY_KABUPATEN_QUERY.format(
             nop_filter=build_nop_filter(nop, "d"),
             availability_nop_filter=build_nop_filter(nop, "d2"),
+            ticket_nop_filter=build_nop_filter(nop, "tfc"),
+            proker_nop_filter=build_nop_filter(nop, "p"),
         )),
         {"trx_month": trx_month, "nop": nop},
     )
     rows = result.mappings().all()
 
-    return [
+    payload = [
         RevenueByKabupaten(
             kabupaten=row.get("kabupaten"),
             total_sites=int(row.get("total_sites") or 0),
@@ -331,9 +458,18 @@ async def get_revenue_by_kabupaten(
             trf_3g=int(row.get("trf_3g") or 0),
             trf_4g=int(row.get("trf_4g") or 0),
             avg_availability=float(row["avg_availability"]) if row.get("avg_availability") is not None else None,
+            ticket_swfm_bps=int(row.get("ticket_swfm_bps") or 0),
+            ticket_swfm_ts=int(row.get("ticket_swfm_ts") or 0),
+            proker_open=int(row.get("proker_open") or 0),
+            proker_closed=int(row.get("proker_closed") or 0),
         )
         for row in rows
     ]
+    if cache_status == "MISS":
+        await redis_cache.set_json(cache_key, payload)
+    if response is not None:
+        response.headers["X-Cache"] = cache_status
+    return payload
 
 
 @router.get("/site-class-by-kabupaten", response_model=list[SiteClassByKabupaten])
@@ -341,15 +477,28 @@ async def get_site_class_by_kabupaten(
     trx_month: str = Query(..., description="Period in YYYY-MM format"),
     nop: str = Query(None),
     session: AsyncSession = Depends(get_session),
+    response: Response = None,
 ):
     """Site class distribution cross-tab by Kabupaten/Kota."""
+    cache_key = redis_cache.make_key(
+        "reporting",
+        "site-class-by-kabupaten",
+        trx_month=trx_month,
+        nop=nop or "",
+    )
+    cache_status, cached_value = await redis_cache.get_json(cache_key)
+    if cache_status == "HIT":
+        if response is not None:
+            response.headers["X-Cache"] = cache_status
+        return cached_value
+
     result = await session.execute(
         text(SITE_CLASS_BY_KABUPATEN_QUERY.format(nop_filter=build_nop_filter(nop, "d"))),
         {"trx_month": trx_month, "nop": nop},
     )
     rows = result.mappings().all()
 
-    return [
+    payload = [
         SiteClassByKabupaten(
             kabupaten=row.get("kabupaten"),
             diamond=int(row.get("diamond") or 0),
@@ -361,21 +510,38 @@ async def get_site_class_by_kabupaten(
         )
         for row in rows
     ]
+    if cache_status == "MISS":
+        await redis_cache.set_json(cache_key, payload)
+    if response is not None:
+        response.headers["X-Cache"] = cache_status
+    return payload
 
 
 @router.get("/battery-by-kabupaten", response_model=list[BatteryByKabupaten])
 async def get_battery_by_kabupaten(
     nop: str = Query(None),
     session: AsyncSession = Depends(get_session),
+    response: Response = None,
 ):
     """Battery type distribution cross-tab by Kabupaten/Kota."""
+    cache_key = redis_cache.make_key(
+        "reporting",
+        "battery-by-kabupaten",
+        nop=nop or "",
+    )
+    cache_status, cached_value = await redis_cache.get_json(cache_key)
+    if cache_status == "HIT":
+        if response is not None:
+            response.headers["X-Cache"] = cache_status
+        return cached_value
+
     result = await session.execute(
         text(BATTERY_BY_KABUPATEN_QUERY.format(nop_filter=build_nop_filter(nop, "d"))),
         {"nop": nop},
     )
     rows = result.mappings().all()
 
-    return [
+    payload = [
         BatteryByKabupaten(
             kabupaten=row.get("kabupaten"),
             lithium=int(row.get("lithium") or 0),
@@ -385,14 +551,31 @@ async def get_battery_by_kabupaten(
         )
         for row in rows
     ]
+    if cache_status == "MISS":
+        await redis_cache.set_json(cache_key, payload)
+    if response is not None:
+        response.headers["X-Cache"] = cache_status
+    return payload
 
 
 @router.get("/trend", response_model=list[RevenueTrendItem])
 async def get_revenue_trend(
     nop: str = Query(None),
     session: AsyncSession = Depends(get_session),
+    response: Response = None,
 ):
     """Monthly revenue/payload/traffic trend across all available months."""
+    cache_key = redis_cache.make_key(
+        "reporting",
+        "trend",
+        nop=nop or "",
+    )
+    cache_status, cached_value = await redis_cache.get_json(cache_key)
+    if cache_status == "HIT":
+        if response is not None:
+            response.headers["X-Cache"] = cache_status
+        return cached_value
+
     result = await session.execute(
         text(REVENUE_TREND_QUERY.format(
             nop_filter=build_nop_filter(nop, "d"),
@@ -402,7 +585,7 @@ async def get_revenue_trend(
     )
     rows = result.mappings().all()
 
-    return [
+    payload = [
         RevenueTrendItem(
             trx_month=row["trx_month"],
             total_revenue=int(row.get("total_revenue") or 0),
@@ -412,3 +595,8 @@ async def get_revenue_trend(
         )
         for row in rows
     ]
+    if cache_status == "MISS":
+        await redis_cache.set_json(cache_key, payload)
+    if response is not None:
+        response.headers["X-Cache"] = cache_status
+    return payload

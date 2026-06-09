@@ -22,6 +22,11 @@ class ImpactServiceSummary(BaseModel):
     open_alarms: int = 0
     clear_alarms: int = 0
     sow_tsel: int = 0
+    previous_total_alarms: int = 0
+    previous_impacted_sites: int = 0
+    previous_open_alarms: int = 0
+    previous_clear_alarms: int = 0
+    previous_sow_tsel: int = 0
 
 
 class ImpactServiceDailyTrendItem(BaseModel):
@@ -84,9 +89,7 @@ class ImpactServiceAlarmListItem(BaseModel):
     aging_range: Optional[str] = None
     status: Optional[str] = None
     sow: Optional[str] = None
-    ticket_no: Optional[str] = None
-    plan_action: Optional[str] = None
-    pic_officer: Optional[str] = None
+    comment: Optional[str] = None
 
 
 class ImpactServiceAlarmListResponse(BaseModel):
@@ -113,7 +116,9 @@ class ImpactServiceAlarmDetail(ImpactServiceAlarmListItem):
     remarks: Optional[str] = None
     remarks2: Optional[str] = None
     status_site_x: Optional[str] = None
-    comment: Optional[str] = None
+    ticket_no: Optional[str] = None
+    plan_action: Optional[str] = None
+    pic_officer: Optional[str] = None
     date_cleared: Optional[datetime] = None
     root_cause_analyst: Optional[str] = None
     pic_onsite: Optional[str] = None

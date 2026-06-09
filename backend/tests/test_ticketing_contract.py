@@ -149,6 +149,27 @@ class TicketingContractTest(unittest.TestCase):
         self.assertIn("default_start_date", source)
         self.assertIn("default_end_date", source)
 
+    def test_summary_exposes_total_ticket_mom_metrics(self):
+        source = self.read_router_source()
+        models = MODELS.read_text(encoding="utf-8")
+
+        for contract in [
+            "total_tickets_mom_delta: int | None = None",
+            "total_tickets_mom_rate: float | None = None",
+        ]:
+            with self.subTest(contract=contract):
+                self.assertIn(contract, models)
+
+        for contract in [
+            "PREVIOUS_MONTH_TICKETS_QUERY",
+            "previous_total_tickets",
+            "total_tickets_mom_delta",
+            "total_tickets_mom_rate",
+            "previous_month_bounds",
+        ]:
+            with self.subTest(contract=contract):
+                self.assertIn(contract, source)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Activity,
@@ -93,6 +93,14 @@ const TONES = {
   },
 };
 
+const HOME_DEFAULT_NOP = 'SIDOARJO';
+const PRIORITY_TONE_RANK = {
+  danger: 0,
+  warning: 1,
+  success: 2,
+  info: 3,
+};
+
 function asNumber(value, fallback = 0) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
@@ -182,29 +190,22 @@ function getMomTone(value) {
   return 'text-[var(--text-muted)]';
 }
 
-function getRevenueDelta(trendRows) {
+function getTrendDelta(trendRows, keyName) {
   if (!trendRows?.length || trendRows.length < 2) return null;
-  const current = asNumber(trendRows[trendRows.length - 1]?.total_revenue, null);
-  const previous = asNumber(trendRows[trendRows.length - 2]?.total_revenue, null);
+  const current = asNumber(trendRows[trendRows.length - 1]?.[keyName], null);
+  const previous = asNumber(trendRows[trendRows.length - 2]?.[keyName], null);
   if (current == null || previous == null || previous === 0) return null;
   return ((current - previous) / previous) * 100;
+}
+
+function getRevenueDelta(trendRows) {
+  return getTrendDelta(trendRows, 'total_revenue');
 }
 
 function formatSignedPercent(value) {
   if (value == null) return '-';
   const sign = value > 0 ? '+' : '';
   return `${sign}${value.toFixed(1).replace('.', ',')}%`;
-}
-
-function calculateDayOverDay(rows, keyName = 'total') {
-  const validRows = (rows || [])
-    .filter((row) => row?.tanggal && Number.isFinite(Number(row?.[keyName])))
-    .sort((a, b) => String(a.tanggal).localeCompare(String(b.tanggal)));
-  if (validRows.length < 2) return null;
-  const current = asNumber(validRows[validRows.length - 1]?.[keyName], null);
-  const previous = asNumber(validRows[validRows.length - 2]?.[keyName], null);
-  if (current == null || previous == null || previous === 0) return null;
-  return ((current - previous) / previous) * 100;
 }
 
 function getLatestDailyRow(rows) {
@@ -214,8 +215,41 @@ function getLatestDailyRow(rows) {
   return validRows[validRows.length - 1] || null;
 }
 
-function formatImpactDod(value) {
-  return value == null ? '-' : formatSignedPercent(value);
+function formatOutageHours(minutes) {
+  const value = asNumber(minutes, 0) / 60;
+  return `${value.toFixed(value >= 10 ? 0 : 1)}h`;
+}
+
+function buildPaddedDomain(rows, keyName, options = {}) {
+  const values = (rows || [])
+    .map((row) => asNumber(row?.[keyName], null))
+    .filter((value) => value != null);
+  if (!values.length) return ['auto', 'auto'];
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = Math.max(max - min, Math.abs(max) * 0.08, 1);
+  const lower = Math.max(options.minLimit ?? -Infinity, min - span * 0.18);
+  const upper = Math.min(options.maxLimit ?? Infinity, max + span * 0.18);
+  return [Math.floor(lower), Math.ceil(upper)];
+}
+
+function buildAvailabilityDomain(rows) {
+  const values = (rows || [])
+    .map((row) => asNumber(row?.avg_availability, null))
+    .filter((value) => value != null);
+  if (!values.length) return [95, 100];
+
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const spread = Math.max(max - min, 0.15);
+  const padding = Math.max(spread * 0.35, 0.08);
+  const lower = Math.max(0, Math.floor((min - padding) * 10) / 10);
+  const upper = Math.min(100, Math.ceil((max + padding) * 10) / 10);
+
+  if (lower === upper) {
+    return [Math.max(0, lower - 0.1), Math.min(100, upper + 0.1)];
+  }
+  return [lower, upper];
 }
 
 function buildLastUpdateRows(overview, bulan, tahun) {
@@ -480,9 +514,8 @@ function InsightRow({ label, value, detail, tone = 'info', to }) {
   );
 }
 
-function ExecutiveInsightPanel({ availability, impact, transport, ticketingSummary, worstSites, impactTopSites }) {
+function ExecutiveInsightPanel({ availability, latestImpactDaily, transport, ticketingSummary, worstSites }) {
   const worstSite = (worstSites || [])[0];
-  const impactTopSite = (impactTopSites || [])[0];
   const ticketCategory = ticketingSummary?.ticket_category || {};
 
   return (
@@ -499,16 +532,16 @@ function ExecutiveInsightPanel({ availability, impact, transport, ticketingSumma
       <div className="grid min-h-[260px] grid-cols-1 content-start gap-2">
         <InsightRow
           label="Network exposure"
-          value={`${formatNumber(availability?.site_critical)} critical sites`}
+          value={`${formatNumber(availability?.site_critical)} critical availability`}
           detail={worstSite ? `${worstSite.site_id} at ${formatPercent(worstSite.avg_availability)}` : `${formatNumber(availability?.site_degraded)} degraded sites`}
           tone={getCountTone(availability?.site_critical, 1, 5)}
           to="/site-map"
         />
         <InsightRow
           label="Impact Service"
-          value={`${formatNumber(impact?.total_alarms)} total alarm`}
-          detail={impactTopSite ? `${impactTopSite.site_id} - ${formatNumber(impactTopSite.total)} alarm` : `${formatNumber(impact?.impacted_sites)} impacted sites`}
-          tone={getCountTone(impact?.open_alarms, 1, 50)}
+          value={`${formatNumber(latestImpactDaily?.total)} latest alarm`}
+          detail={`Open: ${formatNumber(latestImpactDaily?.open)} Clear: ${formatNumber(latestImpactDaily?.clear)} | ${formatShortDateLabel(latestImpactDaily?.tanggal) || '-'}`}
+          tone={getCountTone(latestImpactDaily?.open, 1, 50)}
           to="/impact-service"
         />
         <InsightRow
@@ -530,12 +563,13 @@ function ExecutiveInsightPanel({ availability, impact, transport, ticketingSumma
   );
 }
 
-function buildPrioritySignals(overview) {
+function buildPrioritySignals(overview, latestImpactDaily) {
   const availability = overview?.availability || {};
-  const impact = overview?.impact_service || {};
   const transport = overview?.transport_quality || {};
   const ticketing = overview?.ticketing?.summary || {};
   const worstSites = overview?.worst_sites || [];
+  const transportPrioritySites = overview?.transport_priority_sites?.items || [];
+  const ticketingTopSites = overview?.ticketing?.top_sites || [];
   const signals = [];
 
   if (asNumber(availability.site_critical) > 0) {
@@ -546,11 +580,11 @@ function buildPrioritySignals(overview) {
       to: '/site-map',
     });
   }
-  if (asNumber(impact.open_alarms) > 0) {
+  if (asNumber(latestImpactDaily?.open) > 0) {
     signals.push({
-      title: `${formatNumber(impact.open_alarms)} OPEN alarm`,
-      detail: 'Impact Service',
-      tone: getCountTone(impact.open_alarms, 1, 50),
+      title: `${formatNumber(latestImpactDaily?.open)} OPEN alarm`,
+      detail: `Impact Service | ${formatShortDateLabel(latestImpactDaily?.tanggal)}`,
+      tone: getCountTone(latestImpactDaily?.open, 1, 50),
       to: '/impact-service',
     });
   }
@@ -578,8 +612,26 @@ function buildPrioritySignals(overview) {
       to: '/site-map',
     });
   });
+  transportPrioritySites.slice(0, 2).forEach((site) => {
+    signals.push({
+      title: `${site.site_id} - ${site.priority_level}`,
+      detail: 'Transport Priority',
+      tone: site.priority_level === 'P1' ? 'danger' : 'warning',
+      to: '/transport-quality',
+    });
+  });
+  ticketingTopSites.slice(0, 2).forEach((site) => {
+    signals.push({
+      title: `${site.site_id} - ${formatNumber(site.tickets)} tickets`,
+      detail: 'Ticket FC Site',
+      tone: getTicketTone(site.out_sla_rate),
+      to: '/ticketing',
+    });
+  });
 
-  return signals.slice(0, 6);
+  return signals
+    .sort((a, b) => PRIORITY_TONE_RANK[a.tone] - PRIORITY_TONE_RANK[b.tone])
+    .slice(0, 6);
 }
 
 export default function HomePage() {
@@ -605,12 +657,16 @@ export default function HomePage() {
     ])
       .then(([siteOptions, impactOptions, transportOptions, ticketingOptions, latest]) => {
         if (cancelled) return;
-        setNopOptions(mergeNopOptions(
+        const mergedNops = mergeNopOptions(
           siteOptions?.nop,
           impactOptions?.nops,
           transportOptions?.nops,
           ticketingOptions?.nops,
-        ));
+        );
+        setNopOptions(mergedNops);
+        if (mergedNops.includes(HOME_DEFAULT_NOP)) {
+          setNop(HOME_DEFAULT_NOP);
+        }
         if (latest?.bulan && latest?.tahun) {
           setBulan(Number(latest.bulan));
           setTahun(Number(latest.tahun));
@@ -660,18 +716,20 @@ export default function HomePage() {
   const impactDailyTrend = overview?.impact_daily_trend || [];
   const latestImpactDaily = getLatestDailyRow(impactDailyTrend);
   const transport = overview?.transport_quality || {};
-  const transportPriority = overview?.transport_priority_sites?.items || [];
   const ticketingSummary = overview?.ticketing?.summary || {};
   const ticketCategory = ticketingSummary.ticket_category || {};
   const ticketingTrend = overview?.ticketing?.trend || [];
-  const ticketingTopSites = overview?.ticketing?.top_sites || [];
   const sitePotential = overview?.site_potential || {};
   const worstAvailabilitySites = overview?.worst_sites || [];
   const worstRevenueSites = overview?.worst_revenue_sites || [];
 
   const revenueDelta = getRevenueDelta(overview?.reporting_trend || []);
-  const impactDod = calculateDayOverDay(impactDailyTrend, 'total');
-  const prioritySignals = useMemo(() => buildPrioritySignals(overview), [overview]);
+  const availabilityDelta = getTrendDelta(trendRows, 'avg_availability');
+  const payloadDelta = getTrendDelta(trendRows, 'total_payload');
+  const prioritySignals = buildPrioritySignals(overview, latestImpactDaily);
+  const homeRevenueDomain = buildPaddedDomain(trendRows, 'total_revenue');
+  const homePayloadDomain = buildPaddedDomain(trendRows, 'total_payload');
+  const homeAvailabilityDomain = buildAvailabilityDomain(trendRows);
 
   const scorecards = [
     {
@@ -684,7 +742,7 @@ export default function HomePage() {
     {
       title: 'Network Availability',
       value: formatPercent(availability.avg_availability),
-      subtitle: `${formatNumber(availability.site_critical)} critical sites`,
+      subtitle: `${formatSignedPercent(availabilityDelta)} MoM`,
       icon: Signal,
       tone: getAvailabilityTone(availability.avg_availability),
     },
@@ -698,7 +756,7 @@ export default function HomePage() {
     {
       title: 'Payload',
       value: formatPayload(reporting.total_payload),
-      subtitle: 'total data usage',
+      subtitle: `${formatSignedPercent(payloadDelta)} MoM`,
       icon: HardDrive,
       tone: 'info',
     },
@@ -712,7 +770,7 @@ export default function HomePage() {
     {
       title: 'Today Impact Service',
       value: formatNumber(latestImpactDaily?.total ?? impact.total_alarms),
-      subtitle: `${formatImpactDod(impactDod)} DoD | Last data ${formatShortDateLabel(latestImpactDaily?.tanggal || overview?.period?.impact_end_date)}`,
+      subtitle: `Open: ${formatNumber(latestImpactDaily?.open ?? impact.open_alarms)} Clear: ${formatNumber(latestImpactDaily?.clear ?? impact.clear_alarms)}`,
       icon: BellRing,
       tone: getCountTone(latestImpactDaily?.open ?? impact.open_alarms, 1, 50),
     },
@@ -807,9 +865,9 @@ export default function HomePage() {
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke={themeTokens.chartGrid} vertical={false} />
                   <XAxis dataKey="trx_month" tickFormatter={formatMonthLabel} tick={{ fontSize: 10, fill: themeTokens.axisTick }} tickLine={false} axisLine={false} />
-                  <YAxis yAxisId="revenue" tickFormatter={formatRevenueShort} tick={{ fontSize: 10, fill: themeTokens.axisTick }} tickLine={false} axisLine={false} width={54} />
-                  <YAxis yAxisId="payload" orientation="right" tickFormatter={formatPayloadAxisTick} tick={{ fontSize: 10, fill: themeTokens.axisTick }} tickLine={false} axisLine={false} width={42} />
-                  <YAxis yAxisId="availability" orientation="right" domain={[95, 100]} tickFormatter={(value) => `${value}%`} tick={{ fontSize: 10, fill: themeTokens.warning }} tickLine={false} axisLine={false} width={34} />
+                  <YAxis yAxisId="revenue" domain={homeRevenueDomain} tickFormatter={formatRevenueShort} tick={{ fontSize: 10, fill: themeTokens.axisTick }} tickLine={false} axisLine={false} width={54} />
+                  <YAxis yAxisId="payload" orientation="right" domain={homePayloadDomain} tickFormatter={formatPayloadAxisTick} tick={{ fontSize: 10, fill: themeTokens.axisTick }} tickLine={false} axisLine={false} width={42} />
+                  <YAxis yAxisId="availability" orientation="right" domain={homeAvailabilityDomain} tickCount={5} allowDataOverflow tickFormatter={(value) => `${value}%`} tick={{ fontSize: 10, fill: themeTokens.warning }} tickLine={false} axisLine={false} width={42} />
                   <Tooltip content={<TrendTooltip />} />
                   <Area yAxisId="revenue" type="monotone" dataKey="total_revenue" stroke="#60A5FA" strokeWidth={2} fill="url(#homeRevenueGradient)" />
                   <Area yAxisId="payload" type="monotone" dataKey="total_payload" stroke="#10B981" strokeWidth={2} fill="url(#homePayloadGradient)" />
@@ -823,11 +881,10 @@ export default function HomePage() {
 
           <ExecutiveInsightPanel
             availability={availability}
-            impact={impact}
+            latestImpactDaily={latestImpactDaily}
             transport={transport}
             ticketingSummary={ticketingSummary}
             worstSites={worstAvailabilitySites}
-            impactTopSites={overview?.impact_top_sites || []}
           />
         </section>
 
@@ -861,6 +918,7 @@ export default function HomePage() {
                 <MetricLine label="CLEAR Alarm" value={formatNumber(impact.clear_alarms)} tone="text-emerald-300" />
                 <MetricLine label="Impacted Site" value={formatNumber(impact.impacted_sites)} tone="text-amber-300" />
                 <MetricLine label="SOW TSEL" value={formatNumber(impact.sow_tsel)} />
+                <MetricLine label="Last data" value={formatShortDateLabel(latestImpactDaily?.tanggal || overview?.period?.impact_end_date)} />
               </div>
               <ImpactServiceDailyChart rows={impactDailyTrend} />
             </ModulePanel>
@@ -895,7 +953,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <section className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(300px,0.55fr)]">
           <section className="glass-card overflow-hidden">
             <div className="border-b border-[var(--border)] px-4 py-3">
               <div className="flex items-center gap-2">
@@ -915,9 +973,14 @@ export default function HomePage() {
                         <p className="truncate font-mono text-xs font-bold text-[var(--text-primary)]">{site.site_id}</p>
                         <p className="truncate text-[11px] text-[var(--text-muted)]">{site.site_name || site.kabupaten || '-'}</p>
                       </div>
-                      <span className={`font-mono text-xs font-semibold ${TONES[getAvailabilityTone(site.avg_availability)].text}`}>
-                        {formatPercent(site.avg_availability)}
-                      </span>
+                      <div className="shrink-0 text-right">
+                        <p className={`font-mono text-xs font-semibold ${TONES[getAvailabilityTone(site.avg_availability)].text}`}>
+                          {formatPercent(site.avg_availability)}
+                        </p>
+                        <p className="mt-1 whitespace-nowrap text-[10px] text-[var(--text-muted)]">
+                          {formatOutageHours(site.total_outage_menit)} | {formatNumber(site.jumlah_cell)} cells
+                        </p>
+                      </div>
                     </Link>
                   ))}
                   {!worstAvailabilitySites.length && (
@@ -961,16 +1024,16 @@ export default function HomePage() {
                 <h2 className="text-sm font-semibold text-[var(--text-primary)]">Priority Signals</h2>
               </div>
             </div>
-            <div className="grid grid-cols-1 gap-3 p-4 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-2 p-3">
               {prioritySignals.map((signal) => {
                 const colors = TONES[signal.tone] || TONES.info;
                 return (
-                  <Link key={`${signal.title}-${signal.detail}`} to={signal.to} className={`rounded-lg border p-3 transition-colors hover:bg-[var(--bg-hover)]/45 ${colors.border} ${colors.bg}`}>
-                    <div className="mb-2 flex items-center gap-2">
-                      {signal.tone === 'success' ? <CircleCheck className={`size-4 ${colors.text}`} /> : <AlertTriangle className={`size-4 ${colors.text}`} />}
-                      <span className="text-[10px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">{signal.detail}</span>
+                  <Link key={`${signal.title}-${signal.detail}`} to={signal.to} className={`rounded-lg border p-2.5 transition-colors hover:bg-[var(--bg-hover)]/45 ${colors.border} ${colors.bg}`}>
+                    <div className="mb-1.5 flex items-center gap-2">
+                      {signal.tone === 'success' ? <CircleCheck className={`size-3.5 ${colors.text}`} /> : <AlertTriangle className={`size-3.5 ${colors.text}`} />}
+                      <span className="truncate text-[9px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">{signal.detail}</span>
                     </div>
-                    <p className={`font-mono text-sm font-bold ${colors.text}`}>{signal.title}</p>
+                    <p className={`truncate font-mono text-xs font-bold ${colors.text}`}>{signal.title}</p>
                   </Link>
                 );
               })}
@@ -979,20 +1042,6 @@ export default function HomePage() {
                   Tidak ada priority signal aktif.
                 </div>
               )}
-              {transportPriority.slice(0, 2).map((site) => (
-                <Link key={site.site_id} to="/transport-quality" className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 transition-colors hover:bg-red-500/15">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">Transport Priority</p>
-                  <p className="mt-1 truncate font-mono text-sm font-bold text-red-300">{site.site_id} - {site.priority_level}</p>
-                  <p className="truncate text-[11px] text-[var(--text-muted)]">{site.site_name || site.kabupaten || '-'}</p>
-                </Link>
-              ))}
-              {ticketingTopSites.slice(0, 2).map((site) => (
-                <Link key={site.site_id} to="/ticketing" className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 transition-colors hover:bg-amber-500/15">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">Ticket FC Site</p>
-                  <p className="mt-1 truncate font-mono text-sm font-bold text-amber-300">{site.site_id} - {formatNumber(site.tickets)} tickets</p>
-                  <p className="truncate text-[11px] text-[var(--text-muted)]">{site.site_name || site.cluster_to || '-'}</p>
-                </Link>
-              ))}
             </div>
           </section>
         </section>

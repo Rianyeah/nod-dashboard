@@ -114,6 +114,24 @@ describe('Ticketing dashboard contracts', () => {
     assert.match(page, /<Line /);
   });
 
+  it('shows Ticketing MoM/category percentages, SLA pie hover, and help hints', () => {
+    const page = src('pages', 'TicketingPage.jsx');
+
+    assert.match(page, /total_tickets_mom_delta/);
+    assert.match(page, /total_tickets_mom_rate/);
+    assert.match(page, /formatTicketMoM/);
+    assert.match(page, /categoryShare/);
+    assert.match(page, /BPS.*%/s);
+    assert.match(page, /TS.*%/s);
+    assert.match(page, /PieChart/);
+    assert.match(page, /Pie/);
+    assert.match(page, /activeSlaIndex/);
+    assert.match(page, /activeShape=\{renderActivePieShape\}/);
+    assert.match(page, /HelpCircle/);
+    assert.match(page, /Response P90 menghitung persentil ke-90/);
+    assert.match(page, /Pareto menampilkan kontribusi kumulatif/);
+  });
+
   it('uses compact chart heights for the revised dashboard layout', () => {
     const page = src('pages', 'TicketingPage.jsx');
 

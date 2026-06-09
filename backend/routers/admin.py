@@ -3,12 +3,13 @@ Admin router for operational maintenance endpoints.
 """
 from time import perf_counter
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 import runtime_compat  # noqa: F401
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from cache import CacheUnavailableError, redis_cache
 from database import get_session
 from queries.metrics_cache import (
     BOOTSTRAP_SITE_MONTH_METRICS_STATEMENTS,
@@ -26,6 +27,33 @@ class MetricsRefreshResponse(BaseModel):
     tahun: int
     refreshed_sites: int
     elapsed_ms: int
+
+
+class CacheInvalidationResponse(BaseModel):
+    scope: str
+    deleted_keys: int
+    status: str
+
+
+@router.post(
+    "/cache/invalidate",
+    response_model=CacheInvalidationResponse,
+    dependencies=[Depends(verify_n8n_key)],
+)
+async def invalidate_cache(
+    scope: str = Query("reporting", pattern="^reporting$"),
+):
+    """Invalidate one supported Redis cache namespace."""
+    try:
+        deleted_keys = await redis_cache.invalidate_namespace(scope)
+    except CacheUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    return CacheInvalidationResponse(
+        scope=scope,
+        deleted_keys=deleted_keys,
+        status="invalidated",
+    )
 
 
 @router.post(
@@ -52,6 +80,12 @@ async def refresh_site_month_metrics(
     except Exception:
         await session.rollback()
         raise
+
+    try:
+        await redis_cache.invalidate_namespace("reporting")
+    except CacheUnavailableError:
+        # PostgreSQL refresh remains successful; the reporting TTL is the fallback.
+        pass
 
     return MetricsRefreshResponse(
         bulan=bulan,

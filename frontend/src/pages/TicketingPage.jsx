@@ -12,6 +12,7 @@ import {
   Clock3,
   Download,
   Filter,
+  HelpCircle,
   ListChecks,
   MapPin,
   RefreshCcw,
@@ -32,7 +33,10 @@ import {
   Legend,
   Line,
   LineChart,
+  Pie,
+  PieChart,
   ResponsiveContainer,
+  Sector,
   Tooltip,
   XAxis,
   YAxis,
@@ -136,8 +140,53 @@ function formatMinutes(value) {
   return `${Number(value).toFixed(0)}m`;
 }
 
+function formatTicketMoM(summary) {
+  const delta = summary?.total_tickets_mom_delta;
+  const rate = summary?.total_tickets_mom_rate;
+  if (delta == null) return 'MoM -';
+  const sign = delta > 0 ? '+' : delta < 0 ? '-' : '';
+  const rateLabel = rate == null ? '-' : `${rate > 0 ? '+' : rate < 0 ? '-' : ''}${Math.abs(Number(rate)).toFixed(1)}%`;
+  return `MoM ${sign}${formatNumber(Math.abs(delta))} (${rateLabel})`;
+}
+
+function categoryShare(value, total) {
+  const numerator = Number(value || 0);
+  const denominator = Number(total || 0);
+  if (!denominator) return '-';
+  return `${((numerator / denominator) * 100).toFixed(1)}%`;
+}
+
 function optionList(values = []) {
   return values.filter((value) => value != null && value !== '');
+}
+
+function HelpHint({ text }) {
+  return (
+    <span
+      tabIndex={0}
+      role="img"
+      aria-label={text}
+      title={text}
+      className="inline-flex size-5 items-center justify-center rounded-full border border-[var(--border-light)] text-[var(--text-muted)] transition-colors hover:border-[var(--primary)]/30 hover:text-[var(--primary-light)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/35"
+    >
+      <HelpCircle className="size-3.5" />
+    </span>
+  );
+}
+
+function renderActivePieShape(props) {
+  const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill } = props;
+  return (
+    <Sector
+      cx={cx}
+      cy={cy}
+      innerRadius={innerRadius}
+      outerRadius={(outerRadius || 0) + 8}
+      startAngle={startAngle}
+      endAngle={endAngle}
+      fill={fill}
+    />
+  );
 }
 
 function asDisplay(value) {
@@ -219,11 +268,6 @@ function DateFilter({ id, label, value, onChange }) {
 
 function StatusBadge({ value }) {
   const status = String(value || '-').toUpperCase();
-  const classes = status === 'OUT SLA' || status === 'CANCELED'
-    ? 'border-red-500/30 bg-red-500/10 text-red-300'
-    : status === 'IN SLA' || status === 'CLOSED'
-      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
-      : 'border-amber-500/30 bg-amber-500/10 text-amber-300';
   return (
     <DashboardStatusBadge tone={status === 'OUT SLA' || status === 'CANCELED' ? 'danger' : status === 'IN SLA' || status === 'CLOSED' ? 'success' : 'warning'}>
       {status}
@@ -344,6 +388,7 @@ function TicketingDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [filtersCollapsed, setFiltersCollapsed] = useState(false);
+  const [activeSlaIndex, setActiveSlaIndex] = useState(null);
 
   const loadFilterOptions = useCallback(async () => {
     try {
@@ -365,6 +410,7 @@ function TicketingDashboard() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadFilterOptions();
   }, [loadFilterOptions]);
 
@@ -410,15 +456,18 @@ function TicketingDashboard() {
   }, [endDate, loadData, loadFilterOptions, selectedYear, startDate]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadData();
   }, [loadData]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPage(1);
   }, [queryParams, search]);
 
   useEffect(() => {
     if (!selectedTicket) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTicketDetail(null);
       return;
     }
@@ -549,8 +598,14 @@ function TicketingDashboard() {
         )}
 
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-          <Scorecard title="Total Tickets" value={formatNumber(summary?.total_tickets)} subtitle="Filtered tickets" icon={TicketCheck} accent={COLORS.bps} glow="rgba(59,130,246,0.14)" />
-          <Scorecard title="Ticket Category" subtitle="BPS / TS ticket" icon={ListChecks} accent={COLORS.ts} glow="rgba(16,185,129,0.14)">
+          <Scorecard title="Total Tickets" value={formatNumber(summary?.total_tickets)} subtitle={formatTicketMoM(summary)} icon={TicketCheck} accent={COLORS.bps} glow="rgba(59,130,246,0.14)" />
+          <Scorecard
+            title="Ticket Category"
+            subtitle={`BPS ${categoryShare(ticketCategory.bps, ticketCategory.total)} / TS ${categoryShare(ticketCategory.ts, ticketCategory.total)}`}
+            icon={ListChecks}
+            accent={COLORS.ts}
+            glow="rgba(16,185,129,0.14)"
+          >
             <div className="mt-1 flex items-baseline gap-3 font-mono text-lg font-bold">
               <span style={{ color: COLORS.bps }}>BPS: {formatNumber(ticketCategory.bps)}</span>
               <span style={{ color: COLORS.ts }}>TS: {formatNumber(ticketCategory.ts)}</span>
@@ -568,7 +623,14 @@ function TicketingDashboard() {
           <Scorecard title="Backup Sukses Rate" value={formatPercent(summary?.backup_sukses_rate)} subtitle={`${formatNumber(summary?.backup_sukses_tickets)} BU Genset`} icon={ShieldCheck} accent={COLORS.success} glow="rgba(16,185,129,0.14)" />
           <Scorecard title="Escalated" value={formatNumber(summary?.escalated_tickets)} subtitle={formatPercent(summary?.escalated_rate)} icon={AlertTriangle} accent={COLORS.warning} glow="rgba(245,158,11,0.14)" />
           <Scorecard title="Manual Takeover" value={formatNumber(summary?.manual_takeover_tickets)} subtitle={formatPercent(summary?.manual_takeover_rate)} icon={Zap} accent={COLORS.total} glow="rgba(251,191,36,0.14)" />
-          <Scorecard title="Response P90" value={formatMinutes(summary?.p90_response_minutes)} subtitle="Clean response time" icon={Clock3} accent={COLORS.bps} glow="rgba(59,130,246,0.14)" />
+          <Scorecard title="Response P90" value={formatMinutes(summary?.p90_response_minutes)} subtitle="Clean response time" icon={Clock3} accent={COLORS.bps} glow="rgba(59,130,246,0.14)">
+            <div className="mt-2 flex items-center gap-2">
+              <p className="truncate font-mono text-[28px] font-bold leading-none tabular-nums tracking-tight" style={{ color: COLORS.bps }}>
+                {formatMinutes(summary?.p90_response_minutes)}
+              </p>
+              <HelpHint text="Response P90 menghitung persentil ke-90 dari waktu respons ticket yang valid." />
+            </div>
+          </Scorecard>
           <Scorecard title="Closed Rate" value={formatPercent(summary?.closed_rate)} subtitle={`${formatNumber(summary?.closed_tickets)} closed`} icon={CircleCheck} accent={COLORS.success} glow="rgba(16,185,129,0.14)" />
           <Scorecard title="Canceled" value={formatNumber(summary?.canceled_tickets)} subtitle="Canceled tickets" icon={ShieldX} accent={COLORS.danger} glow="rgba(239,68,68,0.14)" />
         </section>
@@ -593,17 +655,27 @@ function TicketingDashboard() {
           <ChartCard title="SLA Status Distribution" icon={ShieldCheck}>
             {dashboard?.sla_distribution?.length ? (
               <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={dashboard.sla_distribution} layout="vertical" margin={{ left: 12, right: 12 }}>
-                  <CartesianGrid stroke={themeTokens.chartGrid} horizontal={false} />
-                  <XAxis type="number" tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
-                  <YAxis type="category" dataKey="label" width={92} tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
+                <PieChart>
                   <Tooltip content={<TicketingTooltip />} />
-                  <Bar dataKey="tickets" name="Tickets" radius={[0, 4, 4, 0]}>
+                  <Pie
+                    data={dashboard.sla_distribution}
+                    dataKey="tickets"
+                    nameKey="label"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={42}
+                    outerRadius={74}
+                    activeIndex={activeSlaIndex}
+                    activeShape={renderActivePieShape}
+                    onMouseEnter={(_, index) => setActiveSlaIndex(index)}
+                    onMouseLeave={() => setActiveSlaIndex(null)}
+                  >
                     {dashboard.sla_distribution.map((entry, index) => (
                       <Cell key={entry.label} fill={[COLORS.success, COLORS.danger, COLORS.warning, COLORS.muted][index % 4]} />
                     ))}
-                  </Bar>
-                </BarChart>
+                  </Pie>
+                  <Legend />
+                </PieChart>
               </ResponsiveContainer>
             ) : <ChartEmpty />}
           </ChartCard>
@@ -640,7 +712,11 @@ function TicketingDashboard() {
             ) : <ChartEmpty />}
           </ChartCard>
 
-          <ChartCard title="RC Category Pareto" icon={ListChecks}>
+          <ChartCard
+            title="RC Category Pareto"
+            icon={ListChecks}
+            action={<HelpHint text="Pareto menampilkan kontribusi kumulatif ticket per RC Category." />}
+          >
             {dashboard?.rc_category_pareto?.length ? (
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={dashboard.rc_category_pareto}>

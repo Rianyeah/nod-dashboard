@@ -33,6 +33,8 @@ from routers.impact_service import (
     get_impact_service_daily_trend,
     get_impact_service_distributions,
     get_impact_service_filters,
+    get_impact_service_last_7_days_trend,
+    get_impact_service_latest_window,
     get_impact_service_summary,
     get_impact_service_top_sites,
 )
@@ -577,42 +579,47 @@ async def load_impact_module(
     month_end: date | None,
     module_nop: str | None,
 ):
-    impact_filters = await get_impact_service_filters(session=session)
-    impact_start_date = None
-    impact_end_date = None
-    if month_start and month_end and impact_filters.min_date and impact_filters.max_date:
-        impact_start_date = max(month_start, impact_filters.min_date)
-        impact_end_date = min(month_end, impact_filters.max_date)
-        if impact_start_date > impact_end_date:
-            impact_start_date = None
-            impact_end_date = None
+    return await load_latest_impact_module(session, module_nop)
 
+
+async def load_latest_impact_module(
+    session: AsyncSession,
+    module_nop: str | None,
+):
+    latest_impact_start_date, latest_impact_end_date = await get_impact_service_latest_window(
+        session=session,
+        nop=module_nop,
+    )
     impact_service = ImpactServiceSummary()
     impact_daily_trend = []
     impact_distributions = ImpactServiceDistributions()
     impact_top_sites = []
-    if impact_start_date and impact_end_date:
+    if latest_impact_start_date and latest_impact_end_date:
         impact_service = await get_impact_service_summary(
-            start_date=impact_start_date,
-            end_date=impact_end_date,
+            start_date=latest_impact_start_date,
+            end_date=latest_impact_end_date,
             nop=module_nop,
             session=session,
         )
-        impact_daily_trend = await get_impact_service_daily_trend(
-            start_date=impact_start_date,
-            end_date=impact_end_date,
+        impact_daily_trend = await get_impact_service_last_7_days_trend(
+            nop=module_nop,
+            session=session,
+        )
+        impact_distributions = await get_impact_service_distributions(
+            start_date=latest_impact_start_date,
+            end_date=latest_impact_end_date,
             nop=module_nop,
             session=session,
         )
         impact_top_sites = await get_impact_service_top_sites(
-            start_date=impact_start_date,
-            end_date=impact_end_date,
+            start_date=latest_impact_start_date,
+            end_date=latest_impact_end_date,
             nop=module_nop,
             limit=5,
             session=session,
         )
 
-    return impact_start_date, impact_end_date, impact_service, impact_daily_trend, impact_distributions, impact_top_sites
+    return latest_impact_start_date, latest_impact_end_date, impact_service, impact_daily_trend, impact_distributions, impact_top_sites
 
 
 async def load_transport_module(
@@ -775,10 +782,8 @@ async def get_overview(
             errors,
             "impact_service",
             (None, None, ImpactServiceSummary(), [], ImpactServiceDistributions(), []),
-            lambda module_session: load_impact_module(
+            lambda module_session: load_latest_impact_module(
                 module_session,
-                month_start,
-                month_end,
                 module_nop,
             ),
         ),

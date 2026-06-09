@@ -112,6 +112,26 @@ class TransportQualityContractTest(unittest.TestCase):
         self.assertIn("TransportQualityPrioritySiteResponse", models)
         self.assertIn("total_pages", models)
 
+    def test_weekly_trend_exposes_count_series_for_quality_issues(self):
+        source = self.read_router_source()
+        models = MODELS.read_text(encoding="utf-8")
+        trend_query = source.split('TREND_QUERY = """', 1)[1].split('"""', 1)[0].lower()
+
+        for contract in [
+            "jitter_not_clear_sites: int = 0",
+            "thi_fail_sites: int = 0",
+        ]:
+            with self.subTest(contract=contract):
+                self.assertIn(contract, models)
+
+        for query_contract in [
+            "jitter_not_clear",
+            "count(*) filter (where jitter_not_clear) as jitter_not_clear_sites",
+            "count(*) filter (where thi_fail) as thi_fail_sites",
+        ]:
+            with self.subTest(query_contract=query_contract):
+                self.assertIn(query_contract, trend_query)
+
 
 if __name__ == "__main__":
     unittest.main()

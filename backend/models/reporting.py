@@ -8,8 +8,12 @@ from typing import Optional
 class ReportingScorecard(BaseModel):
     """Top-level KPI scorecards for the reporting page."""
     total_sites: int = 0
+    epm_sites: int = 0
+    non_epm_sites: int = 0
     total_revenue: int = 0
     total_payload: int = 0
+    revenue_ytd: int = 0
+    payload_ytd: int = 0
     avg_availability: Optional[float] = None
 
 
@@ -33,6 +37,10 @@ class RevenueByKabupaten(BaseModel):
     trf_3g: int = 0
     trf_4g: int = 0
     avg_availability: Optional[float] = None
+    ticket_swfm_bps: int = 0
+    ticket_swfm_ts: int = 0
+    proker_open: int = 0
+    proker_closed: int = 0
 
 
 class SiteClassByKabupaten(BaseModel):

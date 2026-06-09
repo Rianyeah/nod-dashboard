@@ -4,6 +4,7 @@ Impact Service router - endpoints for alarm_impact_service operational dashboard
 GET /impact-service/filters       - date bounds and NOP options
 GET /impact-service/summary       - KPI scorecards
 GET /impact-service/daily-trend   - daily status trend
+GET /impact-service/last-7-days-trend - latest seven daily status points
 GET /impact-service/distributions - chart distribution groups
 GET /impact-service/top-alarms    - top alarm names
 GET /impact-service/top-sites     - top impacted sites
@@ -64,8 +65,7 @@ def build_optional_filters(
             f"{alias}.site_id ILIKE :q OR "
             f"{alias}.site_name ILIKE :q OR "
             f"{alias}.alarm_name ILIKE :q OR "
-            f"{alias}.ticket_no ILIKE :q OR "
-            f"{alias}.pic_officer ILIKE :q"
+            f"{alias}.comment ILIKE :q"
             ")"
         )
     return "".join(f" AND {part}" for part in filters)
@@ -114,6 +114,15 @@ WHERE a.tanggal between :start_date and :end_date
 {nop_filter}
 GROUP BY a.tanggal
 ORDER BY a.tanggal
+"""
+
+LATEST_IMPACT_WINDOW_QUERY = """
+SELECT
+    (MAX(tanggal) - INTERVAL '6 days')::date AS latest_impact_start_date,
+    MAX(tanggal) AS latest_impact_end_date
+FROM alarm_impact_service a
+WHERE 1=1
+{nop_filter}
 """
 
 SEVERITY_DISTRIBUTION_QUERY = """
@@ -269,9 +278,7 @@ SELECT
     a.aging_range,
     a.status,
     a.sow,
-    a.ticket_no,
-    a.plan_action,
-    a.pic_officer
+    a.comment
 FROM alarm_impact_service a
 WHERE a.tanggal between :start_date and :end_date
 {nop_filter}
@@ -335,6 +342,14 @@ def base_params(start_date: date, end_date: date, nop: str | None = None) -> dic
     return {"start_date": start_date, "end_date": end_date, "nop": nop}
 
 
+def previous_equal_period(start_date: date, end_date: date) -> tuple[date, date]:
+    """Return the equal-length period immediately before the active range."""
+    range_days = (end_date - start_date).days + 1
+    previous_end_date = start_date - timedelta(days=1)
+    previous_start_date = previous_end_date - timedelta(days=range_days - 1)
+    return previous_start_date, previous_end_date
+
+
 def int_value(value, fallback: int = 0) -> int:
     return int(value) if value is not None else fallback
 
@@ -362,9 +377,7 @@ def alarm_list_item(row) -> ImpactServiceAlarmListItem:
         aging_range=row.get("aging_range"),
         status=row.get("status"),
         sow=row.get("sow"),
-        ticket_no=row.get("ticket_no"),
-        plan_action=row.get("plan_action"),
-        pic_officer=row.get("pic_officer"),
+        comment=row.get("comment"),
     )
 
 
@@ -396,17 +409,29 @@ async def get_impact_service_summary(
     session: AsyncSession = Depends(get_session),
 ):
     """Scorecard KPIs for Impact Service alarms."""
+    previous_start_date, previous_end_date = previous_equal_period(start_date, end_date)
+    nop_filter = build_nop_filter(nop)
     result = await session.execute(
-        text(SUMMARY_QUERY.format(nop_filter=build_nop_filter(nop))),
+        text(SUMMARY_QUERY.format(nop_filter=nop_filter)),
         base_params(start_date, end_date, nop),
     )
+    previous_result = await session.execute(
+        text(SUMMARY_QUERY.format(nop_filter=nop_filter)),
+        base_params(previous_start_date, previous_end_date, nop),
+    )
     row = result.mappings().first() or {}
+    previous_row = previous_result.mappings().first() or {}
     return ImpactServiceSummary(
         total_alarms=int_value(row.get("total_alarms")),
         impacted_sites=int_value(row.get("impacted_sites")),
         open_alarms=int_value(row.get("open_alarms")),
         clear_alarms=int_value(row.get("clear_alarms")),
         sow_tsel=int_value(row.get("sow_tsel")),
+        previous_total_alarms=int_value(previous_row.get("total_alarms")),
+        previous_impacted_sites=int_value(previous_row.get("impacted_sites")),
+        previous_open_alarms=int_value(previous_row.get("open_alarms")),
+        previous_clear_alarms=int_value(previous_row.get("clear_alarms")),
+        previous_sow_tsel=int_value(previous_row.get("sow_tsel")),
     )
 
 
@@ -431,6 +456,51 @@ async def get_impact_service_daily_trend(
         )
         for row in result.mappings().all()
     ]
+
+
+async def get_impact_service_latest_window(
+    session: AsyncSession,
+    nop: str | None = None,
+) -> tuple[date | None, date | None]:
+    """Resolve the latest 7-day Impact Service window for the active NOP."""
+    result = await session.execute(
+        text(LATEST_IMPACT_WINDOW_QUERY.format(nop_filter=build_nop_filter(nop))),
+        {"nop": nop},
+    )
+    row = result.mappings().first() or {}
+    return row.get("latest_impact_start_date"), row.get("latest_impact_end_date")
+
+
+async def load_impact_service_last_7_days_trend(
+    session: AsyncSession,
+    nop: str | None = None,
+) -> list[ImpactServiceDailyTrendItem]:
+    window_start, window_end = await get_impact_service_latest_window(session, nop)
+    if not window_start or not window_end:
+        return []
+
+    result = await session.execute(
+        text(DAILY_TREND_QUERY.format(nop_filter=build_nop_filter(nop))),
+        {"start_date": window_start, "end_date": window_end, "nop": nop},
+    )
+    return [
+        ImpactServiceDailyTrendItem(
+            tanggal=row["tanggal"],
+            total=int_value(row.get("total")),
+            open=int_value(row.get("open")),
+            clear=int_value(row.get("clear")),
+        )
+        for row in result.mappings().all()
+    ]
+
+
+@router.get("/last-7-days-trend", response_model=list[ImpactServiceDailyTrendItem])
+async def get_impact_service_last_7_days_trend(
+    nop: str | None = Query(None),
+    session: AsyncSession = Depends(get_session),
+):
+    """Latest seven daily alarm counts split by OPEN and CLEAR."""
+    return await load_impact_service_last_7_days_trend(session=session, nop=nop)
 
 
 @router.get("/distributions", response_model=ImpactServiceDistributions)
@@ -591,7 +661,9 @@ async def get_impact_service_alarm_detail(
         remarks=row.get("remarks"),
         remarks2=row.get("remarks2"),
         status_site_x=row.get("status_site_x"),
-        comment=row.get("comment"),
+        ticket_no=row.get("ticket_no"),
+        plan_action=row.get("plan_action"),
+        pic_officer=row.get("pic_officer"),
         date_cleared=row.get("date_cleared"),
         root_cause_analyst=row.get("root_cause_analyst"),
         pic_onsite=row.get("pic_onsite"),

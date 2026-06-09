@@ -80,6 +80,29 @@ describe('Transport Quality dashboard contracts', () => {
     assert.match(page, /id="transport-jitter-status"/);
   });
 
+  it('supports collapsing global filters and uses count series in weekly trend', () => {
+    const page = src('pages', 'TransportQualityPage.jsx');
+
+    assert.match(page, /filtersCollapsed/);
+    assert.match(page, /setFiltersCollapsed/);
+    assert.match(page, /aria-expanded={!filtersCollapsed}/);
+    assert.match(page, /Collapse Filter/);
+    assert.match(page, /Show Filter/);
+
+    const trendSection = page.split('Weekly Quality Trend', 2)[1].split('High Priority Transport', 1)[0];
+    for (const series of [
+      'pl_over_1_sites',
+      'latency_over_5_sites',
+      'jitter_not_clear_sites',
+      'thi_fail_sites',
+    ]) {
+      assert.match(trendSection, new RegExp(series));
+    }
+    assert.doesNotMatch(trendSection, /avg_packet_loss/);
+    assert.doesNotMatch(trendSection, /avg_latency/);
+    assert.doesNotMatch(trendSection, /avg_jitter/);
+  });
+
   it('keeps threshold and priority semantics visible in the frontend', () => {
     const page = src('pages', 'TransportQualityPage.jsx');
 

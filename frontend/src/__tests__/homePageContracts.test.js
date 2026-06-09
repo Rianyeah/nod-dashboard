@@ -115,7 +115,6 @@ describe('new home page command center contracts', () => {
     }
 
     assert.match(page, /impact_daily_trend/);
-    assert.match(page, /formatImpactDod/);
     assert.match(page, /BPS:/);
     assert.match(page, /TS:/);
     assert.match(page, /Last data/);
@@ -127,6 +126,20 @@ describe('new home page command center contracts', () => {
     const transportIndex = page.indexOf("title: 'Transport Quality'");
     assert.ok(impactIndex > -1, 'Today Impact Service scorecard must exist');
     assert.ok(transportIndex > impactIndex, 'Transport Quality scorecard must be placed after Today Impact Service');
+  });
+
+  it('defaults Home NOP to SIDOARJO and uses requested MoM and latest impact subtitles', () => {
+    const page = src('pages', 'HomePage.jsx');
+
+    assert.match(page, /HOME_DEFAULT_NOP\s*=\s*'SIDOARJO'/);
+    assert.match(page, /setNop\(HOME_DEFAULT_NOP\)/);
+    assert.match(page, /const availabilityDelta/);
+    assert.match(page, /const payloadDelta/);
+    assert.match(page, /title: 'Network Availability'[\s\S]*subtitle:\s*`\$\{formatSignedPercent\(availabilityDelta\)\} MoM`/);
+    assert.match(page, /title: 'Payload'[\s\S]*subtitle:\s*`\$\{formatSignedPercent\(payloadDelta\)\} MoM`/);
+    assert.match(page, /title: 'Today Impact Service'[\s\S]*subtitle:\s*`Open: \$\{formatNumber\(latestImpactDaily\?\.open/);
+    assert.doesNotMatch(page, /critical sites`/);
+    assert.doesNotMatch(page, /subtitle: 'total data usage'/);
   });
 
   it('uses meaningful data charts in each module overview card', () => {
@@ -165,6 +178,58 @@ describe('new home page command center contracts', () => {
     assert.match(page, /MoM/);
     assert.match(page, /\.slice\(0,\s*10\)/);
     assert.match(page, /formatRevenue/);
+    assert.match(page, /formatOutageHours/);
+    assert.match(page, /jumlah_cell/);
+  });
+
+  it('uses dynamic Home performance domains and priority signal ordering', () => {
+    const page = src('pages', 'HomePage.jsx');
+
+    assert.match(page, /homeRevenueDomain/);
+    assert.match(page, /homePayloadDomain/);
+    assert.match(page, /homeAvailabilityDomain/);
+    assert.match(page, /function buildAvailabilityDomain/);
+    assert.match(page, /buildAvailabilityDomain\(trendRows\)/);
+    assert.match(page, /domain=\{homeRevenueDomain\}/);
+    assert.match(page, /domain=\{homePayloadDomain\}/);
+    assert.match(page, /domain=\{homeAvailabilityDomain\}/);
+    assert.match(page, /yAxisId="availability"[\s\S]*tickCount=\{5\}/);
+    assert.match(page, /PRIORITY_TONE_RANK/);
+    assert.match(page, /\.sort\(\(a,\s*b\) => PRIORITY_TONE_RANK/);
+    assert.match(page, /buildPrioritySignals\(overview,\s*latestImpactDaily\)/);
+    assert.match(page, /transport_priority_sites\?\.items/);
+    assert.match(page, /ticketing\?\.top_sites/);
+    assert.doesNotMatch(page, /transportPriority\.slice\(0,\s*2\)\.map/);
+    assert.doesNotMatch(page, /ticketingTopSites\.slice\(0,\s*2\)\.map/);
+    assert.match(page, /xl:grid-cols-\[minmax\(0,1\.45fr\)_minmax\(300px,0\.55fr\)\]/);
+    assert.match(page, /grid grid-cols-1 gap-2 p-3/);
+  });
+
+  it('uses latest daily Impact Service data in priority signals and executive insight', () => {
+    const page = src('pages', 'HomePage.jsx');
+    const executiveInsight = page.split('function ExecutiveInsightPanel', 2)[1].split('function buildPrioritySignals', 1)[0];
+    const prioritySignals = page.split('function buildPrioritySignals', 2)[1].split('export default function HomePage', 1)[0];
+
+    assert.match(page, /latestImpactDaily=\{latestImpactDaily\}/);
+    assert.match(executiveInsight, /latestImpactDaily\?\.total/);
+    assert.match(executiveInsight, /latestImpactDaily\?\.open/);
+    assert.match(executiveInsight, /latestImpactDaily\?\.clear/);
+    assert.match(executiveInsight, /latestImpactDaily\?\.tanggal/);
+    assert.match(prioritySignals, /latestImpactDaily\?\.open/);
+    assert.match(prioritySignals, /latestImpactDaily\?\.tanggal/);
+  });
+
+  it('removes the Site Map worst-sites sidebar and keeps noisy modal fields hidden', () => {
+    const siteMap = src('pages', 'SiteMapPage.jsx');
+    const modal = src('components', 'SiteDetailModal.jsx');
+    const infoSiteGroup = modal.split("title: 'Info Site'", 2)[1].split("title: 'Teknologi'", 1)[0];
+
+    assert.doesNotMatch(siteMap, /import WorstSitesPanel/);
+    assert.doesNotMatch(siteMap, /<WorstSitesPanel/);
+    assert.match(infoSiteGroup, /OA Date/);
+    assert.match(modal, /'row_number'/);
+    assert.match(modal, /'Cek'/);
+    assert.doesNotMatch(modal, /<InfoRow label="Cek"/);
   });
 
   it('keeps chart and detail links available from the home surface', () => {
