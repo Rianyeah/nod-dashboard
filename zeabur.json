@@ -28,6 +28,16 @@
               "description": "PostgreSQL connection string (NeonDB)",
               "default": ""
             },
+            "REDIS_URL": {
+              "description": "Private Redis connection string from the Redis service",
+              "default": ""
+            },
+            "REDIS_CACHE_TTL_SECONDS": {
+              "default": "300"
+            },
+            "REDIS_KEY_PREFIX": {
+              "default": "nod:v1"
+            },
             "VITE_MAPBOX_TOKEN": {
               "description": "Mapbox access token for map tiles",
               "default": ""

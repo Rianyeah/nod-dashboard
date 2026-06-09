@@ -62,6 +62,38 @@ class ImpactServiceContractTest(unittest.TestCase):
         self.assertIn("upper(status) = 'clear'", summary_query)
         self.assertIn("upper(sow) = 'tsel'", summary_query)
 
+    def test_summary_exposes_previous_equal_period_values(self):
+        source = self.read_router_source()
+        models_source = MODELS.read_text(encoding="utf-8")
+        summary_model = models_source.split("class ImpactServiceSummary", 1)[1].split(
+            "class ImpactServiceDailyTrendItem",
+            1,
+        )[0]
+        endpoint_section = source.split(
+            "async def get_impact_service_summary",
+            1,
+        )[1].split('@router.get("/daily-trend"', 1)[0]
+
+        for field in [
+            "previous_total_alarms",
+            "previous_impacted_sites",
+            "previous_open_alarms",
+            "previous_clear_alarms",
+            "previous_sow_tsel",
+        ]:
+            with self.subTest(field=field):
+                self.assertIn(f"{field}: int = 0", summary_model)
+                self.assertIn(f"{field}=", endpoint_section)
+
+        self.assertIn("def previous_equal_period", source)
+        self.assertIn("(end_date - start_date).days + 1", source)
+        self.assertIn("start_date - timedelta(days=1)", source)
+        self.assertIn("timedelta(days=range_days - 1)", source)
+        self.assertIn("previous_start_date, previous_end_date = previous_equal_period", endpoint_section)
+        self.assertIn("nop_filter = build_nop_filter(nop)", endpoint_section)
+        self.assertGreaterEqual(endpoint_section.count("text(SUMMARY_QUERY.format("), 2)
+        self.assertGreaterEqual(endpoint_section.count("nop_filter=nop_filter"), 2)
+
     def test_filter_nops_are_loaded_from_nop_column(self):
         source = self.read_router_source()
         nop_query = source.split('FILTER_NOPS_QUERY = """', 1)[1].split('"""', 1)[0].lower()
@@ -95,6 +127,7 @@ class ImpactServiceContractTest(unittest.TestCase):
             '@router.get("/filters"',
             '@router.get("/summary"',
             '@router.get("/daily-trend"',
+            '@router.get("/last-7-days-trend"',
             '@router.get("/distributions"',
             '@router.get("/top-alarms"',
             '@router.get("/top-sites"',
@@ -114,6 +147,38 @@ class ImpactServiceContractTest(unittest.TestCase):
         self.assertIn("api_prefix_path = API_PREFIX.strip", main_source)
         self.assertIn("full_path.startswith(f\"{api_prefix_path}/\")", main_source)
         self.assertIn("raise HTTPException(status_code=404", main_source)
+
+    def test_last_7_days_trend_uses_latest_alarm_date_and_nop_only(self):
+        source = self.read_router_source()
+
+        for contract in [
+            "LATEST_IMPACT_WINDOW_QUERY",
+            "get_impact_service_latest_window",
+            "get_impact_service_last_7_days_trend",
+            "MAX(tanggal)",
+            "INTERVAL '6 days'",
+        ]:
+            with self.subTest(contract=contract):
+                self.assertIn(contract, source)
+
+        if "async def get_impact_service_last_7_days_trend" in source:
+            endpoint_section = source.split("async def get_impact_service_last_7_days_trend", 1)[1].split("@router.get", 1)[0]
+            self.assertIn("nop: str | None = Query(None", endpoint_section)
+            self.assertNotIn("start_date", endpoint_section)
+            self.assertNotIn("end_date", endpoint_section)
+
+    def test_alarm_list_table_exposes_comment_not_ticket_or_pic(self):
+        source = self.read_router_source()
+        models_source = MODELS.read_text(encoding="utf-8")
+        list_query = source.split('ALARMS_LIST_QUERY = """', 1)[1].split('"""', 1)[0].lower()
+        list_model = models_source.split("class ImpactServiceAlarmListItem", 1)[1].split("class ImpactServiceAlarmListResponse", 1)[0]
+
+        self.assertIn("a.comment", list_query)
+        self.assertIn("comment: Optional[str] = None", list_model)
+        self.assertNotIn("a.ticket_no", list_query)
+        self.assertNotIn("a.pic_officer", list_query)
+        self.assertNotIn("ticket_no", list_model)
+        self.assertNotIn("pic_officer", list_model)
 
 
 if __name__ == "__main__":

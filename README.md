@@ -1,5 +1,8 @@
 # NOD — Network Operation Dashboard
 
+Redis response-cache deployment and N8N invalidation instructions are documented in
+[`docs/redis_cache_zeabur.md`](docs/redis_cache_zeabur.md).
+
 > Real-time availability monitoring for 1,246+ telecom sites across Jawa Timur
 
 ![Dark Theme Dashboard](https://img.shields.io/badge/theme-OLED%20Dark-0A0E1A?style=flat-square)

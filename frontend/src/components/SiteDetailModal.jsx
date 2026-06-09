@@ -50,6 +50,7 @@ const FIELD_GROUPS = [
       ['Type', ['Type Site', 'type_site']],
       ['Category', ['Category Site']],
       ['Status', ['Status Site', 'status_site']],
+      ['OA Date', ['OA DATE']],
       ['TP', ['TP']],
       ['Brand Type', ['Brand Type', 'Brand']],
       ['Band NE', ['Band NE']],
@@ -427,6 +428,8 @@ export default function SiteDetailModal({ data, trendData = [], dailyData = [], 
     'tahun',
     'OA DATE',
     'cek',
+    'Cek',
+    'row_number',
   ]);
   FIELD_GROUPS.forEach(group => group.fields.forEach(([, keys]) => keys.forEach(key => usedKeys.add(key))));
   // Also exclude rca_dominan since it is shown in Kualitas Data
@@ -558,12 +561,10 @@ export default function SiteDetailModal({ data, trendData = [], dailyData = [], 
             <Section icon={CalendarDays} title="Periode Data">
               <InfoRow label="Bulan" value={data.Bulan || data.bulan} />
               <InfoRow label="Tahun" value={data.Tahun || data.tahun} />
-              <InfoRow label="OA Date" value={data['OA DATE']} />
             </Section>
 
             <Section icon={Shield} title="Kualitas Data">
               <InfoRow label="RCA Dominan" value={data.rca_dominan} />
-              <InfoRow label="Cek" value={data.cek} />
             </Section>
           </div>
         </div>

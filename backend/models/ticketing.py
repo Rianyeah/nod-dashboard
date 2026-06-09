@@ -28,6 +28,8 @@ class TicketCategorySummary(BaseModel):
 
 class TicketingSummary(BaseModel):
     total_tickets: int = 0
+    total_tickets_mom_delta: int | None = None
+    total_tickets_mom_rate: float | None = None
     ticket_category: TicketCategorySummary
     out_sla_tickets: int = 0
     out_sla_rate: float = 0

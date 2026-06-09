@@ -487,11 +487,11 @@ function ActivityEnomDashboard() {
             Array.from({ length: 5 }, (_, index) => <div key={index} className="skeleton h-[96px] rounded-xl" />)
           ) : (
             <>
-              <DashboardKpiCard title="Total Activity" value={formatNumber(summary?.total_activity)} subtitle="filtered records" icon={ClipboardList} accent={COLORS.total} glow="rgba(96,165,250,0.14)" />
-              <DashboardKpiCard title="Impacted Site" value={formatNumber(summary?.impacted_sites)} subtitle="distinct site_id" icon={Users} accent={COLORS.sites} glow="rgba(167,139,250,0.14)" />
-              <DashboardKpiCard title="OPEN Activity" value={formatNumber(summary?.open_activity)} subtitle="status OPEN" icon={Activity} accent={COLORS.open} glow="rgba(239,68,68,0.14)" />
-              <DashboardKpiCard title="CLOSE Activity" value={formatNumber(summary?.close_activity)} subtitle="status CLOSE" icon={CheckCircle2} accent={COLORS.close} glow="rgba(16,185,129,0.14)" />
-              <DashboardKpiCard title="Completion Rate" value={formatPercent(summary?.completion_rate)} subtitle="close / total" icon={TrendingUp} accent={COLORS.category} glow="rgba(245,158,11,0.14)" />
+              <DashboardKpiCard title="Total Activity" value={formatNumber(summary?.total_activity)} icon={ClipboardList} accent={COLORS.total} glow="rgba(96,165,250,0.14)" />
+              <DashboardKpiCard title="Impacted Site" value={formatNumber(summary?.impacted_sites)} icon={Users} accent={COLORS.sites} glow="rgba(167,139,250,0.14)" />
+              <DashboardKpiCard title="OPEN Activity" value={formatNumber(summary?.open_activity)} icon={Activity} accent={COLORS.open} glow="rgba(239,68,68,0.14)" />
+              <DashboardKpiCard title="CLOSE Activity" value={formatNumber(summary?.close_activity)} icon={CheckCircle2} accent={COLORS.close} glow="rgba(16,185,129,0.14)" />
+              <DashboardKpiCard title="Completion Rate" value={formatPercent(summary?.completion_rate)} icon={TrendingUp} accent={COLORS.category} glow="rgba(245,158,11,0.14)" />
             </>
           )}
         </section>

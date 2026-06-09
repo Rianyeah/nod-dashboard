@@ -104,4 +104,13 @@ describe('Activity ENOM dashboard contracts', () => {
     assert.match(page, /onClick=\{onClose\}/);
     assert.match(page, /stopPropagation/);
   });
+
+  it('removes scorecard sub-labels from Activity ENOM KPI cards', () => {
+    const page = src('pages', 'ActivityEnomPage.jsx');
+    const scorecardSection = page.split('grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5', 2)[1].split('</section>', 1)[0];
+
+    assert.match(scorecardSection, /DashboardKpiCard title="Total Activity"/);
+    assert.match(scorecardSection, /DashboardKpiCard title="Completion Rate"/);
+    assert.doesNotMatch(scorecardSection, /subtitle=/);
+  });
 });

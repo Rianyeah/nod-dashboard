@@ -5,12 +5,13 @@ import {
   AlertTriangle,
   ArrowLeft,
   BarChart3,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   CircleAlert,
   Filter,
   Gauge,
-  MapPin,
   Network,
   Radio,
   Route,
@@ -182,11 +183,6 @@ function SelectFilter({ id, label, value, onChange, options, placeholder = 'Semu
 
 function PriorityBadge({ value }) {
   const priority = String(value || 'Normal').toUpperCase();
-  const classes = priority === 'P1'
-    ? 'border-red-500/30 bg-red-500/10 text-red-300'
-    : priority === 'P2'
-      ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
-      : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
   return (
     <DashboardStatusBadge tone={priority === 'P1' ? 'danger' : priority === 'P2' ? 'warning' : 'success'}>{priority}</DashboardStatusBadge>
   );
@@ -195,11 +191,6 @@ function PriorityBadge({ value }) {
 function StatusBadge({ value, fail }) {
   const label = String(value || '-').toUpperCase();
   const isFail = fail || label === 'FAIL';
-  const classes = isFail
-    ? 'border-red-500/30 bg-red-500/10 text-red-300'
-    : label === 'PASS'
-      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
-      : 'border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)]';
   return (
     <DashboardStatusBadge tone={isFail ? 'danger' : label === 'PASS' ? 'success' : 'neutral'}>{label}</DashboardStatusBadge>
   );
@@ -245,6 +236,7 @@ function TransportQualityDashboard() {
   const [breakdowns, setBreakdowns] = useState({ by_nop: [], by_kabupaten: [], by_transport_type: [] });
   const [prioritySites, setPrioritySites] = useState({ items: [], total: 0, page: 1, limit: TABLE_LIMIT, total_pages: 0 });
   const [filtersLoaded, setFiltersLoaded] = useState(false);
+  const [filtersCollapsed, setFiltersCollapsed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -299,6 +291,7 @@ function TransportQualityDashboard() {
   }), [baseQueryParams, page]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPage(1);
   }, [baseQueryParams]);
 
@@ -306,6 +299,7 @@ function TransportQualityDashboard() {
     if (!filtersLoaded || !selectedDate) return;
     let cancelled = false;
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     setError(null);
     Promise.all([
@@ -437,10 +431,22 @@ function TransportQualityDashboard() {
         )}
 
         <section className="glass-card p-4">
-          <div className="mb-3 flex items-center gap-2">
-            <Filter className="size-4 text-[var(--primary-light)]" />
-            <h2 className="text-sm font-semibold tracking-wide">Global Filters</h2>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Filter className="size-4 text-[var(--primary-light)]" />
+              <h2 className="text-sm font-semibold tracking-wide">Global Filters</h2>
+            </div>
+            <button
+              type="button"
+              aria-expanded={!filtersCollapsed}
+              onClick={() => setFiltersCollapsed((value) => !value)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border-light)] bg-[var(--bg-elevated)] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--primary)]/30 hover:text-[var(--primary-light)]"
+            >
+              {filtersCollapsed ? <ChevronDown className="size-3.5" /> : <ChevronUp className="size-3.5" />}
+              {filtersCollapsed ? 'Show Filter' : 'Collapse Filter'}
+            </button>
           </div>
+          {!filtersCollapsed && (
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3 xl:grid-cols-5">
             <label className="flex min-w-[170px] flex-1 flex-col gap-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
               Date / Week
@@ -464,6 +470,7 @@ function TransportQualityDashboard() {
             <SelectFilter id="transport-distribution-lat" label="Distribution Lat" value={filters.distribution_lat} options={filterOptions.distribution_lat} onChange={(value) => setFilterValue('distribution_lat', value)} />
             <SelectFilter id="transport-jitter-status" label="Jitter Status" value={filters.jitter_status} options={filterOptions.jitter_statuses} onChange={(value) => setFilterValue('jitter_status', value)} />
           </div>
+          )}
         </section>
 
         <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
@@ -484,9 +491,10 @@ function TransportQualityDashboard() {
                   <YAxis tick={{ fontSize: 10, fill: themeTokens.axisTick }} width={42} />
                   <Tooltip content={<TransportTooltip />} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Line type="monotone" dataKey="avg_packet_loss" name="Avg PL %" stroke={QUALITY_COLORS.packetLoss} strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="avg_latency" name="Avg Latency ms" stroke={QUALITY_COLORS.latency} strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="avg_jitter" name="Avg Jitter" stroke={QUALITY_COLORS.jitter} strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="pl_over_1_sites" name="PL >1%" stroke={QUALITY_COLORS.packetLoss} strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="latency_over_5_sites" name="Latency >5ms" stroke={QUALITY_COLORS.latency} strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="jitter_not_clear_sites" name="Jitter NOT-CLEAR" stroke={QUALITY_COLORS.jitter} strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="thi_fail_sites" name="THI Fail" stroke={QUALITY_COLORS.p1} strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             ) : <ChartEmpty />}

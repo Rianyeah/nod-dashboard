@@ -181,6 +181,7 @@ site_rollup AS (
         AVG(latency) AS latency,
         AVG(jitter) AS jitter,
         BOOL_OR(UPPER(COALESCE(flag_pl_status, '')) = 'FAIL') AS flag_pl_fail,
+        BOOL_OR(UPPER(COALESCE(jitter_status, '')) IN ('NOT-CLEAR', 'NOT CLEAR')) AS jitter_not_clear,
         BOOL_OR(UPPER(COALESCE(thi_status, '')) = 'FAIL') AS thi_fail
     FROM base
     WHERE site_id IS NOT NULL
@@ -233,6 +234,7 @@ site_rollup AS (
         AVG(latency) AS latency,
         AVG(jitter) AS jitter,
         BOOL_OR(UPPER(COALESCE(flag_pl_status, '')) = 'FAIL') AS flag_pl_fail,
+        BOOL_OR(UPPER(COALESCE(jitter_status, '')) IN ('NOT-CLEAR', 'NOT CLEAR')) AS jitter_not_clear,
         BOOL_OR(UPPER(COALESCE(thi_status, '')) = 'FAIL') AS thi_fail
     FROM base
     WHERE site_id IS NOT NULL
@@ -247,6 +249,8 @@ SELECT
     ROUND(AVG(jitter), 3)::float AS avg_jitter,
     COUNT(*) FILTER (WHERE avg_packet_loss > 1) AS pl_over_1_sites,
     COUNT(*) FILTER (WHERE latency > 5) AS latency_over_5_sites,
+    COUNT(*) FILTER (WHERE jitter_not_clear) AS jitter_not_clear_sites,
+    COUNT(*) FILTER (WHERE thi_fail) AS thi_fail_sites,
     COUNT(*) FILTER (WHERE flag_pl_fail OR thi_fail) AS p1_sites
 FROM site_rollup
 GROUP BY date

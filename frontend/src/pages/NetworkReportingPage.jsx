@@ -49,6 +49,14 @@ import {
 } from '../utils/formatters';
 
 const REVENUE_TARGET = 90_000_000_000;
+const REPORTING_DEFAULT_NOP = 'SIDOARJO';
+
+function normalizeReportingNop(value) {
+  return String(value || '')
+    .trim()
+    .replace(/^NOP\s+/i, '')
+    .toUpperCase();
+}
 
 function getDelta(current, previous) {
   if (current == null || previous == null) return null;
@@ -58,16 +66,26 @@ function getDelta(current, previous) {
   return currentNumber - previousNumber;
 }
 
+function getRelativeChange(current, previous) {
+  const currentNumber = Number(current);
+  const previousNumber = Number(previous);
+  if (!Number.isFinite(currentNumber) || !Number.isFinite(previousNumber) || previousNumber === 0) {
+    return null;
+  }
+  return ((currentNumber - previousNumber) / Math.abs(previousNumber)) * 100;
+}
+
 function formatSignedDelta(delta, formatter) {
   if (delta == null) return null;
   const sign = delta > 0 ? '+' : delta < 0 ? '-' : '';
   return `${sign}${formatter(Math.abs(delta))}`;
 }
 
-function formatSignedPercentPoint(delta) {
-  if (delta == null || !Number.isFinite(Number(delta))) return null;
-  const sign = delta > 0 ? '+' : delta < 0 ? '-' : '';
-  return `${sign}${Math.abs(Number(delta)).toFixed(2).replace('.', ',')} ppt`;
+function formatRelativePercent(value, digits = 1) {
+  if (value == null || !Number.isFinite(Number(value))) return '-';
+  const number = Number(value);
+  const sign = number > 0 ? '+' : number < 0 ? '-' : '';
+  return `${sign}${Math.abs(number).toFixed(digits).replace('.', ',')}%`;
 }
 
 function formatPayloadAxisTick(value) {
@@ -83,20 +101,6 @@ function formatAvailabilityAxisTick(value) {
   if (!Number.isFinite(num)) return '';
   const fixed = num.toFixed(1).replace(/\.0$/, '');
   return `${fixed}%`;
-}
-
-function MetricDelta({ delta, formatter }) {
-  const label = formatSignedDelta(delta, formatter);
-  if (!label) {
-    return <span className="text-[10px] text-[var(--text-muted)]">vs prev: -</span>;
-  }
-
-  const colorClass = delta < 0 ? 'text-red-400' : delta > 0 ? 'text-emerald-400' : 'text-[var(--text-muted)]';
-  return (
-    <span className={`text-[10px] font-semibold font-mono tabular-nums ${colorClass}`}>
-      {label} MoM
-    </span>
-  );
 }
 
 function DeltaValue({ delta, formatter }) {
@@ -124,13 +128,33 @@ function buildRevenueTotals(rows) {
       acc.rev_ir += row.rev_ir;
       acc.payload += row.payload;
       acc.traffic += row.traffic;
+      acc.ticket_swfm_bps += row.ticket_swfm_bps || 0;
+      acc.ticket_swfm_ts += row.ticket_swfm_ts || 0;
+      acc.proker_open += row.proker_open || 0;
+      acc.proker_closed += row.proker_closed || 0;
       if (row.avg_availability != null) {
         acc._avail_sum += row.avg_availability * row.total_sites;
         acc._avail_count += row.total_sites;
       }
       return acc;
     },
-    { total_sites: 0, rev: 0, rev_voice: 0, rev_bb: 0, rev_dig: 0, rev_sms: 0, rev_ir: 0, payload: 0, traffic: 0, _avail_sum: 0, _avail_count: 0 },
+    {
+      total_sites: 0,
+      rev: 0,
+      rev_voice: 0,
+      rev_bb: 0,
+      rev_dig: 0,
+      rev_sms: 0,
+      rev_ir: 0,
+      payload: 0,
+      traffic: 0,
+      ticket_swfm_bps: 0,
+      ticket_swfm_ts: 0,
+      proker_open: 0,
+      proker_closed: 0,
+      _avail_sum: 0,
+      _avail_count: 0,
+    },
   );
   totals.avg_availability = totals._avail_count > 0 ? totals._avail_sum / totals._avail_count : null;
   return totals;
@@ -195,7 +219,7 @@ function getAvailabilityTrendInsight({ trendData, currentIndex, currentAvailabil
   };
 }
 
-function getPayloadPeakInsight({ trendData, currentIndex, currentPayload, payloadDelta }) {
+function getPayloadPeakInsight({ trendData, currentIndex, currentPayload }) {
   if (currentPayload == null) {
     return {
       title: 'Payload belum tersedia',
@@ -212,20 +236,37 @@ function getPayloadPeakInsight({ trendData, currentIndex, currentPayload, payloa
     title: isPeak
       ? `Payload ${formatPayload(currentPayload)} - tertinggi 6 bulan`
       : `Payload ${formatPayload(currentPayload)} masih di bawah puncak 6 bulan`,
-    body: payloadDelta == null
-      ? 'Belum ada pembanding bulan sebelumnya.'
-      : `${payloadDelta >= 0 ? 'Naik' : 'Turun'} ${formatSignedDelta(payloadDelta, formatPayload)} dari bulan sebelumnya. Review kapasitas jika tren berlanjut.`,
+    body: isPeak
+      ? 'Review kapasitas jika pertumbuhan berlanjut.'
+      : 'Masih dalam rentang kapasitas enam bulan terakhir.',
     chip: isPeak ? 'Perlu antisipasi' : 'Dalam kendali',
   };
 }
 
 /* ─── Scorecard Component ──────────────────────────────── */
-function Scorecard({ title, value, subtitle, icon: Icon, accent, glow, delta, deltaFormatter, delay = 0 }) {
+function Scorecard({
+  title,
+  value,
+  metadata = [],
+  momRate,
+  momDigits = 1,
+  icon: Icon,
+  accent,
+  glow,
+  delay = 0,
+}) {
+  const momTone = momRate == null
+    ? 'text-[var(--text-muted)]'
+    : momRate < 0
+      ? 'text-red-400'
+      : momRate > 0
+        ? 'text-emerald-400'
+        : 'text-[var(--text-secondary)]';
+
   return (
     <DashboardKpiCard
       title={title}
       value={value}
-      subtitle={subtitle}
       icon={Icon}
       accent={accent}
       glow={glow}
@@ -235,9 +276,17 @@ function Scorecard({ title, value, subtitle, icon: Icon, accent, glow, delta, de
       <p className="mt-2 font-mono text-[28px] font-bold leading-none tabular-nums tracking-tight" style={{ color: accent }}>
         {value}
       </p>
-      <div className="mt-2 flex min-h-4 items-center gap-2">
-        {subtitle && <p className="truncate text-[10px] text-[var(--text-muted)]">{subtitle}</p>}
-        {deltaFormatter && <MetricDelta delta={delta} formatter={deltaFormatter} />}
+      <div className="mt-2 min-h-8 space-y-0.5 text-[10px] leading-4">
+        {momRate !== undefined && (
+          <p className={`font-mono font-semibold tabular-nums ${momTone}`}>
+            {formatRelativePercent(momRate, momDigits)} MoM
+          </p>
+        )}
+        {metadata.map((item) => (
+          <p key={item.label} className="text-[var(--text-secondary)]">
+            {item.label}: <span className="font-mono font-semibold text-[var(--text-primary)]">{item.value}</span>
+          </p>
+        ))}
       </div>
     </DashboardKpiCard>
   );
@@ -344,29 +393,39 @@ const INSIGHT_TONES = {
     shell: 'border-emerald-500/45 bg-emerald-50/80 dark:bg-emerald-500/10',
     text: 'text-emerald-700 dark:text-emerald-300',
     chip: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300',
+    labelText: 'text-slate-600',
+    summaryText: 'text-slate-900',
+    detailText: 'text-slate-700',
   },
   warning: {
     shell: 'border-amber-500/45 bg-amber-50/80 dark:bg-amber-500/10',
     text: 'text-amber-700 dark:text-amber-300',
     chip: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
+    labelText: 'text-slate-600',
+    summaryText: 'text-slate-900',
+    detailText: 'text-slate-700',
   },
   info: {
     shell: 'border-blue-500/45 bg-blue-50/80 dark:bg-blue-500/10',
     text: 'text-blue-700 dark:text-blue-300',
     chip: 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300',
+    labelText: 'text-slate-600',
+    summaryText: 'text-slate-900',
+    detailText: 'text-slate-700',
   },
 };
 
-function InsightCard({ label, title, body, chip, tone = 'info', icon: Icon = TrendingUp }) {
+function InsightCard({ label, title, summary, detail, chip, tone = 'info', icon: Icon = TrendingUp }) {
   const colors = INSIGHT_TONES[tone] || INSIGHT_TONES.info;
   return (
     <article className={`rounded-lg border p-3 ${colors.shell}`}>
       <div className="flex items-start gap-2">
         <Icon className={`mt-0.5 size-4 shrink-0 ${colors.text}`} />
         <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">{label}</p>
+          <p className={`text-[10px] font-semibold uppercase tracking-wider ${colors.labelText}`}>{label}</p>
           <h3 className={`mt-0.5 text-sm font-bold leading-5 ${colors.text}`}>{title}</h3>
-          <p className="mt-1 text-[11px] leading-5 text-[var(--text-secondary)]">{body}</p>
+          <p className={`mt-1 text-xs font-semibold leading-5 ${colors.summaryText}`}>{summary}</p>
+          {detail && <p className={`mt-0.5 text-[11px] font-medium leading-5 ${colors.detailText}`}>{detail}</p>}
           {chip && (
             <span className={`mt-2 inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${colors.chip}`}>
               {chip}
@@ -438,6 +497,7 @@ export default function NetworkReportingPage() {
   const [selectedMonth, setSelectedMonth] = useState(null);
   const [selectedNop, setSelectedNop] = useState(null);
   const [nopOptions, setNopOptions] = useState([]);
+  const [filtersReady, setFiltersReady] = useState(false);
   const [scorecards, setScorecards] = useState(null);
   const [previousScorecards, setPreviousScorecards] = useState(null);
   const [revenueData, setRevenueData] = useState([]);
@@ -461,9 +521,17 @@ export default function NetworkReportingPage() {
     fetchFilterOptions()
       .then((options) => {
         if (cancelled) return;
-        setNopOptions(options?.nop || []);
+        const nops = options?.nop || [];
+        setNopOptions(nops);
+        const defaultNop = nops.find(
+          (item) => normalizeReportingNop(item) === REPORTING_DEFAULT_NOP,
+        );
+        setSelectedNop((current) => current ?? defaultNop ?? null);
       })
-      .catch(console.error);
+      .catch(console.error)
+      .finally(() => {
+        if (!cancelled) setFiltersReady(true);
+      });
     return () => { cancelled = true; };
   }, []);
 
@@ -482,21 +550,31 @@ export default function NetworkReportingPage() {
 
   // Load trend data whenever the reporting NOP changes
   useEffect(() => {
+    if (!filtersReady) return undefined;
+    let cancelled = false;
     fetchRevenueTrend(selectedNop)
-      .then(setTrendData)
+      .then((data) => {
+        if (!cancelled) setTrendData(data);
+      })
       .catch(console.error);
-  }, [selectedNop]);
+    return () => { cancelled = true; };
+  }, [filtersReady, selectedNop]);
 
   // Load battery data whenever the reporting NOP changes
   useEffect(() => {
+    if (!filtersReady) return undefined;
+    let cancelled = false;
     fetchBatteryByKabupaten(selectedNop)
-      .then(setBatteryData)
+      .then((data) => {
+        if (!cancelled) setBatteryData(data);
+      })
       .catch(console.error);
-  }, [selectedNop]);
+    return () => { cancelled = true; };
+  }, [filtersReady, selectedNop]);
 
   // Load period-dependent data when selectedMonth changes
   useEffect(() => {
-    if (!selectedMonth) return;
+    if (!selectedMonth || !filtersReady) return;
     let cancelled = false;
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -522,7 +600,7 @@ export default function NetworkReportingPage() {
       });
 
     return () => { cancelled = true; };
-  }, [selectedMonth, selectedNop, previousMonth]);
+  }, [filtersReady, selectedMonth, selectedNop, previousMonth]);
 
   // Compute totals for revenue table
   const revenueTotals = useMemo(() => {
@@ -598,10 +676,10 @@ export default function NetworkReportingPage() {
 
     const currentRevenue = current?.total_revenue ?? scorecards?.total_revenue;
     const currentPayload = current?.total_payload ?? scorecards?.total_payload;
-    const revenueDelta = getDelta(currentRevenue, previous?.total_revenue);
-    const payloadDelta = getDelta(currentPayload, previous?.total_payload);
+    const revenueMom = getRelativeChange(currentRevenue, previous?.total_revenue);
+    const payloadMom = getRelativeChange(currentPayload, previous?.total_payload);
     const availability = current?.avg_availability ?? scorecards?.avg_availability;
-    const availabilityDelta = getDelta(availability, previous?.avg_availability);
+    const availabilityMom = getRelativeChange(availability, previous?.avg_availability);
     const targetDelta = currentRevenue == null ? null : currentRevenue - REVENUE_TARGET;
     const targetPercent = currentRevenue == null ? null : (currentRevenue / REVENUE_TARGET - 1) * 100;
     const revenueTargetMet = targetDelta != null && targetDelta >= 0;
@@ -621,7 +699,6 @@ export default function NetworkReportingPage() {
       trendData,
       currentIndex,
       currentPayload,
-      payloadDelta,
     });
     const selectedNopLabel = selectedNop ? selectedNop.replace('NOP ', '') : 'Semua NOP';
 
@@ -631,11 +708,14 @@ export default function NetworkReportingPage() {
         {
           label: 'Revenue',
           title: revenueTargetMet
-            ? 'Revenue melampaui target bulan ini'
-            : 'Revenue belum mencapai target',
-          body: currentRevenue == null
+            ? 'Revenue melampaui target'
+            : 'Revenue di bawah target',
+          summary: currentRevenue == null
             ? 'Data revenue belum tersedia untuk periode terpilih.'
-            : `${formatRevenue(currentRevenue)} (${formatSignedDelta(revenueDelta, formatRevenueShort) || '0'} MoM) ${revenueTargetMet ? 'melampaui' : 'di bawah'} target ${formatRevenue(REVENUE_TARGET)} sebesar ${targetPercent == null ? '-' : `${targetPercent.toFixed(1).replace('.', ',')}%`}. ${getRevenueContributorInsight(revenueTotals, previousRevenueTotals)}`,
+            : `${formatRevenue(currentRevenue)} | ${formatRelativePercent(revenueMom)} MoM`,
+          detail: currentRevenue == null
+            ? null
+            : `${revenueTargetMet ? 'Target terlampaui' : 'Gap terhadap target'} ${targetPercent == null ? '-' : `${Math.abs(targetPercent).toFixed(1).replace('.', ',')}%`}. ${getRevenueContributorInsight(revenueTotals, previousRevenueTotals)}`,
           chip: revenueTargetMet
             ? `${monthsAboveTarget || 1} bulan di atas target`
             : `Gap ${formatRevenueShort(Math.abs(targetDelta || 0))}`,
@@ -645,7 +725,8 @@ export default function NetworkReportingPage() {
         {
           label: 'Availability',
           title: availabilityInsight.title,
-          body: `${availability == null ? '-' : formatPercent(availability)} (${formatSignedPercentPoint(availabilityDelta) || '0 ppt'} MoM). ${availabilityInsight.body}`,
+          summary: `${availability == null ? '-' : formatPercent(availability)} | ${formatRelativePercent(availabilityMom, 2)} MoM`,
+          detail: availabilityInsight.body,
           chip: availabilityInsight.chip,
           tone: availability == null || availability < 99.5 ? 'warning' : 'success',
           icon: availability == null || availability < 99.5 ? AlertTriangle : CheckCircle2,
@@ -653,7 +734,12 @@ export default function NetworkReportingPage() {
         {
           label: 'Payload Peak',
           title: payloadInsight.title,
-          body: payloadInsight.body,
+          summary: currentPayload == null
+            ? 'Data payload belum tersedia untuk periode terpilih.'
+            : `${formatPayload(currentPayload)} | ${formatRelativePercent(payloadMom)} MoM`,
+          detail: currentPayload == null
+            ? null
+            : `YTD ${formatPayload(scorecards?.payload_ytd)}. ${payloadInsight.body}`,
           chip: payloadInsight.chip,
           tone: 'info',
           icon: BarChart3,
@@ -688,9 +774,9 @@ export default function NetworkReportingPage() {
         />
         <div className="absolute top-0 left-1/4 w-96 h-1 bg-gradient-to-r from-transparent via-[var(--primary)]/30 to-transparent blur-sm" />
 
-        <div className="relative z-10 px-6 py-3 flex items-center justify-between">
+        <div className="relative z-10 px-3 py-3 flex flex-col gap-3 xl:px-6 xl:flex-row xl:items-center xl:justify-between">
           {/* Left — Logo & Title */}
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 items-center gap-3">
             <button
               onClick={() => navigate('/home')}
               className="w-9 h-9 bg-[var(--bg-elevated)] rounded-xl flex items-center justify-center border border-[var(--border-light)] hover:bg-[var(--bg-hover)] hover:border-[var(--primary)]/30 transition-all duration-200"
@@ -701,7 +787,7 @@ export default function NetworkReportingPage() {
             <div className="w-9 h-9 bg-[var(--primary)]/15 rounded-xl flex items-center justify-center border border-[var(--primary)]/20">
               <BarChart3 className="w-5 h-5 text-[var(--primary-light)]" />
             </div>
-            <div>
+            <div className="min-w-0">
               <h1 className="text-base font-bold tracking-tight text-[var(--text-primary)]">
                 NETWORK REPORTING
               </h1>
@@ -712,7 +798,7 @@ export default function NetworkReportingPage() {
           </div>
 
           {/* Right — Period Selector */}
-          <div className="flex items-center gap-3">
+          <div className="reporting-header-controls flex w-full flex-wrap items-center gap-2 xl:w-auto xl:flex-nowrap xl:gap-3">
             <button
               type="button"
               onClick={handleExportPdf}
@@ -739,21 +825,23 @@ export default function NetworkReportingPage() {
                 <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none opacity-50 text-[var(--text-muted)]" />
               </div>
             </div>
-            <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider font-medium">
-              Periode
-            </span>
-            <div className="relative">
-              <select
-                id="reporting-period"
-                value={selectedMonth || ''}
-                onChange={(e) => setSelectedMonth(e.target.value)}
-                className="appearance-none bg-[var(--bg-elevated)] text-[var(--text-primary)] border border-[var(--border-light)] rounded-lg pl-3 pr-8 py-2 text-sm cursor-pointer hover:bg-[var(--bg-hover)] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/40 focus:border-[var(--primary)]/40 backdrop-blur-sm min-w-[140px]"
-              >
-                {availableMonths.map((m) => (
-                  <option key={m} value={m}>{formatMonthLabel(m)}</option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none opacity-50 text-[var(--text-muted)]" />
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider font-medium">
+                Periode
+              </span>
+              <div className="relative">
+                <select
+                  id="reporting-period"
+                  value={selectedMonth || ''}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  className="appearance-none bg-[var(--bg-elevated)] text-[var(--text-primary)] border border-[var(--border-light)] rounded-lg pl-3 pr-8 py-2 text-sm cursor-pointer hover:bg-[var(--bg-hover)] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/40 focus:border-[var(--primary)]/40 backdrop-blur-sm min-w-[140px]"
+                >
+                  {availableMonths.map((m) => (
+                    <option key={m} value={m}>{formatMonthLabel(m)}</option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none opacity-50 text-[var(--text-muted)]" />
+              </div>
             </div>
           </div>
         </div>
@@ -771,40 +859,44 @@ export default function NetworkReportingPage() {
               <Scorecard
                 title="Total Site"
                 value={formatNumber(scorecards?.total_sites)}
-                subtitle="site dengan data traktor"
+                metadata={[
+                  { label: 'EPM', value: formatNumber(scorecards?.epm_sites) },
+                  { label: 'Site (non EPM)', value: formatNumber(scorecards?.non_epm_sites) },
+                ]}
                 icon={Radio}
                 accent="var(--primary)"
                 glow="rgba(59, 130, 246, 0.15)"
-                delta={getDelta(scorecards?.total_sites, previousScorecards?.total_sites)}
-                deltaFormatter={formatNumber}
                 delay={0}
               />
               <Scorecard
                 title="Total Revenue"
                 value={formatRevenue(scorecards?.total_revenue)}
-                subtitle={`${formatRevenueShort(scorecards?.total_revenue)} total`}
+                momRate={getRelativeChange(scorecards?.total_revenue, previousScorecards?.total_revenue)}
+                metadata={[
+                  { label: 'YTD', value: formatRevenue(scorecards?.revenue_ytd) },
+                ]}
                 icon={Banknote}
                 accent="#10B981"
                 glow="rgba(16, 185, 129, 0.15)"
-                delta={getDelta(scorecards?.total_revenue, previousScorecards?.total_revenue)}
-                deltaFormatter={formatRevenueShort}
                 delay={80}
               />
               <Scorecard
                 title="Total Payload"
                 value={formatPayload(scorecards?.total_payload)}
-                subtitle="total data usage"
+                momRate={getRelativeChange(scorecards?.total_payload, previousScorecards?.total_payload)}
+                metadata={[
+                  { label: 'YTD', value: formatPayload(scorecards?.payload_ytd) },
+                ]}
                 icon={HardDrive}
                 accent="var(--info)"
                 glow="rgba(6, 182, 212, 0.15)"
-                delta={getDelta(scorecards?.total_payload, previousScorecards?.total_payload)}
-                deltaFormatter={formatPayload}
                 delay={160}
               />
               <Scorecard
                 title="Availability"
                 value={formatPercent(scorecards?.avg_availability)}
-                subtitle="rata-rata availability jaringan"
+                momRate={getRelativeChange(scorecards?.avg_availability, previousScorecards?.avg_availability)}
+                momDigits={2}
                 icon={Activity}
                 accent={
                   scorecards?.avg_availability >= 99.5
@@ -820,8 +912,6 @@ export default function NetworkReportingPage() {
                       ? 'rgba(245, 158, 11, 0.15)'
                       : 'rgba(239, 68, 68, 0.15)'
                 }
-                delta={getDelta(scorecards?.avg_availability, previousScorecards?.avg_availability)}
-                deltaFormatter={formatPercent}
                 delay={240}
               />
             </>
@@ -941,7 +1031,7 @@ export default function NetworkReportingPage() {
         {/* Tab Switcher */}
         <div className="flex items-center gap-1 bg-[var(--bg-elevated)] rounded-xl p-1 w-fit">
           {[
-            { key: 'revenue', label: 'Revenue & Payload', icon: Banknote },
+            { key: 'revenue', label: 'Performance Table', icon: Banknote },
             { key: 'siteclass', label: 'Site Class', icon: Layers },
             { key: 'battery', label: 'Battery Type', icon: Battery },
           ].map((tab) => (
@@ -959,10 +1049,10 @@ export default function NetworkReportingPage() {
           ))}
         </div>
 
-        {/* Revenue & Payload Table */}
+        {/* Performance Table */}
         {activeTable === 'revenue' && (
           <TableSection
-            title="Revenue & Payload by Kabupaten/Kota"
+            title="Performance Table"
             icon={Banknote}
             delay={400}
             action={
@@ -991,6 +1081,8 @@ export default function NetworkReportingPage() {
                     <th className={`${thClass} text-right`}>Payload</th>
                     <th className={`${thClass} text-right`}>Traffic</th>
                     <th className={`${thClass} text-center`}>Availability</th>
+                    <th className={`${thClass} text-right`}>Ticket SWFM</th>
+                    <th className={`${thClass} text-right`}>Proker Activity</th>
                     {showRevenueDetails && (
                       <>
                         <th className={`${thClass} text-right`}>Rev Voice</th>
@@ -1022,6 +1114,12 @@ export default function NetworkReportingPage() {
                           <AvailabilityBadge value={row.avg_availability} />
                           <DeltaValue delta={getDelta(row.avg_availability, previousRow?.avg_availability)} formatter={formatPercent} />
                         </td>
+                        <td className={`${tdClass} text-right`}>
+                          BPS: {formatNumber(row.ticket_swfm_bps)} TS: {formatNumber(row.ticket_swfm_ts)}
+                        </td>
+                        <td className={`${tdClass} text-right`}>
+                          Open: {formatNumber(row.proker_open)} Closed: {formatNumber(row.proker_closed)}
+                        </td>
                         {showRevenueDetails && (
                           <>
                             <td className={`${tdClass} text-right`}>{formatRevenueShort(row.rev_voice)}</td>
@@ -1052,6 +1150,12 @@ export default function NetworkReportingPage() {
                       <td className={`${tdClass} text-center font-bold`}>
                         <AvailabilityBadge value={revenueTotals.avg_availability} />
                         <DeltaValue delta={getDelta(revenueTotals.avg_availability, previousRevenueTotals?.avg_availability)} formatter={formatPercent} />
+                      </td>
+                      <td className={`${tdClass} text-right font-bold`}>
+                        BPS: {formatNumber(revenueTotals.ticket_swfm_bps)} TS: {formatNumber(revenueTotals.ticket_swfm_ts)}
+                      </td>
+                      <td className={`${tdClass} text-right font-bold`}>
+                        Open: {formatNumber(revenueTotals.proker_open)} Closed: {formatNumber(revenueTotals.proker_closed)}
                       </td>
                       {showRevenueDetails && (
                         <>

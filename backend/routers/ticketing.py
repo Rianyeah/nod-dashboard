@@ -6,7 +6,7 @@ GET /ticketing/dashboard                  - scorecards, charts, top sites
 GET /ticketing/tickets                    - paginated ticket table
 GET /ticketing/tickets/{ticket_number_swfm} - ticket drilldown detail
 """
-from datetime import date
+from datetime import date, timedelta
 import math
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -128,6 +128,36 @@ async def rows_to_dicts(session: AsyncSession, sql: str, params: dict) -> list[d
     return [row_to_dict(row) for row in result.fetchall()]
 
 
+def previous_month_bounds(params: dict) -> dict | None:
+    """Build a matching filter set for the previous month."""
+    previous_params = {**params}
+    if params.get("tahun") and params.get("bulan"):
+        year = int(params["tahun"])
+        month = int(params["bulan"])
+        if month == 1:
+            year -= 1
+            month = 12
+        else:
+            month -= 1
+        previous_params.update({"tahun": year, "bulan": month, "start_date": None, "end_date": None})
+        return previous_params
+
+    anchor = params.get("start_date")
+    if not anchor:
+        return None
+
+    current_month = date(anchor.year, anchor.month, 1)
+    previous_end = current_month - timedelta(days=1)
+    previous_start = date(previous_end.year, previous_end.month, 1)
+    previous_params.update({
+        "start_date": previous_start,
+        "end_date": previous_end,
+        "tahun": None,
+        "bulan": None,
+    })
+    return previous_params
+
+
 LATEST_MONTH_DEFAULT_QUERY = f"""
 monthly_counts AS (
     SELECT
@@ -247,6 +277,13 @@ SELECT
     COUNT(*) FILTER (WHERE ticket_swfm_status = 'CANCELED') AS canceled_tickets,
     MAX(created_at) AS last_created_at
 FROM base
+"""
+
+PREVIOUS_MONTH_TICKETS_QUERY = """
+SELECT COUNT(*) AS previous_total_tickets
+FROM public.ticketing_fault_center t
+WHERE 1=1
+{filter_clause}
 """
 
 TREND_QUERY = """
@@ -526,6 +563,24 @@ async def get_ticketing_dashboard(
         sql_params,
     )
     summary = row_to_dict(summary_result.first())
+    previous_total_tickets = 0
+    previous_params = previous_month_bounds(params)
+    if previous_params:
+        previous_filter_clause = build_filter_clause(previous_params)
+        previous_result = await session.execute(
+            text(PREVIOUS_MONTH_TICKETS_QUERY.format(filter_clause=previous_filter_clause)),
+            previous_params,
+        )
+        previous_total_tickets = int(previous_result.scalar() or 0)
+    total_tickets = int(summary.get("total_tickets") or 0)
+    total_tickets_mom_delta = total_tickets - previous_total_tickets
+    summary["previous_total_tickets"] = previous_total_tickets
+    summary["total_tickets_mom_delta"] = total_tickets_mom_delta
+    summary["total_tickets_mom_rate"] = (
+        round((total_tickets_mom_delta / previous_total_tickets) * 100, 2)
+        if previous_total_tickets
+        else None
+    )
 
     trend = await rows_to_dicts(
         session,

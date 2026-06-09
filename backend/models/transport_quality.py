@@ -55,6 +55,8 @@ class TransportQualityTrendItem(BaseModel):
     avg_jitter: Optional[float] = None
     pl_over_1_sites: int = 0
     latency_over_5_sites: int = 0
+    jitter_not_clear_sites: int = 0
+    thi_fail_sites: int = 0
     p1_sites: int = 0
 
 

@@ -175,14 +175,31 @@ class OverviewContractTest(unittest.TestCase):
 
         for contract in [
             "month_start, month_end = month_bounds(selected_tahun, selected_bulan)",
-            "impact_start_date = max(month_start, impact_filters.min_date)",
-            "impact_end_date = min(month_end, impact_filters.max_date)",
             "resolve_transport_date_for_period",
             "tahun=selected_tahun",
             "bulan=selected_bulan",
         ]:
             with self.subTest(contract=contract):
                 self.assertIn(contract, source)
+
+    def test_overview_impact_service_uses_latest_alarm_window_not_selected_month(self):
+        source = ROUTER.read_text(encoding="utf-8")
+
+        for contract in [
+            "load_latest_impact_module",
+            "get_impact_service_latest_window",
+            "latest_impact_start_date",
+            "latest_impact_end_date",
+            "get_impact_service_last_7_days_trend",
+            "impact_daily_trend=impact_daily_trend",
+        ]:
+            with self.subTest(contract=contract):
+                self.assertIn(contract, source)
+
+        if "async def load_latest_impact_module" in source:
+            impact_section = source.split("async def load_latest_impact_module", 1)[1].split("async def load_transport_module", 1)[0]
+            self.assertNotIn("month_start", impact_section)
+            self.assertNotIn("month_end", impact_section)
 
 
 if __name__ == "__main__":

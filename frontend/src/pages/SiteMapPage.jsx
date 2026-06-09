@@ -5,7 +5,6 @@ import MapboxMap from '../components/MapboxMap';
 import SiteTable from '../components/SiteTable';
 import FilterPanel from '../components/FilterPanel';
 import SiteDetailModal from '../components/SiteDetailModal';
-import WorstSitesPanel from '../components/WorstSitesPanel';
 import Breadcrumb from '../components/Breadcrumb';
 import { useMapData } from '../hooks/useMapData';
 import { fetchFilterOptions, fetchLatestPeriod, fetchSiteAvailability, fetchSiteDetail, fetchTrend } from '../services/api';
@@ -247,7 +246,6 @@ export default function SiteMapPage() {
         >
           <div className="p-2.5 overflow-y-auto flex-1 flex flex-col gap-2.5">
             <SummaryCards bulan={bulan} tahun={tahun} filters={sidebarFilters} />
-            <WorstSitesPanel bulan={bulan} tahun={tahun} filters={sidebarFilters} />
           </div>
         </aside>
 

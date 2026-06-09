@@ -23,8 +23,10 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  ComposedChart,
   LabelList,
   Legend,
+  Line,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -44,6 +46,7 @@ import {
   fetchImpactServiceDailyTrend,
   fetchImpactServiceDistributions,
   fetchImpactServiceFilters,
+  fetchImpactServiceLast7DaysTrend,
   fetchImpactServiceSummary,
   fetchImpactServiceTopAlarms,
   fetchImpactServiceTopSites,
@@ -118,9 +121,38 @@ function asDisplay(value) {
   return String(value);
 }
 
-function Scorecard({ title, value, subtitle, icon: Icon, accent, glow }) {
+function getImpactDelta(current, previous) {
+  const currentValue = Number(current) || 0;
+  const previousValue = Number(previous) || 0;
+  const delta = currentValue - previousValue;
+  const rate = previousValue === 0 ? null : (delta / Math.abs(previousValue)) * 100;
+  return { delta, rate };
+}
+
+function formatImpactDelta({ delta, rate }) {
+  const deltaSign = delta > 0 ? '+' : delta < 0 ? '-' : '';
+  const deltaLabel = `${deltaSign}${formatNumber(Math.abs(delta))}`;
+  const rateLabel = rate == null ? '-' : `${rate > 0 ? '+' : rate < 0 ? '-' : ''}${Math.abs(rate).toFixed(1).replace('.', ',')}%`;
+  return `${deltaLabel} (${rateLabel})`;
+}
+
+function Scorecard({ title, value, delta, comparisonLabel, icon: Icon, accent, glow }) {
+  const deltaTone = delta.delta > 0
+    ? 'text-emerald-400'
+    : delta.delta < 0
+      ? 'text-red-400'
+      : 'text-[var(--text-muted)]';
+
   return (
-    <DashboardKpiCard title={title} value={value} subtitle={subtitle} icon={Icon} accent={accent} glow={glow} className="animate-fade-in" />
+    <DashboardKpiCard title={title} value={value} icon={Icon} accent={accent} glow={glow} className="animate-fade-in">
+      <p className="mt-2 truncate font-mono text-[28px] font-bold leading-none tabular-nums tracking-tight" style={{ color: accent }}>
+        {value}
+      </p>
+      <div className="mt-2 space-y-0.5 text-[11px] font-semibold leading-snug">
+        <p className={`font-mono tabular-nums ${deltaTone}`}>{formatImpactDelta(delta)}</p>
+        <p className="text-[var(--text-muted)]">{comparisonLabel}</p>
+      </div>
+    </DashboardKpiCard>
   );
 }
 
@@ -150,22 +182,12 @@ function ImpactTooltip({ active, payload, label }) {
 function StatusBadge({ value }) {
   const status = String(value || '').toUpperCase();
   const isOpen = status === 'OPEN';
-  const classes = isOpen
-    ? 'bg-red-500/10 text-red-400 border-red-500/20'
-    : status === 'CLEAR'
-      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-      : 'bg-[var(--bg-elevated)] text-[var(--text-muted)] border-[var(--border)]';
 
   return <DashboardStatusBadge tone={isOpen ? 'danger' : status === 'CLEAR' ? 'success' : 'neutral'}>{status || '-'}</DashboardStatusBadge>;
 }
 
 function SeverityBadge({ value }) {
   const severity = String(value || '');
-  const classes = severity === 'Critical'
-    ? 'bg-red-500/10 text-red-400 border-red-500/20'
-    : severity === 'Major'
-      ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-      : 'bg-[var(--primary)]/10 text-[var(--primary-light)] border-[var(--primary)]/20';
 
   return <DashboardStatusBadge tone={severity === 'Critical' ? 'danger' : severity === 'Major' ? 'warning' : 'info'}>{severity || '-'}</DashboardStatusBadge>;
 }
@@ -327,6 +349,7 @@ function ImpactServiceDashboard() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPage(1);
   }, [startDate, endDate, selectedNop, statusFilter, severityFilter, searchTerm]);
 
@@ -340,6 +363,10 @@ function ImpactServiceDashboard() {
     page,
     limit: TABLE_LIMIT,
   }), [endDate, page, searchTerm, selectedNop, severityFilter, startDate, statusFilter]);
+
+  const last7DaysParams = useMemo(() => ({
+    nop: selectedNop || undefined,
+  }), [selectedNop]);
 
   const hasValidDateRange = Boolean(startDate && endDate && startDate <= endDate);
 
@@ -363,11 +390,12 @@ function ImpactServiceDashboard() {
     if (!hasValidDateRange) return;
     let cancelled = false;
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     setError(null);
     Promise.all([
       fetchImpactServiceSummary(queryParams),
-      fetchImpactServiceDailyTrend(queryParams),
+      fetchImpactServiceLast7DaysTrend(last7DaysParams).catch(() => fetchImpactServiceDailyTrend(queryParams)),
       fetchImpactServiceDistributions(queryParams),
       fetchImpactServiceTopAlarms(queryParams),
       fetchImpactServiceTopSites(queryParams),
@@ -391,12 +419,13 @@ function ImpactServiceDashboard() {
       });
 
     return () => { cancelled = true; };
-  }, [hasValidDateRange, queryParams]);
+  }, [hasValidDateRange, last7DaysParams, queryParams]);
 
   useEffect(() => {
     if (!selectedAlarmId || !hasValidDateRange) return;
     let cancelled = false;
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setModalLoading(true);
     setSelectedAlarmDetail(null);
     fetchImpactServiceAlarmDetail(selectedAlarmId, queryParams)
@@ -419,11 +448,15 @@ function ImpactServiceDashboard() {
     setSelectedAlarmDetail(null);
   }, []);
 
+  const isSingleDayRange = startDate === endDate;
+  const comparisonLabel = isSingleDayRange ? 'vs hari sebelumnya' : 'vs periode sebelumnya';
+
   const scorecards = [
     {
       title: 'Alarm Impact Service',
       value: formatNumber(summary?.total_alarms),
-      subtitle: 'total data alarm',
+      delta: getImpactDelta(summary?.total_alarms, summary?.previous_total_alarms),
+      comparisonLabel,
       icon: Siren,
       accent: STATUS_COLORS.total,
       glow: 'rgba(96, 165, 250, 0.15)',
@@ -431,7 +464,8 @@ function ImpactServiceDashboard() {
     {
       title: 'Impacted Site',
       value: formatNumber(summary?.impacted_sites),
-      subtitle: 'distinct site_id terdampak',
+      delta: getImpactDelta(summary?.impacted_sites, summary?.previous_impacted_sites),
+      comparisonLabel,
       icon: Radio,
       accent: '#A78BFA',
       glow: 'rgba(167, 139, 250, 0.15)',
@@ -439,7 +473,8 @@ function ImpactServiceDashboard() {
     {
       title: 'OPEN Alarm',
       value: formatNumber(summary?.open_alarms),
-      subtitle: 'status OPEN',
+      delta: getImpactDelta(summary?.open_alarms, summary?.previous_open_alarms),
+      comparisonLabel,
       icon: AlertTriangle,
       accent: STATUS_COLORS.open,
       glow: 'rgba(239, 68, 68, 0.14)',
@@ -447,7 +482,8 @@ function ImpactServiceDashboard() {
     {
       title: 'CLEAR Alarm',
       value: formatNumber(summary?.clear_alarms),
-      subtitle: 'status CLEAR',
+      delta: getImpactDelta(summary?.clear_alarms, summary?.previous_clear_alarms),
+      comparisonLabel,
       icon: CircleCheck,
       accent: STATUS_COLORS.clear,
       glow: 'rgba(16, 185, 129, 0.15)',
@@ -455,7 +491,8 @@ function ImpactServiceDashboard() {
     {
       title: 'SOW TSEL',
       value: formatNumber(summary?.sow_tsel),
-      subtitle: 'kolom SOW = TSEL',
+      delta: getImpactDelta(summary?.sow_tsel, summary?.previous_sow_tsel),
+      comparisonLabel,
       icon: ShieldAlert,
       accent: STATUS_COLORS.warning,
       glow: 'rgba(245, 158, 11, 0.15)',
@@ -471,7 +508,6 @@ function ImpactServiceDashboard() {
     }))
     : distributions.by_nop;
 
-  const nopOrSiteTitle = selectedNop ? 'Top Impacted Sites' : 'NOP Contribution';
   const totalPages = alarms.total_pages || 0;
 
   return (
@@ -560,7 +596,7 @@ function ImpactServiceDashboard() {
           </div>
         )}
 
-        <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
           {loading && !summary ? (
             Array.from({ length: 5 }, (_, index) => <div key={index} className="skeleton h-[86px] rounded-xl" />)
           ) : (
@@ -569,10 +605,10 @@ function ImpactServiceDashboard() {
         </section>
 
         <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          <ChartCard title="Daily Alarm Trend" icon={Activity}>
+          <ChartCard title="Last 7 Days Trend" icon={Activity}>
             {dailyTrend.length ? (
               <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={dailyTrend} margin={{ top: 12, right: 18, left: 0, bottom: 0 }}>
+                <ComposedChart data={dailyTrend} margin={{ top: 12, right: 18, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={themeTokens.chartGrid} vertical={false} />
                   <XAxis dataKey="tanggal" tickFormatter={formatDateLabel} tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
                   <YAxis tick={{ fontSize: 10, fill: themeTokens.axisTick }} width={44} />
@@ -582,6 +618,23 @@ function ImpactServiceDashboard() {
                   <Bar dataKey="clear" name="CLEAR" stackId="status" fill={STATUS_COLORS.clear} radius={[4, 4, 0, 0]}>
                     <LabelList dataKey="total" position="top" formatter={formatNumber} fill="var(--text-muted)" fontSize={10} />
                   </Bar>
+                  <Line type="monotone" dataKey="total" name="Total" stroke={STATUS_COLORS.total} strokeWidth={2.5} dot={false} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            ) : <ChartEmpty />}
+          </ChartCard>
+
+          <ChartCard title={selectedNop ? 'Top Impacted Sites' : 'NOP Contribution'} icon={Users}>
+            {nopOrSiteData.length ? (
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={nopOrSiteData.slice(0, 10)} layout="vertical" margin={{ top: 6, right: 22, left: 48, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={themeTokens.chartGrid} vertical={false} />
+                  <XAxis type="number" tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
+                  <YAxis type="category" dataKey="label" width={90} tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
+                  <Tooltip content={<ImpactTooltip />} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Bar dataKey="open" name="OPEN" stackId="status" fill={STATUS_COLORS.open} radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="clear" name="CLEAR" stackId="status" fill={STATUS_COLORS.clear} radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             ) : <ChartEmpty />}
@@ -628,22 +681,6 @@ function ImpactServiceDashboard() {
                   <Bar dataKey="total" name="Total" fill={STATUS_COLORS.warning} radius={[4, 4, 0, 0]}>
                     <LabelList dataKey="total" position="top" formatter={formatNumber} fill="var(--text-muted)" fontSize={10} />
                   </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            ) : <ChartEmpty />}
-          </ChartCard>
-
-          <ChartCard title={nopOrSiteTitle} icon={Users}>
-            {nopOrSiteData.length ? (
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={nopOrSiteData.slice(0, 10)} layout="vertical" margin={{ top: 6, right: 22, left: 48, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={themeTokens.chartGrid} vertical={false} />
-                  <XAxis type="number" tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
-                  <YAxis type="category" dataKey="label" width={90} tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
-                  <Tooltip content={<ImpactTooltip />} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Bar dataKey="open" name="OPEN" stackId="status" fill={STATUS_COLORS.open} radius={[0, 4, 4, 0]} />
-                  <Bar dataKey="clear" name="CLEAR" stackId="status" fill={STATUS_COLORS.clear} radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             ) : <ChartEmpty />}
@@ -729,7 +766,7 @@ function ImpactServiceDashboard() {
             <table className="w-full text-left">
               <thead>
                 <tr>
-                  {['Tanggal', 'Site ID', 'Site Name', 'NOP', 'Alarm Name', 'Category', 'Severity', 'Aging', 'Status', 'SOW', 'Ticket', 'PIC'].map((head) => (
+                  {['Tanggal', 'Site ID', 'Site Name', 'NOP', 'Alarm Name', 'Category', 'Severity', 'Aging', 'Status', 'SOW', 'Comment'].map((head) => (
                     <th key={head} className="sticky top-0 z-10 whitespace-nowrap bg-[var(--bg-elevated)] px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                       {head}
                     </th>
@@ -740,7 +777,7 @@ function ImpactServiceDashboard() {
                 {loading ? (
                   Array.from({ length: 8 }, (_, index) => (
                     <tr key={index}>
-                      <td colSpan={12} className="px-3 py-2"><div className="skeleton h-9 rounded-lg" /></td>
+                      <td colSpan={11} className="px-3 py-2"><div className="skeleton h-9 rounded-lg" /></td>
                     </tr>
                   ))
                 ) : alarms.items.length ? (
@@ -758,16 +795,15 @@ function ImpactServiceDashboard() {
                       <td className="min-w-[220px] px-3 py-2.5 text-xs font-medium text-[var(--text-primary)]">{asDisplay(row.alarm_name)}</td>
                       <td className="min-w-[180px] px-3 py-2.5 text-xs text-[var(--text-secondary)]">{asDisplay(row.category)}</td>
                       <td className="whitespace-nowrap px-3 py-2.5"><SeverityBadge value={row.severity} /></td>
-                      <td className="whitespace-nowrap px-3 py-2.5 text-xs text-[var(--text-secondary)]">{asDisplay(row.aging_range)}</td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-xs text-[var(--text-secondary)]">{row.aging == null ? asDisplay(row.aging_range) : `${row.aging} hari`}</td>
                       <td className="whitespace-nowrap px-3 py-2.5"><StatusBadge value={row.status} /></td>
                       <td className="whitespace-nowrap px-3 py-2.5 text-xs text-[var(--text-secondary)]">{asDisplay(row.sow)}</td>
-                      <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs text-[var(--text-secondary)]">{asDisplay(row.ticket_no)}</td>
-                      <td className="whitespace-nowrap px-3 py-2.5 text-xs text-[var(--text-secondary)]">{asDisplay(row.pic_officer)}</td>
+                      <td className="min-w-[220px] px-3 py-2.5 text-xs text-[var(--text-secondary)]">{asDisplay(row.comment)}</td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={12} className="px-3 py-10 text-center text-sm text-[var(--text-muted)]">
+                    <td colSpan={11} className="px-3 py-10 text-center text-sm text-[var(--text-muted)]">
                       Tidak ada alarm untuk filter ini.
                     </td>
                   </tr>

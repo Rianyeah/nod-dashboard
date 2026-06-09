@@ -206,6 +206,11 @@ export async function fetchImpactServiceDailyTrend(params) {
   return data;
 }
 
+export async function fetchImpactServiceLast7DaysTrend(params) {
+  const { data } = await api.get('/impact-service/last-7-days-trend', { params: params });
+  return data;
+}
+
 export async function fetchImpactServiceDistributions(params) {
   const { data } = await api.get('/impact-service/distributions', { params: params });
   return data;
