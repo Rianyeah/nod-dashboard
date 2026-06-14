@@ -180,6 +180,40 @@ class ImpactServiceContractTest(unittest.TestCase):
         self.assertNotIn("ticket_no", list_model)
         self.assertNotIn("pic_officer", list_model)
 
+    def test_alarm_list_uses_whitelisted_server_side_sorting(self):
+        source = self.read_router_source()
+        endpoint = source.split("async def list_impact_service_alarms", 1)[1].split(
+            '@router.get("/alarms/{alarm_id}"',
+            1,
+        )[0]
+
+        self.assertIn("ALARM_SORT_EXPRESSIONS", source)
+        for sort_key in [
+            "tanggal",
+            "site_id",
+            "site_name",
+            "nop",
+            "alarm_name",
+            "category",
+            "severity",
+            "aging",
+            "status",
+            "sow",
+        ]:
+            with self.subTest(sort_key=sort_key):
+                self.assertRegex(source, rf'"{sort_key}"\s*:')
+
+        self.assertIn("SEVERITY_SORT_EXPRESSION", source)
+        self.assertRegex(source, r"WHEN 'Critical' THEN 1")
+        self.assertRegex(source, r"WHEN 'Major' THEN 2")
+        self.assertRegex(source, r"WHEN 'Minor' THEN 3")
+        self.assertRegex(source, r"WHEN 'Warning' THEN 4")
+        self.assertIn("def build_alarm_order_by", source)
+        self.assertIn("sort_by:", endpoint)
+        self.assertIn("sort_dir:", endpoint)
+        self.assertIn("order_by=build_alarm_order_by(sort_by, sort_dir)", endpoint)
+        self.assertIn("{order_by}", source.split('ALARMS_LIST_QUERY = """', 1)[1].split('"""', 1)[0])
+
 
 if __name__ == "__main__":
     unittest.main()

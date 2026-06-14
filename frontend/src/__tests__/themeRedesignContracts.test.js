@@ -55,8 +55,6 @@ describe('global dashboard theme redesign contracts', () => {
       'DashboardKpiCard',
       'DashboardChartPanel',
       'DashboardStatusBadge',
-      'DashboardSelect',
-      'DashboardInput',
       'DashboardPageHeader',
       'DashboardTableShell',
       'DashboardChartTooltip',
@@ -69,9 +67,6 @@ describe('global dashboard theme redesign contracts', () => {
     for (const pageName of [
       'HomePage.jsx',
       'NetworkReportingPage.jsx',
-      'ImpactServicePage.jsx',
-      'TransportQualityPage.jsx',
-      'TicketingPage.jsx',
     ]) {
       const page = src('pages', pageName);
       assert.match(page, /DashboardKpiCard|DashboardChartPanel|DashboardStatusBadge|DashboardChartTooltip/, pageName);
@@ -79,6 +74,39 @@ describe('global dashboard theme redesign contracts', () => {
       assert.doesNotMatch(page, /stroke="rgba\(148,163,184,0\.16\)"/, pageName);
       assert.doesNotMatch(page, /tick=\{\{\s*fontSize:\s*10,\s*fill:\s*'#94A3B8'\s*\}\}/, pageName);
     }
+
+    for (const [pageName, featureDirectory, chartModule] of [
+      ['ActivityEnomPage.jsx', 'activity-enom', 'ActivityEnomCharts.jsx'],
+      ['TransportQualityPage.jsx', 'transport-quality', 'TransportQualityCharts.jsx'],
+      ['TicketingPage.jsx', 'ticketing', 'TicketingCharts.jsx'],
+    ]) {
+      const page = src('pages', pageName);
+      const charts = src('features', featureDirectory, chartModule);
+      const chartConfig = src(
+        'features',
+        featureDirectory,
+        `${featureDirectory.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase())}ChartConfig.js`,
+      );
+      const surface = page + charts + chartConfig;
+
+      assert.match(page, /DashboardKpiCard|DashboardStatusBadge/, pageName);
+      assert.match(charts, /ChartContainer/, chartModule);
+      assert.match(charts, /DashboardChartTooltipContent/, chartModule);
+      assert.match(surface, /var\(--chart-/, chartModule);
+      assert.doesNotMatch(surface, /ResponsiveContainer/, chartModule);
+      assert.doesNotMatch(surface, /useDashboardThemeTokens/, chartModule);
+      assert.doesNotMatch(surface, /stroke="rgba\(148,163,184,0\.16\)"/, chartModule);
+      assert.doesNotMatch(surface, /tick=\{\{\s*fontSize:\s*10,\s*fill:\s*'#94A3B8'\s*\}\}/, chartModule);
+    }
+
+    const impactPage = src('pages', 'ImpactServicePage.jsx');
+    const impactCharts = src('features', 'impact-service', 'ImpactServiceCharts.jsx');
+    const impactKpis = src('features', 'impact-service', 'ImpactServiceKpiGrid.jsx');
+    assert.match(impactPage, /ImpactServiceCharts/);
+    assert.match(impactCharts, /ChartContainer/);
+    assert.match(impactKpis, /Card/);
+    assert.doesNotMatch(impactPage + impactCharts, /useDashboardThemeTokens/);
+    assert.doesNotMatch(impactCharts, /stroke="rgba\(148,163,184,0\.16\)"/);
 
     for (const componentName of [
       'DashboardSidebar.jsx',

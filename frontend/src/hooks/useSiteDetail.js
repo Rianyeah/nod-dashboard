@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { fetchSiteDetail, fetchSitePopup, fetchTrend } from '../services/api';
+import { fetchSiteDetail, fetchTrend } from '../services/api';
 
 /**
  * Custom hook for fetching site detail and trend data.

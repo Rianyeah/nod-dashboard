@@ -14,7 +14,6 @@ import {
   TrendingUp,
   Battery,
   Layers,
-  MapPin,
   FileDown,
 } from 'lucide-react';
 import {
@@ -28,6 +27,11 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import Breadcrumb from '../components/Breadcrumb';
+import {
+  DashboardCombobox,
+  DashboardFilterBar,
+  DashboardPeriodPicker,
+} from '../components/dashboard-filters/DashboardFilters';
 import { useDashboardThemeTokens } from '../hooks/useDashboardThemeTokens';
 import { DashboardChartPanel, DashboardChartTooltip, DashboardKpiCard } from '../components/ui/DashboardPrimitives';
 import {
@@ -798,7 +802,7 @@ export default function NetworkReportingPage() {
           </div>
 
           {/* Right — Period Selector */}
-          <div className="reporting-header-controls flex w-full flex-wrap items-center gap-2 xl:w-auto xl:flex-nowrap xl:gap-3">
+          <div className="reporting-header-controls flex w-full flex-wrap items-end gap-2 xl:w-auto xl:flex-nowrap xl:gap-3">
             <button
               type="button"
               onClick={handleExportPdf}
@@ -808,41 +812,30 @@ export default function NetworkReportingPage() {
               <FileDown className="size-3.5" />
               Export PDF
             </button>
-            <div className="flex items-center gap-1.5">
-              <MapPin className="w-3.5 h-3.5 text-[var(--text-muted)]" />
-              <div className="relative">
-                <select
-                  id="reporting-nop"
-                  value={selectedNop || ''}
-                  onChange={(e) => setSelectedNop(e.target.value || null)}
-                  className="appearance-none bg-[var(--bg-elevated)] text-[var(--text-primary)] border border-[var(--border-light)] rounded-lg pl-3 pr-8 py-2 text-sm cursor-pointer hover:bg-[var(--bg-hover)] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/40 focus:border-[var(--primary)]/40 backdrop-blur-sm min-w-[140px]"
-                >
-                  <option value="">Semua NOP</option>
-                  {nopOptions.map((n) => (
-                    <option key={n} value={n}>{n.replace('NOP ', '')}</option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none opacity-50 text-[var(--text-muted)]" />
-              </div>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider font-medium">
-                Periode
-              </span>
-              <div className="relative">
-                <select
-                  id="reporting-period"
-                  value={selectedMonth || ''}
-                  onChange={(e) => setSelectedMonth(e.target.value)}
-                  className="appearance-none bg-[var(--bg-elevated)] text-[var(--text-primary)] border border-[var(--border-light)] rounded-lg pl-3 pr-8 py-2 text-sm cursor-pointer hover:bg-[var(--bg-hover)] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/40 focus:border-[var(--primary)]/40 backdrop-blur-sm min-w-[140px]"
-                >
-                  {availableMonths.map((m) => (
-                    <option key={m} value={m}>{formatMonthLabel(m)}</option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none opacity-50 text-[var(--text-muted)]" />
-              </div>
-            </div>
+            <DashboardFilterBar className="w-full border-0 bg-transparent p-0 shadow-none sm:w-auto">
+              <DashboardCombobox
+                id="reporting-nop"
+                label="NOP"
+                value={selectedNop || ''}
+                onChange={(value) => setSelectedNop(value || null)}
+                options={nopOptions.map((option) => ({
+                  value: option,
+                  label: option.replace(/^NOP\s+/i, ''),
+                }))}
+                allLabel="Semua NOP"
+              />
+              <DashboardPeriodPicker
+                id="reporting-period"
+                label="Periode"
+                value={selectedMonth || ''}
+                onChange={setSelectedMonth}
+                options={availableMonths.map((month) => ({
+                  value: month,
+                  label: formatMonthLabel(month),
+                }))}
+                includeAll={false}
+              />
+            </DashboardFilterBar>
           </div>
         </div>
       </header>

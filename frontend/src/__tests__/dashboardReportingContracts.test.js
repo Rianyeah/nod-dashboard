@@ -33,19 +33,15 @@ describe('dashboard and reporting visual/data contracts', () => {
     assert.doesNotMatch(map, /bg-\[#0F172A\]/);
   });
 
-  it('keeps the bottom table filter popover inside the viewport', () => {
+  it('uses the adaptive shadcn sheet for bottom table filters', () => {
     const filterPanel = src('components', 'FilterPanel.jsx');
 
-    assert.match(filterPanel, /buttonRef/);
-    assert.match(filterPanel, /panelPosition/);
-    assert.match(filterPanel, /createPortal/);
-    assert.match(filterPanel, /document\.body/);
-    assert.match(filterPanel, /className="fixed/);
-    assert.match(filterPanel, /bottom:\s*panelPosition\.bottom/);
-    assert.match(filterPanel, /max-h-\[min\(.*100vh/);
-    assert.match(filterPanel, /overflow-y-auto/);
-    assert.match(filterPanel, /bg-\[var\(--bg-surface\)\]/);
-    assert.match(filterPanel, /border-\[var\(--border\)\]/);
+    assert.match(filterPanel, /DashboardFilterSheet/);
+    assert.match(filterPanel, /DashboardCombobox/);
+    assert.match(filterPanel, /DashboardFilterChips/);
+    assert.match(filterPanel, /onApply=\{onFilterChange\}/);
+    assert.doesNotMatch(filterPanel, /createPortal/);
+    assert.doesNotMatch(filterPanel, /<select/);
   });
 
   it('wires reporting NOP filter through scorecards, chart, and tables', () => {
@@ -200,33 +196,40 @@ describe('dashboard and reporting visual/data contracts', () => {
     const impactPagePath = srcPath('pages', 'ImpactServicePage.jsx');
     assert.equal(existsSync(impactPagePath), true);
     const page = readFileSync(impactPagePath, 'utf8');
+    const filters = src('features', 'impact-service', 'ImpactServiceFilters.jsx');
+    const states = src('features', 'impact-service', 'ImpactServiceStates.jsx');
     const api = src('services', 'api.js');
 
     assert.match(app, /ImpactServicePage/);
+    assert.match(app, /React\.lazy/);
     assert.match(app, /path="\/impact-service"/);
     assert.match(sidebar, /to: '\/impact-service'/);
     assert.match(sidebar, /Impact Service/);
 
-    assert.match(page, /id="impact-start-date"/);
-    assert.match(page, /id="impact-end-date"/);
-    assert.match(page, /id="impact-nop"/);
+    assert.match(filters, /id="impact-date-range"/);
+    assert.match(filters, /id="impact-nop"/);
+    assert.match(filters, /DashboardDateRangePicker/);
+    assert.match(filters, /DashboardCombobox/);
+    assert.match(filters, /Reset/);
+    assert.doesNotMatch(filters, /max=/);
     assert.match(page, /default_date:\s*filters\?\.default_date\s*\|\|\s*null/);
     assert.match(page, /has_today_data:\s*Boolean\(filters\?\.has_today_data\)/);
     assert.match(page, /const defaultDate = [a-zA-Z0-9_]+\.default_date \|\| [a-zA-Z0-9_]+\.max_date/);
     assert.match(page, /setStartDate\(defaultDate\)/);
     assert.match(page, /setEndDate\(defaultDate\)/);
-    assert.doesNotMatch(page, /max=\{filterOptions\.max_date \|\| undefined\}/);
-    assert.match(page, /handleStartDateChange/);
-    assert.match(page, /handleEndDateChange/);
+    assert.match(page, /handleApplyRange/);
+    assert.match(page, /handleReset/);
     assert.match(page, /ImpactServiceErrorBoundary/);
-    assert.match(page, /componentDidCatch/);
-    assert.match(page, /fetchImpactServiceSummary\(queryParams\)/);
-    assert.match(page, /fetchImpactServiceDailyTrend\(queryParams\)/);
-    assert.match(page, /fetchImpactServiceDistributions\(queryParams\)/);
-    assert.match(page, /fetchImpactServiceTopAlarms\(queryParams\)/);
-    assert.match(page, /fetchImpactServiceTopSites\(queryParams\)/);
-    assert.match(page, /fetchImpactServiceAlarms\(queryParams\)/);
-    assert.match(page, /fetchImpactServiceAlarmDetail\(selectedAlarmId,\s*queryParams\)/);
+    assert.match(states, /componentDidCatch/);
+    assert.match(page, /fetchImpactServiceSummary\(dashboardParams\)/);
+    assert.match(page, /fetchImpactServiceDailyTrend\(trendParams\)/);
+    assert.match(page, /fetchImpactServiceDistributions\(dashboardParams\)/);
+    assert.match(page, /fetchImpactServiceTopAlarms\(dashboardParams\)/);
+    assert.match(page, /fetchImpactServiceTopSites\(dashboardParams\)/);
+    assert.match(page, /fetchImpactServiceAlarms\(tableParams\)/);
+    assert.match(page, /fetchImpactServiceAlarmDetail\(selectedAlarmId,\s*detailParams\)/);
+    assert.match(page, /getSevenDayWindow\(endDate\)/);
+    assert.doesNotMatch(page, /fetchImpactServiceLast7DaysTrend/);
 
     for (const fn of [
       'fetchImpactServiceFilters',
@@ -252,6 +255,12 @@ describe('dashboard and reporting visual/data contracts', () => {
     const impactPagePath = srcPath('pages', 'ImpactServicePage.jsx');
     assert.equal(existsSync(impactPagePath), true);
     const page = readFileSync(impactPagePath, 'utf8');
+    const charts = src('features', 'impact-service', 'ImpactServiceCharts.jsx');
+    const kpis = src('features', 'impact-service', 'ImpactServiceKpiGrid.jsx');
+    const topAlarms = src('features', 'impact-service', 'ImpactServiceTopAlarms.jsx');
+    const table = src('features', 'impact-service', 'ImpactServiceAlarmTable.jsx');
+    const dialog = src('features', 'impact-service', 'ImpactServiceAlarmDialog.jsx');
+    const feature = [page, charts, kpis, topAlarms, table, dialog].join('\n');
 
     for (const label of [
       'Alarm Impact Service',
@@ -268,26 +277,26 @@ describe('dashboard and reporting visual/data contracts', () => {
       'Top Alarm Names',
       'Alarm Detail Table',
     ]) {
-      assert.match(page, new RegExp(label));
+      assert.match(feature, new RegExp(label));
     }
 
-    assert.match(page, /ResponsiveContainer/);
-    assert.match(page, /ComposedChart/);
-    assert.match(page, /fetchImpactServiceLast7DaysTrend\(last7DaysParams\)/);
-    assert.match(page, /row\.id/);
+    assert.match(charts, /ChartContainer/);
+    assert.match(charts, /ComposedChart/);
+    assert.match(charts, /accessibilityLayer/);
+    assert.doesNotMatch(page, /fetchImpactServiceLast7DaysTrend/);
+    assert.match(table, /row\.id/);
     assert.match(page, /setSelectedAlarmId/);
 
-    const chartSection = page.split('Last 7 Days Trend', 2)[1].split('Category Distribution', 1)[0];
-    assert.ok(chartSection.indexOf('NOP Contribution') < chartSection.indexOf('Status by Severity'));
-
-    const tableHeaders = page.split('Alarm Detail Table', 2)[1].split('<tbody', 1)[0];
-    assert.match(tableHeaders, /Comment/);
-    assert.doesNotMatch(tableHeaders, /Ticket/);
-    assert.doesNotMatch(tableHeaders, /PIC/);
+    assert.ok(charts.indexOf('NOP Contribution') < charts.indexOf('Status by Severity'));
+    assert.match(table, /'Comment'/);
+    assert.doesNotMatch(table.split('const headers', 2)[1].split('];', 1)[0], /Ticket|PIC/);
+    assert.match(dialog, /DialogTitle/);
   });
 
   it('shows equal-period delta and percentage on every Impact Service scorecard', () => {
     const page = src('pages', 'ImpactServicePage.jsx');
+    const kpis = src('features', 'impact-service', 'ImpactServiceKpiGrid.jsx');
+    const feature = `${page}\n${kpis}`;
 
     for (const contract of [
       'getImpactDelta',
@@ -301,16 +310,16 @@ describe('dashboard and reporting visual/data contracts', () => {
       'vs hari sebelumnya',
       'vs periode sebelumnya',
     ]) {
-      assert.match(page, new RegExp(contract));
+      assert.match(feature, new RegExp(contract));
     }
 
-    assert.match(page, /previousValue === 0 \? null/);
-    assert.match(page, /rate == null \? '-'/);
-    assert.match(page, /text-emerald-400/);
-    assert.match(page, /text-red-400/);
-    assert.match(page, /text-\[var\(--text-muted\)\]/);
-    assert.match(page, /xl:grid-cols-3 2xl:grid-cols-5/);
-    assert.doesNotMatch(page, /whitespace-nowrap text-\[11px\] font-semibold leading-snug/);
+    assert.match(kpis, /previousValue === 0 \? null/);
+    assert.match(kpis, /rate == null/);
+    assert.match(kpis, /text-emerald-400/);
+    assert.match(kpis, /text-red-400/);
+    assert.match(kpis, /text-\[var\(--text-muted\)\]/);
+    assert.match(kpis, /xl:grid-cols-3 2xl:grid-cols-5/);
+    assert.doesNotMatch(kpis, /whitespace-nowrap text-\[11px\] font-semibold leading-snug/);
 
     for (const oldSubtitle of [
       'total data alarm',
@@ -319,7 +328,7 @@ describe('dashboard and reporting visual/data contracts', () => {
       'status CLEAR',
       'kolom SOW = TSEL',
     ]) {
-      assert.doesNotMatch(page, new RegExp(oldSubtitle));
+      assert.doesNotMatch(feature, new RegExp(oldSubtitle));
     }
   });
 });

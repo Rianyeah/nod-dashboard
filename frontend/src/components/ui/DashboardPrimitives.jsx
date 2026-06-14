@@ -1,5 +1,3 @@
-import { ChevronDown } from 'lucide-react';
-
 const TONE_CLASS = {
   critical: {
     text: 'text-[var(--danger)]',
@@ -117,49 +115,6 @@ export function DashboardStatusBadge({ children, tone = 'neutral', pulse = false
     >
       {children}
     </span>
-  );
-}
-
-export function DashboardSelect({ id, label, value, onChange, options = [], placeholder = 'Semua', className = '' }) {
-  return (
-    <label className={`flex min-w-[145px] flex-1 flex-col gap-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] ${className}`}>
-      {label}
-      <span className="relative">
-        <select
-          id={id}
-          value={value ?? ''}
-          onChange={onChange}
-          className="dashboard-control min-h-9 w-full appearance-none rounded-lg px-3 py-2 pr-8 text-xs font-medium normal-case tracking-normal transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/35"
-        >
-          {placeholder != null && <option value="">{placeholder}</option>}
-          {options.map((option) => {
-            const optionValue = typeof option === 'object' ? option.value : option;
-            const optionLabel = typeof option === 'object' ? option.label : option;
-            return <option key={optionValue} value={optionValue}>{optionLabel}</option>;
-          })}
-        </select>
-        <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--text-muted)]" />
-      </span>
-    </label>
-  );
-}
-
-export function DashboardInput({ id, label, className = '', inputClassName = '', ...props }) {
-  const input = (
-    <input
-      id={id}
-      className={`dashboard-control min-h-9 w-full rounded-lg px-3 py-2 text-xs font-medium text-[var(--text-primary)] placeholder:text-[var(--text-muted)] transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/35 ${inputClassName}`}
-      {...props}
-    />
-  );
-
-  if (!label) return input;
-
-  return (
-    <label className={`flex min-w-[145px] flex-1 flex-col gap-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] ${className}`}>
-      {label}
-      {input}
-    </label>
   );
 }
 

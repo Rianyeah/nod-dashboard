@@ -14,6 +14,7 @@ export function InsideBarValueLabel({
 
   return (
     <text
+      data-chart-value-label
       x={Number(x) + Number(width) / 2}
       y={Number(y) + Number(height) / 2}
       fill={color}
@@ -33,6 +34,7 @@ export function TopBarValueLabel({ x = 0, y = 0, width = 0, value }) {
 
   return (
     <text
+      data-chart-value-label
       x={Number(x) + Number(width) / 2}
       y={Number(y) - 7}
       fill="var(--foreground)"
@@ -51,6 +53,7 @@ export function EndBarValueLabel({ x = 0, y = 0, width = 0, height = 0, value })
 
   return (
     <text
+      data-chart-value-label
       x={Number(x) + Number(width) + 8}
       y={Number(y) + Number(height) / 2}
       fill="var(--foreground)"

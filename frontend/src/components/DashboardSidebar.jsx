@@ -7,6 +7,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardList,
+  Database,
   Home,
   LogOut,
   Map,
@@ -28,6 +29,7 @@ const NAV_ITEMS = [
   { to: '/activity-enom', label: 'Activity ENOM', icon: ClipboardList },
   { to: '/transport-quality', label: 'Transport Quality', icon: Activity },
   { to: '/ticketing', label: 'Ticketing', icon: TicketCheck },
+  { to: '/data-potensi', label: 'Data Potensi', icon: Database },
 ];
 
 function SidebarNavItem({ item, collapsed }) {
@@ -86,7 +88,9 @@ export default function DashboardSidebar({ collapsed, onToggle, lastUpdates }) {
 
   return (
     <aside
+      data-testid="dashboard-sidebar"
       className={[
+        'dashboard-sidebar',
         'fixed inset-y-0 left-0 z-50 flex flex-col border-r border-[var(--border)] bg-[var(--bg-sidebar)] backdrop-blur-xl transition-[width] duration-200',
         collapsed ? 'w-[68px]' : 'w-[260px]',
       ].join(' ')}
@@ -183,7 +187,7 @@ export function AppShell({ children }) {
     <DashboardSidebarContext.Provider value={contextValue}>
       <div className="min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)]">
         <DashboardSidebar collapsed={effectiveCollapsed} onToggle={handleToggle} lastUpdates={lastUpdates} />
-      <div className={`min-h-screen transition-[padding] duration-200 ${effectiveCollapsed ? 'pl-[68px]' : 'pl-[260px]'}`}>
+        <div className={`dashboard-shell-content min-h-screen transition-[padding] duration-200 ${effectiveCollapsed ? 'pl-[68px]' : 'pl-[260px]'}`}>
           {children}
         </div>
       </div>

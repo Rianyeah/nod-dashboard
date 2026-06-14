@@ -1,16 +1,10 @@
-import { Component, useCallback, useEffect, useMemo, useState } from 'react';
+import { Component, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ArrowCounterClockwiseIcon } from '@phosphor-icons/react';
 import {
-  Activity,
   AlertTriangle,
   ArrowLeft,
-  BarChart3,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  ChevronUp,
   CircleAlert,
-  Filter,
   Gauge,
   Network,
   Radio,
@@ -18,26 +12,22 @@ import {
   ShieldAlert,
   Signal,
   Timer,
-  Waves,
 } from 'lucide-react';
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  LabelList,
-  Legend,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
 import Breadcrumb from '../components/Breadcrumb';
-import { useDashboardThemeTokens } from '../hooks/useDashboardThemeTokens';
 import {
-  DashboardChartPanel,
-  DashboardChartTooltip,
+  DashboardCombobox,
+  DashboardFilterBar,
+  DashboardFilterChips,
+  DashboardFilterPopover,
+  DashboardFilterSelect,
+  DashboardPagination,
+  DashboardPeriodPicker,
+} from '../components/dashboard-filters/DashboardFilters';
+import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert';
+import { Button } from '../components/ui/button';
+import { TRANSPORT_CHART_COLORS } from '../features/transport-quality/transportQualityChartConfig';
+import { TransportQualityCharts } from '../features/transport-quality/TransportQualityCharts';
+import {
   DashboardKpiCard,
   DashboardStatusBadge,
 } from '../components/ui/DashboardPrimitives';
@@ -54,16 +44,14 @@ import { formatNumber } from '../utils/formatters';
 const PL_THRESHOLD = 1;
 const LATENCY_THRESHOLD = 5;
 const TABLE_LIMIT = 20;
-
-const QUALITY_COLORS = {
-  packetLoss: '#EF4444',
-  latency: '#F59E0B',
-  jitter: '#22D3EE',
-  p1: '#DC2626',
-  p2: '#F59E0B',
-  normal: '#10B981',
-  total: '#60A5FA',
-  muted: '#94A3B8',
+const EMPTY_ADVANCED_FILTERS = {
+  kabupaten: '',
+  transport_type: '',
+  thi_status: '',
+  distribution_pl: '',
+  pl_status_0_1_pct: '',
+  distribution_lat: '',
+  jitter_status: '',
 };
 
 class TransportQualityErrorBoundary extends Component {
@@ -129,55 +117,9 @@ function asDisplay(value) {
   return String(value);
 }
 
-function optionList(values = []) {
-  return values.filter((value) => value != null && value !== '');
-}
-
 function Scorecard({ title, value, subtitle, icon: Icon, accent, glow }) {
   return (
     <DashboardKpiCard title={title} value={value} subtitle={subtitle} icon={Icon} accent={accent} glow={glow} />
-  );
-}
-
-function ChartCard({ title, icon: Icon, children, action }) {
-  return (
-    <DashboardChartPanel title={title} icon={Icon} action={action}>
-      {children}
-    </DashboardChartPanel>
-  );
-}
-
-function ChartEmpty({ label = 'Data belum tersedia untuk filter ini.' }) {
-  return (
-    <div className="flex h-[220px] items-center justify-center rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg-elevated)]/40">
-      <p className="text-xs text-[var(--text-muted)]">{label}</p>
-    </div>
-  );
-}
-
-function TransportTooltip({ active, payload, label }) {
-  if (!active || !payload?.length) return null;
-  return (
-    <DashboardChartTooltip active={active} payload={payload} label={label} valueFormatter={formatNumber} />
-  );
-}
-
-function SelectFilter({ id, label, value, onChange, options, placeholder = 'Semua' }) {
-  return (
-    <label className="flex min-w-[150px] flex-1 flex-col gap-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-      {label}
-      <select
-        id={id}
-        value={value || ''}
-        onChange={(event) => onChange(event.target.value)}
-        className="min-h-9 rounded-lg border border-[var(--border-light)] bg-[var(--bg-elevated)] px-3 py-2 text-xs font-medium normal-case tracking-normal text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/40"
-      >
-        <option value="">{placeholder}</option>
-        {optionList(options).map((option) => (
-          <option key={option} value={option}>{option}</option>
-        ))}
-      </select>
-    </label>
   );
 }
 
@@ -206,8 +148,8 @@ function MetricCell({ value, bad, suffix = '', digits = 2 }) {
 
 function TransportQualityDashboard() {
   const navigate = useNavigate();
-  const themeTokens = useDashboardThemeTokens();
   const [filterOptions, setFilterOptions] = useState({
+    default_date: '',
     periods: [],
     nops: [],
     kabupaten: [],
@@ -219,16 +161,8 @@ function TransportQualityDashboard() {
     jitter_statuses: [],
   });
   const [selectedDate, setSelectedDate] = useState('');
-  const [filters, setFilters] = useState({
-    nop: '',
-    kabupaten: '',
-    transport_type: '',
-    thi_status: '',
-    distribution_pl: '',
-    pl_status_0_1_pct: '',
-    distribution_lat: '',
-    jitter_status: '',
-  });
+  const [selectedNop, setSelectedNop] = useState('');
+  const [advancedFilters, setAdvancedFilters] = useState(EMPTY_ADVANCED_FILTERS);
   const [page, setPage] = useState(1);
   const [summary, setSummary] = useState(null);
   const [trend, setTrend] = useState([]);
@@ -236,8 +170,8 @@ function TransportQualityDashboard() {
   const [breakdowns, setBreakdowns] = useState({ by_nop: [], by_kabupaten: [], by_transport_type: [] });
   const [prioritySites, setPrioritySites] = useState({ items: [], total: 0, page: 1, limit: TABLE_LIMIT, total_pages: 0 });
   const [filtersLoaded, setFiltersLoaded] = useState(false);
-  const [filtersCollapsed, setFiltersCollapsed] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [dashboardLoading, setDashboardLoading] = useState(true);
+  const [tableLoading, setTableLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -248,6 +182,7 @@ function TransportQualityDashboard() {
         const periods = Array.isArray(data?.periods) ? data.periods : [];
         const latestDate = data?.max_date || periods[0]?.date || '';
         setFilterOptions({
+          default_date: latestDate,
           periods,
           nops: data?.nops || [],
           kabupaten: data?.kabupaten || [],
@@ -265,76 +200,109 @@ function TransportQualityDashboard() {
         console.error('Failed to load Transport Quality filters:', err);
         if (!cancelled) {
           setError('Gagal memuat filter Transport Quality.');
-          setLoading(false);
+          setDashboardLoading(false);
+          setTableLoading(false);
           setFiltersLoaded(true);
         }
       });
     return () => { cancelled = true; };
   }, []);
 
-  const baseQueryParams = useMemo(() => ({
+  const dashboardParams = useMemo(() => ({
     date: selectedDate || undefined,
-    nop: filters.nop || undefined,
-    kabupaten: filters.kabupaten || undefined,
-    transport_type: filters.transport_type || undefined,
-    thi_status: filters.thi_status || undefined,
-    distribution_pl: filters.distribution_pl || undefined,
-    pl_status_0_1_pct: filters.pl_status_0_1_pct || undefined,
-    distribution_lat: filters.distribution_lat || undefined,
-    jitter_status: filters.jitter_status || undefined,
-  }), [filters, selectedDate]);
+    nop: selectedNop || undefined,
+    kabupaten: advancedFilters.kabupaten || undefined,
+    transport_type: advancedFilters.transport_type || undefined,
+    thi_status: advancedFilters.thi_status || undefined,
+    distribution_pl: advancedFilters.distribution_pl || undefined,
+    pl_status_0_1_pct: advancedFilters.pl_status_0_1_pct || undefined,
+    distribution_lat: advancedFilters.distribution_lat || undefined,
+    jitter_status: advancedFilters.jitter_status || undefined,
+  }), [advancedFilters, selectedDate, selectedNop]);
 
-  const tableQueryParams = useMemo(() => ({
-    ...baseQueryParams,
+  const tableParams = useMemo(() => ({
+    ...dashboardParams,
     page,
     limit: TABLE_LIMIT,
-  }), [baseQueryParams, page]);
+  }), [dashboardParams, page]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setPage(1);
-  }, [baseQueryParams]);
+  }, [dashboardParams]);
 
   useEffect(() => {
     if (!filtersLoaded || !selectedDate) return;
     let cancelled = false;
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLoading(true);
+    setDashboardLoading(true);
     setError(null);
     Promise.all([
-      fetchTransportQualitySummary(baseQueryParams),
-      fetchTransportQualityTrend(baseQueryParams),
-      fetchTransportQualityDistributions(baseQueryParams),
-      fetchTransportQualityBreakdowns(baseQueryParams),
-      fetchTransportQualityPrioritySites(tableQueryParams),
+      fetchTransportQualitySummary(dashboardParams),
+      fetchTransportQualityTrend(dashboardParams),
+      fetchTransportQualityDistributions(dashboardParams),
+      fetchTransportQualityBreakdowns(dashboardParams),
     ])
-      .then(([nextSummary, nextTrend, nextDistributions, nextBreakdowns, nextPrioritySites]) => {
+      .then(([nextSummary, nextTrend, nextDistributions, nextBreakdowns]) => {
         if (cancelled) return;
         setSummary(nextSummary);
         setTrend(Array.isArray(nextTrend) ? nextTrend : []);
         setDistributions(nextDistributions || { by_packet_loss: [], by_latency: [], by_jitter: [] });
         setBreakdowns(nextBreakdowns || { by_nop: [], by_kabupaten: [], by_transport_type: [] });
-        setPrioritySites(nextPrioritySites || { items: [], total: 0, page: 1, limit: TABLE_LIMIT, total_pages: 0 });
       })
       .catch((err) => {
         console.error('Failed to load Transport Quality dashboard:', err);
         if (!cancelled) setError('Gagal memuat data Transport Quality.');
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setDashboardLoading(false);
       });
     return () => { cancelled = true; };
-  }, [baseQueryParams, filtersLoaded, selectedDate, tableQueryParams]);
+  }, [dashboardParams, filtersLoaded, selectedDate]);
+
+  useEffect(() => {
+    if (!filtersLoaded || !selectedDate) return;
+    let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setTableLoading(true);
+    fetchTransportQualityPrioritySites(tableParams)
+      .then((nextPrioritySites) => {
+        if (!cancelled) {
+          setPrioritySites(nextPrioritySites || {
+            items: [],
+            total: 0,
+            page: 1,
+            limit: TABLE_LIMIT,
+            total_pages: 0,
+          });
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to load Transport Quality priority sites:', err);
+        if (!cancelled) setError('Gagal memuat Priority Site List.');
+      })
+      .finally(() => {
+        if (!cancelled) setTableLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [filtersLoaded, selectedDate, tableParams]);
 
   const selectedPeriod = useMemo(
     () => filterOptions.periods.find((period) => period.date === selectedDate),
     [filterOptions.periods, selectedDate],
   );
 
-  const setFilterValue = useCallback((key, value) => {
-    setFilters((current) => ({ ...current, [key]: value }));
-  }, []);
+  const resetFilters = () => {
+    setSelectedDate(filterOptions.default_date || filterOptions.periods[0]?.date || '');
+    setSelectedNop('');
+    setAdvancedFilters({ ...EMPTY_ADVANCED_FILTERS });
+    setPage(1);
+  };
+
+  const removeAdvancedFilter = (key) => {
+    setAdvancedFilters((current) => ({ ...current, [key]: '' }));
+  };
 
   const scorecards = useMemo(() => [
     {
@@ -342,7 +310,7 @@ function TransportQualityDashboard() {
       value: formatNumber(summary?.total_sites || 0),
       subtitle: `${formatNumber(summary?.total_records || 0)} records selected`,
       icon: Network,
-      accent: QUALITY_COLORS.total,
+      accent: TRANSPORT_CHART_COLORS.total,
       glow: 'rgba(96, 165, 250, 0.12)',
     },
     {
@@ -350,7 +318,7 @@ function TransportQualityDashboard() {
       value: formatNumber(summary?.pl_over_1_sites || 0),
       subtitle: `threshold packet loss ${PL_THRESHOLD}%`,
       icon: Signal,
-      accent: QUALITY_COLORS.packetLoss,
+      accent: TRANSPORT_CHART_COLORS.packetLoss,
       glow: 'rgba(239, 68, 68, 0.12)',
     },
     {
@@ -358,7 +326,7 @@ function TransportQualityDashboard() {
       value: formatNumber(summary?.latency_over_5_sites || 0),
       subtitle: `threshold latency ${LATENCY_THRESHOLD}ms`,
       icon: Timer,
-      accent: QUALITY_COLORS.latency,
+      accent: TRANSPORT_CHART_COLORS.latency,
       glow: 'rgba(245, 158, 11, 0.12)',
     },
     {
@@ -366,7 +334,7 @@ function TransportQualityDashboard() {
       value: formatNumber(summary?.flag_pl_fail_sites || 0),
       subtitle: 'high priority packet loss',
       icon: CircleAlert,
-      accent: QUALITY_COLORS.p1,
+      accent: TRANSPORT_CHART_COLORS.p1,
       glow: 'rgba(220, 38, 38, 0.12)',
     },
     {
@@ -374,7 +342,7 @@ function TransportQualityDashboard() {
       value: formatNumber(summary?.thi_fail_sites || 0),
       subtitle: 'Transport Healthy Index',
       icon: ShieldAlert,
-      accent: QUALITY_COLORS.p1,
+      accent: TRANSPORT_CHART_COLORS.p1,
       glow: 'rgba(220, 38, 38, 0.12)',
     },
     {
@@ -382,7 +350,7 @@ function TransportQualityDashboard() {
       value: formatNumber(summary?.p1_sites || 0),
       subtitle: `${formatNumber(summary?.p2_sites || 0)} P2 threshold sites`,
       icon: AlertTriangle,
-      accent: QUALITY_COLORS.p1,
+      accent: TRANSPORT_CHART_COLORS.p1,
       glow: 'rgba(220, 38, 38, 0.14)',
     },
   ], [summary]);
@@ -391,9 +359,9 @@ function TransportQualityDashboard() {
 
   return (
     <div className="flex min-h-screen flex-col bg-[var(--bg-base)] text-[var(--text-primary)]">
-      <header className="border-b border-[var(--border)] bg-gradient-to-r from-[var(--bg-base)] via-[var(--bg-surface)] to-[var(--bg-base)] px-6 py-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+      <header className="border-b border-[var(--border)] bg-gradient-to-r from-[var(--bg-base)] via-[var(--bg-surface)] to-[var(--bg-base)] px-4 py-3 lg:px-6">
+        <div className="flex flex-wrap items-end justify-between gap-3 lg:flex-nowrap">
+          <div className="flex min-w-0 items-center gap-3 lg:shrink-0">
             <button
               type="button"
               onClick={() => navigate('/home')}
@@ -402,21 +370,131 @@ function TransportQualityDashboard() {
             >
               <ArrowLeft className="size-4" />
             </button>
-            <div>
+            <div className="min-w-0">
               <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight">
                 <Radio className="size-5 text-[var(--primary-light)]" />
                 Transport Quality
               </h1>
-              <p className="text-xs text-[var(--text-muted)]">
+              <p className="truncate text-xs text-[var(--text-muted)]">
                 Packet loss, latency, jitter, and Transport Healthy Index monitoring.
               </p>
             </div>
           </div>
-          <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)]/70 px-3 py-2 text-right">
-            <p className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">Last update</p>
-            <p className="font-mono text-xs font-semibold text-[var(--primary-light)]">
-              {selectedPeriod?.label || formatDateLabel(selectedDate)}
-            </p>
+          <div className="flex w-full flex-wrap items-end justify-end gap-2 lg:w-auto lg:flex-nowrap">
+            <DashboardFilterBar
+              className="w-full border-0 bg-transparent p-0 shadow-none backdrop-blur-none lg:w-auto"
+              actions={(
+                <>
+                  <DashboardFilterPopover
+                    title="Filter kualitas lanjutan"
+                    description="Tujuh filter kualitas diterapkan bersamaan setelah menekan Terapkan."
+                    values={advancedFilters}
+                    onApply={setAdvancedFilters}
+                    onReset={() => ({ ...EMPTY_ADVANCED_FILTERS })}
+                    testId="transport-filter-sheet"
+                  >
+                    {({ draftValues, setDraftValue }) => (
+                      <>
+                        <DashboardCombobox
+                          id="transport-kabupaten"
+                          label="Kabupaten"
+                          value={draftValues.kabupaten}
+                          onChange={(value) => setDraftValue('kabupaten', value)}
+                          options={filterOptions.kabupaten}
+                          allLabel="Semua Kabupaten"
+                        />
+                        <DashboardFilterSelect
+                          id="transport-type"
+                          label="Transport Type"
+                          value={draftValues.transport_type}
+                          onChange={(value) => setDraftValue('transport_type', value)}
+                          options={filterOptions.transport_types}
+                        />
+                        <DashboardFilterSelect
+                          id="transport-thi-status"
+                          label="THI Status"
+                          value={draftValues.thi_status}
+                          onChange={(value) => setDraftValue('thi_status', value)}
+                          options={filterOptions.thi_statuses}
+                        />
+                        <DashboardFilterSelect
+                          id="transport-distribution-pl"
+                          label="Distribution PL"
+                          value={draftValues.distribution_pl}
+                          onChange={(value) => setDraftValue('distribution_pl', value)}
+                          options={filterOptions.distribution_pl}
+                        />
+                        <DashboardFilterSelect
+                          id="transport-pl-status"
+                          label="PL Status 0.1%"
+                          value={draftValues.pl_status_0_1_pct}
+                          onChange={(value) => setDraftValue('pl_status_0_1_pct', value)}
+                          options={filterOptions.pl_status_0_1_pct}
+                        />
+                        <DashboardFilterSelect
+                          id="transport-distribution-lat"
+                          label="Distribution Lat"
+                          value={draftValues.distribution_lat}
+                          onChange={(value) => setDraftValue('distribution_lat', value)}
+                          options={filterOptions.distribution_lat}
+                        />
+                        <DashboardFilterSelect
+                          id="transport-jitter-status"
+                          label="Jitter Status"
+                          value={draftValues.jitter_status}
+                          onChange={(value) => setDraftValue('jitter_status', value)}
+                          options={filterOptions.jitter_statuses}
+                        />
+                      </>
+                    )}
+                  </DashboardFilterPopover>
+                  <Button type="button" variant="ghost" size="sm" onClick={resetFilters}>
+                    <ArrowCounterClockwiseIcon data-icon="inline-start" />
+                    Reset
+                  </Button>
+                </>
+              )}
+              chips={(
+                <DashboardFilterChips
+                  items={[
+                    { key: 'kabupaten', label: 'Kabupaten', value: advancedFilters.kabupaten },
+                    { key: 'transport_type', label: 'Transport', value: advancedFilters.transport_type },
+                    { key: 'thi_status', label: 'THI', value: advancedFilters.thi_status },
+                    { key: 'distribution_pl', label: 'Distribution PL', value: advancedFilters.distribution_pl },
+                    { key: 'pl_status_0_1_pct', label: 'PL 0.1%', value: advancedFilters.pl_status_0_1_pct },
+                    { key: 'distribution_lat', label: 'Distribution Lat', value: advancedFilters.distribution_lat },
+                    { key: 'jitter_status', label: 'Jitter', value: advancedFilters.jitter_status },
+                  ]}
+                  onRemove={removeAdvancedFilter}
+                />
+              )}
+            >
+              <DashboardPeriodPicker
+                id="transport-date"
+                label="Date / Week"
+                value={selectedDate}
+                onChange={setSelectedDate}
+                options={filterOptions.periods.map((period) => ({
+                  value: period.date,
+                  label: period.label,
+                }))}
+                includeAll={false}
+              />
+              <DashboardCombobox
+                id="transport-nop"
+                label="NOP"
+                value={selectedNop}
+                onChange={setSelectedNop}
+                options={filterOptions.nops}
+                allLabel="Semua NOP"
+              />
+            </DashboardFilterBar>
+            <div className="shrink-0 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)]/70 px-3 py-2 text-right">
+              <p className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">Last update</p>
+              <p className="font-mono text-xs font-semibold text-[var(--primary-light)]">
+                {selectedPeriod?.label || formatDateLabel(selectedDate)}
+              </p>
+            </div>
           </div>
         </div>
       </header>
@@ -425,168 +503,27 @@ function TransportQualityDashboard() {
 
       <main className="flex-1 space-y-4 overflow-y-auto p-4">
         {error && (
-          <div className="rounded-lg border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-            {error}
-          </div>
+          <Alert variant="destructive">
+            <AlertTitle>Data tidak dapat diperbarui</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         )}
 
-        <section className="glass-card p-4">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <Filter className="size-4 text-[var(--primary-light)]" />
-              <h2 className="text-sm font-semibold tracking-wide">Global Filters</h2>
-            </div>
-            <button
-              type="button"
-              aria-expanded={!filtersCollapsed}
-              onClick={() => setFiltersCollapsed((value) => !value)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border-light)] bg-[var(--bg-elevated)] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--primary)]/30 hover:text-[var(--primary-light)]"
-            >
-              {filtersCollapsed ? <ChevronDown className="size-3.5" /> : <ChevronUp className="size-3.5" />}
-              {filtersCollapsed ? 'Show Filter' : 'Collapse Filter'}
-            </button>
-          </div>
-          {!filtersCollapsed && (
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-3 xl:grid-cols-5">
-            <label className="flex min-w-[170px] flex-1 flex-col gap-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-              Date / Week
-              <select
-                id="transport-date"
-                value={selectedDate}
-                onChange={(event) => setSelectedDate(event.target.value)}
-                className="min-h-9 rounded-lg border border-[var(--border-light)] bg-[var(--bg-elevated)] px-3 py-2 text-xs font-medium normal-case tracking-normal text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/40"
-              >
-                {filterOptions.periods.map((period) => (
-                  <option key={period.date} value={period.date}>{period.label}</option>
-                ))}
-              </select>
-            </label>
-            <SelectFilter id="transport-nop" label="NOP" value={filters.nop} options={filterOptions.nops} onChange={(value) => setFilterValue('nop', value)} />
-            <SelectFilter id="transport-kabupaten" label="Kabupaten" value={filters.kabupaten} options={filterOptions.kabupaten} onChange={(value) => setFilterValue('kabupaten', value)} />
-            <SelectFilter id="transport-type" label="Transport Type" value={filters.transport_type} options={filterOptions.transport_types} onChange={(value) => setFilterValue('transport_type', value)} />
-            <SelectFilter id="transport-thi-status" label="THI Status" value={filters.thi_status} options={filterOptions.thi_statuses} onChange={(value) => setFilterValue('thi_status', value)} />
-            <SelectFilter id="transport-distribution-pl" label="Distribution PL" value={filters.distribution_pl} options={filterOptions.distribution_pl} onChange={(value) => setFilterValue('distribution_pl', value)} />
-            <SelectFilter id="transport-pl-status" label="PL Status 0.1%" value={filters.pl_status_0_1_pct} options={filterOptions.pl_status_0_1_pct} onChange={(value) => setFilterValue('pl_status_0_1_pct', value)} />
-            <SelectFilter id="transport-distribution-lat" label="Distribution Lat" value={filters.distribution_lat} options={filterOptions.distribution_lat} onChange={(value) => setFilterValue('distribution_lat', value)} />
-            <SelectFilter id="transport-jitter-status" label="Jitter Status" value={filters.jitter_status} options={filterOptions.jitter_statuses} onChange={(value) => setFilterValue('jitter_status', value)} />
-          </div>
-          )}
-        </section>
-
         <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
-          {loading && !summary ? (
+          {dashboardLoading && !summary ? (
             Array.from({ length: 6 }, (_, index) => <div key={index} className="skeleton h-[86px] rounded-xl" />)
           ) : (
             scorecards.map((card) => <Scorecard key={card.title} {...card} />)
           )}
         </section>
 
-        <section className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(340px,0.7fr)]">
-          <ChartCard title="Weekly Quality Trend" icon={Activity}>
-            {trend.length ? (
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={trend} margin={{ top: 14, right: 18, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={themeTokens.chartGrid} vertical={false} />
-                  <XAxis dataKey="date" tickFormatter={formatDateLabel} tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
-                  <YAxis tick={{ fontSize: 10, fill: themeTokens.axisTick }} width={42} />
-                  <Tooltip content={<TransportTooltip />} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Line type="monotone" dataKey="pl_over_1_sites" name="PL >1%" stroke={QUALITY_COLORS.packetLoss} strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="latency_over_5_sites" name="Latency >5ms" stroke={QUALITY_COLORS.latency} strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="jitter_not_clear_sites" name="Jitter NOT-CLEAR" stroke={QUALITY_COLORS.jitter} strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="thi_fail_sites" name="THI Fail" stroke={QUALITY_COLORS.p1} strokeWidth={2} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            ) : <ChartEmpty />}
-          </ChartCard>
-
-          <ChartCard
-            title="High Priority Transport"
-            icon={ShieldAlert}
-            action={<span className="rounded-full bg-red-500/10 px-2 py-0.5 text-[10px] font-semibold text-red-300">P1 / P2 queue</span>}
-          >
-            {latestPriority.length ? (
-              <div className="space-y-2">
-                {latestPriority.map((site) => (
-                  <div key={site.site_id} className="rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)]/50 p-3">
-                    <div className="mb-2 flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="truncate font-mono text-xs font-bold text-[var(--text-primary)]">{site.site_id}</p>
-                        <p className="truncate text-[11px] text-[var(--text-muted)]">{asDisplay(site.site_name)}</p>
-                      </div>
-                      <PriorityBadge value={site.priority_level} />
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 text-[10px]">
-                      <span className={site.pl_over_threshold ? 'text-red-300' : 'text-[var(--text-muted)]'}>PL {formatMetric(site.avg_packet_loss, 2, '%')}</span>
-                      <span className={site.latency_over_threshold ? 'text-red-300' : 'text-[var(--text-muted)]'}>LAT {formatMetric(site.latency, 2, 'ms')}</span>
-                      <span className="text-[var(--text-muted)]">Score {site.priority_score}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : <ChartEmpty label="Tidak ada site prioritas untuk filter ini." />}
-          </ChartCard>
-        </section>
-
-        <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          <ChartCard title="PL & Latency Distribution" icon={Waves}>
-            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-              {distributions.by_packet_loss.length ? (
-                <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={distributions.by_packet_loss} margin={{ top: 12, right: 16, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={themeTokens.chartGrid} vertical={false} />
-                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
-                    <YAxis tick={{ fontSize: 10, fill: themeTokens.axisTick }} width={42} />
-                    <Tooltip content={<TransportTooltip />} />
-                    <Bar dataKey="records" name="PL records" fill={QUALITY_COLORS.total} radius={[4, 4, 0, 0]}>
-                      <LabelList dataKey="records" position="top" formatter={formatNumber} fill="var(--text-muted)" fontSize={10} />
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : <ChartEmpty />}
-              {distributions.by_latency.length ? (
-                <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={distributions.by_latency} margin={{ top: 12, right: 16, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={themeTokens.chartGrid} vertical={false} />
-                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
-                    <YAxis tick={{ fontSize: 10, fill: themeTokens.axisTick }} width={42} />
-                    <Tooltip content={<TransportTooltip />} />
-                    <Bar dataKey="records" name="Latency records" fill={QUALITY_COLORS.latency} radius={[4, 4, 0, 0]}>
-                      <LabelList dataKey="records" position="top" formatter={formatNumber} fill="var(--text-muted)" fontSize={10} />
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : <ChartEmpty />}
-            </div>
-          </ChartCard>
-
-          <ChartCard title="Issue Breakdown" icon={BarChart3}>
-            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={(breakdowns.by_nop || []).slice(0, 8)} layout="vertical" margin={{ top: 6, right: 18, left: 58, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={themeTokens.chartGrid} vertical={false} />
-                  <XAxis type="number" tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
-                  <YAxis type="category" dataKey="label" width={88} tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
-                  <Tooltip content={<TransportTooltip />} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Bar dataKey="p1_sites" name="P1" stackId="issues" fill={QUALITY_COLORS.p1} radius={[0, 4, 4, 0]} />
-                  <Bar dataKey="p2_sites" name="P2" stackId="issues" fill={QUALITY_COLORS.p2} radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={(breakdowns.by_kabupaten || []).slice(0, 8)} layout="vertical" margin={{ top: 6, right: 18, left: 82, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={themeTokens.chartGrid} vertical={false} />
-                  <XAxis type="number" tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
-                  <YAxis type="category" dataKey="label" width={112} tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
-                  <Tooltip content={<TransportTooltip />} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Bar dataKey="pl_over_1_sites" name="PL > 1%" fill={QUALITY_COLORS.packetLoss} radius={[0, 4, 4, 0]} />
-                  <Bar dataKey="latency_over_5_sites" name="LAT > 5ms" fill={QUALITY_COLORS.latency} radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </ChartCard>
-        </section>
+        <TransportQualityCharts
+          trend={trend}
+          distributions={distributions}
+          breakdowns={breakdowns}
+          latestPriority={latestPriority}
+          formatDateLabel={formatDateLabel}
+        />
 
         <section className="glass-card overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-3">
@@ -648,31 +585,14 @@ function TransportQualityDashboard() {
             </table>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] px-4 py-3">
-            <p className="text-xs text-[var(--text-muted)]">
-              Page {prioritySites.page || page} of {prioritySites.total_pages || 1}
-            </p>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setPage((current) => Math.max(1, current - 1))}
-                disabled={page <= 1}
-                className="inline-flex items-center gap-1 rounded-lg border border-[var(--border-light)] px-3 py-1.5 text-xs font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--primary)]/30 hover:text-[var(--primary-light)] disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <ChevronLeft className="size-3" />
-                Prev
-              </button>
-              <button
-                type="button"
-                onClick={() => setPage((current) => Math.min(prioritySites.total_pages || current, current + 1))}
-                disabled={!prioritySites.total_pages || page >= prioritySites.total_pages}
-                className="inline-flex items-center gap-1 rounded-lg border border-[var(--border-light)] px-3 py-1.5 text-xs font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--primary)]/30 hover:text-[var(--primary-light)] disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Next
-                <ChevronRight className="size-3" />
-              </button>
-            </div>
-          </div>
+          <DashboardPagination
+            page={prioritySites.page || page}
+            totalPages={prioritySites.total_pages || 1}
+            onPageChange={setPage}
+            disabled={tableLoading}
+            className="border-t border-[var(--border)] px-4 py-2"
+            testIdPrefix="transport"
+          />
         </section>
       </main>
     </div>

@@ -1,51 +1,40 @@
 import { Component, useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ArrowCounterClockwiseIcon } from '@phosphor-icons/react';
 import {
   AlertTriangle,
   ArrowLeft,
-  BarChart3,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  ChevronUp,
   CircleCheck,
   Clock3,
   Download,
-  Filter,
-  HelpCircle,
   ListChecks,
   MapPin,
   RefreshCcw,
-  Search,
   ShieldCheck,
   ShieldX,
   TicketCheck,
-  TrendingUp,
   X,
   Zap,
 } from 'lucide-react';
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  LabelList,
-  Legend,
-  Line,
-  LineChart,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Sector,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
 import Breadcrumb from '../components/Breadcrumb';
-import { useDashboardThemeTokens } from '../hooks/useDashboardThemeTokens';
+import {
+  DashboardCombobox,
+  DashboardDateRangePicker,
+  DashboardFilterBar,
+  DashboardFilterChips,
+  DashboardFilterPopover,
+  DashboardFilterSelect,
+  DashboardPagination,
+  DashboardSearchInput,
+  DashboardTableToolbar,
+} from '../components/dashboard-filters/DashboardFilters';
+import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert';
+import { Button } from '../components/ui/button';
+import { TICKETING_CHART_COLORS } from '../features/ticketing/ticketingChartConfig';
+import { HelpHint, TicketingCharts } from '../features/ticketing/TicketingCharts';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import {
   DashboardChartPanel,
-  DashboardChartTooltip,
   DashboardKpiCard,
   DashboardStatusBadge,
 } from '../components/ui/DashboardPrimitives';
@@ -58,16 +47,16 @@ import {
 import { formatNumber, formatPercent } from '../utils/formatters';
 
 const TABLE_LIMIT = 20;
-
-const COLORS = {
-  bps: '#3B82F6',
-  ts: '#10B981',
-  total: '#FBBF24',
-  danger: '#EF4444',
-  warning: '#F59E0B',
-  success: '#10B981',
-  violet: '#8B5CF6',
-  muted: '#94A3B8',
+const EMPTY_TICKETING_ADVANCED_FILTERS = {
+  tahun: '',
+  bulan: '',
+  cluster_to: '',
+  kategori_tt: '',
+  sla_status: '',
+  ticket_swfm_status: '',
+  backup_sukses: '',
+  rc_category: '',
+  is_escalate: '',
 };
 
 class TicketingErrorBoundary extends Component {
@@ -156,39 +145,6 @@ function categoryShare(value, total) {
   return `${((numerator / denominator) * 100).toFixed(1)}%`;
 }
 
-function optionList(values = []) {
-  return values.filter((value) => value != null && value !== '');
-}
-
-function HelpHint({ text }) {
-  return (
-    <span
-      tabIndex={0}
-      role="img"
-      aria-label={text}
-      title={text}
-      className="inline-flex size-5 items-center justify-center rounded-full border border-[var(--border-light)] text-[var(--text-muted)] transition-colors hover:border-[var(--primary)]/30 hover:text-[var(--primary-light)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/35"
-    >
-      <HelpCircle className="size-3.5" />
-    </span>
-  );
-}
-
-function renderActivePieShape(props) {
-  const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill } = props;
-  return (
-    <Sector
-      cx={cx}
-      cy={cy}
-      innerRadius={innerRadius}
-      outerRadius={(outerRadius || 0) + 8}
-      startAngle={startAngle}
-      endAngle={endAngle}
-      fill={fill}
-    />
-  );
-}
-
 function asDisplay(value) {
   if (value == null || value === '') return '-';
   return String(value);
@@ -206,63 +162,6 @@ function Scorecard({ title, value, subtitle, icon: Icon, accent, glow, children 
     <DashboardKpiCard title={title} value={value} subtitle={subtitle} icon={Icon} accent={accent} glow={glow}>
       {children}
     </DashboardKpiCard>
-  );
-}
-
-function ChartCard({ title, icon: Icon, children, action }) {
-  return (
-    <DashboardChartPanel title={title} icon={Icon} action={action}>
-      {children}
-    </DashboardChartPanel>
-  );
-}
-
-function ChartEmpty({ label = 'Data belum tersedia untuk filter ini.' }) {
-  return (
-    <div className="flex h-[220px] items-center justify-center rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg-elevated)]/40">
-      <p className="text-xs text-[var(--text-muted)]">{label}</p>
-    </div>
-  );
-}
-
-function TicketingTooltip({ active, payload, label }) {
-  if (!active || !payload?.length) return null;
-  return (
-    <DashboardChartTooltip active={active} payload={payload} label={label} valueFormatter={formatNumber} />
-  );
-}
-
-function SelectFilter({ id, label, value, onChange, options, placeholder = 'Semua' }) {
-  return (
-    <label className="flex min-w-[145px] flex-1 flex-col gap-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-      {label}
-      <select
-        id={id}
-        value={value || ''}
-        onChange={(event) => onChange(event.target.value)}
-        className="min-h-9 rounded-lg border border-[var(--border-light)] bg-[var(--bg-elevated)] px-3 py-2 text-xs font-medium normal-case tracking-normal text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/40"
-      >
-        <option value="">{placeholder}</option>
-        {optionList(options).map((option) => (
-          <option key={option} value={option}>{option}</option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
-function DateFilter({ id, label, value, onChange }) {
-  return (
-    <label className="flex min-w-[150px] flex-1 flex-col gap-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-      {label}
-      <input
-        id={id}
-        type="date"
-        value={value || ''}
-        onChange={(event) => onChange(event.target.value)}
-        className="min-h-9 rounded-lg border border-[var(--border-light)] bg-[var(--bg-elevated)] px-3 py-2 text-xs font-medium normal-case tracking-normal text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/40"
-      />
-    </label>
   );
 }
 
@@ -352,8 +251,9 @@ function TicketDetailModal({ detail, loading, onClose }) {
 
 function TicketingDashboard() {
   const navigate = useNavigate();
-  const themeTokens = useDashboardThemeTokens();
   const [filterOptions, setFilterOptions] = useState({
+    default_start_date: '',
+    default_end_date: '',
     years: [],
     months: [],
     nops: [],
@@ -366,18 +266,8 @@ function TicketingDashboard() {
   });
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [selectedYear, setSelectedYear] = useState('');
-  const [selectedMonth, setSelectedMonth] = useState('');
   const [selectedNop, setSelectedNop] = useState('');
-  const [filters, setFilters] = useState({
-    cluster_to: '',
-    kategori_tt: '',
-    sla_status: '',
-    ticket_swfm_status: '',
-    backup_sukses: '',
-    rc_category: '',
-    is_escalate: '',
-  });
+  const [advancedFilters, setAdvancedFilters] = useState(EMPTY_TICKETING_ADVANCED_FILTERS);
   const [dashboard, setDashboard] = useState(null);
   const [tickets, setTickets] = useState({ items: [], total: 0, page: 1, limit: TABLE_LIMIT, total_pages: 0 });
   const [page, setPage] = useState(1);
@@ -385,26 +275,35 @@ function TicketingDashboard() {
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [ticketDetail, setTicketDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [dashboardLoading, setDashboardLoading] = useState(true);
+  const [tableLoading, setTableLoading] = useState(true);
   const [error, setError] = useState('');
-  const [filtersCollapsed, setFiltersCollapsed] = useState(false);
-  const [activeSlaIndex, setActiveSlaIndex] = useState(null);
+  const [filtersLoaded, setFiltersLoaded] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const loadFilterOptions = useCallback(async () => {
     try {
       const data = await fetchTicketingFilters();
-      setFilterOptions(data);
       const defaultStartDate = toDateInput(data.default_start_date || data.min_date);
       const defaultEndDate = toDateInput(data.default_end_date || data.max_date);
+      setFilterOptions({
+        ...data,
+        default_start_date: defaultStartDate,
+        default_end_date: defaultEndDate,
+      });
       if (defaultStartDate && defaultEndDate) {
         setStartDate((current) => current || defaultStartDate);
         setEndDate((current) => current || defaultEndDate);
       }
       setError('');
+      setFiltersLoaded(true);
       return data;
     } catch (err) {
       console.error('Ticketing filters failed:', err);
       setError(filterErrorMessage(err));
+      setDashboardLoading(false);
+      setTableLoading(false);
+      setFiltersLoaded(true);
       return null;
     }
   }, []);
@@ -414,56 +313,78 @@ function TicketingDashboard() {
     loadFilterOptions();
   }, [loadFilterOptions]);
 
-  const queryParams = useMemo(() => ({
+  const debouncedSearch = useDebouncedValue(search, 300);
+
+  const dashboardParams = useMemo(() => ({
     start_date: startDate || undefined,
     end_date: endDate || undefined,
-    tahun: selectedYear || undefined,
-    bulan: selectedMonth || undefined,
+    tahun: advancedFilters.tahun || undefined,
+    bulan: advancedFilters.bulan || undefined,
     nop: selectedNop || undefined,
-    cluster_to: filters.cluster_to || undefined,
-    kategori_tt: filters.kategori_tt || undefined,
-    sla_status: filters.sla_status || undefined,
-    ticket_swfm_status: filters.ticket_swfm_status || undefined,
-    backup_sukses: filters.backup_sukses || undefined,
-    rc_category: filters.rc_category || undefined,
-    is_escalate: filters.is_escalate || undefined,
-  }), [endDate, filters, selectedMonth, selectedNop, selectedYear, startDate]);
+    cluster_to: advancedFilters.cluster_to || undefined,
+    kategori_tt: advancedFilters.kategori_tt || undefined,
+    sla_status: advancedFilters.sla_status || undefined,
+    ticket_swfm_status: advancedFilters.ticket_swfm_status || undefined,
+    backup_sukses: advancedFilters.backup_sukses || undefined,
+    rc_category: advancedFilters.rc_category || undefined,
+    is_escalate: advancedFilters.is_escalate || undefined,
+  }), [advancedFilters, endDate, selectedNop, startDate]);
 
-  const loadData = useCallback(async () => {
-    if (!startDate && !endDate && !selectedYear) return;
-    setLoading(true);
-    setError('');
-    try {
-      const [dashboardData, ticketData] = await Promise.all([
-        fetchTicketingDashboard(queryParams),
-        fetchTicketingTickets({ ...queryParams, q: search || undefined, page, limit: TABLE_LIMIT }),
-      ]);
-      setDashboard(dashboardData);
-      setTickets(ticketData);
-    } catch (err) {
-      console.error('Ticketing dashboard failed:', err);
-      setError('Gagal memuat data Ticketing.');
-    } finally {
-      setLoading(false);
-    }
-  }, [endDate, page, queryParams, search, selectedYear, startDate]);
+  const tableParams = useMemo(() => ({
+    ...dashboardParams,
+    q: debouncedSearch || undefined,
+    page,
+    limit: TABLE_LIMIT,
+  }), [dashboardParams, debouncedSearch, page]);
 
   const handleRefresh = useCallback(async () => {
     await loadFilterOptions();
-    if (startDate || endDate || selectedYear) {
-      await loadData();
-    }
-  }, [endDate, loadData, loadFilterOptions, selectedYear, startDate]);
+    setRefreshKey((current) => current + 1);
+  }, [loadFilterOptions]);
 
   useEffect(() => {
+    if (!filtersLoaded || (!startDate && !endDate && !advancedFilters.tahun)) return;
+    let cancelled = false;
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    loadData();
-  }, [loadData]);
+    setDashboardLoading(true);
+    setError('');
+    fetchTicketingDashboard(dashboardParams)
+      .then((dashboardData) => {
+        if (!cancelled) setDashboard(dashboardData);
+      })
+      .catch((err) => {
+        console.error('Ticketing dashboard failed:', err);
+        if (!cancelled) setError('Gagal memuat data dashboard Ticketing.');
+      })
+      .finally(() => {
+        if (!cancelled) setDashboardLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [advancedFilters.tahun, dashboardParams, endDate, filtersLoaded, refreshKey, startDate]);
+
+  useEffect(() => {
+    if (!filtersLoaded || (!startDate && !endDate && !advancedFilters.tahun)) return;
+    let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setTableLoading(true);
+    fetchTicketingTickets(tableParams)
+      .then((ticketData) => {
+        if (!cancelled) setTickets(ticketData);
+      })
+      .catch((err) => {
+        console.error('Ticketing list failed:', err);
+        if (!cancelled) setError('Gagal memuat daftar ticket.');
+      })
+      .finally(() => {
+        if (!cancelled) setTableLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [advancedFilters.tahun, endDate, filtersLoaded, refreshKey, startDate, tableParams]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setPage(1);
-  }, [queryParams, search]);
+  }, [dashboardParams, debouncedSearch]);
 
   useEffect(() => {
     if (!selectedTicket) {
@@ -481,8 +402,21 @@ function TicketingDashboard() {
       .finally(() => setDetailLoading(false));
   }, [selectedTicket]);
 
-  const updateFilter = (key, value) => {
-    setFilters((prev) => ({ ...prev, [key]: value }));
+  const resetFilters = () => {
+    setStartDate(filterOptions.default_start_date || '');
+    setEndDate(filterOptions.default_end_date || '');
+    setSelectedNop('');
+    setAdvancedFilters({ ...EMPTY_TICKETING_ADVANCED_FILTERS });
+    setPage(1);
+  };
+
+  const removeAdvancedFilter = (key) => {
+    setAdvancedFilters((current) => ({ ...current, [key]: '' }));
+  };
+
+  const resetTableFilters = () => {
+    setSearch('');
+    setPage(1);
   };
 
   const summary = dashboard?.summary;
@@ -502,9 +436,9 @@ function TicketingDashboard() {
 
   return (
     <div className="flex min-h-screen flex-col bg-[var(--bg-base)] text-[var(--text-primary)]">
-      <header className="border-b border-[var(--border)] bg-gradient-to-r from-[var(--bg-base)] via-[var(--bg-surface)] to-[var(--bg-base)] px-6 py-4">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+      <header className="border-b border-[var(--border)] bg-gradient-to-r from-[var(--bg-base)] via-[var(--bg-surface)] to-[var(--bg-base)] px-4 py-3 lg:px-6">
+        <div className="flex flex-wrap items-end justify-between gap-3 lg:flex-nowrap">
+          <div className="flex min-w-0 items-center gap-3 lg:shrink-0">
             <button
               type="button"
               onClick={() => navigate('/home')}
@@ -516,225 +450,222 @@ function TicketingDashboard() {
             <div className="flex size-10 items-center justify-center rounded-xl border border-[var(--primary)]/20 bg-[var(--primary)]/10">
               <TicketCheck className="size-5 text-[var(--primary-light)]" />
             </div>
-            <div>
+            <div className="min-w-0">
               <h1 className="text-xl font-bold tracking-tight">Ticketing</h1>
-              <p className="text-xs text-[var(--text-muted)]">Ticket Fault Center</p>
+              <p className="truncate text-xs text-[var(--text-muted)]">Ticket Fault Center</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex w-full flex-wrap items-end justify-end gap-2 lg:w-auto lg:flex-nowrap">
             <p className="hidden font-mono text-xs text-[var(--text-muted)] md:block">
               Updated: {formatDateTime(summary?.last_created_at)}
             </p>
-            <button
-              type="button"
-              onClick={handleRefresh}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border-light)] px-3 py-2 text-xs font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--primary)]/30 hover:text-[var(--primary-light)]"
+            <DashboardFilterBar
+              className="w-full border-0 bg-transparent p-0 shadow-none backdrop-blur-none lg:w-auto"
+              actions={(
+                <>
+                  <DashboardFilterPopover
+                    title="Filter Ticketing lanjutan"
+                    description="Filter compatibility diterapkan bersamaan setelah menekan Terapkan."
+                    values={advancedFilters}
+                    onApply={setAdvancedFilters}
+                    onReset={() => ({ ...EMPTY_TICKETING_ADVANCED_FILTERS })}
+                    testId="ticketing-filter-sheet"
+                  >
+                    {({ draftValues, setDraftValue }) => (
+                      <>
+                        <DashboardFilterSelect
+                          id="ticketing-year"
+                          label="Tahun / Bulan"
+                          value={draftValues.tahun}
+                          onChange={(value) => setDraftValue('tahun', value)}
+                          options={filterOptions.years}
+                          allLabel="Semua Tahun"
+                        />
+                        <DashboardFilterSelect
+                          id="ticketing-month"
+                          label="Bulan"
+                          value={draftValues.bulan}
+                          onChange={(value) => setDraftValue('bulan', value)}
+                          options={filterOptions.months}
+                          allLabel="Semua Bulan"
+                        />
+                        <DashboardCombobox
+                          id="ticketing-cluster"
+                          label="Cluster TO"
+                          value={draftValues.cluster_to}
+                          onChange={(value) => setDraftValue('cluster_to', value)}
+                          options={filterOptions.clusters}
+                          allLabel="Semua Cluster"
+                        />
+                        <DashboardFilterSelect
+                          id="ticketing-category"
+                          label="Kategori Ticket"
+                          value={draftValues.kategori_tt}
+                          onChange={(value) => setDraftValue('kategori_tt', value)}
+                          options={filterOptions.categories}
+                          allLabel="Semua Kategori"
+                        />
+                        <DashboardFilterSelect
+                          id="ticketing-sla"
+                          label="SLA Status"
+                          value={draftValues.sla_status}
+                          onChange={(value) => setDraftValue('sla_status', value)}
+                          options={filterOptions.sla_statuses}
+                          allLabel="Semua SLA"
+                        />
+                        <DashboardFilterSelect
+                          id="ticketing-status"
+                          label="Ticket Status"
+                          value={draftValues.ticket_swfm_status}
+                          onChange={(value) => setDraftValue('ticket_swfm_status', value)}
+                          options={filterOptions.ticket_statuses}
+                          allLabel="Semua Status"
+                        />
+                        <DashboardFilterSelect
+                          id="ticketing-backup"
+                          label="Backup Sukses"
+                          value={draftValues.backup_sukses}
+                          onChange={(value) => setDraftValue('backup_sukses', value)}
+                          options={filterOptions.backup_sukses}
+                          allLabel="Semua Backup"
+                        />
+                        <DashboardCombobox
+                          id="ticketing-rc-category"
+                          label="RC Category"
+                          value={draftValues.rc_category}
+                          onChange={(value) => setDraftValue('rc_category', value)}
+                          options={filterOptions.rc_categories}
+                          allLabel="Semua RC"
+                        />
+                        <DashboardFilterSelect
+                          id="ticketing-escalate"
+                          label="Is Escalate"
+                          value={draftValues.is_escalate}
+                          onChange={(value) => setDraftValue('is_escalate', value)}
+                          options={[
+                            { value: 'true', label: 'Ya' },
+                            { value: 'false', label: 'Tidak' },
+                          ]}
+                          allLabel="Semua Escalation"
+                        />
+                      </>
+                    )}
+                  </DashboardFilterPopover>
+                  <Button type="button" variant="ghost" size="sm" onClick={resetFilters}>
+                    <ArrowCounterClockwiseIcon data-icon="inline-start" />
+                    Reset
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={handleRefresh}
+                    disabled={dashboardLoading || tableLoading}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border-light)] px-3 py-2 text-xs font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--primary)]/30 hover:text-[var(--primary-light)] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <RefreshCcw className="size-3.5" />
+                    Refresh
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleExportCsv}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border-light)] px-3 py-2 text-xs font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--primary)]/30 hover:text-[var(--primary-light)]"
+                  >
+                    <Download className="size-3.5" />
+                    Export CSV
+                  </button>
+                </>
+              )}
+              chips={(
+                <DashboardFilterChips
+                  items={[
+                    { key: 'tahun', label: 'Tahun', value: advancedFilters.tahun },
+                    { key: 'bulan', label: 'Bulan', value: advancedFilters.bulan },
+                    { key: 'cluster_to', label: 'Cluster', value: advancedFilters.cluster_to },
+                    { key: 'kategori_tt', label: 'Kategori', value: advancedFilters.kategori_tt },
+                    { key: 'sla_status', label: 'SLA', value: advancedFilters.sla_status },
+                    { key: 'ticket_swfm_status', label: 'Status', value: advancedFilters.ticket_swfm_status },
+                    { key: 'backup_sukses', label: 'Backup', value: advancedFilters.backup_sukses },
+                    { key: 'rc_category', label: 'RC', value: advancedFilters.rc_category },
+                    { key: 'is_escalate', label: 'Escalation', value: advancedFilters.is_escalate },
+                  ]}
+                  onRemove={removeAdvancedFilter}
+                />
+              )}
             >
-              <RefreshCcw className="size-3.5" />
-              Refresh
-            </button>
-            <button
-              type="button"
-              onClick={handleExportCsv}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border-light)] px-3 py-2 text-xs font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--primary)]/30 hover:text-[var(--primary-light)]"
-            >
-              <Download className="size-3.5" />
-              Export CSV
-            </button>
+              <DashboardDateRangePicker
+                id="ticketing-start-date"
+                data-end-date-id="ticketing-end-date"
+                label="Date Range"
+                value={{ from: startDate, to: endDate }}
+                onApply={({ from, to }) => {
+                  setStartDate(from);
+                  setEndDate(to);
+                }}
+              />
+              <DashboardCombobox
+                id="ticketing-nop"
+                label="NOP"
+                value={selectedNop}
+                onChange={setSelectedNop}
+                options={filterOptions.nops}
+                allLabel="Semua NOP"
+                searchPlaceholder="Cari NOP..."
+              />
+            </DashboardFilterBar>
           </div>
         </div>
       </header>
       <Breadcrumb />
 
       <main className="flex-1 space-y-4 overflow-auto p-5">
-        <section className="glass-card p-4">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <Filter className="size-4 text-[var(--primary-light)]" />
-              <h2 className="text-sm font-semibold">Global Filter</h2>
-            </div>
-            <button
-              type="button"
-              aria-expanded={!filtersCollapsed}
-              aria-controls="ticketing-global-filters"
-              onClick={() => setFiltersCollapsed((value) => !value)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border-light)] px-3 py-1.5 text-xs font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--primary)]/30 hover:text-[var(--primary-light)]"
-            >
-              {filtersCollapsed ? (
-                <>
-                  <ChevronDown className="size-3.5" />
-                  Show Filter
-                </>
-              ) : (
-                <>
-                  <ChevronUp className="size-3.5" />
-                  Collapse Filter
-                </>
-              )}
-            </button>
-          </div>
-          {!filtersCollapsed && (
-            <div id="ticketing-global-filters" className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
-              <DateFilter id="ticketing-start-date" label="Date Range" value={startDate} onChange={setStartDate} />
-              <DateFilter id="ticketing-end-date" label="Date End" value={endDate} onChange={setEndDate} />
-              <SelectFilter id="ticketing-year" label="Tahun / Bulan" value={selectedYear} onChange={setSelectedYear} options={filterOptions.years} />
-              <SelectFilter id="ticketing-month" label="Bulan" value={selectedMonth} onChange={setSelectedMonth} options={filterOptions.months} />
-              <SelectFilter id="ticketing-nop" label="NOP" value={selectedNop} onChange={setSelectedNop} options={filterOptions.nops} />
-              <SelectFilter id="ticketing-cluster" label="Cluster TO" value={filters.cluster_to} onChange={(value) => updateFilter('cluster_to', value)} options={filterOptions.clusters} />
-              <SelectFilter id="ticketing-category" label="Kategori Ticket" value={filters.kategori_tt} onChange={(value) => updateFilter('kategori_tt', value)} options={filterOptions.categories} />
-              <SelectFilter id="ticketing-sla" label="SLA Status" value={filters.sla_status} onChange={(value) => updateFilter('sla_status', value)} options={filterOptions.sla_statuses} />
-              <SelectFilter id="ticketing-status" label="Ticket Status" value={filters.ticket_swfm_status} onChange={(value) => updateFilter('ticket_swfm_status', value)} options={filterOptions.ticket_statuses} />
-              <SelectFilter id="ticketing-backup" label="Backup Sukses" value={filters.backup_sukses} onChange={(value) => updateFilter('backup_sukses', value)} options={filterOptions.backup_sukses} />
-              <SelectFilter id="ticketing-rc-category" label="RC Category" value={filters.rc_category} onChange={(value) => updateFilter('rc_category', value)} options={filterOptions.rc_categories} />
-              <SelectFilter id="ticketing-escalate" label="Is Escalate" value={filters.is_escalate} onChange={(value) => updateFilter('is_escalate', value)} options={['true', 'false']} />
-            </div>
-          )}
-        </section>
-
         {error && (
-          <section className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
-            {error}
-          </section>
+          <Alert variant="destructive">
+            <AlertTitle>Data tidak dapat diperbarui</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         )}
 
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-          <Scorecard title="Total Tickets" value={formatNumber(summary?.total_tickets)} subtitle={formatTicketMoM(summary)} icon={TicketCheck} accent={COLORS.bps} glow="rgba(59,130,246,0.14)" />
+          <Scorecard title="Total Tickets" value={formatNumber(summary?.total_tickets)} subtitle={formatTicketMoM(summary)} icon={TicketCheck} accent={TICKETING_CHART_COLORS.bps} glow="rgba(59,130,246,0.14)" />
           <Scorecard
             title="Ticket Category"
             subtitle={`BPS ${categoryShare(ticketCategory.bps, ticketCategory.total)} / TS ${categoryShare(ticketCategory.ts, ticketCategory.total)}`}
             icon={ListChecks}
-            accent={COLORS.ts}
+            accent={TICKETING_CHART_COLORS.ts}
             glow="rgba(16,185,129,0.14)"
           >
             <div className="mt-1 flex items-baseline gap-3 font-mono text-lg font-bold">
-              <span style={{ color: COLORS.bps }}>BPS: {formatNumber(ticketCategory.bps)}</span>
-              <span style={{ color: COLORS.ts }}>TS: {formatNumber(ticketCategory.ts)}</span>
+              <span style={{ color: TICKETING_CHART_COLORS.bps }}>BPS: {formatNumber(ticketCategory.bps)}</span>
+              <span style={{ color: TICKETING_CHART_COLORS.ts }}>TS: {formatNumber(ticketCategory.ts)}</span>
             </div>
           </Scorecard>
-          <Scorecard title="OUT SLA Rate" value={formatPercent(summary?.out_sla_rate)} subtitle={`${formatNumber(summary?.out_sla_tickets)} OUT SLA`} icon={ShieldX} accent={COLORS.danger} glow="rgba(239,68,68,0.14)" />
+          <Scorecard title="OUT SLA Rate" value={formatPercent(summary?.out_sla_rate)} subtitle={`${formatNumber(summary?.out_sla_tickets)} OUT SLA`} icon={ShieldX} accent={TICKETING_CHART_COLORS.danger} glow="rgba(239,68,68,0.14)" />
           <Scorecard
             title="Visitation Rate"
             value={formatPercent(summary?.visitation_rate)}
             subtitle={`${formatNumber(summary?.visitation_tickets)} / ${formatNumber(summary?.total_tickets)} Visit site`}
             icon={MapPin}
-            accent={COLORS.violet}
+            accent={TICKETING_CHART_COLORS.violet}
             glow="rgba(139,92,246,0.14)"
           />
-          <Scorecard title="Backup Sukses Rate" value={formatPercent(summary?.backup_sukses_rate)} subtitle={`${formatNumber(summary?.backup_sukses_tickets)} BU Genset`} icon={ShieldCheck} accent={COLORS.success} glow="rgba(16,185,129,0.14)" />
-          <Scorecard title="Escalated" value={formatNumber(summary?.escalated_tickets)} subtitle={formatPercent(summary?.escalated_rate)} icon={AlertTriangle} accent={COLORS.warning} glow="rgba(245,158,11,0.14)" />
-          <Scorecard title="Manual Takeover" value={formatNumber(summary?.manual_takeover_tickets)} subtitle={formatPercent(summary?.manual_takeover_rate)} icon={Zap} accent={COLORS.total} glow="rgba(251,191,36,0.14)" />
-          <Scorecard title="Response P90" value={formatMinutes(summary?.p90_response_minutes)} subtitle="Clean response time" icon={Clock3} accent={COLORS.bps} glow="rgba(59,130,246,0.14)">
+          <Scorecard title="Backup Sukses Rate" value={formatPercent(summary?.backup_sukses_rate)} subtitle={`${formatNumber(summary?.backup_sukses_tickets)} BU Genset`} icon={ShieldCheck} accent={TICKETING_CHART_COLORS.success} glow="rgba(16,185,129,0.14)" />
+          <Scorecard title="Escalated" value={formatNumber(summary?.escalated_tickets)} subtitle={formatPercent(summary?.escalated_rate)} icon={AlertTriangle} accent={TICKETING_CHART_COLORS.warning} glow="rgba(245,158,11,0.14)" />
+          <Scorecard title="Manual Takeover" value={formatNumber(summary?.manual_takeover_tickets)} subtitle={formatPercent(summary?.manual_takeover_rate)} icon={Zap} accent={TICKETING_CHART_COLORS.total} glow="rgba(251,191,36,0.14)" />
+          <Scorecard title="Response P90" value={formatMinutes(summary?.p90_response_minutes)} subtitle="Clean response time" icon={Clock3} accent={TICKETING_CHART_COLORS.bps} glow="rgba(59,130,246,0.14)">
             <div className="mt-2 flex items-center gap-2">
-              <p className="truncate font-mono text-[28px] font-bold leading-none tabular-nums tracking-tight" style={{ color: COLORS.bps }}>
+              <p className="truncate font-mono text-[28px] font-bold leading-none tabular-nums tracking-tight" style={{ color: TICKETING_CHART_COLORS.bps }}>
                 {formatMinutes(summary?.p90_response_minutes)}
               </p>
               <HelpHint text="Response P90 menghitung persentil ke-90 dari waktu respons ticket yang valid." />
             </div>
           </Scorecard>
-          <Scorecard title="Closed Rate" value={formatPercent(summary?.closed_rate)} subtitle={`${formatNumber(summary?.closed_tickets)} closed`} icon={CircleCheck} accent={COLORS.success} glow="rgba(16,185,129,0.14)" />
-          <Scorecard title="Canceled" value={formatNumber(summary?.canceled_tickets)} subtitle="Canceled tickets" icon={ShieldX} accent={COLORS.danger} glow="rgba(239,68,68,0.14)" />
+          <Scorecard title="Closed Rate" value={formatPercent(summary?.closed_rate)} subtitle={`${formatNumber(summary?.closed_tickets)} closed`} icon={CircleCheck} accent={TICKETING_CHART_COLORS.success} glow="rgba(16,185,129,0.14)" />
+          <Scorecard title="Canceled" value={formatNumber(summary?.canceled_tickets)} subtitle="Canceled tickets" icon={ShieldX} accent={TICKETING_CHART_COLORS.danger} glow="rgba(239,68,68,0.14)" />
         </section>
 
-        <section className="grid gap-3 xl:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.65fr)_minmax(280px,0.65fr)]">
-          <ChartCard title="Daily Trend Ticket by Kategori" icon={TrendingUp}>
-            {dashboard?.trend?.length ? (
-              <ResponsiveContainer width="100%" height={220}>
-                <LineChart data={dashboard.trend} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-                  <CartesianGrid stroke={themeTokens.chartGrid} vertical={false} />
-                  <XAxis dataKey="label" tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
-                  <YAxis tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
-                  <Tooltip content={<TicketingTooltip />} />
-                  <Legend />
-                  <Line type="monotone" dataKey="bps" name="BPS" stroke={COLORS.bps} strokeWidth={2.4} dot={false} activeDot={{ r: 4 }} />
-                  <Line type="monotone" dataKey="ts" name="TS" stroke={COLORS.ts} strokeWidth={2.4} dot={false} activeDot={{ r: 4 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            ) : <ChartEmpty />}
-          </ChartCard>
-
-          <ChartCard title="SLA Status Distribution" icon={ShieldCheck}>
-            {dashboard?.sla_distribution?.length ? (
-              <ResponsiveContainer width="100%" height={220}>
-                <PieChart>
-                  <Tooltip content={<TicketingTooltip />} />
-                  <Pie
-                    data={dashboard.sla_distribution}
-                    dataKey="tickets"
-                    nameKey="label"
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={42}
-                    outerRadius={74}
-                    activeIndex={activeSlaIndex}
-                    activeShape={renderActivePieShape}
-                    onMouseEnter={(_, index) => setActiveSlaIndex(index)}
-                    onMouseLeave={() => setActiveSlaIndex(null)}
-                  >
-                    {dashboard.sla_distribution.map((entry, index) => (
-                      <Cell key={entry.label} fill={[COLORS.success, COLORS.danger, COLORS.warning, COLORS.muted][index % 4]} />
-                    ))}
-                  </Pie>
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : <ChartEmpty />}
-          </ChartCard>
-
-          <ChartCard title="Visiting Site vs Backup Genset" icon={BarChart3}>
-            {dashboard?.visiting_backup_distribution?.length ? (
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={dashboard.visiting_backup_distribution.slice(0, 6)} layout="vertical" margin={{ left: 12, right: 12 }}>
-                  <CartesianGrid stroke={themeTokens.chartGrid} horizontal={false} />
-                  <XAxis type="number" tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
-                  <YAxis type="category" dataKey="label" width={92} tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
-                  <Tooltip content={<TicketingTooltip />} />
-                  <Legend />
-                  <Bar dataKey="visiting_site" name="Visiting Site" fill={COLORS.bps} radius={[0, 4, 4, 0]} />
-                  <Bar dataKey="backup_genset" name="Backup Genset" fill={COLORS.success} radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : <ChartEmpty />}
-          </ChartCard>
-        </section>
-
-        <section className="grid gap-3 xl:grid-cols-2">
-          <ChartCard title={dashboard?.location_breakdown_title || 'Kabupaten/Kota Distribution'} icon={BarChart3}>
-            {dashboard?.location_breakdown?.length ? (
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={dashboard.location_breakdown} layout="vertical" margin={{ left: 12 }}>
-                  <CartesianGrid stroke={themeTokens.chartGrid} horizontal={false} />
-                  <XAxis type="number" tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
-                  <YAxis type="category" dataKey="label" width={100} tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
-                  <Tooltip content={<TicketingTooltip />} />
-                  <Bar dataKey="tickets" name="Tickets" fill={COLORS.bps} radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : <ChartEmpty />}
-          </ChartCard>
-
-          <ChartCard
-            title="RC Category Pareto"
-            icon={ListChecks}
-            action={<HelpHint text="Pareto menampilkan kontribusi kumulatif ticket per RC Category." />}
-          >
-            {dashboard?.rc_category_pareto?.length ? (
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={dashboard.rc_category_pareto}>
-                  <CartesianGrid stroke={themeTokens.chartGrid} vertical={false} />
-                  <XAxis dataKey="label" tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
-                  <YAxis tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
-                  <Tooltip content={<TicketingTooltip />} />
-                  <Bar dataKey="tickets" name="Tickets" fill={COLORS.bps} radius={[4, 4, 0, 0]}>
-                    <LabelList dataKey="cumulative_rate" position="top" formatter={(value) => `${value}%`} fontSize={10} />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            ) : <ChartEmpty />}
-          </ChartCard>
-        </section>
+        <TicketingCharts dashboard={dashboard} />
 
         <section className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-          <ChartCard title="Top Problem Sites" icon={AlertTriangle}>
+          <DashboardChartPanel title="Top Problem Sites" icon={AlertTriangle}>
             <div className="overflow-auto">
               <table className="w-full min-w-[640px] text-left text-xs">
                 <thead className="border-b border-[var(--border)] text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
@@ -763,25 +694,32 @@ function TicketingDashboard() {
                 </tbody>
               </table>
             </div>
-          </ChartCard>
+          </DashboardChartPanel>
 
           <section className="glass-card overflow-hidden">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] p-4">
+            <DashboardTableToolbar
+              className="border-b border-[var(--border)] p-3"
+              actions={(
+                <>
+                  <DashboardSearchInput
+                    id="ticketing-search"
+                    value={search}
+                    onChange={setSearch}
+                    placeholder="Search ticket number, site, summary..."
+                    className="w-full sm:w-[280px]"
+                  />
+                  <Button type="button" variant="ghost" size="sm" onClick={resetTableFilters}>
+                    <ArrowCounterClockwiseIcon data-icon="inline-start" />
+                    Reset tabel
+                  </Button>
+                </>
+              )}
+            >
               <div className="flex items-center gap-2">
                 <ListChecks className="size-4 text-[var(--primary-light)]" />
                 <h2 className="text-sm font-semibold">Ticket List</h2>
               </div>
-              <label className="relative w-full max-w-xs">
-                <Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-[var(--text-muted)]" />
-                <input
-                  type="search"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search ticket number, site, summary..."
-                  className="w-full rounded-lg border border-[var(--border-light)] bg-[var(--bg-elevated)] py-2 pl-9 pr-3 text-xs text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/40"
-                />
-              </label>
-            </div>
+            </DashboardTableToolbar>
             <div className="overflow-auto">
               <table className="w-full min-w-[880px] text-left text-xs">
                 <thead className="border-b border-[var(--border)] text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
@@ -822,26 +760,12 @@ function TicketingDashboard() {
             </div>
             <div className="flex items-center justify-between border-t border-[var(--border)] px-4 py-3 text-xs text-[var(--text-muted)]">
               <span>Showing page {tickets.page || page} of {tickets.total_pages || 1} | {formatNumber(tickets.total)} tickets</span>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
-                  disabled={page <= 1 || loading}
-                  className="inline-flex items-center gap-1 rounded-lg border border-[var(--border-light)] px-3 py-1.5 text-xs text-[var(--text-secondary)] transition-colors hover:border-[var(--primary)]/30 hover:text-[var(--primary-light)] disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <ChevronLeft className="size-3.5" />
-                  Prev
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPage((prev) => Math.min(prev + 1, tickets.total_pages || prev))}
-                  disabled={page >= (tickets.total_pages || 1) || loading}
-                  className="inline-flex items-center gap-1 rounded-lg border border-[var(--border-light)] px-3 py-1.5 text-xs text-[var(--text-secondary)] transition-colors hover:border-[var(--primary)]/30 hover:text-[var(--primary-light)] disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  Next
-                  <ChevronRight className="size-3.5" />
-                </button>
-              </div>
+              <DashboardPagination
+                page={page}
+                totalPages={tickets.total_pages || 1}
+                onPageChange={setPage}
+                disabled={tableLoading}
+              />
             </div>
           </section>
         </section>

@@ -1,5 +1,9 @@
 @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap');
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is([data-theme="dark"] *));
 
 /* ===== NOC Dashboard Design System ===== */
 :root {
@@ -7,8 +11,7 @@
   --primary: #0EA5E9;
   --primary-light: #38BDF8;
   --primary-dark: #0284C7;
-  --accent: #F59E0B;
-  --accent-light: #FBBF24;
+  --accent: #252B3A;
 
   /* Status */
   --success: #10B981;
@@ -45,10 +48,10 @@
   --shadow-glow: 0 0 24px rgba(14, 165, 233, 0.14);
 
   /* Radius */
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 14px;
-  --radius-xl: 16px;
+  --noc-radius-sm: 8px;
+  --noc-radius-md: 12px;
+  --noc-radius-lg: 14px;
+  --noc-radius-xl: 16px;
 
   /* Charts */
   --chart-grid: rgba(255, 255, 255, 0.035);
@@ -71,6 +74,35 @@
   --badge-warning-bg: rgba(245, 158, 11, 0.12);
   --badge-success-bg: rgba(16, 185, 129, 0.12);
   --badge-info-bg: rgba(14, 165, 233, 0.12);
+  --background: var(--bg-base);
+  --foreground: var(--text-primary);
+  --card: var(--bg-surface);
+  --card-foreground: var(--text-primary);
+  --popover: var(--bg-elevated);
+  --popover-foreground: var(--text-primary);
+  --primary-foreground: #F8FAFC;
+  --secondary: var(--surface-muted);
+  --secondary-foreground: var(--text-primary);
+  --muted: var(--surface-muted);
+  --muted-foreground: var(--text-secondary);
+  --accent-foreground: var(--text-primary);
+  --destructive: var(--danger);
+  --input: var(--control-border);
+  --ring: var(--border-focus);
+  --chart-1: var(--primary-light);
+  --chart-2: var(--danger);
+  --chart-3: var(--success);
+  --chart-4: var(--warning);
+  --chart-5: #A78BFA;
+  --radius: 0.45rem;
+  --sidebar: var(--bg-sidebar);
+  --sidebar-foreground: var(--text-primary);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--bg-hover);
+  --sidebar-accent-foreground: var(--text-primary);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
 }
 
 /* ===== Light Mode Overrides ===== */
@@ -79,8 +111,7 @@
   --primary: #0284C7;
   --primary-light: #0EA5E9;
   --primary-dark: #0369A1;
-  --accent: #F59E0B;
-  --accent-light: #F59E0B;
+  --accent: #EAF2F8;
 
   /* Status */
   --success: #10B981;
@@ -137,6 +168,31 @@
   --badge-warning-bg: rgba(245, 158, 11, 0.12);
   --badge-success-bg: rgba(16, 185, 129, 0.10);
   --badge-info-bg: rgba(2, 132, 199, 0.10);
+
+  /* shadcn semantic bridge */
+  --background: var(--bg-base);
+  --foreground: var(--text-primary);
+  --card: var(--bg-surface);
+  --card-foreground: var(--text-primary);
+  --popover: var(--bg-elevated);
+  --popover-foreground: var(--text-primary);
+  --primary-foreground: #F8FAFC;
+  --secondary: var(--surface-muted);
+  --secondary-foreground: var(--text-primary);
+  --muted: var(--surface-muted);
+  --muted-foreground: var(--text-secondary);
+  --accent-foreground: var(--text-primary);
+  --destructive: var(--danger);
+  --input: var(--control-border);
+  --ring: var(--border-focus);
+  --sidebar: var(--bg-sidebar);
+  --sidebar-foreground: var(--text-primary);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--bg-hover);
+  --sidebar-accent-foreground: var(--text-primary);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
 }
 
 /* Glass card — light mode */
@@ -273,7 +329,7 @@ html, body, #root {
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--noc-radius-lg);
   box-shadow: var(--shadow-card);
   transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
@@ -286,7 +342,7 @@ html, body, #root {
 .dashboard-panel {
   background: var(--bg-glass);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--noc-radius-lg);
   box-shadow: var(--shadow-card);
 }
 
@@ -308,7 +364,7 @@ html, body, #root {
 .mapboxgl-popup-content {
   background: var(--bg-surface) !important;
   color: var(--text-primary) !important;
-  border-radius: var(--radius-lg) !important;
+  border-radius: var(--noc-radius-lg) !important;
   padding: 0 !important;
   box-shadow: var(--shadow-lg), 0 0 30px rgba(14, 165, 233, 0.1) !important;
   border: 1px solid var(--border-light) !important;
@@ -471,7 +527,7 @@ html, body, #root {
 .mapboxgl-ctrl-group {
   background: var(--bg-surface) !important;
   border: 1px solid var(--border) !important;
-  border-radius: var(--radius-md) !important;
+  border-radius: var(--noc-radius-md) !important;
   overflow: hidden;
 }
 
@@ -560,7 +616,7 @@ html, body, #root {
   background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
-  border-radius: var(--radius-md);
+  border-radius: var(--noc-radius-md);
 }
 
 /* ===== Utility ===== */
@@ -599,6 +655,10 @@ select option {
 /* Light-mode modal card adjustments */
 [data-theme="light"] .site-detail-modal {
   box-shadow: 0 25px 60px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
+.impact-service-print-only {
+  display: none;
 }
 
 /* Reporting PDF export */
@@ -648,6 +708,110 @@ select option {
   .reporting-export-root .glass-card {
     box-shadow: none !important;
   }
+
+  body:has(.impact-service-report-root) .dashboard-sidebar {
+    display: none !important;
+  }
+
+  body:has(.impact-service-report-root) .dashboard-shell-content {
+    padding-left: 0 !important;
+  }
+
+  .impact-service-no-print,
+  .impact-service-screen-table {
+    display: none !important;
+  }
+
+  .impact-service-print-only {
+    display: block !important;
+  }
+
+  .impact-service-report-root {
+    --background: #ffffff;
+    --card: #ffffff;
+    --card-foreground: #111827;
+    --popover: #ffffff;
+    --popover-foreground: #111827;
+    --foreground: #111827;
+    --muted-foreground: #475569;
+    --secondary-foreground: #111827;
+    --accent-foreground: #111827;
+    --border: #cbd5e1;
+    --bg-base: #ffffff;
+    --bg-surface: #ffffff;
+    --bg-elevated: #f8fafc;
+    --text-primary: #111827;
+    --text-secondary: #334155;
+    --text-muted: #475569;
+    width: auto !important;
+    min-height: auto !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    color: #111827 !important;
+    font-size: 8pt;
+  }
+
+  .impact-service-report-root main {
+    overflow: visible !important;
+    padding: 4mm 0 0 !important;
+  }
+
+  .impact-service-report-root header {
+    background: #ffffff !important;
+  }
+
+  .impact-service-kpi-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  }
+
+  .impact-service-primary-charts {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) !important;
+  }
+
+  .impact-service-secondary-charts {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .impact-service-report-root [data-slot="card"],
+  .impact-service-report-root [data-slot="chart"],
+  .impact-service-report-root tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .impact-service-report-root [data-slot="card"] {
+    box-shadow: none !important;
+  }
+
+  .impact-service-chart-card [data-slot="chart"] {
+    height: 155px !important;
+  }
+
+  .impact-service-top-alarms [data-slot="scroll-area"],
+  .impact-service-top-alarms [data-slot="scroll-area-viewport"] {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .impact-service-print-only {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  .impact-service-print-table {
+    table-layout: fixed;
+    width: 100%;
+    font-size: 6.5pt;
+  }
+
+  .impact-service-print-table th,
+  .impact-service-print-table td {
+    height: auto !important;
+    padding: 1.2mm 1mm !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+    vertical-align: top;
+  }
 }
 
 /* Reduced motion */
@@ -656,5 +820,63 @@ select option {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+@theme inline {
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-heading: 'Inter', system-ui, sans-serif;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  button:not(:disabled), [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  html {
+    @apply font-sans;
   }
 }

@@ -387,3 +387,47 @@ No other page is automatically migrated in this scope.
   normalization.
 - Adding new drill-down endpoints or analytics not already supplied by the
   backend.
+
+## Chart Readability Addendum
+
+The chart refinement approved after implementation adds these presentation
+rules without changing API requests or metric definitions:
+
+- KPI icons sit immediately beside their scorecard titles, and KPI values use a
+  larger display size.
+- Top Impacted Sites always renders every Site ID tick by disabling automatic
+  Y-axis interval skipping and reserving sufficient label width.
+- Stacked and grouped bars show a high-contrast value label for every non-zero
+  OPEN and CLEAR segment. The stacked charts do not add a separate total label.
+- Aging bars show their total value directly above each bar.
+- Category Distribution becomes a donut chart. The period total is shown in the
+  donut center, while a valued legend shows each category name and value.
+- Chart value labels use a larger, bold font than the original 10px trend
+  labels.
+- Every bar rectangle uses a larger consistent corner radius.
+
+## Compact Reporting and Alarm Sorting Addendum
+
+The approved reporting refinement adds these requirements:
+
+- Chart value labels use solid foreground colors without SVG stroke, outline,
+  or paint-order effects.
+- The screen layout uses compact reporting density: page gaps, card headers,
+  KPI height, chart height, table rows, and control height are reduced while
+  preserving readable labels and click targets.
+- A print action produces an A4 landscape report. Navigation, breadcrumb,
+  interactive filters, pagination, and screen-only controls are hidden.
+- The print report contains KPI cards, all charts, Top Alarm Names, and a
+  dedicated alarm detail dataset.
+- The print alarm dataset is independent of the active screen table filters.
+  It contains at most 100 OPEN alarms for the active global date and NOP
+  filters, ordered by Critical, Major, Minor, Warning, then newest date.
+- Alarm Detail Table sorting is server-side and applies across pagination.
+  Sortable columns are Tanggal, Site ID, Site Name, NOP, Alarm Name, Category,
+  Severity, Aging, Status, and SOW.
+- Sort columns are mapped through a backend whitelist. User input is never
+  interpolated directly into SQL.
+- Clicking a sortable header toggles ascending and descending order and resets
+  the table to page one. The default screen order remains newest date first.
+- The print stylesheet must avoid splitting KPI cards, chart cards, and table
+  rows where practical.

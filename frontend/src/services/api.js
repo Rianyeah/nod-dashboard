@@ -336,4 +336,26 @@ export async function fetchTicketingTicketDetail(ticketNumberSwfm) {
   return data;
 }
 
+// ===== Data Potensi =====
+
+export async function fetchDataPotensiDashboard(params) {
+  const { data } = await api.get('/data-potensi/dashboard', { params });
+  return data;
+}
+
+export async function fetchDataPotensiSites(params) {
+  const { data } = await api.get('/data-potensi/sites', { params });
+  return data;
+}
+
+export async function fetchDataPotensiStatusOptions() {
+  const { data } = await api.get('/data-potensi/status-options');
+  return data;
+}
+
+export async function fetchDataPotensiFilterOptions(params) {
+  const { data } = await api.get('/data-potensi/filter-options', { params });
+  return data;
+}
+
 export default api;

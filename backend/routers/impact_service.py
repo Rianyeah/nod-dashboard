@@ -13,6 +13,7 @@ GET /impact-service/alarms/{id}   - modal detail for one alarm
 """
 from datetime import date, datetime, timedelta, timezone
 import math
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 import runtime_compat  # noqa: F401
@@ -35,6 +36,30 @@ from models.impact_service import (
 
 router = APIRouter(prefix="/impact-service", tags=["Impact Service"])
 JAKARTA_TZ = timezone(timedelta(hours=7))
+
+SEVERITY_SORT_EXPRESSION = """
+CASE COALESCE(NULLIF(TRIM(a.severity), ''), 'Unknown')
+    WHEN 'Critical' THEN 1
+    WHEN 'Major' THEN 2
+    WHEN 'Minor' THEN 3
+    WHEN 'Warning' THEN 4
+    ELSE 5
+END
+""".strip()
+
+ALARM_SORT_EXPRESSIONS = {
+    "tanggal": "a.tanggal",
+    "site_id": "LOWER(COALESCE(a.site_id, ''))",
+    "site_name": "LOWER(COALESCE(a.site_name, ''))",
+    "nop": "LOWER(COALESCE(a.nop, ''))",
+    "alarm_name": "LOWER(COALESCE(a.alarm_name, ''))",
+    "category": "LOWER(COALESCE(a.category, ''))",
+    "severity": SEVERITY_SORT_EXPRESSION,
+    "aging": "a.aging",
+    "status": "LOWER(COALESCE(a.status, ''))",
+    "sow": "LOWER(COALESCE(a.sow, ''))",
+}
+ALARM_SORT_DIRECTIONS = {"asc": "ASC", "desc": "DESC"}
 
 
 def get_jakarta_today() -> date:
@@ -69,6 +94,13 @@ def build_optional_filters(
             ")"
         )
     return "".join(f" AND {part}" for part in filters)
+
+
+def build_alarm_order_by(sort_by: str, sort_dir: str) -> str:
+    """Build an ORDER BY clause exclusively from trusted expressions."""
+    expression = ALARM_SORT_EXPRESSIONS.get(sort_by, ALARM_SORT_EXPRESSIONS["tanggal"])
+    direction = ALARM_SORT_DIRECTIONS.get(sort_dir, "DESC")
+    return f"{expression} {direction} NULLS LAST, a.tanggal DESC, a.id DESC"
 
 
 FILTERS_QUERY = """
@@ -283,7 +315,7 @@ FROM alarm_impact_service a
 WHERE a.tanggal between :start_date and :end_date
 {nop_filter}
 {extra_filter}
-ORDER BY a.tanggal DESC, a.id DESC
+ORDER BY {order_by}
 LIMIT :limit OFFSET :offset
 """
 
@@ -592,6 +624,19 @@ async def list_impact_service_alarms(
     q: str | None = Query(None),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
+    sort_by: Literal[
+        "tanggal",
+        "site_id",
+        "site_name",
+        "nop",
+        "alarm_name",
+        "category",
+        "severity",
+        "aging",
+        "status",
+        "sow",
+    ] = Query("tanggal"),
+    sort_dir: Literal["asc", "desc"] = Query("desc"),
     session: AsyncSession = Depends(get_session),
 ):
     """Paginated Impact Service alarm detail table."""
@@ -614,7 +659,11 @@ async def list_impact_service_alarms(
     total = int_value(count_result.scalar())
 
     list_result = await session.execute(
-        text(ALARMS_LIST_QUERY.format(nop_filter=nop_filter, extra_filter=extra_filter)),
+        text(ALARMS_LIST_QUERY.format(
+            nop_filter=nop_filter,
+            extra_filter=extra_filter,
+            order_by=build_alarm_order_by(sort_by, sort_dir),
+        )),
         params,
     )
 

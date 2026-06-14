@@ -9,6 +9,7 @@ import {
   shouldRenderChartValue,
   sumChartValues,
 } from '../components/dashboard-charts/dashboardChartUtils.js';
+import { getSlaStatusColor } from '../features/ticketing/ticketingChartConfig.js';
 
 const src = (...parts) => readFileSync(resolve(process.cwd(), 'src', ...parts), 'utf8');
 const srcPath = (...parts) => resolve(process.cwd(), 'src', ...parts);
@@ -30,6 +31,13 @@ describe('shared dashboard chart contracts', () => {
     assert.equal(sumChartValues([{ total: 4 }, { total: '6' }, { total: null }], 'total'), 10);
   });
 
+  it('maps SLA labels to stable semantic chart colors', () => {
+    assert.equal(getSlaStatusColor('IN SLA'), 'var(--chart-3)');
+    assert.equal(getSlaStatusColor('OUT SLA'), 'var(--chart-2)');
+    assert.equal(getSlaStatusColor('PENDING'), 'var(--chart-4)');
+    assert.equal(getSlaStatusColor('UNKNOWN'), 'var(--chart-5)');
+  });
+
   it('provides focused shadcn chart helpers without changing the generated primitive', () => {
     for (const file of ['dashboardChartUtils.js','DashboardChartTooltipContent.jsx','DashboardChartLegend.jsx','DashboardChartEmpty.jsx','DashboardChartLabels.jsx']) {
       assert.equal(existsSync(srcPath('components', 'dashboard-charts', file)), true, file);
@@ -48,6 +56,7 @@ describe('shared dashboard chart contracts', () => {
     assert.match(labels, /InsideBarValueLabel/);
     assert.match(labels, /TopBarValueLabel/);
     assert.match(labels, /EndBarValueLabel/);
+    assert.equal((labels.match(/data-chart-value-label/g) || []).length, 3);
     assert.doesNotMatch(labels, /stroke=/);
   });
 });
