@@ -1,4 +1,4 @@
-import { getMarkerColor, getStatusLabel, formatAvailability, formatOutage } from '../../utils/mapColors';
+import { getMarkerColor, getStatusLabel } from '../../utils/mapColors';
 
 export default function StatusBadge({ availability, statusSite, size = 'sm' }) {
   const color = getMarkerColor(availability, statusSite);

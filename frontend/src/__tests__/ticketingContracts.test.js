@@ -42,6 +42,8 @@ describe('Ticketing dashboard contracts', () => {
     const pagePath = srcPath('pages', 'TicketingPage.jsx');
     assert.equal(existsSync(pagePath), true);
     const page = readFileSync(pagePath, 'utf8');
+    const charts = src('features', 'ticketing', 'TicketingCharts.jsx');
+    const feature = `${page}\n${charts}`;
 
     for (const label of [
       'Ticketing',
@@ -71,7 +73,7 @@ describe('Ticketing dashboard contracts', () => {
       'Top Problem Sites',
       'Ticket List',
     ]) {
-      assert.match(page, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+      assert.match(feature, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     }
 
     assert.doesNotMatch(page, /Scorecard title="Median MTTR"/);
@@ -92,53 +94,68 @@ describe('Ticketing dashboard contracts', () => {
       'ticketing-rc-category',
       'ticketing-escalate',
     ]) {
-      assert.match(page, new RegExp(`id="${id}"`));
+      assert.match(page, new RegExp(id));
     }
   });
 
   it('keeps fixed Kabupaten/Kota breakdown, table drilldown, and chart primitives visible', () => {
     const page = src('pages', 'TicketingPage.jsx');
+    const charts = src('features', 'ticketing', 'TicketingCharts.jsx');
+    const feature = `${page}\n${charts}`;
 
-    assert.match(page, /Kabupaten\/Kota Distribution/);
-    assert.doesNotMatch(page, /NOP Distribution/);
-    assert.doesNotMatch(page, /Ticket Status Distribution/);
-    assert.match(page, /visiting_backup_distribution/);
-    assert.match(page, /visiting_site/);
-    assert.match(page, /backup_genset/);
+    assert.match(feature, /Kabupaten\/Kota Distribution/);
+    assert.doesNotMatch(feature, /NOP Distribution/);
+    assert.doesNotMatch(feature, /Ticket Status Distribution/);
+    assert.match(charts, /visiting_backup_distribution/);
+    assert.match(charts, /visiting_site/);
+    assert.match(charts, /backup_genset/);
     assert.match(page, /ticket_number_swfm/);
     assert.match(page, /setSelectedTicket/);
     assert.match(page, /fetchTicketingTicketDetail\(selectedTicket/);
-    assert.match(page, /ResponsiveContainer/);
-    assert.match(page, /BarChart/);
-    assert.match(page, /LineChart/);
-    assert.match(page, /<Line /);
+    assert.match(page, /TicketingCharts/);
+    assert.doesNotMatch(page, /ResponsiveContainer/);
+    assert.match(charts, /ChartContainer/g);
+    assert.match(charts, /BarChart/);
+    assert.match(charts, /LineChart/);
+    assert.match(charts, /<Line /);
+    assert.match(charts, /DashboardChartTooltipContent/);
+    assert.match(charts, /accessibilityLayer/g);
   });
 
   it('shows Ticketing MoM/category percentages, SLA pie hover, and help hints', () => {
     const page = src('pages', 'TicketingPage.jsx');
+    const charts = src('features', 'ticketing', 'TicketingCharts.jsx');
+    const feature = `${page}\n${charts}`;
 
     assert.match(page, /total_tickets_mom_delta/);
     assert.match(page, /total_tickets_mom_rate/);
     assert.match(page, /formatTicketMoM/);
     assert.match(page, /categoryShare/);
-    assert.match(page, /BPS.*%/s);
-    assert.match(page, /TS.*%/s);
-    assert.match(page, /PieChart/);
-    assert.match(page, /Pie/);
-    assert.match(page, /activeSlaIndex/);
-    assert.match(page, /activeShape=\{renderActivePieShape\}/);
-    assert.match(page, /HelpCircle/);
+    assert.match(page, /BPS \$\{categoryShare/);
+    assert.match(page, /TS \$\{categoryShare/);
+    assert.match(charts, /PieChart/);
+    assert.match(charts, /dataKey="tickets"/);
+    assert.match(charts, /nameKey="label"/);
+    assert.match(charts, /DonutCenterLabel/);
+    assert.match(charts, /getSlaStatusColor/);
+    assert.match(charts, /activeSlaIndex/);
+    assert.match(charts, /activeShape=\{renderActivePieShape\}/);
+    assert.match(feature, /HelpCircle/);
     assert.match(page, /Response P90 menghitung persentil ke-90/);
-    assert.match(page, /Pareto menampilkan kontribusi kumulatif/);
+    assert.match(charts, /Pareto menampilkan kontribusi kumulatif/);
+    assert.match(charts, /ComposedChart/);
+    assert.match(charts, /dataKey="cumulative_rate"/);
+    assert.match(charts, /yAxisId="percentage"/);
+    assert.match(charts, /domain=\{\[0,\s*100\]\}/);
   });
 
   it('uses compact chart heights for the revised dashboard layout', () => {
-    const page = src('pages', 'TicketingPage.jsx');
+    const charts = src('features', 'ticketing', 'TicketingCharts.jsx');
 
-    assert.match(page, /height=\{220\}/);
-    assert.doesNotMatch(page, /height=\{280\}/);
-    assert.ok(page.includes('xl:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.65fr)_minmax(280px,0.65fr)]'));
-    assert.match(page, /xl:grid-cols-2/);
+    assert.match(charts, /h-\[220px\]/);
+    assert.doesNotMatch(charts, /h-\[280px\]/);
+    assert.ok(charts.includes('xl:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.65fr)_minmax(280px,0.65fr)]'));
+    assert.match(charts, /xl:grid-cols-2/);
   });
 
   it('keeps Ticketing page free from static sidebar shell and uses backend default date range', () => {
@@ -151,15 +168,49 @@ describe('Ticketing dashboard contracts', () => {
     assert.match(page, /default_end_date/);
   });
 
-  it('supports collapsing global filters and refresh retries filter loading', () => {
+  it('uses adaptive shadcn filters and refresh retries filter loading', () => {
     const page = src('pages', 'TicketingPage.jsx');
+    const header = page.split('</header>', 1)[0];
 
-    assert.match(page, /filtersCollapsed/);
-    assert.match(page, /setFiltersCollapsed/);
-    assert.match(page, /aria-expanded={!filtersCollapsed}/);
-    assert.match(page, /Collapse Filter/);
-    assert.match(page, /Show Filter/);
+    for (const component of [
+      'DashboardFilterBar',
+      'DashboardDateRangePicker',
+      'DashboardCombobox',
+      'DashboardFilterPopover',
+      'DashboardFilterChips',
+      'DashboardFilterSelect',
+      'DashboardSearchInput',
+      'DashboardTableToolbar',
+      'DashboardPagination',
+    ]) {
+      assert.match(page, new RegExp(component));
+    }
+    assert.match(header, /DashboardFilterBar/);
+    assert.match(header, /DashboardFilterPopover/);
+    assert.match(header, /lg:flex-nowrap/);
+    assert.doesNotMatch(page, /DashboardFilterSheet/);
+    assert.match(page, /useDebouncedValue\(search,\s*300\)/);
+    assert.doesNotMatch(page, /function SelectFilter/);
+    assert.doesNotMatch(page, /function DateFilter/);
+    assert.doesNotMatch(page, /filtersCollapsed/);
+    assert.doesNotMatch(page, /type="date"/);
+    assert.doesNotMatch(page, /<select/);
     assert.match(page, /loadFilterOptions/);
     assert.match(page, /handleRefresh/);
+  });
+
+  it('isolates ticket search and pagination from dashboard requests', () => {
+    const page = src('pages', 'TicketingPage.jsx');
+
+    assert.match(page, /const dashboardParams = useMemo/);
+    assert.match(page, /const tableParams = useMemo/);
+    assert.match(page, /dashboardLoading/);
+    assert.match(page, /tableLoading/);
+    assert.match(page, /fetchTicketingTickets\(tableParams\)/);
+    assert.match(page, /resetTableFilters/);
+    assert.match(page, /Reset tabel/);
+
+    const dashboardRequestBlock = page.split('fetchTicketingDashboard(dashboardParams)', 2)[0];
+    assert.doesNotMatch(dashboardRequestBlock.slice(-500), /fetchTicketingTickets/);
   });
 });

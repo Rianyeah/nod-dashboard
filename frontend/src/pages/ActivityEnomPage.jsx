@@ -2,45 +2,39 @@
 import { Component, useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
+  ArrowCounterClockwiseIcon,
+  CaretDownIcon,
+  CaretUpDownIcon,
+  CaretUpIcon,
+} from '@phosphor-icons/react';
+import {
   Activity,
   ArrowLeft,
-  BarChart3,
   CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
   ClipboardList,
-  FileText,
-  Filter,
-  Layers3,
-  MapPin,
-  Search,
-  SlidersHorizontal,
-  Trophy,
   TrendingUp,
   Users,
   X,
 } from 'lucide-react';
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ComposedChart,
-  LabelList,
-  Legend,
-  Line,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
 import Breadcrumb from '../components/Breadcrumb';
-import { useDashboardThemeTokens } from '../hooks/useDashboardThemeTokens';
 import {
-  DashboardChartPanel,
-  DashboardChartTooltip,
-  DashboardInput,
+  DashboardCombobox,
+  DashboardFilterBar,
+  DashboardFilterSelect,
+  DashboardPagination,
+  DashboardPeriodPicker,
+  DashboardSearchInput,
+  DashboardTableToolbar,
+} from '../components/dashboard-filters/DashboardFilters';
+import { cn } from '../lib/utils';
+import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert';
+import { Badge } from '../components/ui/badge';
+import { Button } from '../components/ui/button';
+import { ACTIVITY_CHART_COLORS } from '../features/activity-enom/activityEnomChartConfig';
+import { ActivityEnomCharts } from '../features/activity-enom/ActivityEnomCharts';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import {
   DashboardKpiCard,
-  DashboardSelect,
   DashboardStatusBadge,
   DashboardTableShell,
 } from '../components/ui/DashboardPrimitives';
@@ -56,28 +50,20 @@ import {
 import { formatNumber } from '../utils/formatters';
 
 const TABLE_LIMIT = 20;
-const COLORS = {
-  total: '#60A5FA',
-  open: '#EF4444',
-  close: '#10B981',
-  sites: '#A78BFA',
-  category: '#F59E0B',
-  muted: '#94A3B8',
-};
 const MONTH_FORMATTER = new Intl.DateTimeFormat('id-ID', { month: 'long' });
 const MONTH_YEAR_FORMATTER = new Intl.DateTimeFormat('id-ID', { month: 'long', year: 'numeric' });
 
-const SORT_OPTIONS = [
-  { value: 'create_date', label: 'Bulan' },
-  { value: 'site_id', label: 'Site ID' },
-  { value: 'site_name', label: 'Site Name' },
-  { value: 'nop', label: 'NOP' },
-  { value: 'kabupaten', label: 'Kabupaten' },
-  { value: 'part', label: 'Kategori' },
-  { value: 'activity', label: 'Activity' },
-  { value: 'status', label: 'Status' },
-  { value: 'week_done', label: 'Week Done' },
-  { value: 'date_done', label: 'Date Done' },
+const ACTIVITY_TABLE_COLUMNS = [
+  { sortKey: 'create_date', label: 'Bulan' },
+  { sortKey: 'site_id', label: 'Site ID' },
+  { sortKey: 'site_name', label: 'Site Name' },
+  { sortKey: 'nop', label: 'NOP' },
+  { sortKey: 'kabupaten', label: 'Kabupaten' },
+  { sortKey: 'part', label: 'Kategori' },
+  { sortKey: 'activity', label: 'Activity' },
+  { sortKey: 'status', label: 'Status' },
+  { sortKey: 'week_done', label: 'Week Done' },
+  { sortKey: 'date_done', label: 'Date Done' },
 ];
 
 class ActivityEnomErrorBoundary extends Component {
@@ -148,73 +134,10 @@ function formatPercent(value) {
   return `${Number(value).toFixed(1).replace('.', ',')}%`;
 }
 
-function ChartEmpty({ label = 'Data belum tersedia untuk filter ini.' }) {
-  return (
-    <div className="flex h-[220px] items-center justify-center rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg-elevated)]/40">
-      <p className="text-xs text-[var(--text-muted)]">{label}</p>
-    </div>
-  );
-}
-
-function ActivityTooltip({ active, payload, label }) {
-  if (!active || !payload?.length) return null;
-  return (
-    <DashboardChartTooltip
-      active={active}
-      payload={payload}
-      label={label}
-      labelFormatter={(value) => (String(value).includes('-') ? formatMonthLabel(value, true) : value)}
-      valueFormatter={formatNumber}
-    />
-  );
-}
-
 function StatusBadge({ value }) {
   const status = String(value || '').toUpperCase();
   const tone = status === 'OPEN' ? 'danger' : status === 'CLOSE' ? 'success' : 'neutral';
   return <DashboardStatusBadge tone={tone}>{status || '-'}</DashboardStatusBadge>;
-}
-
-function RankingPanel({ rows }) {
-  if (!rows?.length) return <ChartEmpty />;
-
-  return (
-    <div className="h-[260px] overflow-y-auto pr-1 xl:h-[552px]">
-      <div className="space-y-2">
-        {rows.map((row, index) => {
-          const rate = Math.max(0, Math.min(100, Number(row.completion_rate || 0)));
-          return (
-            <div key={row.label} className="border-b border-[var(--border)] pb-2 last:border-b-0">
-              <div className="flex items-start gap-3">
-                <span className="mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-lg border border-[var(--border-light)] bg-[var(--bg-elevated)] font-mono text-[11px] font-semibold text-[var(--text-muted)]">
-                  {index + 1}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <p className="truncate text-xs font-semibold text-[var(--text-primary)]" title={row.label}>
-                      {row.label}
-                    </p>
-                    <p className="font-mono text-sm font-bold text-emerald-300">{formatPercent(rate)}</p>
-                  </div>
-                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--bg-elevated)]">
-                    <div
-                      className="h-full rounded-full bg-emerald-400"
-                      style={{ width: `${rate}%` }}
-                    />
-                  </div>
-                  <div className="mt-1.5 grid grid-cols-3 gap-2 text-[10px] text-[var(--text-muted)]">
-                    <span>Total <b className="font-mono text-[var(--text-secondary)]">{formatNumber(row.total)}</b></span>
-                    <span>Open <b className="font-mono text-red-300">{formatNumber(row.open)}</b></span>
-                    <span>Close <b className="font-mono text-emerald-300">{formatNumber(row.close)}</b></span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
 }
 
 function ActivityDetailModal({ detail, loading, onClose }) {
@@ -300,7 +223,6 @@ function ActivityDetailModal({ detail, loading, onClose }) {
 
 function ActivityEnomDashboard() {
   const navigate = useNavigate();
-  const themeTokens = useDashboardThemeTokens();
   const [filterOptions, setFilterOptions] = useState({ months: [], nops: [], categories: [], default_month: null });
   const [selectedMonth, setSelectedMonth] = useState('');
   const [selectedNop, setSelectedNop] = useState('');
@@ -324,7 +246,8 @@ function ActivityEnomDashboard() {
   const [topActivities, setTopActivities] = useState([]);
   const [activities, setActivities] = useState({ items: [], total: 0, page: 1, limit: TABLE_LIMIT, total_pages: 0 });
   const [filtersLoaded, setFiltersLoaded] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [dashboardLoading, setDashboardLoading] = useState(true);
+  const [tableLoading, setTableLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedActivityId, setSelectedActivityId] = useState(null);
   const [selectedActivityDetail, setSelectedActivityDetail] = useState(null);
@@ -350,7 +273,8 @@ function ActivityEnomDashboard() {
         console.error('Failed to load Activity ENOM filters:', err);
         if (!cancelled) {
           setError('Gagal memuat filter Activity ENOM.');
-          setLoading(false);
+          setDashboardLoading(false);
+          setTableLoading(false);
           setFiltersLoaded(true);
         }
       });
@@ -361,58 +285,84 @@ function ActivityEnomDashboard() {
     setPage(1);
   }, [selectedMonth, selectedNop, selectedCategory, statusFilter, search, sortBy, sortDir]);
 
-  const baseParams = useMemo(() => ({
+  const debouncedSearch = useDebouncedValue(search, 300);
+
+  const dashboardParams = useMemo(() => ({
     month_date: selectedMonth,
     nop: selectedNop || undefined,
     category: selectedCategory || undefined,
   }), [selectedCategory, selectedMonth, selectedNop]);
 
   const tableParams = useMemo(() => ({
-    ...baseParams,
+    ...dashboardParams,
     status: statusFilter || undefined,
-    q: search.trim() || undefined,
+    q: debouncedSearch.trim() || undefined,
     page,
     limit: TABLE_LIMIT,
     sort_by: sortBy,
     sort_dir: sortDir,
-  }), [baseParams, page, search, sortBy, sortDir, statusFilter]);
+  }), [dashboardParams, debouncedSearch, page, sortBy, sortDir, statusFilter]);
 
   useEffect(() => {
     if (!selectedMonth) return;
     let cancelled = false;
-    setLoading(true);
+    setDashboardLoading(true);
     setError(null);
     Promise.all([
-      fetchActivityEnomSummary(baseParams),
-      fetchActivityEnomTrend(baseParams),
-      fetchActivityEnomBreakdowns(baseParams),
-      fetchActivityEnomTopActivities({ ...baseParams, limit: 10 }),
-      fetchActivityEnomActivities(tableParams),
+      fetchActivityEnomSummary(dashboardParams),
+      fetchActivityEnomTrend(dashboardParams),
+      fetchActivityEnomBreakdowns(dashboardParams),
+      fetchActivityEnomTopActivities({ ...dashboardParams, limit: 10 }),
     ])
-      .then(([nextSummary, nextTrend, nextBreakdowns, nextTopActivities, nextActivities]) => {
+      .then(([nextSummary, nextTrend, nextBreakdowns, nextTopActivities]) => {
         if (cancelled) return;
         setSummary(nextSummary);
         setTrend(nextTrend || []);
         setBreakdowns(nextBreakdowns || {});
         setTopActivities(nextTopActivities || []);
-        setActivities(nextActivities || { items: [], total: 0, page: 1, limit: TABLE_LIMIT, total_pages: 0 });
       })
       .catch((err) => {
         console.error('Failed to load Activity ENOM dashboard:', err);
         if (!cancelled) setError('Gagal memuat data Activity ENOM.');
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setDashboardLoading(false);
       });
     return () => { cancelled = true; };
-  }, [baseParams, selectedMonth, tableParams]);
+  }, [dashboardParams, selectedMonth]);
+
+  useEffect(() => {
+    if (!selectedMonth) return;
+    let cancelled = false;
+    setTableLoading(true);
+    fetchActivityEnomActivities(tableParams)
+      .then((nextActivities) => {
+        if (!cancelled) {
+          setActivities(nextActivities || {
+            items: [],
+            total: 0,
+            page: 1,
+            limit: TABLE_LIMIT,
+            total_pages: 0,
+          });
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to load Activity ENOM table:', err);
+        if (!cancelled) setError('Gagal memuat tabel Activity ENOM.');
+      })
+      .finally(() => {
+        if (!cancelled) setTableLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [selectedMonth, tableParams]);
 
   useEffect(() => {
     if (!selectedActivityId || !selectedMonth) return;
     let cancelled = false;
     setModalLoading(true);
     setSelectedActivityDetail(null);
-    fetchActivityEnomActivityDetail(selectedActivityId, baseParams)
+    fetchActivityEnomActivityDetail(selectedActivityId, dashboardParams)
       .then((detail) => {
         if (!cancelled) setSelectedActivityDetail(detail);
       })
@@ -424,7 +374,7 @@ function ActivityEnomDashboard() {
         if (!cancelled) setModalLoading(false);
       });
     return () => { cancelled = true; };
-  }, [baseParams, selectedActivityId, selectedMonth]);
+  }, [dashboardParams, selectedActivityId, selectedMonth]);
 
   const closeModal = useCallback(() => {
     setSelectedActivityId(null);
@@ -441,6 +391,22 @@ function ActivityEnomDashboard() {
   const contributionTitle = selectedNop ? 'Kabupaten Contribution' : 'NOP Contribution';
   const rankingTitle = selectedNop ? 'Ranking Kabupaten' : 'Ranking NOP';
   const totalPages = activities.total_pages || 0;
+  const resetTableFilters = () => {
+    setSearch('');
+    setStatusFilter('');
+    setSortBy('create_date');
+    setSortDir('desc');
+    setPage(1);
+  };
+  const handleTableSort = useCallback((columnKey) => {
+    if (sortBy === columnKey) {
+      setSortDir((currentDirection) => (currentDirection === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortBy(columnKey);
+      setSortDir('asc');
+    }
+    setPage(1);
+  }, [sortBy]);
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[var(--bg-base)]">
@@ -465,11 +431,32 @@ function ActivityEnomDashboard() {
               </p>
             </div>
           </div>
-          <div className="grid w-full gap-2 md:w-auto md:grid-cols-3">
-            <DashboardSelect id="activity-enom-month" label="Bulan" value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)} options={monthOptions} placeholder={null} />
-            <DashboardSelect id="activity-enom-nop" label="NOP" value={selectedNop} onChange={(event) => setSelectedNop(event.target.value)} options={filterOptions.nops} placeholder="Semua NOP" />
-            <DashboardSelect id="activity-enom-category" label="Kategori" value={selectedCategory} onChange={(event) => setSelectedCategory(event.target.value)} options={filterOptions.categories} placeholder="Semua Kategori" />
-          </div>
+          <DashboardFilterBar className="w-full border-0 bg-transparent p-0 shadow-none md:w-auto">
+            <DashboardPeriodPicker
+              id="activity-enom-month"
+              label="Bulan"
+              value={selectedMonth}
+              onChange={setSelectedMonth}
+              options={monthOptions}
+              includeAll={false}
+            />
+            <DashboardCombobox
+              id="activity-enom-nop"
+              label="NOP"
+              value={selectedNop}
+              onChange={setSelectedNop}
+              options={filterOptions.nops}
+              allLabel="Semua NOP"
+            />
+            <DashboardCombobox
+              id="activity-enom-category"
+              label="Kategori"
+              value={selectedCategory}
+              onChange={setSelectedCategory}
+              options={filterOptions.categories}
+              allLabel="Semua Kategori"
+            />
+          </DashboardFilterBar>
         </div>
       </header>
 
@@ -477,166 +464,118 @@ function ActivityEnomDashboard() {
 
       <main className="flex-1 space-y-4 overflow-y-auto p-4">
         {error && (
-          <section className="rounded-lg border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-            {error}
-          </section>
+          <Alert variant="destructive">
+            <AlertTitle>Data tidak dapat diperbarui</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         )}
 
         <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
-          {loading && !summary ? (
+          {dashboardLoading && !summary ? (
             Array.from({ length: 5 }, (_, index) => <div key={index} className="skeleton h-[96px] rounded-xl" />)
           ) : (
             <>
-              <DashboardKpiCard title="Total Activity" value={formatNumber(summary?.total_activity)} icon={ClipboardList} accent={COLORS.total} glow="rgba(96,165,250,0.14)" />
-              <DashboardKpiCard title="Impacted Site" value={formatNumber(summary?.impacted_sites)} icon={Users} accent={COLORS.sites} glow="rgba(167,139,250,0.14)" />
-              <DashboardKpiCard title="OPEN Activity" value={formatNumber(summary?.open_activity)} icon={Activity} accent={COLORS.open} glow="rgba(239,68,68,0.14)" />
-              <DashboardKpiCard title="CLOSE Activity" value={formatNumber(summary?.close_activity)} icon={CheckCircle2} accent={COLORS.close} glow="rgba(16,185,129,0.14)" />
-              <DashboardKpiCard title="Completion Rate" value={formatPercent(summary?.completion_rate)} icon={TrendingUp} accent={COLORS.category} glow="rgba(245,158,11,0.14)" />
+              <DashboardKpiCard title="Total Activity" value={formatNumber(summary?.total_activity)} icon={ClipboardList} accent={ACTIVITY_CHART_COLORS.total} glow="rgba(96,165,250,0.14)" />
+              <DashboardKpiCard title="Impacted Site" value={formatNumber(summary?.impacted_sites)} icon={Users} accent={ACTIVITY_CHART_COLORS.sites} glow="rgba(167,139,250,0.14)" />
+              <DashboardKpiCard title="OPEN Activity" value={formatNumber(summary?.open_activity)} icon={Activity} accent={ACTIVITY_CHART_COLORS.open} glow="rgba(239,68,68,0.14)" />
+              <DashboardKpiCard title="CLOSE Activity" value={formatNumber(summary?.close_activity)} icon={CheckCircle2} accent={ACTIVITY_CHART_COLORS.close} glow="rgba(16,185,129,0.14)" />
+              <DashboardKpiCard title="Completion Rate" value={formatPercent(summary?.completion_rate)} icon={TrendingUp} accent={ACTIVITY_CHART_COLORS.category} glow="rgba(245,158,11,0.14)" />
             </>
           )}
         </section>
 
-        <section className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-          <DashboardChartPanel title="Monthly Activity Trend" icon={TrendingUp} className="xl:col-span-2">
-            {trend.length ? (
-              <ResponsiveContainer width="100%" height={260}>
-                <ComposedChart data={trend} margin={{ top: 12, right: 18, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={themeTokens.chartGrid} vertical={false} />
-                  <XAxis dataKey="create_date" tickFormatter={formatMonthLabel} tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
-                  <YAxis tick={{ fontSize: 10, fill: themeTokens.axisTick }} width={44} />
-                  <Tooltip content={<ActivityTooltip />} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Bar dataKey="open" name="OPEN" stackId="status" fill={COLORS.open} radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="close" name="CLOSE" stackId="status" fill={COLORS.close} radius={[4, 4, 0, 0]}>
-                    <LabelList dataKey="total" position="top" formatter={formatNumber} fill="var(--text-muted)" fontSize={10} />
-                  </Bar>
-                  <Line type="monotone" dataKey="total" name="Total Trend" stroke={COLORS.total} strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
-                </ComposedChart>
-              </ResponsiveContainer>
-            ) : <ChartEmpty />}
-          </DashboardChartPanel>
-
-          <DashboardChartPanel title={rankingTitle} icon={Trophy} className="xl:row-span-2">
-            <RankingPanel rows={breakdowns.ranking || []} />
-          </DashboardChartPanel>
-
-          <DashboardChartPanel title={contributionTitle} icon={selectedNop ? MapPin : BarChart3}>
-            {(breakdowns.contribution || []).length ? (
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={(breakdowns.contribution || []).slice(0, 10)} layout="vertical" margin={{ top: 6, right: 18, left: 76, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={themeTokens.chartGrid} vertical={false} />
-                  <XAxis type="number" tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
-                  <YAxis type="category" dataKey="label" width={112} tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
-                  <Tooltip content={<ActivityTooltip />} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Bar dataKey="open" name="OPEN" stackId="status" fill={COLORS.open} radius={[0, 4, 4, 0]} />
-                  <Bar dataKey="close" name="CLOSE" stackId="status" fill={COLORS.close} radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : <ChartEmpty />}
-          </DashboardChartPanel>
-
-          <DashboardChartPanel title="Week Done Progress" icon={SlidersHorizontal}>
-            {(breakdowns.by_week_done || []).length ? (
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={breakdowns.by_week_done} margin={{ top: 12, right: 18, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={themeTokens.chartGrid} vertical={false} />
-                  <XAxis dataKey="label" tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
-                  <YAxis tick={{ fontSize: 10, fill: themeTokens.axisTick }} width={44} />
-                  <Tooltip content={<ActivityTooltip />} />
-                  <Bar dataKey="close" name="CLOSE" fill={COLORS.close} radius={[4, 4, 0, 0]}>
-                    <LabelList dataKey="close" position="top" formatter={formatNumber} fill="var(--text-muted)" fontSize={10} />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            ) : <ChartEmpty />}
-          </DashboardChartPanel>
-
-          <DashboardChartPanel title="Kategori Distribution" icon={Layers3}>
-            {(breakdowns.by_category || []).length ? (
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={breakdowns.by_category} layout="vertical" margin={{ top: 6, right: 18, left: 50, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={themeTokens.chartGrid} vertical={false} />
-                  <XAxis type="number" tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
-                  <YAxis type="category" dataKey="label" width={82} tick={{ fontSize: 10, fill: themeTokens.axisTick }} />
-                  <Tooltip content={<ActivityTooltip />} />
-                  <Bar dataKey="total" name="Total" fill={COLORS.category} radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : <ChartEmpty />}
-          </DashboardChartPanel>
-
-          <DashboardChartPanel title="Top Activity" icon={FileText} className="xl:col-span-2">
-            {topActivities.length ? (
-              <div className="overflow-auto">
-                <table className="w-full min-w-[720px] text-left text-xs">
-                  <thead className="border-b border-[var(--border)] text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
-                    <tr>
-                      <th className="px-3 py-2">Activity</th>
-                      <th className="px-3 py-2 text-right">Total</th>
-                      <th className="px-3 py-2 text-right">Sites</th>
-                      <th className="px-3 py-2 text-right">OPEN</th>
-                      <th className="px-3 py-2 text-right">CLOSE</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[var(--border)]">
-                    {topActivities.map((row) => (
-                      <tr key={row.activity} className="hover:bg-[var(--bg-hover)]/50">
-                        <td className="px-3 py-2 font-medium text-[var(--text-primary)]">{row.activity}</td>
-                        <td className="px-3 py-2 text-right font-mono">{formatNumber(row.total)}</td>
-                        <td className="px-3 py-2 text-right font-mono">{formatNumber(row.sites)}</td>
-                        <td className="px-3 py-2 text-right font-mono text-red-300">{formatNumber(row.open)}</td>
-                        <td className="px-3 py-2 text-right font-mono text-emerald-300">{formatNumber(row.close)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : <ChartEmpty />}
-          </DashboardChartPanel>
-        </section>
+        <ActivityEnomCharts
+          trend={trend}
+          breakdowns={breakdowns}
+          selectedNop={selectedNop}
+          rankingTitle={rankingTitle}
+          contributionTitle={contributionTitle}
+          formatMonthLabel={formatMonthLabel}
+          topActivities={topActivities}
+        />
 
         <DashboardTableShell
           title="Activity Detail Table"
           icon={ClipboardList}
           count={`${formatNumber(activities.total)} rows`}
           action={(
-            <div className="flex flex-wrap items-end gap-2">
-              <DashboardInput
+            <DashboardTableToolbar
+              data-testid="activity-enom-table-toolbar"
+              className="w-full items-center lg:w-auto lg:flex-nowrap [&>div:first-child]:items-center [&>div:first-child]:lg:flex-nowrap"
+            >
+              <DashboardSearchInput
                 id="activity-enom-search"
-                label=""
-                type="search"
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
+                onChange={setSearch}
                 placeholder="Search site, activity, kabupaten..."
-                inputClassName="min-w-[220px] pl-8"
+                className="min-w-[240px] sm:max-w-[360px]"
               />
-              <div className="pointer-events-none relative -ml-[222px] mb-2 mr-[198px] hidden md:block">
-                <Search className="size-3.5 text-[var(--text-muted)]" />
-              </div>
-              <DashboardSelect id="activity-enom-status" label="Status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} options={['OPEN', 'CLOSE']} placeholder="Semua Status" className="min-w-[130px]" />
-              <DashboardSelect id="activity-enom-sort-by" label="Sort By" value={sortBy} onChange={(event) => setSortBy(event.target.value)} options={SORT_OPTIONS} placeholder={null} className="min-w-[150px]" />
-              <DashboardSelect id="activity-enom-sort-dir" label="Direction" value={sortDir} onChange={(event) => setSortDir(event.target.value)} options={[{ value: 'desc', label: 'Desc' }, { value: 'asc', label: 'Asc' }]} placeholder={null} className="min-w-[110px]" />
-              <span className="inline-flex items-center gap-1 rounded-lg border border-[var(--border)] px-2 py-2 text-[10px] text-[var(--text-muted)]">
-                <Filter className="size-3" />
+              <DashboardFilterSelect
+                id="activity-enom-status"
+                label=""
+                ariaLabel="Filter status activity"
+                value={statusFilter}
+                onChange={setStatusFilter}
+                options={['OPEN', 'CLOSE']}
+                allLabel="Semua Status"
+                triggerClassName="min-w-[132px]"
+              />
+              <Badge variant="outline" className="h-8 shrink-0">
                 {selectedNop || 'Semua NOP'}
-              </span>
-            </div>
+              </Badge>
+              <Button type="button" variant="ghost" size="sm" className="shrink-0" onClick={resetTableFilters}>
+                <ArrowCounterClockwiseIcon data-icon="inline-start" />
+                Reset tabel
+              </Button>
+            </DashboardTableToolbar>
           )}
         >
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead>
                 <tr>
-                  {['Bulan', 'Site ID', 'Site Name', 'NOP', 'Kabupaten', 'Kategori', 'Activity', 'Status', 'Week Done', 'Date Done'].map((head) => (
-                    <th key={head} className="sticky top-0 z-10 whitespace-nowrap bg-[var(--bg-elevated)] px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-                      {head}
-                    </th>
-                  ))}
+                  {ACTIVITY_TABLE_COLUMNS.map((column) => {
+                    const isActive = sortBy === column.sortKey;
+                    const ariaSort = isActive
+                      ? (sortDir === 'asc' ? 'ascending' : 'descending')
+                      : 'none';
+                    const nextDirection = isActive && sortDir === 'asc' ? 'descending' : 'ascending';
+
+                    return (
+                      <th
+                        key={column.sortKey}
+                        aria-sort={ariaSort}
+                        className="sticky top-0 z-10 whitespace-nowrap bg-[var(--bg-elevated)] px-1 py-1.5"
+                      >
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          data-testid={`activity-enom-sort-${column.sortKey}`}
+                          aria-label={`Urutkan ${column.label} ${nextDirection}`}
+                          title={`Urutkan ${column.label} ${nextDirection}`}
+                          onClick={() => handleTableSort(column.sortKey)}
+                          className={cn(
+                            'h-7 justify-start gap-1 px-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]',
+                            isActive && 'text-[var(--primary-light)]',
+                          )}
+                        >
+                          <span>{column.label}</span>
+                          {isActive ? (
+                            sortDir === 'asc'
+                              ? <CaretUpIcon data-icon="inline-end" />
+                              : <CaretDownIcon data-icon="inline-end" />
+                          ) : (
+                            <CaretUpDownIcon data-icon="inline-end" className="opacity-45" />
+                          )}
+                        </Button>
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
-                {loading && !activities.items.length ? (
+                {tableLoading && !activities.items.length ? (
                   Array.from({ length: 8 }, (_, index) => (
                     <tr key={index}>
                       <td colSpan={10} className="px-3 py-2"><div className="skeleton h-9 rounded-lg" /></td>
@@ -671,31 +610,14 @@ function ActivityEnomDashboard() {
               </tbody>
             </table>
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] px-4 py-3">
-            <p className="text-xs text-[var(--text-muted)]">
-              Page {activities.page || page} of {totalPages || 1}
-            </p>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setPage((current) => Math.max(1, current - 1))}
-                disabled={page <= 1 || loading}
-                className="inline-flex items-center gap-1 rounded-lg border border-[var(--border-light)] px-3 py-1.5 text-xs font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--primary)]/30 hover:text-[var(--primary-light)] disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <ChevronLeft className="size-3" />
-                Prev
-              </button>
-              <button
-                type="button"
-                onClick={() => setPage((current) => (totalPages ? Math.min(totalPages, current + 1) : current + 1))}
-                disabled={loading || (totalPages > 0 && page >= totalPages)}
-                className="inline-flex items-center gap-1 rounded-lg border border-[var(--border-light)] px-3 py-1.5 text-xs font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--primary)]/30 hover:text-[var(--primary-light)] disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Next
-                <ChevronRight className="size-3" />
-              </button>
-            </div>
-          </div>
+          <DashboardPagination
+            page={activities.page || page}
+            totalPages={totalPages || 1}
+            onPageChange={setPage}
+            disabled={tableLoading}
+            className="border-t border-[var(--border)] px-4 py-2"
+            testIdPrefix="activity-enom"
+          />
         </DashboardTableShell>
 
         {!filtersLoaded && <div className="skeleton h-10 rounded-lg" />}

@@ -1,4 +1,10 @@
-import { ChevronDown, MapPin } from 'lucide-react';
+import { MapPinIcon } from '@phosphor-icons/react';
+
+import {
+  DashboardCombobox,
+  DashboardFilterBar,
+  DashboardFilterSelect,
+} from './dashboard-filters/DashboardFilters';
 
 const BULAN_OPTIONS = [
   { value: 1, label: 'Januari' },
@@ -17,22 +23,6 @@ const BULAN_OPTIONS = [
 
 const currentYear = new Date().getFullYear();
 const TAHUN_OPTIONS = Array.from({ length: 5 }, (_, i) => currentYear - i);
-
-function SelectDropdown({ id, value, onChange, children, className = '' }) {
-  return (
-    <div className="relative">
-      <select
-        id={id}
-        value={value ?? ''}
-        onChange={onChange}
-        className={`dashboard-control appearance-none rounded-lg py-2 pl-3 pr-8 text-sm backdrop-blur-sm transition-all duration-200 focus:border-[var(--primary)]/40 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/40 ${className}`}
-      >
-        {children}
-      </select>
-      <ChevronDown className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 opacity-50" />
-    </div>
-  );
-}
 
 export default function Header({ bulan, tahun, nop, nopOptions = [], onBulanChange, onTahunChange, onNopChange }) {
   return (
@@ -66,44 +56,43 @@ export default function Header({ bulan, tahun, nop, nopOptions = [], onBulanChan
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <div className="mr-2 flex items-center gap-1.5">
-            <MapPin className="size-3.5 text-[var(--text-muted)]" />
-            <SelectDropdown
+        <DashboardFilterBar className="w-full border-0 bg-transparent p-0 shadow-none md:w-auto">
+          <div className="flex items-end gap-1.5">
+            <MapPinIcon className="mb-2 text-muted-foreground" />
+            <DashboardCombobox
               id="filter-nop"
+              label="NOP"
               value={nop || ''}
-              onChange={(event) => onNopChange?.(event.target.value || null)}
+              onChange={(nextValue) => onNopChange?.(nextValue || null)}
+              options={nopOptions.map((option) => ({
+                value: option,
+                label: String(option).replace(/^NOP\s+/i, ''),
+              }))}
+              allLabel="Semua NOP"
               className="min-w-[150px]"
-            >
-              <option value="">Semua NOP</option>
-              {nopOptions.map((n) => (
-                <option key={n} value={n}>{String(n).replace('NOP ', '')}</option>
-              ))}
-            </SelectDropdown>
+            />
           </div>
 
-          <div className="mx-1 h-6 w-px bg-[var(--border-light)]" />
-
-          <SelectDropdown
+          <DashboardFilterSelect
             id="filter-bulan"
+            label="Bulan"
             value={bulan}
-            onChange={(event) => onBulanChange(Number(event.target.value))}
-          >
-            {BULAN_OPTIONS.map((b) => (
-              <option key={b.value} value={b.value}>{b.label}</option>
-            ))}
-          </SelectDropdown>
+            onChange={(nextValue) => onBulanChange(Number(nextValue))}
+            options={BULAN_OPTIONS}
+            includeAll={false}
+            className="min-w-[120px]"
+          />
 
-          <SelectDropdown
+          <DashboardFilterSelect
             id="filter-tahun"
+            label="Tahun"
             value={tahun}
-            onChange={(event) => onTahunChange(Number(event.target.value))}
-          >
-            {TAHUN_OPTIONS.map((t) => (
-              <option key={t} value={t}>{t}</option>
-            ))}
-          </SelectDropdown>
-        </div>
+            onChange={(nextValue) => onTahunChange(Number(nextValue))}
+            options={TAHUN_OPTIONS}
+            includeAll={false}
+            className="min-w-[96px]"
+          />
+        </DashboardFilterBar>
       </div>
     </header>
   );

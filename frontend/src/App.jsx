@@ -1,14 +1,31 @@
+import React, { Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import HomePage from './pages/HomePage';
 import SiteMapPage from './pages/SiteMapPage';
 import NetworkReportingPage from './pages/NetworkReportingPage';
-import ImpactServicePage from './pages/ImpactServicePage';
 import ActivityEnomPage from './pages/ActivityEnomPage';
 import TransportQualityPage from './pages/TransportQualityPage';
 import TicketingPage from './pages/TicketingPage';
+import DataPotensiPage from './pages/DataPotensiPage';
 import LoginPage from './pages/LoginPage';
 import { useSessionTimeout } from './hooks/useSessionTimeout';
 import { AppShell } from './components/DashboardSidebar';
+
+const ImpactServicePage = React.lazy(() => import('./pages/ImpactServicePage'));
+
+function ImpactServiceRoute() {
+  return (
+    <Suspense
+      fallback={(
+        <div className="flex min-h-64 items-center justify-center text-sm text-muted-foreground">
+          Memuat Impact Service...
+        </div>
+      )}
+    >
+      <ImpactServicePage />
+    </Suspense>
+  );
+}
 
 // Simple PrivateRoute wrapper
 function PrivateRoute({ children }) {
@@ -57,7 +74,7 @@ export default function App() {
             path="/impact-service"
             element={
               <PrivateRoute>
-                <ImpactServicePage />
+                <ImpactServiceRoute />
               </PrivateRoute>
             }
           />
@@ -82,6 +99,14 @@ export default function App() {
             element={
               <PrivateRoute>
                 <TicketingPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/data-potensi"
+            element={
+              <PrivateRoute>
+                <DataPotensiPage />
               </PrivateRoute>
             }
           />

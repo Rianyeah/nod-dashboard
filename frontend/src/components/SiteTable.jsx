@@ -1,19 +1,13 @@
 import { useState, useEffect } from 'react';
-import { Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { fetchSites } from '../services/api';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import StatusBadge from './ui/StatusBadge';
 import { formatAvailability, formatOutage } from '../utils/mapColors';
-
-function useDebouncedValue(value, delayMs = 300) {
-  const [debouncedValue, setDebouncedValue] = useState(value);
-
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => setDebouncedValue(value), delayMs);
-    return () => window.clearTimeout(timeoutId);
-  }, [value, delayMs]);
-
-  return debouncedValue;
-}
+import {
+  DashboardPagination,
+  DashboardSearchInput,
+  DashboardTableToolbar,
+} from './dashboard-filters/DashboardFilters';
 
 export default function SiteTable({ bulan, tahun, filters, onSiteSelect, siteCount, toolbar }) {
   const [data, setData] = useState({ data: [], total: 0, page: 1, limit: 15, total_pages: 0 });
@@ -57,8 +51,8 @@ export default function SiteTable({ bulan, tahun, filters, onSiteSelect, siteCou
     };
   }, [bulan, tahun, page, filters, debouncedSearchTerm]);
 
-  const handleSearchChange = (e) => {
-    setSearch(e.target.value);
+  const handleSearchChange = (value) => {
+    setSearch(value);
     setPage(1);
   };
 
@@ -91,27 +85,23 @@ export default function SiteTable({ bulan, tahun, filters, onSiteSelect, siteCou
   return (
     <div className="glass-card animate-fade-in flex flex-col h-full overflow-hidden">
       {/* Header */}
-      <div className="flex items-center gap-3 border-b border-[var(--border)] px-4 py-3">
+      <div className="flex items-center gap-3 border-b border-[var(--border)] px-4 py-2">
         <div className="min-w-0 flex items-baseline gap-3">
           <h3 className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-widest shrink-0">Daftar Site</h3>
           <span className="text-[10px] font-mono text-[var(--text-muted)]">
             {(siteCount ?? data.total ?? 0).toLocaleString()} sites
           </span>
         </div>
-        <div className="ml-auto flex min-w-0 items-center gap-2">
-          <div className="relative w-[320px] max-w-[38vw]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-muted)]" />
-          <input
+        <DashboardTableToolbar className="ml-auto min-w-0 flex-1 justify-end">
+          <DashboardSearchInput
             id="site-search"
-            type="text"
             placeholder="Cari site ID, nama, kabupaten..."
             value={search}
             onChange={handleSearchChange}
-            className="dashboard-control w-full rounded-lg py-1.5 pl-9 pr-3 text-[11px] placeholder:text-[var(--text-muted)] transition-all focus:border-[var(--primary)]/30 focus:outline-none focus:ring-1 focus:ring-[var(--primary)]/40"
+            className="max-w-[320px]"
           />
-          </div>
           {toolbar}
-        </div>
+        </DashboardTableToolbar>
       </div>
 
       {/* Table */}
@@ -165,16 +155,14 @@ export default function SiteTable({ bulan, tahun, filters, onSiteSelect, siteCou
         </table>
       </div>
 
-      {/* Pagination */}
-      <div className="flex items-center justify-between border-t border-[var(--border)] px-3 py-2 text-[10px] text-[var(--text-muted)]">
-        <span className="font-mono">Page {data.page}/{data.total_pages || 1} · {data.total} sites</span>
-        <div className="flex gap-1">
-          <button onClick={() => setPage(p => Math.max(1, p-1))} disabled={page <= 1}
-            className="rounded-lg p-1.5 transition-colors hover:bg-[var(--table-row-hover)] disabled:cursor-default disabled:opacity-20"><ChevronLeft className="w-3.5 h-3.5" /></button>
-          <button onClick={() => setPage(p => p+1)} disabled={page >= (data.total_pages||1)}
-            className="rounded-lg p-1.5 transition-colors hover:bg-[var(--table-row-hover)] disabled:cursor-default disabled:opacity-20"><ChevronRight className="w-3.5 h-3.5" /></button>
-        </div>
-      </div>
+      <DashboardPagination
+        page={data.page || page}
+        totalPages={data.total_pages || 1}
+        onPageChange={setPage}
+        disabled={loading}
+        className="border-t border-[var(--border)] px-3 py-1.5"
+        testIdPrefix="site"
+      />
     </div>
   );
 }

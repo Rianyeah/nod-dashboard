@@ -51,28 +51,28 @@ export function formatRevenueShort(value) {
 
 /**
  * Format payload/data volume with smart units.
- * Input is assumed to be in KB.
- * @param {number} value — Payload in KB
- * @returns {string} — e.g. "11,3 TB" or "2,8 GB"
+ * Input is assumed to be in MB.
+ * @param {number} value — Payload in MB
+ * @returns {string} — e.g. "1,5 PB", "11,3 TB" or "2,8 GB"
  */
 export function formatPayload(value) {
   if (value == null || isNaN(value)) return '-';
   const num = Number(value);
-  // KB → MB → GB → TB
-  const mb = num / 1_024;
-  const gb = mb / 1_024;
+  // MB → GB → TB → PB
+  const gb = num / 1_024;
   const tb = gb / 1_024;
+  const pb = tb / 1_024;
 
+  if (pb >= 1) {
+    return `${pb.toFixed(1).replace('.', ',')} PB`;
+  }
   if (tb >= 1) {
     return `${tb.toFixed(1).replace('.', ',')} TB`;
   }
   if (gb >= 1) {
     return `${gb.toFixed(1).replace('.', ',')} GB`;
   }
-  if (mb >= 1) {
-    return `${mb.toFixed(1).replace('.', ',')} MB`;
-  }
-  return `${num.toLocaleString('id-ID')} KB`;
+  return `${num.toLocaleString('id-ID')} MB`;
 }
 
 /**
