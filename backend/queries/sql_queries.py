@@ -134,7 +134,9 @@ SELECT
     longitude_fix,
     azimuth,
     beamwidth,
-    radius
+    radius,
+    antenna_height,
+    antenna_type
 FROM ransys_gabungan
 WHERE latitude_fix IS NOT NULL
   AND longitude_fix IS NOT NULL
