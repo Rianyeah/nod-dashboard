@@ -12,6 +12,7 @@ import {
   BatteryWarning,
   CheckCircle2,
   Database,
+  Monitor,
   Radio,
   TowerControl,
 } from 'lucide-react';
@@ -641,9 +642,9 @@ export default function DataPotensiPage() {
         ) : null}
 
         {/* Section 1: Scorecards */}
-        <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           {dashboardLoading && !dashboardData ? (
-            Array.from({ length: 5 }, (_, index) => (
+            Array.from({ length: 6 }, (_, index) => (
               <Skeleton key={index} className="h-[112px] rounded-xl" />
             ))
           ) : (
@@ -724,6 +725,22 @@ export default function DataPotensiPage() {
             </p>
             <p className="mt-2 text-[10px] text-[var(--text-secondary)]">
               {sc.radio_ip_pct?.toFixed(1) || '0'}% dari total
+            </p>
+          </DashboardKpiCard>
+
+          <DashboardKpiCard
+            title="BBLTI Software"
+            icon={Monitor}
+            accent="#A855F7"
+            glow="rgba(168, 85, 247, 0.15)"
+            className="animate-fade-in"
+            style={{ animationDelay: '250ms' }}
+          >
+            <p className="mt-2 font-mono text-[28px] font-bold leading-none tabular-nums tracking-tight" style={{ color: '#A855F7' }}>
+              {formatNumber(sc.bblti_software)}
+            </p>
+            <p className="mt-2 text-[10px] text-[var(--text-secondary)]">
+              {sc.bblti_software_pct?.toFixed(1) || '0'}% dari total
             </p>
           </DashboardKpiCard>
             </>

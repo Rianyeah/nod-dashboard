@@ -54,6 +54,7 @@ const HEADERS = [
   { key: 'type_battery', label: 'Battery' },
   { key: 'jenis_rectifier', label: 'Rectifier' },
   { key: 'tp', label: 'TP' },
+  { key: 'bblti_software', label: 'BBLTI Software' },
   { key: 'status_site', label: 'Status' },
 ];
 
@@ -87,6 +88,31 @@ function StatusBadge({ value }) {
     return <Badge variant="destructive">Non Active</Badge>;
   }
   return <Badge variant="outline">{asDisplay(value)}</Badge>;
+}
+
+/* ── Site Class colors matching Reporting page ── */
+const CLASS_COLORS = {
+  diamond:  { bg: 'rgba(96, 165, 250, 0.15)',  text: '#60A5FA' },
+  platinum: { bg: 'rgba(168, 162, 158, 0.15)', text: '#A8A29E' },
+  gold:     { bg: 'rgba(251, 191, 36, 0.15)',  text: '#FBBF24' },
+  silver:   { bg: 'rgba(148, 163, 184, 0.15)', text: '#94A3B8' },
+  bronze:   { bg: 'rgba(217, 119, 6, 0.15)',   text: '#D97706' },
+};
+
+function ClassBadge({ value }) {
+  const display = asDisplay(value);
+  const key = (value || '').toLowerCase().trim();
+  const colors = CLASS_COLORS[key];
+  if (colors) {
+    return (
+      <Badge
+        style={{ backgroundColor: colors.bg, color: colors.text, borderColor: `${colors.text}30` }}
+      >
+        {display}
+      </Badge>
+    );
+  }
+  return <Badge variant="outline">{display}</Badge>;
 }
 
 export default function DataPotensiSiteTable({
@@ -249,12 +275,13 @@ export default function DataPotensiSiteTable({
                   <TableCell className="px-2 py-1.5 text-xs"><TruncatedCell value={site.site_name} /></TableCell>
                   <TableCell className="px-2 py-1.5 text-xs text-muted-foreground">{asDisplay(site.cluster)}</TableCell>
                   <TableCell className="px-2 py-1.5 text-xs text-muted-foreground">{asDisplay(site.kabupaten)}</TableCell>
-                  <TableCell className="px-2 py-1.5 text-xs"><Badge variant="outline">{asDisplay(site.site_class)}</Badge></TableCell>
+                  <TableCell className="px-2 py-1.5 text-xs"><ClassBadge value={site.site_class} /></TableCell>
                   <TableCell className="px-2 py-1.5 text-xs text-muted-foreground">{asDisplay(site.type_site)}</TableCell>
                   <TableCell className="px-2 py-1.5 text-xs text-muted-foreground">{asDisplay(site.transport_type)}</TableCell>
                   <TableCell className="px-2 py-1.5 text-xs text-muted-foreground">{asDisplay(site.type_battery)}</TableCell>
                   <TableCell className="px-2 py-1.5 text-xs text-muted-foreground">{asDisplay(site.jenis_rectifier)}</TableCell>
                   <TableCell className="px-2 py-1.5 text-xs text-muted-foreground">{asDisplay(site.tp)}</TableCell>
+                  <TableCell className="px-2 py-1.5 text-xs text-muted-foreground">{asDisplay(site.bblti_software)}</TableCell>
                   <TableCell className="px-2 py-1.5"><StatusBadge value={site.status_site} /></TableCell>
                 </TableRow>
               ))

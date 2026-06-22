@@ -60,6 +60,7 @@ DATA_POTENSI_SORT_EXPRESSIONS = {
     "type_battery": 'LOWER(COALESCE(d."Type Battery", \'\'))',
     "jenis_rectifier": 'LOWER(COALESCE(d."Jenis Rectifier", \'\'))',
     "tp": 'LOWER(COALESCE(d."TP", \'\'))',
+    "bblti_software": 'LOWER(COALESCE(d."bblti_software", \'\'))',
     "status_site": 'LOWER(COALESCE(d."Status Site", \'\'))',
 }
 DATA_POTENSI_SORT_DIRECTIONS = {"asc": "ASC", "desc": "DESC"}
@@ -150,6 +151,10 @@ SELECT
           AND UPPER(TRIM(d."Transport Type")) <> 'FO_TELKOM'
           AND UPPER(TRIM(d."Transport Type")) NOT LIKE '#N/A%'
     )::int AS radio_ip,
+    COUNT(DISTINCT d."Siteid") FILTER (
+        WHERE NULLIF(TRIM(COALESCE(d."bblti_software", '')), '') IS NOT NULL
+          AND UPPER(TRIM(d."bblti_software")) <> 'NO'
+    )::int AS bblti_software,
     COUNT(DISTINCT NULLIF(TRIM(d."New Cluster"), ''))::int AS total_cluster
 FROM public.data_site_master d
 WHERE NULLIF(TRIM(d."Siteid"), '') IS NOT NULL
@@ -273,6 +278,7 @@ SELECT
     d."Backup Time Battery",
     d."Belting Battery",
     d."TP",
+    d."bblti_software",
     d."Status Site",
     d."ENVA STATUS"
 FROM public.data_site_master d
@@ -454,6 +460,7 @@ async def get_data_potensi_dashboard(
     site_vrla = int(sc_row.get("site_vrla") or 0)
     enva_validated = int(sc_row.get("enva_validated") or 0)
     radio_ip = int(sc_row.get("radio_ip") or 0)
+    bblti_sw = int(sc_row.get("bblti_software") or 0)
 
     scorecard = DataPotensiScorecard(
         total_sites=total_sites,
@@ -465,6 +472,8 @@ async def get_data_potensi_dashboard(
         enva_validated_pct=_pct(enva_validated, total_sites),
         radio_ip=radio_ip,
         radio_ip_pct=_pct(radio_ip, total_sites),
+        bblti_software=bblti_sw,
+        bblti_software_pct=_pct(bblti_sw, total_sites),
         total_cluster=int(sc_row.get("total_cluster") or 0),
     )
 
@@ -557,6 +566,7 @@ async def get_data_potensi_sites(
         "type_battery",
         "jenis_rectifier",
         "tp",
+        "bblti_software",
         "status_site",
     ] = Query("site_id"),
     sort_dir: Literal["asc", "desc"] = Query("asc"),
@@ -623,6 +633,7 @@ async def get_data_potensi_sites(
             backup_time_battery=row.get("Backup Time Battery"),
             belting_battery=row.get("Belting Battery"),
             tp=row.get("TP"),
+            bblti_software=row.get("bblti_software"),
             status_site=row.get("Status Site"),
             enva_status=row.get("ENVA STATUS"),
         )

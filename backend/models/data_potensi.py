@@ -15,6 +15,8 @@ class DataPotensiScorecard(BaseModel):
     enva_validated_pct: float = 0.0
     radio_ip: int = 0
     radio_ip_pct: float = 0.0
+    bblti_software: int = 0
+    bblti_software_pct: float = 0.0
     total_cluster: int = 0
 
 
@@ -62,6 +64,7 @@ class DataPotensiSiteRow(BaseModel):
     backup_time_battery: Optional[str] = None
     belting_battery: Optional[str] = None
     tp: Optional[str] = None
+    bblti_software: Optional[str] = None
     status_site: Optional[str] = None
     enva_status: Optional[str] = None
 

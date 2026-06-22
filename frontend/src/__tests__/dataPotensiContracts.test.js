@@ -61,6 +61,7 @@ describe('Data Potensi dashboard contracts', () => {
       'transport_type: advancedFilters.transport_type',
       'type_battery: advancedFilters.type_battery',
       'tp: advancedFilters.tp',
+      'bblti_software',
     ]) {
       assert.match(page + api, new RegExp(contract.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     }
@@ -91,7 +92,7 @@ describe('Data Potensi dashboard contracts', () => {
   it('uses responsive KPI layout and explicit loading/error states', () => {
     const page = src('pages', 'DataPotensiPage.jsx');
 
-    assert.match(page, /grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5/);
+    assert.match(page, /grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6/);
     assert.match(page, /InsideBarValueLabel/);
     assert.match(page, /dataKey=\{cat\}/);
     assert.match(page, /Alert/);
