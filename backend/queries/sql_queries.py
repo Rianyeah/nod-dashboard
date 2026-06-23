@@ -136,7 +136,7 @@ SELECT
     beamwidth,
     radius,
     antenna_height,
-    antenna_type
+    antenna_type,
     "ta_90%"
 FROM ransys_gabungan
 WHERE latitude_fix IS NOT NULL
