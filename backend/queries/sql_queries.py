@@ -137,6 +137,7 @@ SELECT
     radius,
     antenna_height,
     antenna_type
+    "ta_90%"
 FROM ransys_gabungan
 WHERE latitude_fix IS NOT NULL
   AND longitude_fix IS NOT NULL
