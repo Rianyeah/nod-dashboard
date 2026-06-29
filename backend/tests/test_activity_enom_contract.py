@@ -38,11 +38,32 @@ class ActivityEnomContractTest(unittest.TestCase):
 
         for query_param in [
             "month_date: date = Query(",
+            "year: int | None = Query(None",
             "nop: str | None = Query(None",
             "category: str | None = Query(None",
         ]:
             with self.subTest(query_param=query_param):
                 self.assertIn(query_param, source)
+
+    def test_year_filter_and_annual_xcek_summary_contract(self):
+        source = self.read_router_source()
+        models = MODELS.read_text(encoding="utf-8")
+
+        for contract in [
+            "class ActivityEnomYearOption",
+            "years: list[ActivityEnomYearOption]",
+            "default_year: Optional[int] = None",
+            "annual_total_activity: int = 0",
+            "annual_open_activity: int = 0",
+            "annual_close_activity: int = 0",
+            "COUNT(*) FILTER (WHERE a.xcek IS NULL) AS annual_total_activity",
+            "COUNT(*) FILTER (WHERE a.xcek IS NULL AND UPPER(a.status) = 'OPEN') AS annual_open_activity",
+            "COUNT(*) FILTER (WHERE a.xcek IS NULL AND UPPER(a.status) = 'CLOSE') AS annual_close_activity",
+            "annual_filter_clause = build_filter_clause(params, include_month=False, include_year=True)",
+            "EXTRACT(YEAR FROM a.create_date) = :year",
+        ]:
+            with self.subTest(contract=contract):
+                self.assertIn(contract, source + models)
 
     def test_global_filters_and_kabupaten_breakdown_contract(self):
         source = self.read_router_source()

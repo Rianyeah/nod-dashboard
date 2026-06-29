@@ -129,6 +129,11 @@ function formatMonthLabel(value, withYear = false) {
   return formatter.format(new Date(`${value}T00:00:00`));
 }
 
+function getYearFromDateValue(value) {
+  if (!value) return '';
+  return String(value).slice(0, 4);
+}
+
 function formatPercent(value) {
   if (value == null || Number.isNaN(Number(value))) return '0%';
   return `${Number(value).toFixed(1).replace('.', ',')}%`;
@@ -223,7 +228,15 @@ function ActivityDetailModal({ detail, loading, onClose }) {
 
 function ActivityEnomDashboard() {
   const navigate = useNavigate();
-  const [filterOptions, setFilterOptions] = useState({ months: [], nops: [], categories: [], default_month: null });
+  const [filterOptions, setFilterOptions] = useState({
+    years: [],
+    months: [],
+    nops: [],
+    categories: [],
+    default_year: null,
+    default_month: null,
+  });
+  const [selectedYear, setSelectedYear] = useState('');
   const [selectedMonth, setSelectedMonth] = useState('');
   const [selectedNop, setSelectedNop] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -260,12 +273,17 @@ function ActivityEnomDashboard() {
         if (cancelled) return;
         const months = Array.isArray(data?.months) ? data.months : [];
         const defaultMonth = data?.default_month || months[0]?.value || '';
+        const years = Array.isArray(data?.years) ? data.years : [];
+        const defaultYear = String(data?.default_year || getYearFromDateValue(defaultMonth) || years[0]?.value || '');
         setFilterOptions({
+          years,
           months,
           nops: Array.isArray(data?.nops) ? data.nops : [],
           categories: Array.isArray(data?.categories) ? data.categories : [],
+          default_year: data?.default_year || null,
           default_month: data?.default_month || null,
         });
+        setSelectedYear(defaultYear);
         setSelectedMonth(defaultMonth);
         setFiltersLoaded(true);
       })
@@ -283,15 +301,16 @@ function ActivityEnomDashboard() {
 
   useEffect(() => {
     setPage(1);
-  }, [selectedMonth, selectedNop, selectedCategory, statusFilter, search, sortBy, sortDir]);
+  }, [selectedYear, selectedMonth, selectedNop, selectedCategory, statusFilter, search, sortBy, sortDir]);
 
   const debouncedSearch = useDebouncedValue(search, 300);
 
   const dashboardParams = useMemo(() => ({
     month_date: selectedMonth,
+    year: selectedYear || undefined,
     nop: selectedNop || undefined,
     category: selectedCategory || undefined,
-  }), [selectedCategory, selectedMonth, selectedNop]);
+  }), [selectedCategory, selectedMonth, selectedNop, selectedYear]);
 
   const tableParams = useMemo(() => ({
     ...dashboardParams,
@@ -381,12 +400,27 @@ function ActivityEnomDashboard() {
     setSelectedActivityDetail(null);
   }, []);
 
-  const monthOptions = useMemo(() => (
-    (filterOptions.months || []).map((month) => ({
-      value: month.value,
-      label: formatMonthLabel(month.value),
+  const yearOptions = useMemo(() => (
+    (filterOptions.years || []).map((year) => ({
+      value: year.value,
+      label: year.label || String(year.value),
     }))
-  ), [filterOptions.months]);
+  ), [filterOptions.years]);
+
+  const monthOptions = useMemo(() => (
+    (filterOptions.months || [])
+      .filter((month) => !selectedYear || getYearFromDateValue(month.value) === String(selectedYear))
+      .map((month) => ({
+        value: month.value,
+        label: formatMonthLabel(month.value),
+      }))
+  ), [filterOptions.months, selectedYear]);
+
+  useEffect(() => {
+    if (!selectedYear || !filtersLoaded) return;
+    if (selectedMonth && getYearFromDateValue(selectedMonth) === String(selectedYear)) return;
+    setSelectedMonth(monthOptions[0]?.value || '');
+  }, [filtersLoaded, monthOptions, selectedMonth, selectedYear]);
 
   const contributionTitle = selectedNop ? 'Kabupaten Contribution' : 'NOP Contribution';
   const rankingTitle = selectedNop ? 'Ranking Kabupaten' : 'Ranking NOP';
@@ -432,6 +466,14 @@ function ActivityEnomDashboard() {
             </div>
           </div>
           <DashboardFilterBar className="w-full border-0 bg-transparent p-0 shadow-none md:w-auto">
+            <DashboardFilterSelect
+              id="activity-enom-year"
+              label="Tahun"
+              value={selectedYear}
+              onChange={setSelectedYear}
+              options={yearOptions}
+              includeAll={false}
+            />
             <DashboardPeriodPicker
               id="activity-enom-month"
               label="Bulan"
@@ -470,11 +512,19 @@ function ActivityEnomDashboard() {
           </Alert>
         )}
 
-        <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
           {dashboardLoading && !summary ? (
-            Array.from({ length: 5 }, (_, index) => <div key={index} className="skeleton h-[96px] rounded-xl" />)
+            Array.from({ length: 6 }, (_, index) => <div key={index} className="skeleton h-[96px] rounded-xl" />)
           ) : (
             <>
+              <DashboardKpiCard
+                title={`Total Activity Tahun ${selectedYear || '-'}`}
+                value={formatNumber(summary?.annual_total_activity)}
+                subtitle={`Open: ${formatNumber(summary?.annual_open_activity)} Closed: ${formatNumber(summary?.annual_close_activity)}`}
+                icon={ClipboardList}
+                accent={ACTIVITY_CHART_COLORS.total}
+                glow="rgba(96,165,250,0.14)"
+              />
               <DashboardKpiCard title="Total Activity" value={formatNumber(summary?.total_activity)} icon={ClipboardList} accent={ACTIVITY_CHART_COLORS.total} glow="rgba(96,165,250,0.14)" />
               <DashboardKpiCard title="Impacted Site" value={formatNumber(summary?.impacted_sites)} icon={Users} accent={ACTIVITY_CHART_COLORS.sites} glow="rgba(167,139,250,0.14)" />
               <DashboardKpiCard title="OPEN Activity" value={formatNumber(summary?.open_activity)} icon={Activity} accent={ACTIVITY_CHART_COLORS.open} glow="rgba(239,68,68,0.14)" />
