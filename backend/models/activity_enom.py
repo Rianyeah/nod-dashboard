@@ -11,17 +11,28 @@ class ActivityEnomMonthOption(BaseModel):
     label: str
 
 
+class ActivityEnomYearOption(BaseModel):
+    """Available Activity ENOM year option."""
+    value: int
+    label: str
+
+
 class ActivityEnomFilters(BaseModel):
     """Available global filters for Activity ENOM."""
+    years: list[ActivityEnomYearOption] = Field(default_factory=list)
     months: list[ActivityEnomMonthOption] = Field(default_factory=list)
     nops: list[str] = Field(default_factory=list)
     categories: list[str] = Field(default_factory=list)
+    default_year: Optional[int] = None
     default_month: Optional[date] = None
 
 
 class ActivityEnomSummary(BaseModel):
     """Top-level Activity ENOM KPI scorecards."""
     month_date: date
+    annual_total_activity: int = 0
+    annual_open_activity: int = 0
+    annual_close_activity: int = 0
     total_activity: int = 0
     impacted_sites: int = 0
     open_activity: int = 0

@@ -45,9 +45,11 @@ describe('Activity ENOM dashboard contracts', () => {
 
     for (const label of [
       'Activity ENOM',
+      'Tahun',
       'Bulan',
       'NOP',
       'Kategori',
+      'Total Activity Tahun',
       'Total Activity',
       'Impacted Site',
       'OPEN Activity',
@@ -67,6 +69,7 @@ describe('Activity ENOM dashboard contracts', () => {
     }
 
     assert.match(page, /Intl\.DateTimeFormat\('id-ID',\s*\{\s*month:\s*'long'/);
+    assert.match(page, /id="activity-enom-year"/);
     assert.match(page, /selectedNop\s*\?\s*'Kabupaten Contribution'\s*:\s*'NOP Contribution'/);
     assert.match(page, /selectedNop\s*\?\s*'Ranking Kabupaten'\s*:\s*'Ranking NOP'/);
     assert.match(page, /ActivityEnomCharts/);
@@ -209,12 +212,15 @@ describe('Activity ENOM dashboard contracts', () => {
     assert.match(page, /stopPropagation/);
   });
 
-  it('removes scorecard sub-labels from Activity ENOM KPI cards', () => {
+  it('adds annual Activity ENOM scorecard while keeping monthly KPI cards subtitle-free', () => {
     const page = src('pages', 'ActivityEnomPage.jsx');
-    const scorecardSection = page.split('grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5', 2)[1].split('</section>', 1)[0];
+    const scorecardSection = page.split('grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6', 2)[1].split('</section>', 1)[0];
 
+    assert.match(scorecardSection, /DashboardKpiCard[\s\S]*title=\{`Total Activity Tahun \$\{selectedYear/);
     assert.match(scorecardSection, /DashboardKpiCard title="Total Activity"/);
     assert.match(scorecardSection, /DashboardKpiCard title="Completion Rate"/);
-    assert.doesNotMatch(scorecardSection, /subtitle=/);
+    assert.match(scorecardSection, /Open: \$\{formatNumber\(summary\?\.annual_open_activity/);
+    assert.match(scorecardSection, /Closed: \$\{formatNumber\(summary\?\.annual_close_activity/);
+    assert.doesNotMatch(scorecardSection, /DashboardKpiCard title="Total Activity"[\s\S]{0,180}subtitle=/);
   });
 });

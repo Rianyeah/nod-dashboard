@@ -29,6 +29,7 @@ from models.activity_enom import (
     ActivityEnomSummary,
     ActivityEnomTopActivity,
     ActivityEnomTrendItem,
+    ActivityEnomYearOption,
 )
 
 router = APIRouter(prefix="/activity-enom", tags=["Activity ENOM"])
@@ -37,11 +38,22 @@ DEFAULT_LIMIT = 20
 SORT_ORDER_TEMPLATE = "ORDER BY {sort_column} {sort_direction}, a.id DESC"
 
 
-def build_filter_clause(params: dict, include_month: bool = True, alias: str = "a") -> str:
+def build_filter_clause(
+    params: dict,
+    include_month: bool = True,
+    include_year: bool = True,
+    alias: str = "a",
+) -> str:
     """Build shared Activity ENOM global filter clause."""
     clauses = []
     if include_month and params.get("month_date"):
         clauses.append("a.create_date = :month_date" if alias == "a" else f"{alias}.create_date = :month_date")
+    if include_year and params.get("year"):
+        clauses.append(
+            f"EXTRACT(YEAR FROM {alias}.create_date) = :year"
+            if alias != "a"
+            else "EXTRACT(YEAR FROM a.create_date) = :year"
+        )
     if params.get("nop"):
         clauses.append("a.nop = :nop" if alias == "a" else f"{alias}.nop = :nop")
     if params.get("category"):
@@ -64,8 +76,13 @@ def build_search_clause(q: str | None, alias: str = "a") -> str:
     )
 
 
-def base_params(month_date: date, nop: str | None = None, category: str | None = None) -> dict:
-    return {"month_date": month_date, "nop": nop, "category": category}
+def base_params(
+    month_date: date,
+    year: int | None = None,
+    nop: str | None = None,
+    category: str | None = None,
+) -> dict:
+    return {"month_date": month_date, "year": year, "nop": nop, "category": category}
 
 
 def int_value(value, fallback: int = 0) -> int:
@@ -120,6 +137,13 @@ ORDER BY create_date DESC
 FILTER_OPTIONS_QUERY = f"""
 SELECT
     MAX(create_date) AS default_month,
+    EXTRACT(YEAR FROM MAX(create_date))::int AS default_year,
+    ARRAY(
+        SELECT DISTINCT EXTRACT(YEAR FROM create_date)::int
+        FROM {TABLE_NAME}
+        WHERE create_date IS NOT NULL
+        ORDER BY 1 DESC
+    ) AS years,
     ARRAY(
         SELECT DISTINCT NULLIF(TRIM(nop), '')
         FROM {TABLE_NAME}
@@ -138,17 +162,37 @@ FROM {TABLE_NAME}
 SUMMARY_QUERY = f"""
 SELECT
     CAST(:month_date AS date) AS month_date,
-    COUNT(*) AS total_activity,
-    COUNT(DISTINCT a.site_id) AS impacted_sites,
-    COUNT(*) FILTER (WHERE UPPER(a.status) = 'OPEN') AS open_activity,
-    COUNT(*) FILTER (WHERE UPPER(a.status) = 'CLOSE') AS close_activity,
-    ROUND(
-        100.0 * COUNT(*) FILTER (WHERE UPPER(a.status) = 'CLOSE') / NULLIF(COUNT(*), 0),
-        2
-    )::float AS completion_rate
-FROM {TABLE_NAME} a
-WHERE 1=1
-{{filter_clause}}
+    monthly.total_activity,
+    monthly.impacted_sites,
+    monthly.open_activity,
+    monthly.close_activity,
+    monthly.completion_rate,
+    annual.annual_total_activity,
+    annual.annual_open_activity,
+    annual.annual_close_activity
+FROM (
+    SELECT
+        COUNT(*) AS total_activity,
+        COUNT(DISTINCT a.site_id) AS impacted_sites,
+        COUNT(*) FILTER (WHERE UPPER(a.status) = 'OPEN') AS open_activity,
+        COUNT(*) FILTER (WHERE UPPER(a.status) = 'CLOSE') AS close_activity,
+        ROUND(
+            100.0 * COUNT(*) FILTER (WHERE UPPER(a.status) = 'CLOSE') / NULLIF(COUNT(*), 0),
+            2
+        )::float AS completion_rate
+    FROM {TABLE_NAME} a
+    WHERE 1=1
+    {{filter_clause}}
+) monthly
+CROSS JOIN (
+    SELECT
+        COUNT(*) FILTER (WHERE a.xcek IS NULL) AS annual_total_activity,
+        COUNT(*) FILTER (WHERE a.xcek IS NULL AND UPPER(a.status) = 'OPEN') AS annual_open_activity,
+        COUNT(*) FILTER (WHERE a.xcek IS NULL AND UPPER(a.status) = 'CLOSE') AS annual_close_activity
+    FROM {TABLE_NAME} a
+    WHERE 1=1
+    {{annual_filter_clause}}
+) annual
 """
 
 TREND_QUERY = f"""
@@ -343,9 +387,15 @@ async def get_activity_enom_filters(session: AsyncSession = Depends(get_session)
     option_result = await session.execute(text(FILTER_OPTIONS_QUERY))
     option_row = option_result.mappings().first() or {}
     return ActivityEnomFilters(
+        years=[
+            ActivityEnomYearOption(value=int(year), label=str(year))
+            for year in (option_row.get("years") or [])
+            if year is not None
+        ],
         months=[ActivityEnomMonthOption(**dict(row)) for row in months_result.mappings().all()],
         nops=option_row.get("nops") or [],
         categories=option_row.get("categories") or [],
+        default_year=option_row.get("default_year"),
         default_month=option_row.get("default_month"),
     )
 
@@ -353,18 +403,26 @@ async def get_activity_enom_filters(session: AsyncSession = Depends(get_session)
 @router.get("/summary", response_model=ActivityEnomSummary)
 async def get_activity_enom_summary(
     month_date: date = Query(...),
+    year: int | None = Query(None),
     nop: str | None = Query(None),
     category: str | None = Query(None),
     session: AsyncSession = Depends(get_session),
 ):
-    params = base_params(month_date, nop, category)
+    params = base_params(month_date, year, nop, category)
+    annual_filter_clause = build_filter_clause(params, include_month=False, include_year=True)
     result = await session.execute(
-        text(SUMMARY_QUERY.format(filter_clause=build_filter_clause(params))),
+        text(SUMMARY_QUERY.format(
+            filter_clause=build_filter_clause(params),
+            annual_filter_clause=annual_filter_clause,
+        )),
         params,
     )
     row = result.mappings().first() or {}
     return ActivityEnomSummary(
         month_date=month_date,
+        annual_total_activity=int_value(row.get("annual_total_activity")),
+        annual_open_activity=int_value(row.get("annual_open_activity")),
+        annual_close_activity=int_value(row.get("annual_close_activity")),
         total_activity=int_value(row.get("total_activity")),
         impacted_sites=int_value(row.get("impacted_sites")),
         open_activity=int_value(row.get("open_activity")),
@@ -376,11 +434,12 @@ async def get_activity_enom_summary(
 @router.get("/trend", response_model=list[ActivityEnomTrendItem])
 async def get_activity_enom_trend(
     month_date: date = Query(...),
+    year: int | None = Query(None),
     nop: str | None = Query(None),
     category: str | None = Query(None),
     session: AsyncSession = Depends(get_session),
 ):
-    params = base_params(month_date, nop, category)
+    params = base_params(month_date, year, nop, category)
     result = await session.execute(
         text(TREND_QUERY.format(filter_clause=build_filter_clause(params, include_month=False))),
         params,
@@ -391,11 +450,12 @@ async def get_activity_enom_trend(
 @router.get("/breakdowns", response_model=ActivityEnomBreakdowns)
 async def get_activity_enom_breakdowns(
     month_date: date = Query(...),
+    year: int | None = Query(None),
     nop: str | None = Query(None),
     category: str | None = Query(None),
     session: AsyncSession = Depends(get_session),
 ):
-    params = base_params(month_date, nop, category)
+    params = base_params(month_date, year, nop, category)
     filter_clause = build_filter_clause(params)
     selected_nop_breakdown = bool(params.get("nop"))
     label_expr = (
@@ -435,12 +495,13 @@ async def get_activity_enom_breakdowns(
 @router.get("/top-activities", response_model=list[ActivityEnomTopActivity])
 async def get_activity_enom_top_activities(
     month_date: date = Query(...),
+    year: int | None = Query(None),
     nop: str | None = Query(None),
     category: str | None = Query(None),
     limit: int = Query(10, ge=1, le=50),
     session: AsyncSession = Depends(get_session),
 ):
-    params = {**base_params(month_date, nop, category), "limit": limit}
+    params = {**base_params(month_date, year, nop, category), "limit": limit}
     result = await session.execute(
         text(TOP_ACTIVITIES_QUERY.format(filter_clause=build_filter_clause(params))),
         params,
@@ -451,6 +512,7 @@ async def get_activity_enom_top_activities(
 @router.get("/activities", response_model=ActivityEnomActivityResponse)
 async def list_activity_enom_activities(
     month_date: date = Query(...),
+    year: int | None = Query(None),
     nop: str | None = Query(None),
     category: str | None = Query(None),
     status: str | None = Query(None),
@@ -462,7 +524,7 @@ async def list_activity_enom_activities(
     session: AsyncSession = Depends(get_session),
 ):
     params = {
-        **base_params(month_date, nop, category),
+        **base_params(month_date, year, nop, category),
         "q": f"%{q.strip()}%" if q and q.strip() else None,
         "status": status,
         "limit": limit,
@@ -513,11 +575,12 @@ async def list_activity_enom_activities(
 async def get_activity_enom_activity_detail(
     activity_id: int,
     month_date: date = Query(...),
+    year: int | None = Query(None),
     nop: str | None = Query(None),
     category: str | None = Query(None),
     session: AsyncSession = Depends(get_session),
 ):
-    params = {**base_params(month_date, nop, category), "activity_id": activity_id}
+    params = {**base_params(month_date, year, nop, category), "activity_id": activity_id}
     result = await session.execute(
         text(ACTIVITY_DETAIL_QUERY.format(filter_clause=build_filter_clause(params))),
         params,
