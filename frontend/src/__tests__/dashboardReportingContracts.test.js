@@ -170,9 +170,9 @@ describe('dashboard and reporting visual/data contracts', () => {
     assert.match(page, /REVENUE_TARGET/);
     assert.match(page, /summary/);
     assert.match(page, /detail/);
-    assert.match(page, /summaryText: 'text-slate-900'/);
-    assert.match(page, /detailText: 'text-slate-700'/);
-    assert.match(page, /labelText: 'text-slate-600'/);
+    assert.match(page, /summaryText: 'text-slate-900 dark:text-(emerald|amber|blue)-100'/);
+    assert.match(page, /detailText: 'text-slate-700 dark:text-(emerald|amber|blue)-200\/70'/);
+    assert.match(page, /labelText: 'text-slate-600 dark:text-(emerald|amber|blue)-400\/80'/);
   });
 
   it('adds a print-to-PDF export action for the reporting page', () => {

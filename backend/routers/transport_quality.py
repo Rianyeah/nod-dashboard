@@ -103,7 +103,7 @@ FILTER_PERIODS_QUERY = """
 SELECT
     date,
     week,
-    TO_CHAR(date, '"W"IW - YYYY-MM-DD') AS label
+    CONCAT('W', LPAD(week::text, 2, '0'), ' - ', TO_CHAR(date, 'YYYY-MM-DD')) AS label
 FROM (
     SELECT DISTINCT date, week
     FROM public.packet_los_jatim
