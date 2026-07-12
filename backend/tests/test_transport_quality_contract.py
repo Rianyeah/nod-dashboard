@@ -99,7 +99,8 @@ class TransportQualityContractTest(unittest.TestCase):
 
         self.assertIn("filter_periods_query", source)
         self.assertIn("filter_options_query", source)
-        self.assertIn("to_char(date, '\"w\"iw - yyyy-mm-dd')", source)
+        self.assertIn("lpad(week::text, 2, '0')", source)
+        self.assertNotIn("to_char(date, '\"w\"iw - yyyy-mm-dd')", source)
         self.assertIn("nullif(trim", source)
         self.assertIn("TransportQualityFilters", models)
         self.assertIn("periods: list[TransportQualityPeriod]", models)

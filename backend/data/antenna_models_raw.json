@@ -1,0 +1,1740 @@
+{
+  "raw_count": 497,
+  "total_rows": 64837,
+  "normalised_count": 200,
+  "models": [
+    {
+      "antenna_model": "APE4516R1",
+      "series": "APE",
+      "raw_count": 18474,
+      "raw_examples": [
+        " APE4516R1v06 (10 Ports  900/1800/2100/ 2300) (3) ",
+        "APE 4516R1V06",
+        "APE4516R1"
+      ]
+    },
+    {
+      "antenna_model": "ASI4518R42",
+      "series": "ASI",
+      "raw_count": 14666,
+      "raw_examples": [
+        "ASI 4518R42V06",
+        "ASI 4518R42v06",
+        "ASI4518R42"
+      ]
+    },
+    {
+      "antenna_model": "AQU4518R21",
+      "series": "AQU",
+      "raw_count": 5247,
+      "raw_examples": [
+        "AQU4518R21V06",
+        "AQU4518R21v06",
+        "AQU4518R21v06 (8 Ports  1800/2100/2300)"
+      ]
+    },
+    {
+      "antenna_model": "ASI4518R10",
+      "series": "ASI",
+      "raw_count": 3836,
+      "raw_examples": [
+        "ASI4518R10V06",
+        "ASI4518R10V07",
+        "ASI4518R10v06"
+      ]
+    },
+    {
+      "antenna_model": "ATR451704",
+      "series": "ATR",
+      "raw_count": 3195,
+      "raw_examples": [
+        "ATR 451704v01",
+        "ATR451704V01",
+        "ATR451704v01"
+      ]
+    },
+    {
+      "antenna_model": "A12264PD01",
+      "series": null,
+      "raw_count": 1821,
+      "raw_examples": [
+        "4T6S_A12264PD01v06 (12 Port  900/1800/2100/2300)",
+        "A12264PD01",
+        "A12264PD01V06"
+      ]
+    },
+    {
+      "antenna_model": "ADU451816",
+      "series": "ADU",
+      "raw_count": 1771,
+      "raw_examples": [
+        "ADU451816V01",
+        "ADU451816V02",
+        "ADU451816V02 "
+      ]
+    },
+    {
+      "antenna_model": "APE4517R0",
+      "series": "APE",
+      "raw_count": 1229,
+      "raw_examples": [
+        "APE4517R0V06",
+        "APE4517R0v06",
+        "APE4517R0v06 Huawei"
+      ]
+    },
+    {
+      "antenna_model": "HBXX-6516DS",
+      "series": "HBXX",
+      "raw_count": 1215,
+      "raw_examples": [
+        "ANDREW HBXX 6516DS-VTM",
+        "ANDREW HBXX-6516DS-VTM",
+        "AndrewHBXX-6516DSVTM"
+      ]
+    },
+    {
+      "antenna_model": "AAU5336",
+      "series": "AAU",
+      "raw_count": 1142,
+      "raw_examples": [
+        "AAU5336",
+        "Antenna RRU AAU5336 (WD7MQTQC49JV) Huawei",
+        "RRU Antenna AAU5336 (WD7MQTQC49JV) Huawei"
+      ]
+    },
+    {
+      "antenna_model": "AMB4519R0",
+      "series": "AMB",
+      "raw_count": 859,
+      "raw_examples": [
+        "AMB4519R0",
+        "AMB4519R0V06",
+        "AMB4519R0v06"
+      ]
+    },
+    {
+      "antenna_model": "AMB4520R8",
+      "series": "AMB",
+      "raw_count": 778,
+      "raw_examples": [
+        "AMB4520R8v06",
+        "AMB4520R8v06 (8 Ports  1800/2100)",
+        "Antenna Sectoral AMB4520R8v06 Huawei"
+      ]
+    },
+    {
+      "antenna_model": "AMB4520R0",
+      "series": "AMB",
+      "raw_count": 771,
+      "raw_examples": [
+        "AMB 4520R0",
+        "AMB4520R0",
+        "AMB4520R0v06"
+      ]
+    },
+    {
+      "antenna_model": "739650",
+      "series": null,
+      "raw_count": 641,
+      "raw_examples": [
+        "Antenna Sectoral 739650 Kathrein",
+        "Antenna Sectoral Kathrein K739650 High Band",
+        "K739650"
+      ]
+    },
+    {
+      "antenna_model": "ATR4518R11",
+      "series": "ATR",
+      "raw_count": 437,
+      "raw_examples": [
+        "ATR4518R11v06",
+        "Antenna RF ATR4518R11v06 Huawei"
+      ]
+    },
+    {
+      "antenna_model": "ATD4516R5",
+      "series": "ATD",
+      "raw_count": 390,
+      "raw_examples": [
+        "ATD4516R5",
+        "Antenna Sectoral ATD4516R5 Huawei",
+        "atd4516r5"
+      ]
+    },
+    {
+      "antenna_model": "HG2412P-180",
+      "series": "HG",
+      "raw_count": 310,
+      "raw_examples": [
+        "ANATEL HG2412P-180",
+        "Antenna BTS HG2412P-180",
+        "Antenna Sectoral HG2412P-180 Anatel"
+      ]
+    },
+    {
+      "antenna_model": "LDX-9014DS",
+      "series": "LDX",
+      "raw_count": 293,
+      "raw_examples": [
+        "ANDREW LDX-9014DS-VTM",
+        "Antenna Sectoral LDX-9014DS-VTM Andrew",
+        "Commscope_LDX9014DSVTM"
+      ]
+    },
+    {
+      "antenna_model": "AQU4518R9",
+      "series": "AQU",
+      "raw_count": 222,
+      "raw_examples": [
+        "AQU4518R9v06",
+        "Antenna Sectoral AQU4518R9 Huawei",
+        "Huawei_AQU4518R9v06"
+      ]
+    },
+    {
+      "antenna_model": "ADU4517R6",
+      "series": "ADU",
+      "raw_count": 158,
+      "raw_examples": [
+        "ADU4517R6v06",
+        "Antenna RF ADU4517R6V06 Huawei"
+      ]
+    },
+    {
+      "antenna_model": "HBX-6513DS",
+      "series": "HBX",
+      "raw_count": 145,
+      "raw_examples": [
+        "ANDREW HBX-6513DS-VTM",
+        "Antenna RF HBX-6513DS-VTM Andrew",
+        "Commscope_HBX6513DSVTM"
+      ]
+    },
+    {
+      "antenna_model": "AMB4519R6",
+      "series": "AMB",
+      "raw_count": 132,
+      "raw_examples": [
+        "AMB4519R6v06",
+        "AMB4519R6v06 (Antenna Bangkok)",
+        "Antenna Sectoral AMB4519R6v06 Huawei"
+      ]
+    },
+    {
+      "antenna_model": "LDX-6516DS",
+      "series": "LDX",
+      "raw_count": 114,
+      "raw_examples": [
+        "ANDREW LDX-6516DS-VTM",
+        "Antenna Sectoral LDX-6516DS-VTM Commscope",
+        "CommscopeLDX-6516DS-VTM"
+      ]
+    },
+    {
+      "antenna_model": "HBXX-6517DS",
+      "series": "HBXX",
+      "raw_count": 113,
+      "raw_examples": [
+        "ANDREW HBXX-6517DS-VTM",
+        "Antenna RF HBXX-6517DS-VTM Andrew",
+        "HBXX-6517DS-VTM"
+      ]
+    },
+    {
+      "antenna_model": "80010213",
+      "series": null,
+      "raw_count": 108,
+      "raw_examples": [
+        "Antenna Sectoral 80010213 Kathrein",
+        "K80010213 (2 Ports",
+        "KATHREIN 80010213"
+      ]
+    },
+    {
+      "antenna_model": "CNPX-410-14M-4P-E1",
+      "series": "CNPX",
+      "raw_count": 106,
+      "raw_examples": [
+        "ARGUS CNPX410.14M-4P-E1",
+        "Antenna Sectoral CNPX410.14M-4P-E1 Argus",
+        "CNPX410.14M-4P-E1"
+      ]
+    },
+    {
+      "antenna_model": "ADU4521R3",
+      "series": "ADU",
+      "raw_count": 98,
+      "raw_examples": [
+        "ADU4521R3v06",
+        "ADU4521R3v06 (4 Ports 1800)",
+        "Antenna ADU4521R3v06 (High Gain Antenna)"
+      ]
+    },
+    {
+      "antenna_model": "730382",
+      "series": null,
+      "raw_count": 98,
+      "raw_examples": [
+        "Antenna Sectoral 730382 Kathrein",
+        "KATHREIN 730382",
+        "Kathrein_730382"
+      ]
+    },
+    {
+      "antenna_model": "CNPX-410-14M",
+      "series": "CNPX",
+      "raw_count": 82,
+      "raw_examples": [
+        "ANDREW CNPX-410-14M",
+        "Antenna Sectoral CNPX-410-14M Commscope"
+      ]
+    },
+    {
+      "antenna_model": "APE4518R1",
+      "series": "APE",
+      "raw_count": 80,
+      "raw_examples": [
+        "APE4518R1v06",
+        "Antenna RF APE4518R1v06 Huawei"
+      ]
+    },
+    {
+      "antenna_model": "742215",
+      "series": null,
+      "raw_count": 79,
+      "raw_examples": [
+        "Antenna Sectoral 742215 Katherin",
+        "KATHREIN 742215"
+      ]
+    },
+    {
+      "antenna_model": "PRRU",
+      "series": "PRRU",
+      "raw_count": 78,
+      "raw_examples": [
+        "PRRU",
+        "pRRU"
+      ]
+    },
+    {
+      "antenna_model": "AAU5768",
+      "series": "AAU",
+      "raw_count": 76,
+      "raw_examples": [
+        "AAU5768",
+        "AAU5768 (WD7MRTUEL004)"
+      ]
+    },
+    {
+      "antenna_model": "CNPX-310M-4P",
+      "series": "CNPX",
+      "raw_count": 69,
+      "raw_examples": [
+        "ARGUS CNPX310M-4P",
+        "Antenna Sectoral CNPX310M-4P Argus"
+      ]
+    },
+    {
+      "antenna_model": "80010217",
+      "series": null,
+      "raw_count": 65,
+      "raw_examples": [
+        "Antenna RF 80010217V01 Kathrein",
+        "K80010217 (2 Ports",
+        "KATHREIN 80010217"
+      ]
+    },
+    {
+      "antenna_model": "739630",
+      "series": null,
+      "raw_count": 65,
+      "raw_examples": [
+        "Antenna Sectoral 739630 Kathrein",
+        "K739630",
+        "KATHREIN 739630"
+      ]
+    },
+    {
+      "antenna_model": "730282",
+      "series": null,
+      "raw_count": 57,
+      "raw_examples": [
+        "Antenna Sectoral 730282 Kathrein",
+        "KATHREIN 730282"
+      ]
+    },
+    {
+      "antenna_model": "VHLP4-15-NC3",
+      "series": "VHLP",
+      "raw_count": 56,
+      "raw_examples": [
+        "ANDREW VHlP4-15-NC3",
+        "Antenna Sectoral VHlP4-15-NC3 Andrew"
+      ]
+    },
+    {
+      "antenna_model": "TBXLHA-6565C",
+      "series": "TBXL",
+      "raw_count": 50,
+      "raw_examples": [
+        "ANDREW TBXLHA-6565C-VTM",
+        "Antenna Sectoral TBXLHA-6565C-VTM Andrew",
+        "TBXLHA-6565C-VTM (6 Ports"
+      ]
+    },
+    {
+      "antenna_model": "AAU5685",
+      "series": "AAU",
+      "raw_count": 49,
+      "raw_examples": [
+        "AAU5685"
+      ]
+    },
+    {
+      "antenna_model": "A08260PD00",
+      "series": null,
+      "raw_count": 47,
+      "raw_examples": [
+        "Antenna RF A08260PD00v06 Huawei"
+      ]
+    },
+    {
+      "antenna_model": "APE4518R12",
+      "series": "APE",
+      "raw_count": 45,
+      "raw_examples": [
+        "Antenna RF APE4518R12v06 Huawei"
+      ]
+    },
+    {
+      "antenna_model": "ADU45116",
+      "series": "ADU",
+      "raw_count": 45,
+      "raw_examples": [
+        "Antenna Sectoral ADU45116v02 Huawei"
+      ]
+    },
+    {
+      "antenna_model": "MB4B/QMF-65-16/16DE-IN-TSL",
+      "series": "MB",
+      "raw_count": 41,
+      "raw_examples": [
+        "Antenna Sectoral MB4B/QMF-65-16/16DE-IN-TSL Mobi",
+        "MB4B/QMF-65-16/16DE-IN-TSL"
+      ]
+    },
+    {
+      "antenna_model": "739636",
+      "series": null,
+      "raw_count": 40,
+      "raw_examples": [
+        "Antenna Sectoral 739636 Kathrein"
+      ]
+    },
+    {
+      "antenna_model": "ADU4521R0",
+      "series": "ADU",
+      "raw_count": 39,
+      "raw_examples": [
+        "ADU4521R0v06",
+        "Antenna Sectoral ADU4521R0v06 Huawei"
+      ]
+    },
+    {
+      "antenna_model": "AMB4521R0",
+      "series": "AMB",
+      "raw_count": 39,
+      "raw_examples": [
+        "AMB4521R0v06",
+        "Antenna Sectoral AMB4521R0v06 Huawei"
+      ]
+    },
+    {
+      "antenna_model": "730368",
+      "series": null,
+      "raw_count": 39,
+      "raw_examples": [
+        "Antenna Sectoral 730368 Kathrein",
+        "KATHREIN 730368"
+      ]
+    },
+    {
+      "antenna_model": "MULTI",
+      "series": "MULT",
+      "raw_count": 36,
+      "raw_examples": [
+        "MULTI_RET"
+      ]
+    },
+    {
+      "antenna_model": "739662",
+      "series": null,
+      "raw_count": 34,
+      "raw_examples": [
+        "Antenna Sectoral 739662 Kathrein",
+        "K739662 (4 Ports",
+        "KATHREIN 739662"
+      ]
+    },
+    {
+      "antenna_model": "HBXX",
+      "series": "HBXX",
+      "raw_count": 33,
+      "raw_examples": [
+        "Andrew HBXX",
+        "Andrew hbxx",
+        "HBXX"
+      ]
+    },
+    {
+      "antenna_model": "HBXX-6516-DS",
+      "series": "HBXX",
+      "raw_count": 31,
+      "raw_examples": [
+        "Andrew hbxx-6516-ds-vtm",
+        "andrew HBXX-6516-DS-VTM"
+      ]
+    },
+    {
+      "antenna_model": "AAU5492",
+      "series": "AAU",
+      "raw_count": 30,
+      "raw_examples": [
+        "AAU5492"
+      ]
+    },
+    {
+      "antenna_model": "ARGNNPX-412M",
+      "series": "ARGN",
+      "raw_count": 30,
+      "raw_examples": [
+        "Antenna Sectoral ARGNNPX-412M",
+        "Antenna Sectoral ARG_NNPX-412M_ET Argus"
+      ]
+    },
+    {
+      "antenna_model": "741989",
+      "series": null,
+      "raw_count": 29,
+      "raw_examples": [
+        "Antenna RF 741989 Kathrein",
+        "Antenna RF KATHREIN 741989",
+        "KATHREIN 741989"
+      ]
+    },
+    {
+      "antenna_model": "A79451700",
+      "series": null,
+      "raw_count": 28,
+      "raw_examples": [
+        "Antenna RF A79451700v06 Huawei",
+        "Antenna Sectoral A79451700v02 Huawei"
+      ]
+    },
+    {
+      "antenna_model": "AMB4520R1",
+      "series": "AMB",
+      "raw_count": 27,
+      "raw_examples": [
+        "AMB4520R1v06",
+        "AMB4520R1v06 (4 Ports  1800/2100)"
+      ]
+    },
+    {
+      "antenna_model": "CNPX-310R-4P",
+      "series": "CNPX",
+      "raw_count": 27,
+      "raw_examples": [
+        "ANDREW CNPX310R-4P",
+        "Antenna RF CNPX310R-4P COMMSCOPE",
+        "CNPX310R-4p"
+      ]
+    },
+    {
+      "antenna_model": "BA-G6W6W6W6W6X65V-11-TK",
+      "series": "BA",
+      "raw_count": 26,
+      "raw_examples": [
+        "Antenna RF BA-G6W6W6W6W6X65V-11-TK Rosenberger",
+        "Antenna Sectoral BA-G6W6W6W6W6X65V-11-TK Rosenberger"
+      ]
+    },
+    {
+      "antenna_model": "HBX-6516DS",
+      "series": "HBX",
+      "raw_count": 25,
+      "raw_examples": [
+        "ANDREW HBX-6516DS-VTM",
+        "Antenna RF HBX-6516DS-VTM Andrew"
+      ]
+    },
+    {
+      "antenna_model": "AAU5942",
+      "series": "AAU",
+      "raw_count": 24,
+      "raw_examples": [
+        "AAU5942",
+        "AAU5942 (WD7MZAAZGAA2) Antenna RRU Huawei",
+        "AAU5942 Antenna RRU Huawei"
+      ]
+    },
+    {
+      "antenna_model": "APE4518R10",
+      "series": "APE",
+      "raw_count": 24,
+      "raw_examples": [
+        "APE4518R10v06"
+      ]
+    },
+    {
+      "antenna_model": "741328",
+      "series": null,
+      "raw_count": 23,
+      "raw_examples": [
+        "Antenna RF Kathrein  741328",
+        "KATHREIN 741328"
+      ]
+    },
+    {
+      "antenna_model": "730376",
+      "series": null,
+      "raw_count": 23,
+      "raw_examples": [
+        "Antenna Sectoral 730376 Kathrein",
+        "K730376 (2 Ports  900)",
+        "Kathrein 730376"
+      ]
+    },
+    {
+      "antenna_model": "APE901213",
+      "series": "APE",
+      "raw_count": 22,
+      "raw_examples": [
+        "APE901213_6T",
+        "RFS_APE901213",
+        "RFS_APE901213_6T.pafx"
+      ]
+    },
+    {
+      "antenna_model": "HBXX-8516D5",
+      "series": "HBXX",
+      "raw_count": 22,
+      "raw_examples": [
+        "Antenna RF HBXX-8516D5-VTM Andrew"
+      ]
+    },
+    {
+      "antenna_model": "A11264PD01",
+      "series": null,
+      "raw_count": 21,
+      "raw_examples": [
+        "A11264PD01V06",
+        "A11264PD01v06"
+      ]
+    },
+    {
+      "antenna_model": "1916-09-5344",
+      "series": null,
+      "raw_count": 21,
+      "raw_examples": [
+        "ANDREW 1916-09-5344",
+        "Antenna Sectoral 1916-09-5344 Andrew"
+      ]
+    },
+    {
+      "antenna_model": "LDX-6565C",
+      "series": "LDX",
+      "raw_count": 19,
+      "raw_examples": [
+        "Antenna RF LDX-6565C-VTM Andrew"
+      ]
+    },
+    {
+      "antenna_model": "80010123",
+      "series": null,
+      "raw_count": 19,
+      "raw_examples": [
+        "Antenna Sectoral 80010123 Kathrein",
+        "Antenna Sectoral 80010123v03 Kathrein",
+        "K80010123 (4 Ports"
+      ]
+    },
+    {
+      "antenna_model": "NPX412M-E1",
+      "series": "NPX",
+      "raw_count": 18,
+      "raw_examples": [
+        "ARGUS NPX412M-E1",
+        "Antenna Sectoral NPX412M-E1 Argus"
+      ]
+    },
+    {
+      "antenna_model": "739495",
+      "series": null,
+      "raw_count": 18,
+      "raw_examples": [
+        "Antenna Sectoral 739495 Kathrein",
+        "K739495",
+        "K739495  (2 Ports"
+      ]
+    },
+    {
+      "antenna_model": "1270-09-5349",
+      "series": null,
+      "raw_count": 16,
+      "raw_examples": [
+        "ANATEL 1270-09-5349",
+        "Antenna RF 1270-09-5349 Anatel"
+      ]
+    },
+    {
+      "antenna_model": "3126-10-5344",
+      "series": null,
+      "raw_count": 16,
+      "raw_examples": [
+        "ANATEL 3126-10-5344",
+        "Antenna RF 3126-10-5344 Anatel"
+      ]
+    },
+    {
+      "antenna_model": "ASI4518R410",
+      "series": "ASI",
+      "raw_count": 16,
+      "raw_examples": [
+        "ASI4518R410v06"
+      ]
+    },
+    {
+      "antenna_model": "741794",
+      "series": null,
+      "raw_count": 16,
+      "raw_examples": [
+        "Antenna RF 741794 Kathrein",
+        "Antenna Sectoral K741794 Kathrein",
+        "KATHREIN 741794"
+      ]
+    },
+    {
+      "antenna_model": "HBXXX-6516DS",
+      "series": "HBXX",
+      "raw_count": 15,
+      "raw_examples": [
+        "ANDREW HBXXX-6516DS-VTM",
+        "Antenna sectoral HBXXX-6516DS-VTM Commscope"
+      ]
+    },
+    {
+      "antenna_model": "ASI4516R1",
+      "series": "ASI",
+      "raw_count": 15,
+      "raw_examples": [
+        "ASI4516R1V06"
+      ]
+    },
+    {
+      "antenna_model": "MB4B/MF/MF-65-17/18/18DDE-IN-TSL",
+      "series": "MB",
+      "raw_count": 15,
+      "raw_examples": [
+        "Antenna RF MB4B/MF/MF-65-17/18/18DDE-IN-TSL Mobi"
+      ]
+    },
+    {
+      "antenna_model": "HBXX-6516CS",
+      "series": "HBXX",
+      "raw_count": 15,
+      "raw_examples": [
+        "Antenna Sectoral HBXX-6516CS-VTM Andrew"
+      ]
+    },
+    {
+      "antenna_model": "80010761",
+      "series": null,
+      "raw_count": 14,
+      "raw_examples": [
+        "Antenna Sectoral 80010761 Katherin"
+      ]
+    },
+    {
+      "antenna_model": "DBXRH-8585C",
+      "series": "DBXR",
+      "raw_count": 13,
+      "raw_examples": [
+        "ANDREW DBXRH-8585C-VTM",
+        "Antenna Sectoral DBXRH-8585C-VTM Andrew"
+      ]
+    },
+    {
+      "antenna_model": "HBXX-6513DS",
+      "series": "HBXX",
+      "raw_count": 13,
+      "raw_examples": [
+        "ANDREW HBXX-6513DS-VTM",
+        "Antenna Sectoral HBXX-6513DS-VTM Commscope"
+      ]
+    },
+    {
+      "antenna_model": "APE4526R2",
+      "series": "APE",
+      "raw_count": 13,
+      "raw_examples": [
+        "APE4526R2V06"
+      ]
+    },
+    {
+      "antenna_model": "ASI4516R10",
+      "series": "ASI",
+      "raw_count": 13,
+      "raw_examples": [
+        "ASI4516R10V06"
+      ]
+    },
+    {
+      "antenna_model": "MB4B/QMF-65-17/18DE-IN-TSL",
+      "series": "MB",
+      "raw_count": 13,
+      "raw_examples": [
+        "Antenna RF MB4B/QMF-65-17/18DE-IN-TSL Mobi"
+      ]
+    },
+    {
+      "antenna_model": "739710",
+      "series": null,
+      "raw_count": 13,
+      "raw_examples": [
+        "Antenna Sectoral 739710 Kathrein",
+        "KATHREIN 739710"
+      ]
+    },
+    {
+      "antenna_model": "APE4518R42",
+      "series": "APE",
+      "raw_count": 13,
+      "raw_examples": [
+        "Antenna Sectoral APE4518R42v06 Huawei"
+      ]
+    },
+    {
+      "antenna_model": "DBXLH-6565C",
+      "series": "DBXL",
+      "raw_count": 12,
+      "raw_examples": [
+        "ANDREW DBXLH-6565C-VTM",
+        "Antenna Sectoral DBXLH-6565C-VTM Andrew"
+      ]
+    },
+    {
+      "antenna_model": "LBX-9014DS",
+      "series": "LBX",
+      "raw_count": 12,
+      "raw_examples": [
+        "ANDREW LBX-9014DS-VTM",
+        "Antenna RF LBX-9014DS-VTM Andrew"
+      ]
+    },
+    {
+      "antenna_model": "AQU4518R10",
+      "series": "AQU",
+      "raw_count": 12,
+      "raw_examples": [
+        "AQU 4518R10v06"
+      ]
+    },
+    {
+      "antenna_model": "S-WAVEU/U-65-18DV10",
+      "series": null,
+      "raw_count": 12,
+      "raw_examples": [
+        "Antenna Sector S-Wave U/U-65-18DV10 Rosenberger"
+      ]
+    },
+    {
+      "antenna_model": "HBXX-9014DS",
+      "series": "HBXX",
+      "raw_count": 11,
+      "raw_examples": [
+        "ANDREW HBXX-9014DS-VTM",
+        "Antenna Sectoral HBXX-9014DS-VTM Andrew",
+        "HBXX-9014DS-VTM"
+      ]
+    },
+    {
+      "antenna_model": "LDX",
+      "series": "LDX",
+      "raw_count": 11,
+      "raw_examples": [
+        "Andrew LDX",
+        "Andrew ldx",
+        "Andrew ldx "
+      ]
+    },
+    {
+      "antenna_model": "739491",
+      "series": null,
+      "raw_count": 11,
+      "raw_examples": [
+        "Antenna Sectoral 739491 Kathrein",
+        "K739491 (2 Ports"
+      ]
+    },
+    {
+      "antenna_model": "A08260PD05",
+      "series": null,
+      "raw_count": 10,
+      "raw_examples": [
+        "A08260PD05v06"
+      ]
+    },
+    {
+      "antenna_model": "CNPX-410-12M",
+      "series": "CNPX",
+      "raw_count": 10,
+      "raw_examples": [
+        "ARGUS CNPX410.12M",
+        "Antenna Sectoral CNPX410.12M Argus"
+      ]
+    },
+    {
+      "antenna_model": "ASI-2264PDO",
+      "series": "ASI",
+      "raw_count": 10,
+      "raw_examples": [
+        "ASI2264PDO1v06"
+      ]
+    },
+    {
+      "antenna_model": "NNPX412M-E1",
+      "series": "NNPX",
+      "raw_count": 10,
+      "raw_examples": [
+        "Antenna RF NNPX412M-E1 Argus",
+        "NNPX412M-E1"
+      ]
+    },
+    {
+      "antenna_model": "742047",
+      "series": null,
+      "raw_count": 10,
+      "raw_examples": [
+        "Antenna Sectoral 742047 Kathrein",
+        "KATHREIN 742047"
+      ]
+    },
+    {
+      "antenna_model": "CNPX-310R",
+      "series": "CNPX",
+      "raw_count": 10,
+      "raw_examples": [
+        "CNPX310R",
+        "Commscope_CNPX310R"
+      ]
+    },
+    {
+      "antenna_model": "AAU3940",
+      "series": "AAU",
+      "raw_count": 9,
+      "raw_examples": [
+        "AAU3940"
+      ]
+    },
+    {
+      "antenna_model": "AQU",
+      "series": "AQU",
+      "raw_count": 9,
+      "raw_examples": [
+        "AQU",
+        "AQU (3)",
+        "AQU (4)"
+      ]
+    },
+    {
+      "antenna_model": "ASI4518R1",
+      "series": "ASI",
+      "raw_count": 9,
+      "raw_examples": [
+        "ASI4518R1V06",
+        "ASI4518R1v06"
+      ]
+    },
+    {
+      "antenna_model": "DB856DG65EXY",
+      "series": "DB",
+      "raw_count": 9,
+      "raw_examples": [
+        "Antenna RF Andrew DB856DG65EXY"
+      ]
+    },
+    {
+      "antenna_model": "DBXLH-9090C",
+      "series": "DBXL",
+      "raw_count": 9,
+      "raw_examples": [
+        "Antenna RF DBXLH-9090C-VTM Andrew"
+      ]
+    },
+    {
+      "antenna_model": "NNPX4126M-E1",
+      "series": "NNPX",
+      "raw_count": 9,
+      "raw_examples": [
+        "Antenna RF NNPX4126M-E1 Argus"
+      ]
+    },
+    {
+      "antenna_model": "MB4B-65-18DDE-IN-TSL",
+      "series": "MB",
+      "raw_count": 9,
+      "raw_examples": [
+        "Antenna Sectoral MB4B-65-18DDE-IN-TSL MOBI"
+      ]
+    },
+    {
+      "antenna_model": "APE451704",
+      "series": "APE",
+      "raw_count": 8,
+      "raw_examples": [
+        "APE451704V01"
+      ]
+    },
+    {
+      "antenna_model": "80010122",
+      "series": null,
+      "raw_count": 8,
+      "raw_examples": [
+        "Antenna Sectoral 80010122 Kathrein"
+      ]
+    },
+    {
+      "antenna_model": "AAU5636",
+      "series": "AAU",
+      "raw_count": 7,
+      "raw_examples": [
+        "AAU5636 Huawei"
+      ]
+    },
+    {
+      "antenna_model": "AQU4518R31",
+      "series": "AQU",
+      "raw_count": 7,
+      "raw_examples": [
+        "AQU4518R31V06"
+      ]
+    },
+    {
+      "antenna_model": "HBXX-8317TB",
+      "series": "HBXX",
+      "raw_count": 7,
+      "raw_examples": [
+        "Antenna RF HBXX-8317TB1-VTM Andrew"
+      ]
+    },
+    {
+      "antenna_model": "80010126",
+      "series": null,
+      "raw_count": 7,
+      "raw_examples": [
+        "Antenna Sector 80010126 Kathrein"
+      ]
+    },
+    {
+      "antenna_model": "742236",
+      "series": null,
+      "raw_count": 7,
+      "raw_examples": [
+        "Antenna Sectoral 742236 Kathrein",
+        "Antenna Sectoral 742236V01 Kathrein",
+        "KATHREIN 742236"
+      ]
+    },
+    {
+      "antenna_model": "AQU4518R24",
+      "series": "AQU",
+      "raw_count": 7,
+      "raw_examples": [
+        "Antenna Sectoral AQU4518R24v06 Huawei"
+      ]
+    },
+    {
+      "antenna_model": "LBX-6516DS",
+      "series": "LBX",
+      "raw_count": 7,
+      "raw_examples": [
+        "Antenna Sectoral LBX-6516DS-VTM Commscope"
+      ]
+    },
+    {
+      "antenna_model": "739666",
+      "series": null,
+      "raw_count": 7,
+      "raw_examples": [
+        "Antenna Sectoral kathrein 739666"
+      ]
+    },
+    {
+      "antenna_model": "HBBXX",
+      "series": "HBBX",
+      "raw_count": 7,
+      "raw_examples": [
+        "Hbbxx"
+      ]
+    },
+    {
+      "antenna_model": "ADU45176",
+      "series": "ADU",
+      "raw_count": 7,
+      "raw_examples": [
+        "Huawei_ADU45176V02"
+      ]
+    },
+    {
+      "antenna_model": "736950",
+      "series": null,
+      "raw_count": 7,
+      "raw_examples": [
+        "KATHREIN 736950"
+      ]
+    },
+    {
+      "antenna_model": "QMF-65-16",
+      "series": "QMF",
+      "raw_count": 7,
+      "raw_examples": [
+        "QMF-65-16"
+      ]
+    },
+    {
+      "antenna_model": "S-WAVEU-65-18DV10",
+      "series": null,
+      "raw_count": 7,
+      "raw_examples": [
+        "ROSENBERGER S-Wave U-65-18DV10",
+        "S-Wave U-65-18DV10 (4 Ports"
+      ]
+    },
+    {
+      "antenna_model": "A704516R0",
+      "series": null,
+      "raw_count": 6,
+      "raw_examples": [
+        "A704516R0v06",
+        "Antenna Sectoral A704516R0v06 Huawei"
+      ]
+    },
+    {
+      "antenna_model": "2500MHZ",
+      "series": null,
+      "raw_count": 6,
+      "raw_examples": [
+        "ANDREW 806-960/1710-2500MHz",
+        "Indoor Omni Antenna 806-960/1710-2500MHz Andrew"
+      ]
+    },
+    {
+      "antenna_model": "AO-8260PD",
+      "series": "AO",
+      "raw_count": 6,
+      "raw_examples": [
+        "AO8260PD05v06"
+      ]
+    },
+    {
+      "antenna_model": "APE4517R1",
+      "series": "APE",
+      "raw_count": 6,
+      "raw_examples": [
+        "APE4517R1V06"
+      ]
+    },
+    {
+      "antenna_model": "APE4616R1",
+      "series": "APE",
+      "raw_count": 6,
+      "raw_examples": [
+        "APE4616R1v06"
+      ]
+    },
+    {
+      "antenna_model": "ATR461704",
+      "series": "ATR",
+      "raw_count": 6,
+      "raw_examples": [
+        "ATR461704v01"
+      ]
+    },
+    {
+      "antenna_model": "DB858DG90ESY",
+      "series": "DB",
+      "raw_count": 6,
+      "raw_examples": [
+        "Antenna RF DB858DG90ESY Andrew"
+      ]
+    },
+    {
+      "antenna_model": "KRE1011775",
+      "series": "KRE",
+      "raw_count": 6,
+      "raw_examples": [
+        "Antenna RF KRE1011775/1 Kathrein"
+      ]
+    },
+    {
+      "antenna_model": "S-WAVEUU-65-21DV6",
+      "series": null,
+      "raw_count": 6,
+      "raw_examples": [
+        "Antenna RF S-Wave UU-65-21DV6 Rosenberger"
+      ]
+    },
+    {
+      "antenna_model": "739707",
+      "series": null,
+      "raw_count": 6,
+      "raw_examples": [
+        "Antenna Sectoral 739707 Kathrein",
+        "KATHREIN 739707"
+      ]
+    },
+    {
+      "antenna_model": "742352",
+      "series": null,
+      "raw_count": 6,
+      "raw_examples": [
+        "Antenna Sectoral 742352 Kathrein",
+        "Antenna Sectoral K742352 Kathrein"
+      ]
+    },
+    {
+      "antenna_model": "S-WAVEU/U-65-18DV10-B10",
+      "series": null,
+      "raw_count": 6,
+      "raw_examples": [
+        "S-Wave U/U-65-18DV10-B10 (4 Ports"
+      ]
+    },
+    {
+      "antenna_model": "ATR",
+      "series": "ATR",
+      "raw_count": 5,
+      "raw_examples": [
+        "ATR"
+      ]
+    },
+    {
+      "antenna_model": "PW-10A-820/2500",
+      "series": "PW",
+      "raw_count": 5,
+      "raw_examples": [
+        "Antenna Omni PW-10A-820/2500"
+      ]
+    },
+    {
+      "antenna_model": "DB878H120ESX",
+      "series": "DB",
+      "raw_count": 5,
+      "raw_examples": [
+        "Antenna RF DB878H120ESX Andrew"
+      ]
+    },
+    {
+      "antenna_model": "S-WAVEU/U-65-21DV6",
+      "series": null,
+      "raw_count": 5,
+      "raw_examples": [
+        "Antenna Sector S-Wave U/U-65-21DV6 Rosenberger"
+      ]
+    },
+    {
+      "antenna_model": "HBXX-3817TB",
+      "series": "HBXX",
+      "raw_count": 5,
+      "raw_examples": [
+        "Antenna Sectoral HBXX-3817TB1-VTM Commscope"
+      ]
+    },
+    {
+      "antenna_model": "MB2500-PSA4-16DE",
+      "series": "MB",
+      "raw_count": 5,
+      "raw_examples": [
+        "Antenna Sectoral MB2500-PSA4-16DE Mobi",
+        "MOBI MB2500-PSA4-16DE"
+      ]
+    },
+    {
+      "antenna_model": "MB4B",
+      "series": "MB",
+      "raw_count": 5,
+      "raw_examples": [
+        "Antenna Sectoral MB4B/Mobi"
+      ]
+    },
+    {
+      "antenna_model": "739624",
+      "series": null,
+      "raw_count": 5,
+      "raw_examples": [
+        "KATHREIN 739624"
+      ]
+    },
+    {
+      "antenna_model": "SWAFE-U/U-65-21DV6",
+      "series": "SWAF",
+      "raw_count": 5,
+      "raw_examples": [
+        "S wafe- U/U -65-21DV6"
+      ]
+    },
+    {
+      "antenna_model": "AAU5940",
+      "series": "AAU",
+      "raw_count": 4,
+      "raw_examples": [
+        "AAU5940"
+      ]
+    },
+    {
+      "antenna_model": "AMB-4520RO",
+      "series": "AMB",
+      "raw_count": 4,
+      "raw_examples": [
+        "AMB 4520RO"
+      ]
+    },
+    {
+      "antenna_model": "S-WAVE",
+      "series": null,
+      "raw_count": 4,
+      "raw_examples": [
+        "ANTENNA S-wave"
+      ]
+    },
+    {
+      "antenna_model": "2650-12-5344",
+      "series": null,
+      "raw_count": 4,
+      "raw_examples": [
+        "Antenna RF 2650-12-5344 Anatel"
+      ]
+    },
+    {
+      "antenna_model": "80010991",
+      "series": null,
+      "raw_count": 4,
+      "raw_examples": [
+        "Antenna RF 80010991 Kathrein"
+      ]
+    },
+    {
+      "antenna_model": "S-WAVEICU-005005",
+      "series": null,
+      "raw_count": 4,
+      "raw_examples": [
+        "Antenna Sector S-Wave ICU-005_005 Rosenberger"
+      ]
+    },
+    {
+      "antenna_model": "741322",
+      "series": null,
+      "raw_count": 4,
+      "raw_examples": [
+        "Antenna Sectoral 741322 Kathrein"
+      ]
+    },
+    {
+      "antenna_model": "80020217",
+      "series": null,
+      "raw_count": 4,
+      "raw_examples": [
+        "Antenna Sectoral 80020217 Kathrein",
+        "KATHREIN 80020217"
+      ]
+    },
+    {
+      "antenna_model": "DX-790-960-65-17.5I-M",
+      "series": "DX",
+      "raw_count": 4,
+      "raw_examples": [
+        "Antenna Sectoral DX-790-960-65-17.5I-M Huawei"
+      ]
+    },
+    {
+      "antenna_model": "1011775",
+      "series": null,
+      "raw_count": 4,
+      "raw_examples": [
+        "KATHREIN 1011775"
+      ]
+    },
+    {
+      "antenna_model": "APE",
+      "series": "APE",
+      "raw_count": 3,
+      "raw_examples": [
+        "APE",
+        "APE (3)"
+      ]
+    },
+    {
+      "antenna_model": "APE451",
+      "series": "APE",
+      "raw_count": 3,
+      "raw_examples": [
+        "APE451"
+      ]
+    },
+    {
+      "antenna_model": "APE4516R10",
+      "series": "APE",
+      "raw_count": 3,
+      "raw_examples": [
+        "APE4516R10v6"
+      ]
+    },
+    {
+      "antenna_model": "AQU451816",
+      "series": "AQU",
+      "raw_count": 3,
+      "raw_examples": [
+        "AQU451816v02"
+      ]
+    },
+    {
+      "antenna_model": "ASI4518R2",
+      "series": "ASI",
+      "raw_count": 3,
+      "raw_examples": [
+        "ASI4518R2V06"
+      ]
+    },
+    {
+      "antenna_model": "NPX414M-E2",
+      "series": "NPX",
+      "raw_count": 3,
+      "raw_examples": [
+        "Antenna NPX414M-E2 Argus"
+      ]
+    },
+    {
+      "antenna_model": "LDX-901405",
+      "series": "LDX",
+      "raw_count": 3,
+      "raw_examples": [
+        "Antenna RF LDX-901405-VTM Andrew"
+      ]
+    },
+    {
+      "antenna_model": "80010992",
+      "series": null,
+      "raw_count": 3,
+      "raw_examples": [
+        "Antenna Sector 80010992 Kathrein"
+      ]
+    },
+    {
+      "antenna_model": "739622",
+      "series": null,
+      "raw_count": 3,
+      "raw_examples": [
+        "Antenna Sectoral 739622 Katherin"
+      ]
+    },
+    {
+      "antenna_model": "APX-909014",
+      "series": "APX",
+      "raw_count": 3,
+      "raw_examples": [
+        "Antenna Sectoral APX-909014-0T6 Celwave"
+      ]
+    },
+    {
+      "antenna_model": "HBXX-9016DS",
+      "series": "HBXX",
+      "raw_count": 3,
+      "raw_examples": [
+        "Antenna Sectoral HBXX-9016DS-VTM Andrew"
+      ]
+    },
+    {
+      "antenna_model": "NPX412M-V1",
+      "series": "NPX",
+      "raw_count": 3,
+      "raw_examples": [
+        "Antenna Sectoral NPX412M-V1 Argus"
+      ]
+    },
+    {
+      "antenna_model": "CNPX-410",
+      "series": "CNPX",
+      "raw_count": 3,
+      "raw_examples": [
+        "CNPX-410"
+      ]
+    },
+    {
+      "antenna_model": "DBLXH-6565C",
+      "series": "DBLX",
+      "raw_count": 3,
+      "raw_examples": [
+        "DBLXH-6565C-VTM (4 Ports"
+      ]
+    },
+    {
+      "antenna_model": "742265",
+      "series": null,
+      "raw_count": 3,
+      "raw_examples": [
+        "KATHREIN 742265"
+      ]
+    },
+    {
+      "antenna_model": "AAU5639",
+      "series": "AAU",
+      "raw_count": 2,
+      "raw_examples": [
+        "AAU5639"
+      ]
+    },
+    {
+      "antenna_model": "AMB",
+      "series": "AMB",
+      "raw_count": 2,
+      "raw_examples": [
+        "AMB",
+        "AMB High band (1)"
+      ]
+    },
+    {
+      "antenna_model": "LB",
+      "series": "LB",
+      "raw_count": 2,
+      "raw_examples": [
+        "Antenna Dual Beam 4 Port LB"
+      ]
+    },
+    {
+      "antenna_model": "AP901213",
+      "series": "AP",
+      "raw_count": 2,
+      "raw_examples": [
+        "Antenna RF AP901213 RFS"
+      ]
+    },
+    {
+      "antenna_model": "DX-1710-2170-90-171-21",
+      "series": "DX",
+      "raw_count": 2,
+      "raw_examples": [
+        "Antenna RF DX-1710-2170-90-171-21 Agisson"
+      ]
+    },
+    {
+      "antenna_model": "741979",
+      "series": null,
+      "raw_count": 2,
+      "raw_examples": [
+        "Antenna Sectoral 741979 Kathrein"
+      ]
+    },
+    {
+      "antenna_model": "TBXLHA-6565D",
+      "series": "TBXL",
+      "raw_count": 2,
+      "raw_examples": [
+        "Antenna Sectoral TBXLHA-6565DS-VTM Andrew"
+      ]
+    },
+    {
+      "antenna_model": "741990",
+      "series": null,
+      "raw_count": 2,
+      "raw_examples": [
+        "K741990 (2 Ports 1800/2100)"
+      ]
+    },
+    {
+      "antenna_model": "NNPXA12ME1",
+      "series": "NNPX",
+      "raw_count": 2,
+      "raw_examples": [
+        "NNPXA 12M E1"
+      ]
+    },
+    {
+      "antenna_model": "ADU451",
+      "series": "ADU",
+      "raw_count": 1,
+      "raw_examples": [
+        "ADU451"
+      ]
+    },
+    {
+      "antenna_model": "ADU4517",
+      "series": "ADU",
+      "raw_count": 1,
+      "raw_examples": [
+        "ADU4517"
+      ]
+    },
+    {
+      "antenna_model": "AMB420R0",
+      "series": "AMB",
+      "raw_count": 1,
+      "raw_examples": [
+        "AMB420R0"
+      ]
+    },
+    {
+      "antenna_model": "LDX-1014DS",
+      "series": "LDX",
+      "raw_count": 1,
+      "raw_examples": [
+        "ANDREW LDX-1014DS-VTM"
+      ]
+    },
+    {
+      "antenna_model": "AQU4518R2",
+      "series": "AQU",
+      "raw_count": 1,
+      "raw_examples": [
+        "AQU4518R2V06"
+      ]
+    },
+    {
+      "antenna_model": "AAU5323",
+      "series": "AAU",
+      "raw_count": 1,
+      "raw_examples": [
+        "Antenna HAAU5323 Huawei"
+      ]
+    },
+    {
+      "antenna_model": "MB900-YZ-011",
+      "series": "MB",
+      "raw_count": 1,
+      "raw_examples": [
+        "Antenna Omni MB900-YZ-011 Mobi"
+      ]
+    },
+    {
+      "antenna_model": "80010306",
+      "series": null,
+      "raw_count": 1,
+      "raw_examples": [
+        "Antenna RF 80010306v01 Kathrein"
+      ]
+    },
+    {
+      "antenna_model": "A264518S0",
+      "series": null,
+      "raw_count": 1,
+      "raw_examples": [
+        "Antenna RF A264518S0 Huawei"
+      ]
+    },
+    {
+      "antenna_model": "A79451702",
+      "series": null,
+      "raw_count": 1,
+      "raw_examples": [
+        "Antenna RF A79451702 Huawei"
+      ]
+    },
+    {
+      "antenna_model": "AQU4519R21",
+      "series": "AQU",
+      "raw_count": 1,
+      "raw_examples": [
+        "Antenna RF AQU4519R21V06 Huawei"
+      ]
+    },
+    {
+      "antenna_model": "ATR4518R6",
+      "series": "ATR",
+      "raw_count": 1,
+      "raw_examples": [
+        "Antenna RF ATR4518R6v07 Huawei"
+      ]
+    },
+    {
+      "antenna_model": "HBX-3319DS",
+      "series": "HBX",
+      "raw_count": 1,
+      "raw_examples": [
+        "Antenna RF HBX-3319DS-A1M Andrew"
+      ]
+    },
+    {
+      "antenna_model": "HBX-9014DS",
+      "series": "HBX",
+      "raw_count": 1,
+      "raw_examples": [
+        "Antenna RF HBX-9014DS-VTM Commscope"
+      ]
+    },
+    {
+      "antenna_model": "KRE1011741",
+      "series": "KRE",
+      "raw_count": 1,
+      "raw_examples": [
+        "Antenna RF KRE1011741/1 Kathrein"
+      ]
+    },
+    {
+      "antenna_model": "738445",
+      "series": null,
+      "raw_count": 1,
+      "raw_examples": [
+        "Antenna Sectoral 738445 Kathrein"
+      ]
+    },
+    {
+      "antenna_model": "739686",
+      "series": null,
+      "raw_count": 1,
+      "raw_examples": [
+        "Antenna Sectoral 739686 Kathrein"
+      ]
+    },
+    {
+      "antenna_model": "793532",
+      "series": null,
+      "raw_count": 1,
+      "raw_examples": [
+        "Antenna Sectoral 793532 Kathrein"
+      ]
+    },
+    {
+      "antenna_model": "CNPX",
+      "series": "CNPX",
+      "raw_count": 1,
+      "raw_examples": [
+        "Argus cnpx"
+      ]
+    },
+    {
+      "antenna_model": "CNPC410",
+      "series": "CNPC",
+      "raw_count": 1,
+      "raw_examples": [
+        "CNPC410"
+      ]
+    },
+    {
+      "antenna_model": "ODI065R17M18JJJ-G",
+      "series": "ODI",
+      "raw_count": 1,
+      "raw_examples": [
+        "COMBA ODI_065R17M18JJJ-G_ET"
+      ]
+    },
+    {
+      "antenna_model": "S-WAVEU-65-21DV6",
+      "series": null,
+      "raw_count": 1,
+      "raw_examples": [
+        "ROSENBERGER S-Wave U-65-21DV6"
+      ]
+    }
+  ]
+}

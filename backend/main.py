@@ -164,6 +164,7 @@ from routers import ticketing as ticketing_router
 from routers import overview as overview_router
 from routers import activity_enom as activity_enom_router
 from routers import data_potensi as data_potensi_router
+from routers import rf_tilt as rf_tilt_router
 
 # NOTE: Token auth removed for initial deployment — dashboard is internal
 app.include_router(map_router.router, prefix=API_PREFIX)
@@ -177,6 +178,7 @@ app.include_router(ticketing_router.router, prefix=API_PREFIX)
 app.include_router(overview_router.router, prefix=API_PREFIX)
 app.include_router(activity_enom_router.router, prefix=API_PREFIX)
 app.include_router(data_potensi_router.router, prefix=API_PREFIX)
+app.include_router(rf_tilt_router.router, prefix=API_PREFIX)
 
 
 # ---------- Serve Frontend Static Files (Production) ----------

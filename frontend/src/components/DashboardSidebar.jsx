@@ -12,8 +12,10 @@ import {
   LogOut,
   Map,
   Moon,
+  Radio,
   Sun,
   TicketCheck,
+  Wrench,
 } from 'lucide-react';
 import { useTheme } from '../hooks/useTheme';
 import { authLogout } from '../services/api';
@@ -30,6 +32,10 @@ const NAV_ITEMS = [
   { to: '/transport-quality', label: 'Transport Quality', icon: Activity },
   { to: '/ticketing', label: 'Ticketing', icon: TicketCheck },
   { to: '/data-potensi', label: 'Data Potensi', icon: Database },
+];
+
+const TOOL_ITEMS = [
+  { to: '/rf-tilt-analysis', label: 'RF Tilt Analysis', icon: Radio },
 ];
 
 function SidebarNavItem({ item, collapsed }) {
@@ -119,10 +125,31 @@ export default function DashboardSidebar({ collapsed, onToggle, lastUpdates }) {
         </button>
       </div>
 
-      <nav className="flex-1 space-y-1.5 overflow-y-auto px-2.5 py-3">
-        {NAV_ITEMS.map((item) => (
-          <SidebarNavItem key={item.to} item={item} collapsed={collapsed} />
-        ))}
+      <nav className="flex-1 overflow-y-auto px-2.5 py-3">
+        <div className="space-y-1.5">
+          {NAV_ITEMS.map((item) => (
+            <SidebarNavItem key={item.to} item={item} collapsed={collapsed} />
+          ))}
+        </div>
+
+        {/* Tools section */}
+        <div className="mt-4 pt-3 border-t border-[var(--border)]">
+          {!collapsed ? (
+            <div className="flex items-center gap-2 px-3 pb-2">
+              <Wrench className="size-3 text-[var(--text-muted)]" />
+              <span className="text-[9px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">Tools</span>
+            </div>
+          ) : (
+            <div className="flex justify-center pb-2" title="Tools">
+              <Wrench className="size-3 text-[var(--text-muted)]" />
+            </div>
+          )}
+          <div className="space-y-1.5">
+            {TOOL_ITEMS.map((item) => (
+              <SidebarNavItem key={item.to} item={item} collapsed={collapsed} />
+            ))}
+          </div>
+        </div>
       </nav>
 
       <div className="space-y-2 border-t border-[var(--border)] px-2.5 py-3">

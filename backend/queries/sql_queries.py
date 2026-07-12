@@ -136,7 +136,8 @@ SELECT
     beamwidth,
     radius,
     antenna_height,
-    antenna_type
+    antenna_type,
+    "ta_90%"
 FROM ransys_gabungan
 WHERE latitude_fix IS NOT NULL
   AND longitude_fix IS NOT NULL
@@ -420,3 +421,95 @@ SELECT m.*
 FROM data_site_master m
 WHERE m."Siteid" = :site_id
 """
+
+# Query - RF Tilt site search from ransys_gabungan
+RF_TILT_SITE_SEARCH_QUERY = """
+SELECT
+    site_id,
+    cell_name,
+    sector_base,
+    band,
+    latitude_fix,
+    longitude_fix,
+    azimuth,
+    electrical_tilt,
+    mechanical_tilt,
+    antenna_height,
+    beamwidth,
+    antenna_type
+FROM ransys_gabungan
+WHERE latitude_fix IS NOT NULL
+  AND longitude_fix IS NOT NULL
+  AND azimuth IS NOT NULL
+  AND longitude_fix BETWEEN -180 AND 180
+  AND latitude_fix BETWEEN -90 AND 90
+  {filters}
+ORDER BY site_id, sector_base, band
+LIMIT :limit
+"""
+
+# Query - Antenna spec lookup from antenna_specs table
+ANTENNA_SPEC_LOOKUP_QUERY = """
+SELECT
+    antenna_model,
+    vendor,
+    series,
+    antenna_type_enum,
+    frequency_low_mhz,
+    frequency_high_mhz,
+    frequency_bands,
+    gain_dbi_by_band,
+    vertical_beamwidth_by_band,
+    horizontal_beamwidth,
+    electrical_tilt_min,
+    electrical_tilt_max,
+    ports,
+    weight_kg,
+    height_mm,
+    width_mm,
+    depth_mm,
+    connector_type,
+    source_url
+FROM antenna_specs
+WHERE antenna_model = :antenna_model
+LIMIT 1
+"""
+
+# Query - Fuzzy antenna spec lookup (prefix match)
+ANTENNA_SPEC_FUZZY_QUERY = """
+SELECT
+    antenna_model,
+    vendor,
+    series,
+    antenna_type_enum,
+    frequency_low_mhz,
+    frequency_high_mhz,
+    frequency_bands,
+    gain_dbi_by_band,
+    vertical_beamwidth_by_band,
+    horizontal_beamwidth,
+    electrical_tilt_min,
+    electrical_tilt_max,
+    ports,
+    weight_kg,
+    height_mm,
+    width_mm,
+    depth_mm,
+    connector_type,
+    source_url
+FROM antenna_specs
+WHERE antenna_model ILIKE :pattern
+ORDER BY length(antenna_model) ASC
+LIMIT 1
+"""
+
+# Query - List/search antenna models
+ANTENNA_MODEL_LIST_QUERY = """
+SELECT antenna_model, vendor, series, frequency_bands, ports, connector_type,
+       frequency_low_mhz, frequency_high_mhz
+FROM antenna_specs
+WHERE (:q = '' OR antenna_model ILIKE :q_pattern)
+ORDER BY antenna_model
+LIMIT :limit
+"""
+# End of RF Tilt antenna query definitions.

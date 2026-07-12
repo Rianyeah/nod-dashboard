@@ -358,4 +358,34 @@ export async function fetchDataPotensiFilterOptions(params) {
   return data;
 }
 
+// ===== RF Tilt Analysis =====
+
+export async function searchRfTiltSites(q) {
+  const { data } = await api.get('/rf-tilt/sites', {
+    params: { q: q || undefined },
+  });
+  return data;
+}
+
+export async function analyzeRfTilt(payload) {
+  const { data } = await api.post('/rf-tilt/analysis', payload, {
+    timeout: 60000,
+  });
+  return data;
+}
+
+export async function getAntennaSpec(antennaType) {
+  const { data } = await api.get('/rf-tilt/antenna-spec', {
+    params: { antenna_type: antennaType },
+  });
+  return data;
+}
+
+export async function searchAntennaModels(q) {
+  const { data } = await api.get('/rf-tilt/antenna-models', {
+    params: { q: q || undefined },
+  });
+  return data;
+}
+
 export default api;

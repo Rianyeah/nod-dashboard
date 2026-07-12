@@ -125,6 +125,7 @@ def sector_row_to_feature(
             "site_type": _row_value(row, "site_type"),
             "antenna_height": _to_float(_row_value(row, "antenna_height")),
             "antenna_type": _row_value(row, "antenna_type"),
+            "ta_90%": _to_float(_row_value(row, "ta_90%")),
             "azimuth": azimuth,
             "beamwidth": beamwidth,
             "radius": _to_float(_row_value(row, "radius")),

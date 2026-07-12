@@ -880,3 +880,14 @@ select option {
     @apply font-sans;
   }
 }
+
+/* ─── RF Tilt Map — custom popup styles ────────────────────────────── */
+.rf-map-popup .mapboxgl-popup-content {
+  background: transparent !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+.rf-map-popup .mapboxgl-popup-tip {
+  display: none !important;
+}

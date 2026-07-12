@@ -7,6 +7,7 @@ import ActivityEnomPage from './pages/ActivityEnomPage';
 import TransportQualityPage from './pages/TransportQualityPage';
 import TicketingPage from './pages/TicketingPage';
 import DataPotensiPage from './pages/DataPotensiPage';
+import RfTiltAnalysisPage from './pages/RfTiltAnalysisPage';
 import LoginPage from './pages/LoginPage';
 import { useSessionTimeout } from './hooks/useSessionTimeout';
 import { AppShell } from './components/DashboardSidebar';
@@ -107,6 +108,14 @@ export default function App() {
             element={
               <PrivateRoute>
                 <DataPotensiPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/rf-tilt-analysis"
+            element={
+              <PrivateRoute>
+                <RfTiltAnalysisPage />
               </PrivateRoute>
             }
           />
