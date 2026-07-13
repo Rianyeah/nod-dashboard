@@ -17,7 +17,7 @@ export default function RfTiltExportButton({ targetRef, disabled }) {
         pixelRatio: 2,
         cacheBust: true,
         filter: (node) => {
-          if (node?.classList?.contains('rf-map-skip-export')) return false;
+          if (node?.classList?.contains('rf-export-control')) return false;
           return true;
         },
       });
@@ -36,6 +36,7 @@ export default function RfTiltExportButton({ targetRef, disabled }) {
     <Button
       variant="outline"
       size="sm"
+      className="rf-export-control"
       onClick={handleExport}
       disabled={disabled || exporting}
     >

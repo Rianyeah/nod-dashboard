@@ -174,6 +174,8 @@ export default function RfTiltMap({ result, params, onMapClick, targetMode, sele
       style: style.url,
       center: [params.longitude, params.latitude],
       zoom: 14,
+      // Required so html-to-image can include the WebGL map canvas in PNG exports.
+      preserveDrawingBuffer: true,
     });
 
     mapRef.current.addControl(new mapboxgl.NavigationControl(), 'top-right');

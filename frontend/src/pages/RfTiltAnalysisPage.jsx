@@ -7,6 +7,7 @@ import RfTiltMap from '../features/rf-tilt/RfTiltMap';
 import RfTiltResultPanel from '../features/rf-tilt/RfTiltResultPanel';
 import RfTiltExportButton from '../features/rf-tilt/RfTiltExportButton';
 import RfTiltAntennaSpecPanel from '../features/rf-tilt/RfTiltAntennaSpecPanel';
+import RfTiltResultErrorBoundary from '../features/rf-tilt/RfTiltResultErrorBoundary';
 
 export default function RfTiltAnalysisPage() {
   const hook = useRfTiltAnalysis();
@@ -23,6 +24,7 @@ export default function RfTiltAnalysisPage() {
     manualMode,
     setManualMode,
     selectedSiteId,
+    selectedSite,
     siteSearchResults,
     siteSearchLoading,
     searchSites,
@@ -35,11 +37,16 @@ export default function RfTiltAnalysisPage() {
     antennaModelError,
     searchAntennaModels,
     selectAntennaModel,
+    selectFrequency,
+    inputSources,
+    compatibilityWarning,
   } = hook;
 
   const exportRef = useRef(null);
 
-  const totalTilt = (params.mechanical_tilt + params.electrical_tilt).toFixed(1);
+  const totalTilt = [params.mechanical_tilt, params.electrical_tilt]
+    .reduce((total, value) => total + (Number.isFinite(Number(value)) ? Number(value) : 0), 0)
+    .toFixed(1);
 
   const handleMapClick = useCallback((lat, lon) => {
     if (targetMode) {
@@ -48,7 +55,7 @@ export default function RfTiltAnalysisPage() {
   }, [targetMode, setMultiple]);
 
   return (
-    <div className="min-h-screen">
+    <div ref={exportRef} data-export="rf-tilt-analysis" className="min-h-screen">
       <Breadcrumb />
 
       {/* Page header */}
@@ -89,12 +96,12 @@ export default function RfTiltAnalysisPage() {
             <RfTiltParamForm
               params={params}
               set={set}
-              setMultiple={setMultiple}
               targetMode={targetMode}
               setTargetMode={setTargetMode}
               manualMode={manualMode}
               setManualMode={setManualMode}
               selectedSiteId={selectedSiteId}
+              selectedSite={selectedSite}
               siteSearchResults={siteSearchResults}
               siteSearchLoading={siteSearchLoading}
               searchSites={searchSites}
@@ -107,7 +114,10 @@ export default function RfTiltAnalysisPage() {
               antennaModelError={antennaModelError}
               searchAntennaModels={searchAntennaModels}
               selectAntennaModel={selectAntennaModel}
+              selectFrequency={selectFrequency}
               antennaSpec={antennaSpec}
+              inputSources={inputSources}
+              compatibilityWarning={compatibilityWarning}
             />
 
             {/* Status messages */}
@@ -120,7 +130,7 @@ export default function RfTiltAnalysisPage() {
             {error && (
               <div className="flex items-start gap-2 text-xs text-destructive px-2 py-1.5 rounded-md bg-destructive/10 border border-destructive/20">
                 <span className="mt-0.5">⚠</span>
-                {error}
+                {typeof error === 'string' ? error : 'Analisis tidak dapat dijalankan. Periksa kembali input Anda.'}
               </div>
             )}
           </div>
@@ -132,30 +142,32 @@ export default function RfTiltAnalysisPage() {
             )}
 
             {result && (
-              <div ref={exportRef} className="space-y-4 bg-[var(--bg-base)] p-3 rounded-lg">
-                <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(280px,1fr)]">
-                  <div className="min-w-0">
-                    <RfTiltChart result={result} />
-                  </div>
-                  <div className="min-w-0">
-                    {(antennaSpec || antennaSpecLoading) && (
-                      <RfTiltAntennaSpecPanel antennaSpec={antennaSpec} loading={antennaSpecLoading} />
-                    )}
-                  </div>
-                  <div className="rf-map-skip-export min-w-0">
-                    <RfTiltMap
-                      result={result}
-                      params={params}
-                      onMapClick={handleMapClick}
-                      targetMode={targetMode}
-                      selectedSiteId={selectedSiteId}
-                    />
-                  </div>
-                  <div className="min-w-0 space-y-4">
-                    <RfTiltResultPanel result={result} clutterCount={0} selectedSiteId={selectedSiteId} />
+              <RfTiltResultErrorBoundary resetKey={result}>
+                <div className="space-y-4 bg-[var(--bg-base)] p-3 rounded-lg">
+                  <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(280px,1fr)]">
+                    <div className="min-w-0">
+                      <RfTiltChart result={result} />
+                    </div>
+                    <div className="min-w-0">
+                      {(antennaSpec || antennaSpecLoading) && (
+                        <RfTiltAntennaSpecPanel antennaSpec={antennaSpec} loading={antennaSpecLoading} />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <RfTiltMap
+                        result={result}
+                        params={params}
+                        onMapClick={handleMapClick}
+                        targetMode={targetMode}
+                        selectedSiteId={selectedSiteId}
+                      />
+                    </div>
+                    <div className="min-w-0 space-y-4">
+                      <RfTiltResultPanel result={result} clutterCount={0} selectedSiteId={selectedSiteId} />
+                    </div>
                   </div>
                 </div>
-              </div>
+              </RfTiltResultErrorBoundary>
             )}
 
             {!result && !loading && !antennaSpec && !antennaSpecLoading && (
