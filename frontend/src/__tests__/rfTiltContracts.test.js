@@ -8,7 +8,13 @@ import {
   inferAntennaSeries,
   inferFrequencyFromBand,
   inferFrequencyFromAntennaBands,
+  resolveAntennaInputs,
+  STANDARD_VERTICAL_BEAMWIDTH,
+  formatRfTiltApiError,
+  hasValidTiltAnalysisResult,
+  validateRfTiltInputs,
 } from '../features/rf-tilt/rfTiltSiteUtils.js';
+import { DEFAULT_PARAMS } from '../features/rf-tilt/rfTiltChartConfig.js';
 
 const src = (...parts) => readFileSync(resolve(process.cwd(), 'src', ...parts), 'utf8');
 
@@ -36,6 +42,88 @@ describe('RF Tilt site selection contracts', () => {
     assert.equal(inferFrequencyFromAntennaBands(null), null);
   });
 
+  it('resolves Vertical BW from the matched antenna specification at the active frequency', () => {
+    const resolved = resolveAntennaInputs({
+      antennaSpec: {
+        matched: true,
+        vertical_beamwidth_by_band: { 1800: 7.3, 2100: 6.5 },
+        horizontal_beamwidth: 65,
+        electrical_tilt_min: 0,
+        electrical_tilt_max: 12,
+      },
+      frequencyMhz: 1800,
+      electricalTilt: 8,
+    });
+
+    assert.equal(resolved.verticalBeamwidth, 7.3);
+    assert.equal(resolved.verticalBeamwidthSource, 'Antenna spec');
+    assert.equal(resolved.horizontalBeamwidth, 65);
+    assert.equal(resolved.electricalTiltWarning, null);
+  });
+
+  it('uses the standard 6° fallback for unmatched, absent, or invalid Vertical BW values', () => {
+    for (const antennaSpec of [
+      null,
+      { matched: false, vertical_beamwidth_by_band: { 1800: 7.3 } },
+      { matched: true, vertical_beamwidth_by_band: { 1800: 0 } },
+      { matched: true, vertical_beamwidth_by_band: { 1800: 'unknown' } },
+      { matched: true, vertical_beamwidth_by_band: {} },
+    ]) {
+      const resolved = resolveAntennaInputs({ antennaSpec, frequencyMhz: 1800 });
+      assert.equal(resolved.verticalBeamwidth, STANDARD_VERTICAL_BEAMWIDTH);
+      assert.equal(resolved.verticalBeamwidthSource, 'Standard fallback (6°)');
+    }
+  });
+
+  it('rejects incomplete numeric input before analysis and accepts the configured defaults', () => {
+    assert.equal(validateRfTiltInputs(DEFAULT_PARAMS), null);
+    assert.equal(validateRfTiltInputs({ ...DEFAULT_PARAMS, azimuth: null }), 'Azimuth harus diisi dengan angka yang valid.');
+    assert.equal(validateRfTiltInputs({ ...DEFAULT_PARAMS, horizontal_beamwidth: Number.NaN }), 'Horizontal BW harus diisi dengan angka yang valid.');
+    assert.equal(validateRfTiltInputs({ ...DEFAULT_PARAMS, target_latitude: null }, true), 'Target Latitude harus diisi dengan angka yang valid untuk mode Point-to-Point.');
+  });
+
+  it('requires complete analysis data before chart and map rendering', () => {
+    const validResult = {
+      terrain_profile: [{}],
+      main_beam: { profile: [{}] },
+      upper_beam: { profile: [{}] },
+      lower_beam: { profile: [{}] },
+    };
+    assert.equal(hasValidTiltAnalysisResult(validResult), true);
+    assert.equal(hasValidTiltAnalysisResult({ ...validResult, main_beam: null }), false);
+  });
+
+  it('turns API validation details into safe error text instead of rendering objects', () => {
+    const error = {
+      response: {
+        data: {
+          detail: [{ loc: ['body', 'antenna_series'], msg: "Input should be 'AQU'" }],
+        },
+      },
+    };
+    assert.equal(formatRfTiltApiError(error), "antenna_series: Input should be 'AQU'");
+  });
+
+  it('keeps site Horizontal BW authoritative and warns when electrical tilt is unsupported', () => {
+    const resolved = resolveAntennaInputs({
+      antennaSpec: {
+        matched: true,
+        vertical_beamwidth_by_band: { 1800: 7.3 },
+        horizontal_beamwidth: 65,
+        electrical_tilt_min: 0,
+        electrical_tilt_max: 6,
+      },
+      frequencyMhz: 1800,
+      siteBeamwidth: 30,
+      hasSelectedSite: true,
+      electricalTilt: 8,
+    });
+
+    assert.equal(resolved.horizontalBeamwidth, 30);
+    assert.equal(resolved.horizontalBeamwidthSource, 'Site data');
+    assert.match(resolved.electricalTiltWarning, /outside the antenna-supported range/);
+  });
+
   it('uses the canonical antenna spec model as the model combobox label', () => {
     const page = src('pages', 'RfTiltAnalysisPage.jsx');
     const form = src('features', 'rf-tilt', 'RfTiltParamForm.jsx');
@@ -55,6 +143,35 @@ describe('RF Tilt site selection contracts', () => {
     assert.match(hook, /Antenna search service is unavailable/);
   });
 
+  it('shows site azimuth in search results and provides shared hover help for every RF Tilt input', () => {
+    const form = src('features', 'rf-tilt', 'RfTiltParamForm.jsx');
+
+    assert.match(form, /function formatSiteLabel\(site\)/);
+    assert.match(form, /\$\{site\?\.site_id\} - \$\{site\?\.cell_name \|\| site\?\.sector_base/);
+    assert.match(form, /Az \$\{hasAzimuth/);
+    assert.match(form, /<TooltipProvider>/);
+    assert.match(form, /function FieldLabel/);
+    assert.match(form, /Bantuan: \$\{label\}/);
+    assert.match(form, /Cari konfigurasi site terpasang/);
+    for (const label of ['Latitude', 'Longitude', 'Azimuth', 'Antenna Height', 'Mechanical Tilt', 'Electrical Tilt', 'Vertical BW', 'Horizontal BW', 'Max Distance', 'Sample Interval', 'Frequency', 'Antenna Model', 'Fresnel Clearance Required', 'DEM Source']) {
+      assert.match(form, new RegExp(`label="${label}"`));
+    }
+  });
+
+  it('connects selection and frequency flows to the shared antenna-input resolver and source indicators', () => {
+    const hook = src('features', 'rf-tilt', 'useRfTiltAnalysis.js');
+    const page = src('pages', 'RfTiltAnalysisPage.jsx');
+    const form = src('features', 'rf-tilt', 'RfTiltParamForm.jsx');
+
+    assert.match(hook, /resolveAntennaInputs/);
+    assert.match(hook, /const selectFrequency/);
+    assert.match(hook, /if \(nearestFreq && !selectedSite\)/);
+    assert.match(hook, /verticalBeamwidth: 'Manual'/);
+    assert.match(page, /selectFrequency=\{selectFrequency\}/);
+    assert.match(form, /source=\{inputSources\?\.verticalBeamwidth\}/);
+    assert.match(form, /compatibilityWarning/);
+  });
+
   it('renders Antenna Specification immediately above Result Summary', () => {
     const page = src('pages', 'RfTiltAnalysisPage.jsx');
     const panel = src('features', 'rf-tilt', 'RfTiltAntennaSpecPanel.jsx');
@@ -63,12 +180,36 @@ describe('RF Tilt site selection contracts', () => {
     assert.match(panel, /<h2>Antenna Specification<\/h2>/);
   });
 
+  it('contains numeric and result guards so malformed edits cannot blank the full page', () => {
+    const hook = src('features', 'rf-tilt', 'useRfTiltAnalysis.js');
+    const form = src('features', 'rf-tilt', 'RfTiltParamForm.jsx');
+    const page = src('pages', 'RfTiltAnalysisPage.jsx');
+
+    assert.match(form, /rawValue === '' \? null : Number\(rawValue\)/);
+    assert.match(hook, /validateRfTiltInputs\(params, targetMode\)/);
+    assert.match(hook, /hasValidTiltAnalysisResult\(data\)/);
+    assert.match(hook, /updates\.antenna_series = inferAntennaSeries/);
+    assert.match(hook, /setError\(formatRfTiltApiError\(err\)\)/);
+    assert.match(page, /<RfTiltResultErrorBoundary resetKey=\{result\}>/);
+  });
+
   it('aligns Terrain and Coverage Map in the shared main grid column', () => {
     const page = src('pages', 'RfTiltAnalysisPage.jsx');
 
     assert.match(page, /<RfTiltChart result=\{result\} \/>[\s\S]*<RfTiltAntennaSpecPanel/);
     assert.match(page, /<RfTiltMap[\s\S]*<RfTiltResultPanel/);
     assert.match(page, /xl:grid-cols-\[minmax\(0,3fr\)_minmax\(280px,1fr\)\]/);
+  });
+
+  it('exports the complete RF Tilt page, including the Mapbox canvas', () => {
+    const page = src('pages', 'RfTiltAnalysisPage.jsx');
+    const map = src('features', 'rf-tilt', 'RfTiltMap.jsx');
+    const exporter = src('features', 'rf-tilt', 'RfTiltExportButton.jsx');
+
+    assert.match(page, /data-export="rf-tilt-analysis"/);
+    assert.doesNotMatch(page, /rf-map-skip-export/);
+    assert.match(map, /preserveDrawingBuffer: true/);
+    assert.match(exporter, /rf-export-control/);
   });
 
   it('supports click-and-drag P2P target pins and Vertical BW-driven 3D envelopes', () => {
@@ -81,7 +222,7 @@ describe('RF Tilt site selection contracts', () => {
     assert.match(map, /P2P target mode: click the map to pin a target/);
     assert.match(map, /verticalBeamEnvelopeHeight/);
     assert.match(map, /fill-extrusion-height.*cfg\.extrusionHeight/);
-    assert.match(form, /Click the Coverage Map to place or drag the target pin/);
+    assert.match(form, /Klik Coverage Map untuk menempatkan atau menyeret pin target/);
   });
 
   it('clears the Mapbox ref during cleanup so StrictMode can recreate the map', () => {
