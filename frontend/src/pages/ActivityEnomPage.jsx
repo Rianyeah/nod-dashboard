@@ -518,7 +518,7 @@ function ActivityEnomDashboard() {
           ) : (
             <>
               <DashboardKpiCard
-                title={`Total Activity ${selectedYear || '-'}`}
+                title={`Total Activity Tahun ${selectedYear || '-'}`}
                 value={formatNumber(summary?.annual_total_activity)}
                 subtitle={`Open: ${formatNumber(summary?.annual_open_activity)} Closed: ${formatNumber(summary?.annual_close_activity)}`}
                 icon={ClipboardList}
