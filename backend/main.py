@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import pathlib
+import asyncio
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
@@ -163,6 +164,8 @@ def create_app(settings: SecuritySettings | None = None) -> FastAPI:
     app.state.security_settings = security_settings
     app.state.session_manager = SessionManager(security_settings)
     app.state.login_limiter = InMemoryRateLimiter()
+    app.state.rf_limiter = InMemoryRateLimiter()
+    app.state.rf_analysis_semaphore = asyncio.Semaphore(2)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(security_settings.allowed_hosts))
     app.add_middleware(RequestBodyLimitMiddleware, max_bytes=1_048_576)
     app.add_middleware(SecurityHeadersMiddleware, content_security_policy=CONTENT_SECURITY_POLICY)

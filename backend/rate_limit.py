@@ -17,6 +17,11 @@ class InMemoryRateLimiter:
     def __init__(self) -> None:
         self._events: dict[str, deque[float]] = {}
 
+    def consume(self, key: str, limit: int, window_seconds: int) -> None:
+        """Consume one request from a fixed-window-style rolling budget."""
+        self.check(key, limit, window_seconds)
+        self.record_failure(key, window_seconds)
+
     def check(self, key: str, limit: int, window_seconds: int) -> None:
         now = time.monotonic()
         events = self._events.get(key)
