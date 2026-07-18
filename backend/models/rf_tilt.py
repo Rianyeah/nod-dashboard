@@ -3,7 +3,7 @@ Pydantic models for RF Tilt Analysis feature.
 """
 from typing import List, Optional, Literal, Dict, Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 # --- Site search models ---
@@ -94,16 +94,16 @@ class ClutterPoint(BaseModel):
 
 
 class TiltAnalysisRequest(BaseModel):
-    latitude: float
-    longitude: float
+    latitude: float = Field(..., ge=-90, le=90)
+    longitude: float = Field(..., ge=-180, le=180)
     azimuth: float = Field(..., ge=0, le=360, description="Degrees, 0 = North")
     antenna_height: float = Field(..., gt=0, description="Meters above ground")
     mechanical_tilt: float = Field(0.0, description="Degrees, positive = downtilt")
     electrical_tilt: float = Field(0.0, description="Degrees, positive = downtilt")
     vertical_beamwidth: float = Field(..., gt=0, description="Degrees")
     horizontal_beamwidth: float = Field(65.0, gt=0, le=360, description="Degrees")
-    max_distance: float = Field(2000.0, gt=0, description="Meters")
-    sample_interval: float = Field(30.0, gt=0, description="Meters between DEM samples")
+    max_distance: float = Field(2000.0, gt=0, le=50_000, description="Meters")
+    sample_interval: float = Field(30.0, ge=10, description="Meters between DEM samples")
     frequency_mhz: Literal[900, 1800, 2100, 2300] = Field(
         1800, description="Carrier frequency band"
     )
@@ -117,9 +117,9 @@ class TiltAnalysisRequest(BaseModel):
         60.0, gt=0, le=100, description="Required % of first Fresnel zone clearance"
     )
     target_latitude: Optional[float] = Field(
-        None, description="If set with target_longitude, switches to point-to-point mode"
+        None, ge=-90, le=90, description="If set with target_longitude, switches to point-to-point mode"
     )
-    target_longitude: Optional[float] = None
+    target_longitude: Optional[float] = Field(None, ge=-180, le=180)
     target_height: float = Field(
         1.5, ge=0, description="Height (m) above ground at the target point"
     )
@@ -128,8 +128,15 @@ class TiltAnalysisRequest(BaseModel):
     )
     clutter: List[ClutterPoint] = Field(
         default_factory=list,
+        max_length=200,
         description="Optional building heights to overlay on terrain",
     )
+
+    @model_validator(mode="after")
+    def target_coordinates_are_paired(self):
+        if (self.target_latitude is None) != (self.target_longitude is None):
+            raise ValueError("target_latitude and target_longitude must be provided together")
+        return self
 
 
 class ProfilePoint(BaseModel):

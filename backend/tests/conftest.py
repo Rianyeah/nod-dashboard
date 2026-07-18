@@ -61,3 +61,20 @@ def authenticated_client(client, credentials):
     )
     assert response.status_code == 200
     return client
+
+
+@pytest.fixture
+def valid_payload():
+    return {
+        "latitude": -7.25,
+        "longitude": 112.75,
+        "azimuth": 90,
+        "antenna_height": 30,
+        "mechanical_tilt": 2,
+        "electrical_tilt": 2,
+        "vertical_beamwidth": 6,
+        "max_distance": 2000,
+        "sample_interval": 30,
+        "frequency_mhz": 1800,
+        "clutter": [],
+    }
