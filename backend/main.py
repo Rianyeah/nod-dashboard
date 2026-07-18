@@ -10,10 +10,13 @@ from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.responses import FileResponse
 
 from cache import redis_cache
 from config import SecuritySettings
+from middleware import RequestBodyLimitMiddleware, SecurityHeadersMiddleware
+from rate_limit import InMemoryRateLimiter, RateLimitExceeded
 from security import (
     SESSION_COOKIE_NAME,
     SessionManager,
@@ -28,6 +31,16 @@ load_dotenv()
 
 API_PREFIX = os.getenv("API_PREFIX", "/api/v1")
 FRONTEND_DIST = pathlib.Path(__file__).parent.parent / "frontend" / "dist"
+LOGIN_FAILURE_LIMIT = 5
+LOGIN_FAILURE_WINDOW_SECONDS = 5 * 60
+CONTENT_SECURITY_POLICY = (
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' "
+    "https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; "
+    "img-src 'self' data: blob: https://api.mapbox.com https://*.tiles.mapbox.com; "
+    "connect-src 'self' https://api.mapbox.com https://events.mapbox.com https://*.tiles.mapbox.com; "
+    "worker-src 'self' blob:; child-src blob:; object-src 'none'; base-uri 'self'; "
+    "form-action 'self'; frame-ancestors 'none'"
+)
 
 
 @asynccontextmanager
@@ -149,6 +162,10 @@ def create_app(settings: SecuritySettings | None = None) -> FastAPI:
     )
     app.state.security_settings = security_settings
     app.state.session_manager = SessionManager(security_settings)
+    app.state.login_limiter = InMemoryRateLimiter()
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(security_settings.allowed_hosts))
+    app.add_middleware(RequestBodyLimitMiddleware, max_bytes=1_048_576)
+    app.add_middleware(SecurityHeadersMiddleware, content_security_policy=CONTENT_SECURITY_POLICY)
 
     @app.get(f"{API_PREFIX}/health")
     async def health_check():
@@ -157,15 +174,36 @@ def create_app(settings: SecuritySettings | None = None) -> FastAPI:
     @app.post(f"{API_PREFIX}/auth/login", response_model=AuthSessionResponse)
     async def login(credentials: LoginRequest, request: Request, response: Response):
         verify_browser_origin(request)
+        client_address = request.client.host if request.client else "unknown"
+        limiter_key = f"{credentials.username.strip().casefold()}:{client_address}"
+        try:
+            app.state.login_limiter.check(
+                limiter_key,
+                LOGIN_FAILURE_LIMIT,
+                LOGIN_FAILURE_WINDOW_SECONDS,
+            )
+        except RateLimitExceeded as exc:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too many failed login attempts",
+                headers={"Retry-After": str(exc.retry_after)},
+            ) from exc
+
         if not credentials_are_valid(
             security_settings,
             credentials.username,
             credentials.password,
         ):
+            app.state.login_limiter.record_failure(
+                limiter_key,
+                LOGIN_FAILURE_WINDOW_SECONDS,
+            )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid username or password",
             )
+
+        app.state.login_limiter.reset(limiter_key)
 
         _set_session_cookie(
             response,
