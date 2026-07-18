@@ -53,3 +53,13 @@ def test_hashed_dev_lock_includes_bootstrap_dependencies():
             lockfile,
             flags=re.MULTILINE,
         ), f"{package} must be pinned and hashed for --require-hashes installs"
+
+
+def test_hashed_dev_lock_includes_linux_standard_server_dependency():
+    lockfile = (ROOT / "backend" / "requirements-dev.lock").read_text(encoding="utf-8")
+
+    assert re.search(
+        r"^uvloop==[^\s\\]+ ; .*sys_platform != 'win32'.* \\\n\s+--hash=sha256:",
+        lockfile,
+        flags=re.MULTILINE,
+    ), "uvloop must be pinned and hashed for Linux uvicorn[standard] installs"
