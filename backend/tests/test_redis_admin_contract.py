@@ -50,11 +50,12 @@ class RedisAdminContractTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(raised.exception.status_code, 503)
 
-    def test_health_and_admin_routes_expose_redis_contracts(self):
+    def test_health_is_minimal_while_admin_routes_keep_machine_authentication(self):
         main_source = (BACKEND_DIR / "main.py").read_text(encoding="utf-8")
         admin_source = (BACKEND_DIR / "routers" / "admin.py").read_text(encoding="utf-8")
 
-        self.assertIn('"redis": redis_status', main_source)
+        self.assertIn('return {"status": "ok"}', main_source)
+        self.assertNotIn('"redis": redis_status', main_source)
         self.assertIn('"/cache/invalidate"', admin_source)
         self.assertIn("dependencies=[Depends(verify_n8n_key)]", admin_source)
         self.assertIn('scope: str = Query("reporting"', admin_source)

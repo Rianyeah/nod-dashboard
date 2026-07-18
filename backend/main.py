@@ -1,27 +1,38 @@
-"""
-FastAPI application entry point.
-Network Operation Dashboard — Backend API.
-"""
+"""FastAPI application entry point for the Network Operation Dashboard."""
+
+from __future__ import annotations
+
 import os
+import pathlib
 from contextlib import asynccontextmanager
+
 from dotenv import load_dotenv
-from fastapi import FastAPI, Depends, HTTPException, status
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
+from starlette.responses import FileResponse
+
 from cache import redis_cache
-from security import DASHBOARD_TOKEN, verify_n8n_key
+from config import SecuritySettings
+from security import (
+    SESSION_COOKIE_NAME,
+    SessionManager,
+    credentials_are_valid,
+    require_dashboard_session,
+    verify_browser_origin,
+    verify_n8n_key,
+)
+
 
 load_dotenv()
 
 API_PREFIX = os.getenv("API_PREFIX", "/api/v1")
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
-DASHBOARD_USER = os.getenv("DASHBOARD_USER", "admin")
-DASHBOARD_PASS = os.getenv("DASHBOARD_PASS", "admin123")
+FRONTEND_DIST = pathlib.Path(__file__).parent.parent / "frontend" / "dist"
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan — startup & shutdown."""
+    """Connect optional cache infrastructure and refresh the metrics cache."""
     print("[NOD] Backend starting up...")
 
     if await redis_cache.connect():
@@ -31,51 +42,46 @@ async def lifespan(app: FastAPI):
     else:
         print("[NOD] Redis cache is disabled.")
 
-    # Auto-populate site_month_metrics for any months missing from the cache
     try:
-        from database import engine as _engine
-        from sqlalchemy.ext.asyncio import AsyncSession as _AS
-        from sqlalchemy.orm import sessionmaker as _sm
-        from sqlalchemy import text as _text
+        from database import engine as database_engine
         from queries.metrics_cache import (
             BOOTSTRAP_SITE_MONTH_METRICS_STATEMENTS,
             REFRESH_SITE_MONTH_DELETE_QUERY,
             REFRESH_SITE_MONTH_INSERT_QUERY,
         )
+        from sqlalchemy import text
+        from sqlalchemy.ext.asyncio import AsyncSession
+        from sqlalchemy.orm import sessionmaker
 
-        _SessionLocal = _sm(_engine, class_=_AS, expire_on_commit=False)
-        async with _SessionLocal() as session:
-            # Ensure cache table + indexes exist
-            for stmt in BOOTSTRAP_SITE_MONTH_METRICS_STATEMENTS:
-                await session.execute(_text(stmt))
+        session_local = sessionmaker(
+            database_engine,
+            class_=AsyncSession,
+            expire_on_commit=False,
+        )
+        async with session_local() as session:
+            for statement in BOOTSTRAP_SITE_MONTH_METRICS_STATEMENTS:
+                await session.execute(text(statement))
             await session.commit()
 
-            # Find (tahun, bulan) combos in raw logs but missing from cache
-            missing_query = _text("""
-                SELECT DISTINCT a."Tahun"::INT AS tahun, a."Bulan"::INT AS bulan
-                FROM availability_logs_jatim a
-                WHERE a."Tahun" IS NOT NULL AND a."Bulan" IS NOT NULL
-                  AND NOT EXISTS (
-                      SELECT 1 FROM site_month_metrics m
-                      WHERE m.tahun = a."Tahun"::INT AND m.bulan = a."Bulan"::INT
-                  )
-                ORDER BY tahun, bulan
-            """)
-            result = await session.execute(missing_query)
-            missing_periods = result.fetchall()
-
-            if missing_periods:
-                print(f"[NOD] Auto-refreshing metrics cache for {len(missing_periods)} missing period(s)...")
-                for row in missing_periods:
-                    params = {"tahun": row.tahun, "bulan": row.bulan}
-                    await session.execute(_text(REFRESH_SITE_MONTH_DELETE_QUERY), params)
-                    ins_result = await session.execute(_text(REFRESH_SITE_MONTH_INSERT_QUERY), params)
-                    count = len(ins_result.scalars().all())
-                    print(f"[NOD]   -> {row.tahun}-{str(row.bulan).zfill(2)}: {count} sites cached")
-                await session.commit()
-                print("[NOD] Metrics cache auto-refresh complete.")
-            else:
-                print("[NOD] Metrics cache is up-to-date.")
+            missing_periods = await session.execute(
+                text(
+                    '''
+                    SELECT DISTINCT a."Tahun"::INT AS tahun, a."Bulan"::INT AS bulan
+                    FROM availability_logs_jatim a
+                    WHERE a."Tahun" IS NOT NULL AND a."Bulan" IS NOT NULL
+                      AND NOT EXISTS (
+                          SELECT 1 FROM site_month_metrics m
+                          WHERE m.tahun = a."Tahun"::INT AND m.bulan = a."Bulan"::INT
+                      )
+                    ORDER BY tahun, bulan
+                    '''
+                )
+            )
+            for period in missing_periods.fetchall():
+                params = {"tahun": period.tahun, "bulan": period.bulan}
+                await session.execute(text(REFRESH_SITE_MONTH_DELETE_QUERY), params)
+                await session.execute(text(REFRESH_SITE_MONTH_INSERT_QUERY), params)
+            await session.commit()
     except Exception as exc:
         print(f"[NOD] WARNING: Auto-refresh metrics cache failed: {exc}")
 
@@ -86,55 +92,15 @@ async def lifespan(app: FastAPI):
         print("[NOD] Backend shutting down...")
 
 
-app = FastAPI(
-    title="Network Operation Dashboard API",
-    description="Backend API untuk monitoring availability site telekomunikasi Jawa Timur",
-    version="1.0.0",
-    lifespan=lifespan,
-)
-
-# CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-# ---------- Health Check ----------
-
-@app.get(f"{API_PREFIX}/health")
-async def health_check():
-    """Health check endpoint for UptimeRobot."""
-    from database import check_db_connection
-    db_ok = await check_db_connection()
-    redis_status = await redis_cache.status()
-    return {
-        "status": "ok" if db_ok else "degraded",
-        "database": "connected" if db_ok else "unreachable",
-        "redis": redis_status,
-        "service": "nod-backend",
-    }
-
-
-# ---------- Authentication ----------
-
 class LoginRequest(BaseModel):
-    username: str
-    password: str
+    username: str = Field(min_length=1, max_length=128)
+    password: str = Field(min_length=1, max_length=1024)
 
-@app.post(f"{API_PREFIX}/auth/login")
-async def login(credentials: LoginRequest):
-    if credentials.username == DASHBOARD_USER and credentials.password == DASHBOARD_PASS:
-        return {"token": DASHBOARD_TOKEN}
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Incorrect username or password",
-    )
 
-# ---------- N8N Webhook ----------
+class AuthSessionResponse(BaseModel):
+    authenticated: bool
+    username: str | None = None
+
 
 class N8NAlertPayload(BaseModel):
     site_id: str
@@ -143,65 +109,134 @@ class N8NAlertPayload(BaseModel):
     detail: str | None = None
 
 
-@app.post(f"{API_PREFIX}/webhook/n8n/alert", dependencies=[Depends(verify_n8n_key)])
-async def n8n_webhook(payload: N8NAlertPayload):
-    """Webhook endpoint for N8N outage alerts."""
-    # Log the alert (in production, this would trigger notifications)
-    print(f"[ALERT] N8N: {payload.event_type} on site {payload.site_id}")
-    return {"received": True, "site_id": payload.site_id, "event_type": payload.event_type}
+def _set_session_cookie(response: Response, settings: SecuritySettings, token: str) -> None:
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=token,
+        max_age=settings.dashboard_session_ttl_seconds,
+        httponly=True,
+        secure=settings.session_cookie_secure,
+        samesite="strict",
+        path="/",
+    )
 
 
-# ---------- Register Routers ----------
-
-from routers import map as map_router
-from routers import availability as availability_router
-from routers import sites as sites_router
-from routers import admin as admin_router
-from routers import reporting as reporting_router
-from routers import impact_service as impact_service_router
-from routers import transport_quality as transport_quality_router
-from routers import ticketing as ticketing_router
-from routers import overview as overview_router
-from routers import activity_enom as activity_enom_router
-from routers import data_potensi as data_potensi_router
-from routers import rf_tilt as rf_tilt_router
-
-# NOTE: Token auth removed for initial deployment — dashboard is internal
-app.include_router(map_router.router, prefix=API_PREFIX)
-app.include_router(availability_router.router, prefix=API_PREFIX)
-app.include_router(sites_router.router, prefix=API_PREFIX)
-app.include_router(admin_router.router, prefix=API_PREFIX)
-app.include_router(reporting_router.router, prefix=API_PREFIX)
-app.include_router(impact_service_router.router, prefix=API_PREFIX)
-app.include_router(transport_quality_router.router, prefix=API_PREFIX)
-app.include_router(ticketing_router.router, prefix=API_PREFIX)
-app.include_router(overview_router.router, prefix=API_PREFIX)
-app.include_router(activity_enom_router.router, prefix=API_PREFIX)
-app.include_router(data_potensi_router.router, prefix=API_PREFIX)
-app.include_router(rf_tilt_router.router, prefix=API_PREFIX)
+def _clear_session_cookie(response: Response, settings: SecuritySettings) -> None:
+    response.delete_cookie(
+        key=SESSION_COOKIE_NAME,
+        httponly=True,
+        secure=settings.session_cookie_secure,
+        samesite="strict",
+        path="/",
+    )
 
 
-# ---------- Serve Frontend Static Files (Production) ----------
+def create_app(settings: SecuritySettings | None = None) -> FastAPI:
+    """Build the application with explicit security configuration for tests."""
+    security_settings = settings or SecuritySettings.from_env()
+    documentation_url = None if security_settings.is_production else "/docs"
+    redoc_url = None if security_settings.is_production else "/redoc"
+    openapi_url = None if security_settings.is_production else f"{API_PREFIX}/openapi.json"
 
-import pathlib
-from fastapi.staticfiles import StaticFiles
-from starlette.responses import FileResponse
+    app = FastAPI(
+        title="Network Operation Dashboard API",
+        description="Backend API untuk monitoring availability site telekomunikasi Jawa Timur",
+        version="1.0.0",
+        lifespan=lifespan,
+        docs_url=documentation_url,
+        redoc_url=redoc_url,
+        openapi_url=openapi_url,
+    )
+    app.state.security_settings = security_settings
+    app.state.session_manager = SessionManager(security_settings)
 
-FRONTEND_DIST = pathlib.Path(__file__).parent.parent / "frontend" / "dist"
+    @app.get(f"{API_PREFIX}/health")
+    async def health_check():
+        return {"status": "ok"}
 
-if FRONTEND_DIST.exists():
-    # Serve static assets (JS, CSS, images)
-    app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIST / "assets")), name="assets")
+    @app.post(f"{API_PREFIX}/auth/login", response_model=AuthSessionResponse)
+    async def login(credentials: LoginRequest, request: Request, response: Response):
+        verify_browser_origin(request)
+        if not credentials_are_valid(
+            security_settings,
+            credentials.username,
+            credentials.password,
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid username or password",
+            )
 
-    # SPA fallback — serve index.html for all non-API routes
-    @app.get("/{full_path:path}")
-    async def serve_spa(full_path: str):
-        """Serve frontend SPA for any non-API route."""
-        api_prefix_path = API_PREFIX.strip("/")
-        if full_path == api_prefix_path or full_path.startswith(f"{api_prefix_path}/"):
-            raise HTTPException(status_code=404, detail="API route not found")
+        _set_session_cookie(
+            response,
+            security_settings,
+            app.state.session_manager.issue(security_settings.dashboard_user),
+        )
+        return AuthSessionResponse(
+            authenticated=True,
+            username=security_settings.dashboard_user,
+        )
 
-        file_path = FRONTEND_DIST / full_path
-        if file_path.exists() and file_path.is_file():
-            return FileResponse(str(file_path))
-        return FileResponse(str(FRONTEND_DIST / "index.html"))
+    @app.get(f"{API_PREFIX}/auth/session", response_model=AuthSessionResponse)
+    async def auth_session(subject: str = Depends(require_dashboard_session)):
+        return AuthSessionResponse(authenticated=True, username=subject)
+
+    @app.post(f"{API_PREFIX}/auth/logout", response_model=AuthSessionResponse)
+    async def logout(response: Response, _: str = Depends(require_dashboard_session)):
+        _clear_session_cookie(response, security_settings)
+        return AuthSessionResponse(authenticated=False)
+
+    @app.post(f"{API_PREFIX}/webhook/n8n/alert", dependencies=[Depends(verify_n8n_key)])
+    async def n8n_webhook(payload: N8NAlertPayload):
+        print(f"[ALERT] N8N: {payload.event_type} on site {payload.site_id}")
+        return {
+            "received": True,
+            "site_id": payload.site_id,
+            "event_type": payload.event_type,
+        }
+
+    from routers import activity_enom as activity_enom_router
+    from routers import admin as admin_router
+    from routers import availability as availability_router
+    from routers import data_potensi as data_potensi_router
+    from routers import impact_service as impact_service_router
+    from routers import map as map_router
+    from routers import overview as overview_router
+    from routers import reporting as reporting_router
+    from routers import rf_tilt as rf_tilt_router
+    from routers import sites as sites_router
+    from routers import ticketing as ticketing_router
+    from routers import transport_quality as transport_quality_router
+
+    dashboard_dependency = [Depends(require_dashboard_session)]
+    app.include_router(map_router.router, prefix=API_PREFIX, dependencies=dashboard_dependency)
+    app.include_router(availability_router.router, prefix=API_PREFIX, dependencies=dashboard_dependency)
+    app.include_router(sites_router.router, prefix=API_PREFIX, dependencies=dashboard_dependency)
+    app.include_router(reporting_router.router, prefix=API_PREFIX, dependencies=dashboard_dependency)
+    app.include_router(impact_service_router.router, prefix=API_PREFIX, dependencies=dashboard_dependency)
+    app.include_router(transport_quality_router.router, prefix=API_PREFIX, dependencies=dashboard_dependency)
+    app.include_router(ticketing_router.router, prefix=API_PREFIX, dependencies=dashboard_dependency)
+    app.include_router(overview_router.router, prefix=API_PREFIX, dependencies=dashboard_dependency)
+    app.include_router(activity_enom_router.router, prefix=API_PREFIX, dependencies=dashboard_dependency)
+    app.include_router(data_potensi_router.router, prefix=API_PREFIX, dependencies=dashboard_dependency)
+    app.include_router(rf_tilt_router.router, prefix=API_PREFIX, dependencies=dashboard_dependency)
+    app.include_router(admin_router.router, prefix=API_PREFIX)
+
+    if FRONTEND_DIST.exists():
+        app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIST / "assets")), name="assets")
+
+        @app.get("/{full_path:path}")
+        async def serve_spa(full_path: str):
+            api_prefix_path = API_PREFIX.strip("/")
+            if full_path == api_prefix_path or full_path.startswith(f"{api_prefix_path}/"):
+                raise HTTPException(status_code=404, detail="API route not found")
+
+            file_path = FRONTEND_DIST / full_path
+            if file_path.exists() and file_path.is_file():
+                return FileResponse(str(file_path))
+            return FileResponse(str(FRONTEND_DIST / "index.html"))
+
+    return app
+
+
+app = create_app()
