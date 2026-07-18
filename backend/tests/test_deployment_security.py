@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 
 
@@ -41,3 +42,14 @@ def test_deployment_files_require_secrets_and_immutable_builds():
     assert "pip_audit" in workflow
     assert "npm audit --omit=dev --audit-level=high" in workflow
     assert "github.sha" in workflow
+
+
+def test_hashed_dev_lock_includes_bootstrap_dependencies():
+    lockfile = (ROOT / "backend" / "requirements-dev.lock").read_text(encoding="utf-8")
+
+    for package in ("pip", "setuptools"):
+        assert re.search(
+            rf"^{package}==[^\s\\]+ \\\n\s+--hash=sha256:",
+            lockfile,
+            flags=re.MULTILINE,
+        ), f"{package} must be pinned and hashed for --require-hashes installs"
