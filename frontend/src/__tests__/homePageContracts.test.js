@@ -29,7 +29,8 @@ describe('new home page command center contracts', () => {
     assert.match(app, /AppShell/);
     assert.match(sidebar, /aria-label="Collapse sidebar"/);
     assert.match(sidebar, /Last data update/);
-    assert.match(sidebar, /authLogout/);
+    assert.match(sidebar, /useAuth/);
+    assert.match(sidebar, /await logout\(\)/);
 
     for (const route of ['/home', '/site-map', '/reporting', '/impact-service', '/transport-quality', '/ticketing']) {
       assert.match(sidebar, new RegExp(`to: '${route}'`));

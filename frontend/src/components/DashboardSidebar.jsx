@@ -18,7 +18,7 @@ import {
   Wrench,
 } from 'lucide-react';
 import { useTheme } from '../hooks/useTheme';
-import { authLogout } from '../services/api';
+import { useAuth } from '../auth/AuthContext';
 import { DashboardSidebarContext } from '../hooks/useDashboardSidebar';
 
 const SIDEBAR_STORAGE_KEY = 'nod_sidebar_collapsed';
@@ -85,11 +85,15 @@ function LastUpdatePanel({ collapsed, rows }) {
 
 export default function DashboardSidebar({ collapsed, onToggle, lastUpdates }) {
   const { theme, toggleTheme } = useTheme();
+  const { logout } = useAuth();
   const navigate = useNavigate();
 
-  const handleLogout = () => {
-    authLogout();
-    navigate('/login', { replace: true });
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } finally {
+      navigate('/login', { replace: true });
+    }
   };
 
   return (

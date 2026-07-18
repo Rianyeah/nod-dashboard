@@ -1,5 +1,5 @@
 import React, { Suspense } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import HomePage from './pages/HomePage';
 import SiteMapPage from './pages/SiteMapPage';
 import NetworkReportingPage from './pages/NetworkReportingPage';
@@ -9,8 +9,8 @@ import TicketingPage from './pages/TicketingPage';
 import DataPotensiPage from './pages/DataPotensiPage';
 import RfTiltAnalysisPage from './pages/RfTiltAnalysisPage';
 import LoginPage from './pages/LoginPage';
-import { useSessionTimeout } from './hooks/useSessionTimeout';
 import { AppShell } from './components/DashboardSidebar';
+import { AuthProvider, useAuth } from './auth/AuthContext';
 
 const ImpactServicePage = React.lazy(() => import('./pages/ImpactServicePage'));
 
@@ -30,22 +30,41 @@ function ImpactServiceRoute() {
 
 // Simple PrivateRoute wrapper
 function PrivateRoute({ children }) {
-  const isAuthenticated = !!localStorage.getItem('nod_auth_token');
-  return isAuthenticated ? <AppShell>{children}</AppShell> : <Navigate to="/login" />;
+  const { status } = useAuth();
+  const location = useLocation();
+
+  if (status === 'loading') {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
+        Checking dashboard session...
+      </div>
+    );
+  }
+
+  return status === 'authenticated'
+    ? <AppShell>{children}</AppShell>
+    : <Navigate to="/login" replace state={{ from: location.pathname }} />;
 }
 
 // Session guard — must be inside <Router> to use useNavigate()
-function SessionGuard({ children }) {
-  useSessionTimeout();
-  return children;
+function LoginRoute() {
+  const { status } = useAuth();
+  if (status === 'loading') {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
+        Checking dashboard session...
+      </div>
+    );
+  }
+  return status === 'authenticated' ? <Navigate to="/home" replace /> : <LoginPage />;
 }
 
 export default function App() {
   return (
     <Router>
-      <SessionGuard>
+      <AuthProvider>
         <Routes>
-          <Route path="/login" element={<LoginPage />} />
+          <Route path="/login" element={<LoginRoute />} />
           <Route
             path="/home"
             element={
@@ -121,7 +140,7 @@ export default function App() {
           />
           <Route path="/" element={<Navigate to="/home" />} />
         </Routes>
-      </SessionGuard>
+      </AuthProvider>
     </Router>
   );
 }
