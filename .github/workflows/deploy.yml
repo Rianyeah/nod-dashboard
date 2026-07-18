@@ -1,23 +1,72 @@
-name: Deploy to Zeabur
+name: Verify and publish dashboard image
 
 on:
+  pull_request:
+    branches: [main]
   push:
-    branches: [ main ]
+    branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
-  deploy:
+  verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - name: Deploy Backend
-        uses: zeabur/action@v0.0.15
+      - uses: actions/setup-python@v5
         with:
-          service-name: nod-backend
-          token: ${{ secrets.ZEABUR_TOKEN }}
+          python-version: '3.12'
 
-      - name: Deploy Frontend
-        uses: zeabur/action@v0.0.15
+      - name: Install locked backend test dependencies
+        working-directory: backend
+        run: python -m pip install --require-hashes -r requirements-dev.lock
+
+      - name: Test and audit backend
+        working-directory: backend
+        run: |
+          python -m pytest tests -q
+          python -m pip_audit -r requirements.lock
+
+      - uses: actions/setup-node@v4
         with:
-          service-name: nod-frontend
-          token: ${{ secrets.ZEABUR_TOKEN }}
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Test, audit, and build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          node --test src/__tests__/*.test.js
+          npm run lint
+          npm audit --omit=dev --audit-level=high
+          npm run build
+
+  publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish immutable image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+            VITE_MAPBOX_TOKEN=${{ vars.VITE_MAPBOX_TOKEN }}
+          tags: ghcr.io/${{ github.repository_owner }}/nod-dashboard:${{ github.sha }}

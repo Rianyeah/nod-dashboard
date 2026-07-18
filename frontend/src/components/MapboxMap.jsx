@@ -3,6 +3,7 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { getMarkerColor } from '../utils/mapColors';
 import { fetchMapSectors, fetchSiteAvailability } from '../services/api';
+import { domElement, textElement } from '../utils/safeMapDom';
 import { Layers, Globe2, Satellite } from 'lucide-react';
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN;
@@ -179,7 +180,7 @@ function buildSparklinePath(values, width = 218, height = 48, padding = 8) {
     .join(' ');
 }
 
-function dailySparklineHtml(rows = [], monthAvailability = null) {
+function dailySparklineContent(rows = [], monthAvailability = null) {
   const orderedRows = [...rows]
     .filter(row => row.availability != null)
     .sort((a, b) => Number(a.tgl) - Number(b.tgl));
@@ -188,21 +189,52 @@ function dailySparklineHtml(rows = [], monthAvailability = null) {
   const monthAvg = monthAvailability != null ? Number(monthAvailability).toFixed(2) : 'N/A';
 
   if (!path) {
-    return '<div style="height:46px;display:flex;align-items:center;justify-content:center;color:#64748B;font-size:10px">Daily trend tidak tersedia</div>';
+    return textElement('div', 'Daily trend tidak tersedia', {
+      style: {
+        height: '46px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: '#64748B', fontSize: '10px',
+      },
+    });
   }
 
-  return `
-    <div>
-      <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;margin-bottom:6px">
-        <span style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Daily Availability</span>
-        <b style="font-size:10px;color:#34D399;white-space:nowrap">Month Avg ${monthAvg}%</b>
-      </div>
-      <svg width="218" height="48" viewBox="0 0 218 48" style="display:block;width:100%;height:48px;overflow:visible">
-        <path d="${path} L210,46 L8,46 Z" fill="rgba(16,185,129,.16)" stroke="none"></path>
-        <path d="${path}" fill="none" stroke="#34D399" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path>
-      </svg>
-    </div>
-  `;
+  const root = domElement('div');
+  const heading = domElement('div', {
+    style: {
+      display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', alignItems: 'center',
+      gap: '8px', marginBottom: '6px',
+    },
+  });
+  heading.append(
+    textElement('span', 'Daily Availability', {
+      style: {
+        fontSize: '9px', color: 'var(--text-muted)', textTransform: 'uppercase',
+        letterSpacing: '.08em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+      },
+    }),
+    textElement('b', `Month Avg ${monthAvg}%`, {
+      style: { fontSize: '10px', color: '#34D399', whiteSpace: 'nowrap' },
+    }),
+  );
+
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('width', '218');
+  svg.setAttribute('height', '48');
+  svg.setAttribute('viewBox', '0 0 218 48');
+  svg.style.cssText = 'display:block;width:100%;height:48px;overflow:visible';
+  const area = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  area.setAttribute('d', `${path} L210,46 L8,46 Z`);
+  area.setAttribute('fill', 'rgba(16,185,129,.16)');
+  area.setAttribute('stroke', 'none');
+  const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  line.setAttribute('d', path);
+  line.setAttribute('fill', 'none');
+  line.setAttribute('stroke', '#34D399');
+  line.setAttribute('stroke-width', '2.2');
+  line.setAttribute('stroke-linecap', 'round');
+  line.setAttribute('stroke-linejoin', 'round');
+  svg.append(area, line);
+  root.append(heading, svg);
+  return root;
 }
 
 function distanceKm(from, to) {
@@ -225,21 +257,6 @@ function rectsIntersect(a, b, padding = 0) {
     || a.bottom + padding < b.top
     || a.top - padding > b.bottom
   );
-}
-
-function escapeHtml(str) {
-  if (typeof str !== 'string') return str;
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function escapeJsQuote(str) {
-  if (typeof str !== 'string') return str;
-  return str.replace(/'/g, "\\'");
 }
 
 function createCircleFeature(center, radiusKm, steps = 96) {
@@ -272,6 +289,114 @@ function createCircleFeature(center, radiusKm, steps = 96) {
       coordinates: [coordinates],
     },
   };
+}
+
+function createNeighborCard(site) {
+  const color = getMarkerColor(site.avg_availability, site.status_site);
+  const element = domElement('div', { className: 'nod-neighbor-card' });
+  element.style.zIndex = '12';
+  const shell = domElement('div', { className: 'nod-neighbor-card-shell' });
+  const title = domElement('div', {
+    style: { display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '6px' },
+  });
+  title.append(
+    domElement('span', {
+      style: {
+        width: '6px', height: '6px', borderRadius: '999px', background: color,
+      },
+    }),
+    textElement('strong', site.site_id, { className: 'nod-neighbor-card-id' }),
+  );
+
+  const metrics = domElement('div', {
+    style: { display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '3px 8px' },
+  });
+  const appendMetric = (label, value, valueStyle = {}) => {
+    metrics.append(
+      textElement('span', label, { className: 'nod-neighbor-card-label' }),
+      textElement('b', value, { style: { textAlign: 'right', ...valueStyle } }),
+    );
+  };
+  appendMetric('Avail', formatAvailability(site.avg_availability), { color });
+  appendMetric('Cell', formatCell(site.jumlah_cell));
+  appendMetric('Outage', formatOutageMinutes(site.total_outage_menit));
+  shell.append(title, metrics);
+  element.append(shell);
+  return element;
+}
+
+function createSitePopupContent(site, availability, outage) {
+  const shell = domElement('div', {
+    className: 'nod-popup-shell',
+    style: { padding: '12px', fontFamily: 'Inter, sans-serif', width: '248px' },
+  });
+  const handle = domElement('div', {
+    className: 'nod-popup-drag-handle',
+    style: {
+      display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '8px', paddingRight: '18px',
+    },
+  });
+  handle.append(
+    domElement('span', {
+      style: {
+        width: '8px', height: '8px', borderRadius: '50%', background: site.color,
+        boxShadow: `0 0 8px ${site.color}`,
+      },
+    }),
+    textElement('span', site.site_id, {
+      style: { fontSize: '13px', fontWeight: '800', color: 'var(--text-primary)', lineHeight: '1' },
+    }),
+  );
+  const name = textElement('p', site.site_name, {
+    style: {
+      fontSize: '10px', color: 'var(--text-muted)', margin: '0 0 10px', lineHeight: '1.25',
+      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+    },
+  });
+  const chart = domElement('div', {
+    style: {
+      marginBottom: '10px', border: '1px solid var(--border)', background: 'var(--bg-elevated)',
+      borderRadius: '8px', padding: '8px 9px',
+    },
+  });
+  chart.append(textElement('div', 'Memuat daily trend...', {
+    style: {
+      height: '65px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      color: 'var(--text-muted)', fontSize: '10px',
+    },
+  }));
+  const metrics = domElement('div', {
+    style: {
+      display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '5px 10px', fontSize: '10px',
+      alignItems: 'center',
+    },
+  });
+  const appendMetric = (label, value, valueStyle = {}) => {
+    metrics.append(
+      textElement('span', label, { style: { color: 'var(--text-muted)' } }),
+      textElement('b', value, { style: { color: 'var(--text-primary)', textAlign: 'right', ...valueStyle } }),
+    );
+  };
+  appendMetric('Avail', availability, { color: site.color, fontSize: '13px' });
+  appendMetric('Outage', outage);
+  appendMetric('Cell', formatCell(site.jumlah_cell));
+  appendMetric('Class', site.site_class || '-');
+  const detailButton = textElement('button', 'Lihat Detail Lengkap', {
+    attributes: { type: 'button' },
+    style: {
+      marginTop: '10px', width: '100%', padding: '7px',
+      background: 'linear-gradient(135deg,#1E40AF,#3B82F6)', color: '#fff', border: 'none',
+      borderRadius: '7px', fontSize: '10px', fontWeight: '700', cursor: 'pointer',
+      letterSpacing: '.2px', transition: 'opacity .2s',
+    },
+  });
+  detailButton.addEventListener('mouseenter', () => { detailButton.style.opacity = '0.9'; });
+  detailButton.addEventListener('mouseleave', () => { detailButton.style.opacity = '1'; });
+  detailButton.addEventListener('click', () => {
+    window.dispatchEvent(new CustomEvent('open-site-detail', { detail: site.site_id }));
+  });
+  shell.append(handle, name, chart, metrics, detailButton);
+  return { shell, chart };
 }
 
 export default function MapboxMap({
@@ -678,22 +803,7 @@ export default function MapboxMap({
     }
 
     neighborMarkers.current = visibleNeighbors.map((site) => {
-      const element = document.createElement('div');
-      element.className = 'nod-neighbor-card';
-      element.style.zIndex = '12';
-      element.innerHTML = `
-        <div class="nod-neighbor-card-shell">
-          <div style="display:flex;align-items:center;gap:5px;margin-bottom:6px">
-            <span style="width:6px;height:6px;border-radius:999px;background:${getMarkerColor(site.avg_availability, site.status_site)}"></span>
-            <strong class="nod-neighbor-card-id">${site.site_id}</strong>
-          </div>
-          <div style="display:grid;grid-template-columns:auto 1fr;gap:3px 8px">
-            <span class="nod-neighbor-card-label">Avail</span><b style="text-align:right;color:${getMarkerColor(site.avg_availability, site.status_site)}">${formatAvailability(site.avg_availability)}</b>
-            <span class="nod-neighbor-card-label">Cell</span><b style="text-align:right">${formatCell(site.jumlah_cell)}</b>
-            <span class="nod-neighbor-card-label">Outage</span><b style="text-align:right">${formatOutageMinutes(site.total_outage_menit)}</b>
-          </div>
-        </div>
-      `;
+      const element = createNeighborCard(site);
 
       return new mapboxgl.Marker({
         element,
@@ -779,14 +889,9 @@ export default function MapboxMap({
     if (!map.current) return;
 
     const p = siteData;
-    const escapedSiteId = escapeHtml(p.site_id);
-    const escapedSiteIdJs = escapeJsQuote(p.site_id);
-    const escapedSiteName = escapeHtml(p.site_name);
-    const escapedSiteClass = escapeHtml(p.site_class);
-
     const avail = formatAvailability(p.avg_availability);
     const outage = p.total_outage_menit != null ? `${Math.round(p.total_outage_menit)} min` : 'N/A';
-    const chartId = `nod-popup-daily-${String(p.site_id).replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+    const { shell, chart } = createSitePopupContent(p, avail, outage);
 
     popup.current?.remove();
     popupDragCleanup.current?.();
@@ -800,33 +905,7 @@ export default function MapboxMap({
       offset: { top: [0, 16] },
       maxWidth: '258px',
       className: 'nod-popup',
-    }).setLngLat(coordinates).setHTML(`
-      <div class="nod-popup-shell" style="padding:12px;font-family:Inter,sans-serif;width:248px">
-        <div class="nod-popup-drag-handle" style="display:flex;align-items:center;gap:7px;margin-bottom:8px;padding-right:18px">
-          <span style="width:8px;height:8px;border-radius:50%;background:${p.color};box-shadow:0 0 8px ${p.color}"></span>
-          <span style="font-size:13px;font-weight:800;color:var(--text-primary);line-height:1">${escapedSiteId}</span>
-        </div>
-        <p style="font-size:10px;color:var(--text-muted);margin:0 0 10px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapedSiteName}</p>
-        <div id="${chartId}" style="margin-bottom:10px;border:1px solid var(--border);background:var(--bg-elevated);border-radius:8px;padding:8px 9px">
-          <div style="height:65px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:10px">Memuat daily trend...</div>
-        </div>
-        <div style="display:grid;grid-template-columns:auto 1fr;gap:5px 10px;font-size:10px;align-items:center">
-          <span style="color:var(--text-muted)">Avail</span>
-          <b style="color:${p.color};font-size:13px;text-align:right">${avail}</b>
-          <span style="color:var(--text-muted)">Outage</span>
-          <b style="color:var(--text-primary);text-align:right">${outage}</b>
-          <span style="color:var(--text-muted)">Cell</span>
-          <b style="color:var(--text-primary);text-align:right">${formatCell(p.jumlah_cell)}</b>
-          <span style="color:var(--text-muted)">Class</span>
-          <b style="color:var(--text-primary);text-align:right">${escapedSiteClass || '-'}</b>
-        </div>
-        <button onclick="window.dispatchEvent(new CustomEvent('open-site-detail',{detail:'${escapedSiteIdJs}'}))"
-          style="margin-top:10px;width:100%;padding:7px;background:linear-gradient(135deg,#1E40AF,#3B82F6);color:#fff;border:none;border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:0.2px;transition:opacity 0.2s"
-          onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
-          Lihat Detail Lengkap
-        </button>
-      </div>
-    `).addTo(map.current);
+    }).setLngLat(coordinates).setDOMContent(shell).addTo(map.current);
 
     popup.current.getElement().style.zIndex = '40';
     enablePopupDrag();
@@ -845,21 +924,25 @@ export default function MapboxMap({
       const cacheKey = `${p.site_id}-${tahun}-${bulan}`;
       const cachedRows = dailyAvailabilityCache.current.get(cacheKey);
       if (cachedRows) {
-        const chartEl = document.getElementById(chartId);
-        if (chartEl) chartEl.innerHTML = dailySparklineHtml(cachedRows, p.avg_availability);
+        chart.replaceChildren(dailySparklineContent(cachedRows, p.avg_availability));
         return;
       }
 
       fetchSiteAvailability(p.site_id, bulan, tahun)
         .then((rows) => {
           dailyAvailabilityCache.current.set(cacheKey, rows);
-          const chartEl = document.getElementById(chartId);
-          if (chartEl) chartEl.innerHTML = dailySparklineHtml(rows, p.avg_availability);
+          if (activePopupSiteId.current === p.site_id) {
+            chart.replaceChildren(dailySparklineContent(rows, p.avg_availability));
+          }
         })
         .catch(() => {
-          const chartEl = document.getElementById(chartId);
-          if (chartEl) {
-            chartEl.innerHTML = '<div style="height:65px;display:flex;align-items:center;justify-content:center;color:var(--danger);font-size:10px">Daily trend gagal dimuat</div>';
+          if (activePopupSiteId.current === p.site_id) {
+            chart.replaceChildren(textElement('div', 'Daily trend gagal dimuat', {
+              style: {
+                height: '65px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: 'var(--danger)', fontSize: '10px',
+              },
+            }));
           }
         });
     }

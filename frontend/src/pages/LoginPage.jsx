@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { authLogin } from '../services/api';
+import { useAuth } from '../auth/AuthContext';
 import { useTheme } from '../hooks/useTheme';
 import { Lock, User, Sun, Moon, ArrowRight } from 'lucide-react';
 
@@ -11,6 +11,7 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
+  const { login } = useAuth();
 
   // Vanta.js refs
   const vantaRef = useRef(null);
@@ -69,7 +70,7 @@ export default function LoginPage() {
     setError('');
 
     try {
-      await authLogin(username, password);
+      await login(username, password);
       navigate('/home');
     } catch {
       setError('Invalid username or password.');

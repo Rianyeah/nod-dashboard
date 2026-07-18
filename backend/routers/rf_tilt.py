@@ -15,12 +15,13 @@ from typing import List, Optional, Literal
 
 import httpx
 import runtime_compat  # noqa: F401
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, Field
 
 from database import get_session
+from rate_limit import RateLimitExceeded
 from models.rf_tilt import (
     ClutterPoint,
     TiltAnalysisRequest,
@@ -60,6 +61,11 @@ OPENTOPOGRAPHY_API_KEY = os.environ.get("OPENTOPOGRAPHY_API_KEY", "")
 
 CHUNK_SIZE = 100
 NODATA_THRESHOLD = -1000
+MAX_RF_ANALYSIS_DISTANCE_M = 50_000
+MAX_RF_ANALYSIS_SAMPLES = 5_001
+RF_ANALYSIS_LIMIT = 10
+RF_ANALYSIS_WINDOW_SECONDS = 60
+RF_ANALYSIS_CONCURRENCY_TIMEOUT_SECONDS = 0.01
 
 SUPPORTED_FREQUENCIES_MHZ = (900, 1800, 2100, 2300)
 
@@ -654,17 +660,8 @@ async def get_antenna_spec(
     )
 
 
-@router.post("/analysis", response_model=TiltAnalysisResponse)
-async def analyze_tilt(
-    req: TiltAnalysisRequest,
-    session: AsyncSession = Depends(get_session),
-):
-    """Run RF vertical tilt analysis with DEM elevation data."""
-    total_tilt = req.mechanical_tilt + req.electrical_tilt
-    half_vbw = req.vertical_beamwidth / 2
-    upper_angle = total_tilt - half_vbw
-    lower_angle = total_tilt + half_vbw
-
+def resolve_analysis_parameters(req: TiltAnalysisRequest) -> tuple[bool, float, float, int]:
+    """Resolve and bound the distance-derived analysis work before I/O."""
     target_mode = req.target_latitude is not None and req.target_longitude is not None
     if target_mode:
         link_distance, link_azimuth = haversine_distance_bearing(
@@ -676,7 +673,85 @@ async def analyze_tilt(
         azimuth_used = req.azimuth
         max_distance_used = req.max_distance
 
+    if max_distance_used > MAX_RF_ANALYSIS_DISTANCE_M:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"RF analysis distance must not exceed {MAX_RF_ANALYSIS_DISTANCE_M} metres",
+        )
+
     n_samples = max(2, int(max_distance_used / req.sample_interval) + 1)
+    if n_samples > MAX_RF_ANALYSIS_SAMPLES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"RF analysis must not exceed {MAX_RF_ANALYSIS_SAMPLES} terrain samples",
+        )
+
+    return target_mode, azimuth_used, max_distance_used, n_samples
+
+
+@router.post("/analysis", response_model=TiltAnalysisResponse)
+async def analyze_tilt(
+    req: TiltAnalysisRequest,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    """Rate-limit and bound an RF vertical tilt analysis before DEM work."""
+    target_mode, azimuth_used, max_distance_used, n_samples = resolve_analysis_parameters(req)
+    subject = getattr(request.state, "dashboard_subject", "unknown")
+    client_address = request.client.host if request.client else "unknown"
+    try:
+        request.app.state.rf_limiter.consume(
+            f"{subject}:{client_address}",
+            RF_ANALYSIS_LIMIT,
+            RF_ANALYSIS_WINDOW_SECONDS,
+        )
+    except RateLimitExceeded as exc:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many RF analysis requests",
+            headers={"Retry-After": str(exc.retry_after)},
+        ) from exc
+
+    try:
+        await asyncio.wait_for(
+            request.app.state.rf_analysis_semaphore.acquire(),
+            timeout=RF_ANALYSIS_CONCURRENCY_TIMEOUT_SECONDS,
+        )
+    except TimeoutError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="RF analysis capacity is temporarily exhausted",
+            headers={"Retry-After": "1"},
+        ) from exc
+
+    try:
+        return await run_bounded_analysis(
+            req,
+            session,
+            target_mode=target_mode,
+            azimuth_used=azimuth_used,
+            max_distance_used=max_distance_used,
+            n_samples=n_samples,
+        )
+    finally:
+        request.app.state.rf_analysis_semaphore.release()
+
+
+async def run_bounded_analysis(
+    req: TiltAnalysisRequest,
+    session: AsyncSession,
+    *,
+    target_mode: bool,
+    azimuth_used: float,
+    max_distance_used: float,
+    n_samples: int,
+) -> TiltAnalysisResponse:
+    """Run DEM and raster work while the caller holds the analysis semaphore."""
+    total_tilt = req.mechanical_tilt + req.electrical_tilt
+    half_vbw = req.vertical_beamwidth / 2
+    upper_angle = total_tilt - half_vbw
+    lower_angle = total_tilt + half_vbw
+
     distances = [i * max_distance_used / (n_samples - 1) for i in range(n_samples)]
     sample_points = [
         destination_point(req.latitude, req.longitude, azimuth_used, d) for d in distances

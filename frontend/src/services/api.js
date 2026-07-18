@@ -4,35 +4,50 @@
  */
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+const API_BASE_URL = '/api/v1';
+
+let unauthorizedHandler = null;
 
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000,
+  withCredentials: true,
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Add auth token if exists
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('nod_auth_token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+api.interceptors.response.use(undefined, (error) => {
+  const path = error.config?.url || '';
+  const isAuthEndpoint = path.startsWith('/auth/');
+  if (error.response?.status === 401 && !isAuthEndpoint) {
+    unauthorizedHandler?.();
   }
-  return config;
+  return Promise.reject(error);
 });
 
 // ===== Auth =====
 
 export async function authLogin(username, password) {
   const { data } = await api.post('/auth/login', { username, password });
-  if (data.token) {
-    localStorage.setItem('nod_auth_token', data.token);
-  }
   return data;
 }
 
-export function authLogout() {
-  localStorage.removeItem('nod_auth_token');
+export async function authSession() {
+  const { data } = await api.get('/auth/session');
+  return data;
+}
+
+export async function authLogout() {
+  const { data } = await api.post('/auth/logout');
+  return data;
+}
+
+export function setUnauthorizedHandler(handler) {
+  unauthorizedHandler = handler;
+  return () => {
+    if (unauthorizedHandler === handler) {
+      unauthorizedHandler = null;
+    }
+  };
 }
 
 
