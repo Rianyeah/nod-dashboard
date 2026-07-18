@@ -3,6 +3,7 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { RF_COLORS } from './rfTiltChartConfig';
+import { domElement, textElement } from '../../utils/safeMapDom';
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN;
 
@@ -54,85 +55,111 @@ function verticalBeamEnvelopeHeight(result, params) {
 
 /* ─── Tower marker with site ID label ──────────────────────────────── */
 function createTowerMarkerElement(azimuthDeg, siteId) {
-  const el = document.createElement('div');
-  el.style.cursor = 'pointer';
-  el.style.position = 'relative';
-  el.style.width = '40px';
-  el.style.height = '50px';
-  el.style.overflow = 'visible';
+  const el = domElement('div', {
+    style: {
+      cursor: 'pointer', position: 'relative', width: '40px', height: '50px', overflow: 'visible',
+    },
+  });
+  if (siteId) {
+    el.append(textElement('div', siteId, {
+      style: {
+        position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)',
+        background: 'rgba(15,23,42,0.9)', backdropFilter: 'blur(6px)', border: `1px solid ${C.main}44`,
+        borderRadius: '6px', padding: '2px 8px', whiteSpace: 'nowrap', marginBottom: '4px',
+        fontSize: '10px', fontWeight: '700', color: C.main, fontFamily: 'Inter, system-ui, sans-serif',
+        letterSpacing: '.3px', boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+      },
+    }));
+  }
 
-  // Label container
-  const labelHtml = siteId ? `
-    <div style="
-      position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
-      background: rgba(15,23,42,0.9); backdrop-filter: blur(6px);
-      border: 1px solid ${C.main}44; border-radius: 6px;
-      padding: 2px 8px; white-space: nowrap; margin-bottom: 4px;
-      font-size: 10px; font-weight: 700; color: ${C.main};
-      font-family: 'Inter', system-ui, sans-serif; letter-spacing: 0.3px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-    ">${siteId}</div>` : '';
-
-  el.innerHTML = `
-    ${labelHtml}
-    <svg width="40" height="50" viewBox="0 0 40 50" xmlns="http://www.w3.org/2000/svg">
-      <!-- Legs -->
-      <line x1="14" y1="50" x2="18" y2="12" stroke="${C.towerStruct}" stroke-width="1.8"/>
-      <line x1="26" y1="50" x2="22" y2="12" stroke="${C.towerStruct}" stroke-width="1.8"/>
-      <!-- Cross-bars -->
-      <line x1="15" y1="40" x2="25" y2="40" stroke="${C.towerBrace}" stroke-width="1.2"/>
-      <line x1="16.5" y1="30" x2="23.5" y2="30" stroke="${C.towerBrace}" stroke-width="1.2"/>
-      <line x1="17.5" y1="20" x2="22.5" y2="20" stroke="${C.towerBrace}" stroke-width="1.2"/>
-      <!-- X braces -->
-      <line x1="15" y1="40" x2="23.5" y2="30" stroke="${C.towerDiag}" stroke-width="0.7"/>
-      <line x1="25" y1="40" x2="16.5" y2="30" stroke="${C.towerDiag}" stroke-width="0.7"/>
-      <line x1="16.5" y1="30" x2="22.5" y2="20" stroke="${C.towerDiag}" stroke-width="0.7"/>
-      <line x1="23.5" y1="30" x2="17.5" y2="20" stroke="${C.towerDiag}" stroke-width="0.7"/>
-      <!-- Foundation -->
-      <rect x="12" y="48" width="16" height="3" rx="1" fill="${C.towerBrace}" opacity="0.5"/>
-      <!-- Mast -->
-      <line x1="20" y1="12" x2="20" y2="2" stroke="#e2e8f0" stroke-width="1.8"/>
-      <!-- Antenna panels -->
-      <g transform="rotate(${azimuthDeg} 20 8)">
-        <rect x="18" y="2" width="4" height="10" rx="1" fill="${C.main}" opacity="0.9"/>
-        <rect x="12" y="4" width="3.5" height="8" rx="1" fill="${C.main}" opacity="0.55" transform="rotate(-12 14 8)"/>
-        <rect x="24.5" y="4" width="3.5" height="8" rx="1" fill="${C.main}" opacity="0.55" transform="rotate(12 26 8)"/>
-      </g>
-      <!-- Beacon -->
-      <circle cx="20" cy="2" r="2" fill="${C.beacon}" opacity="0.9"/>
-      <circle cx="20" cy="2" r="4" fill="${C.beacon}" opacity="0.15"/>
-    </svg>`;
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('width', '40');
+  svg.setAttribute('height', '50');
+  svg.setAttribute('viewBox', '0 0 40 50');
+  const appendSvg = (tag, attributes) => {
+    const node = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    Object.entries(attributes).forEach(([name, value]) => node.setAttribute(name, String(value)));
+    svg.append(node);
+    return node;
+  };
+  const line = (x1, y1, x2, y2, stroke, width) => appendSvg('line', {
+    x1, y1, x2, y2, stroke, 'stroke-width': width,
+  });
+  line(14, 50, 18, 12, C.towerStruct, 1.8);
+  line(26, 50, 22, 12, C.towerStruct, 1.8);
+  line(15, 40, 25, 40, C.towerBrace, 1.2);
+  line(16.5, 30, 23.5, 30, C.towerBrace, 1.2);
+  line(17.5, 20, 22.5, 20, C.towerBrace, 1.2);
+  line(15, 40, 23.5, 30, C.towerDiag, 0.7);
+  line(25, 40, 16.5, 30, C.towerDiag, 0.7);
+  line(16.5, 30, 22.5, 20, C.towerDiag, 0.7);
+  line(23.5, 30, 17.5, 20, C.towerDiag, 0.7);
+  appendSvg('rect', { x: 12, y: 48, width: 16, height: 3, rx: 1, fill: C.towerBrace, opacity: 0.5 });
+  line(20, 12, 20, 2, '#e2e8f0', 1.8);
+  const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  const safeAzimuth = Number.isFinite(Number(azimuthDeg)) ? Number(azimuthDeg) : 0;
+  group.setAttribute('transform', `rotate(${safeAzimuth} 20 8)`);
+  const panel = (attributes) => {
+    const node = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    Object.entries(attributes).forEach(([name, value]) => node.setAttribute(name, String(value)));
+    group.append(node);
+  };
+  panel({ x: 18, y: 2, width: 4, height: 10, rx: 1, fill: C.main, opacity: 0.9 });
+  panel({ x: 12, y: 4, width: 3.5, height: 8, rx: 1, fill: C.main, opacity: 0.55, transform: 'rotate(-12 14 8)' });
+  panel({ x: 24.5, y: 4, width: 3.5, height: 8, rx: 1, fill: C.main, opacity: 0.55, transform: 'rotate(12 26 8)' });
+  svg.append(group);
+  appendSvg('circle', { cx: 20, cy: 2, r: 2, fill: C.beacon, opacity: 0.9 });
+  appendSvg('circle', { cx: 20, cy: 2, r: 4, fill: C.beacon, opacity: 0.15 });
+  el.append(svg);
   return el;
+}
+
+function createRoundMarker(color, size, glowSize) {
+  const marker = domElement('div');
+  marker.append(domElement('div', {
+    style: {
+      width: `${size}px`, height: `${size}px`, borderRadius: '50%', background: color,
+      border: '2px solid #fff', boxShadow: `0 0 0 ${glowSize}px ${color}33, 0 2px 6px rgba(0,0,0,0.3)`,
+    },
+  }));
+  return marker;
+}
+
+function createRfPopup(title, color, rows) {
+  const root = domElement('div', {
+    style: {
+      background: 'rgba(15,23,42,0.92)', backdropFilter: 'blur(8px)', border: `1px solid ${color}44`,
+      borderRadius: '8px', padding: '8px 12px', color: '#f1f5f9', fontFamily: 'Inter, system-ui, sans-serif',
+    },
+  });
+  root.append(textElement('div', title, {
+    style: {
+      fontSize: '10px', color, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '.5px',
+      marginBottom: '3px',
+    },
+  }));
+  const body = domElement('div', { style: { fontSize: '11px', color: '#94a3b8', lineHeight: '1.5' } });
+  rows.forEach(([label, value, valueColor = '#f1f5f9']) => {
+    const row = domElement('div');
+    row.append(
+      textElement('span', `${label}: `),
+      textElement('b', value, { style: { color: valueColor } }),
+    );
+    body.append(row);
+  });
+  root.append(body);
+  return root;
 }
 
 /* ─── Impact marker with popup ─────────────────────────────────────── */
 function createImpactMarker(map, lngLat, color, label, distance) {
-  const el = document.createElement('div');
+  const el = createRoundMarker(color, 14, 3);
   el.style.cursor = 'pointer';
-  el.innerHTML = `
-    <div style="
-      width: 14px; height: 14px; border-radius: 50%;
-      background: ${color}; border: 2px solid #fff;
-      box-shadow: 0 0 0 3px ${color}33, 0 2px 6px rgba(0,0,0,0.3);
-    "></div>`;
 
   const popup = new mapboxgl.Popup({
     offset: 16, closeButton: false, closeOnClick: false,
     className: 'rf-map-popup',
-  }).setHTML(`
-    <div style="
-      background: rgba(15,23,42,0.92); backdrop-filter: blur(8px);
-      border: 1px solid ${color}44; border-radius: 8px;
-      padding: 8px 12px; color: #f1f5f9; font-family: 'Inter', system-ui, sans-serif;
-    ">
-      <div style="font-size:10px; color:${color}; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:2px;">
-        ${label}
-      </div>
-      <div style="font-size:12px; font-weight:600;">
-        ${Math.round(distance)} m from tower
-      </div>
-    </div>
-  `);
+  }).setDOMContent(createRfPopup(label, color, [['Distance', `${Math.round(distance)} m from tower`]]));
 
   const marker = new mapboxgl.Marker({ element: el })
     .setLngLat(lngLat)
@@ -364,20 +391,11 @@ export default function RfTiltMap({ result, params, onMapClick, targetMode, sele
           const props = e.features?.[0]?.properties || {};
           hoverPopupRef.current
             ?.setLngLat(coords)
-            .setHTML(`
-              <div style="
-                background: rgba(15,23,42,0.92); backdrop-filter: blur(8px);
-                border: 1px solid ${cfg.color}44; border-radius: 8px;
-                padding: 8px 12px; color: #f1f5f9; font-family: 'Inter', system-ui, sans-serif;
-              ">
-                <div style="font-size:10px; color:${cfg.color}; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:2px;">
-                  ${props.label || cfg.label}
-                </div>
-                <div style="font-size:11px; color:#94a3b8;">
-                  ${props.desc || cfg.desc}
-                </div>
-              </div>
-            `)
+            .setDOMContent(createRfPopup(
+              props.label || cfg.label,
+              cfg.color,
+              [['Description', props.desc || cfg.desc]],
+            ))
             .addTo(map);
         });
 
@@ -406,24 +424,12 @@ export default function RfTiltMap({ result, params, onMapClick, targetMode, sele
     const towerPopup = new mapboxgl.Popup({
       offset: [0, -56], closeButton: false, closeOnClick: false,
       className: 'rf-map-popup',
-    }).setHTML(`
-      <div style="
-        background: rgba(15,23,42,0.92); backdrop-filter: blur(8px);
-        border: 1px solid ${C.main}44; border-radius: 8px;
-        padding: 8px 12px; color: #f1f5f9; font-family: 'Inter', system-ui, sans-serif;
-        min-width: 140px;
-      ">
-        <div style="font-size:10px; color:${C.main}; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:3px;">
-          📡 Cell Tower
-        </div>
-        <div style="font-size:11px; color:#94a3b8; line-height:1.5;">
-          ${siteLabel ? `<b style="color:#f1f5f9">${siteLabel}</b><br/>` : ''}
-          Height: <b style="color:#f1f5f9">${params.antenna_height}m</b><br/>
-          Azimuth: <b style="color:#f1f5f9">${azimuth}°</b><br/>
-          Elevation: <b style="color:#f1f5f9">${Math.round(result.site_elevation)}m</b>
-        </div>
-      </div>
-    `);
+    }).setDOMContent(createRfPopup('Cell Tower', C.main, [
+      ...(siteLabel ? [['Site', siteLabel]] : []),
+      ['Height', `${params.antenna_height}m`],
+      ['Azimuth', `${azimuth}°`],
+      ['Elevation', `${Math.round(result.site_elevation)}m`],
+    ]));
 
     towerEl.addEventListener('mouseenter', () => {
       towerPopup.setLngLat([params.longitude, params.latitude]).addTo(map);
@@ -442,12 +448,7 @@ export default function RfTiltMap({ result, params, onMapClick, targetMode, sele
       && !result.link;
 
     if (hasDraftTarget) {
-      const targetEl = document.createElement('div');
-      targetEl.innerHTML = `
-        <div style="
-          width: 18px; height: 18px; background: ${C.link}; border: 2px solid #fff;
-          border-radius: 50%; box-shadow: 0 0 0 4px ${C.link}33, 0 2px 8px rgba(0,0,0,0.35);
-        "></div>`;
+      const targetEl = createRoundMarker(C.link, 18, 4);
       targetEl.title = 'Drag to move P2P target';
 
       const draftTargetMarker = new mapboxgl.Marker({ element: targetEl, draggable: true })
@@ -492,35 +493,22 @@ export default function RfTiltMap({ result, params, onMapClick, targetMode, sele
 
     // P2P target marker
     if (result.link) {
-      const targetEl = document.createElement('div');
+      const targetEl = createRoundMarker(C.link, 16, 3);
       targetEl.style.cursor = 'pointer';
-      targetEl.innerHTML = `
-        <div style="
-          width: 16px; height: 16px; background: ${C.link};
-          border: 2px solid #fff; border-radius: 50%;
-          box-shadow: 0 0 0 3px ${C.link}33, 0 2px 6px rgba(0,0,0,0.3);
-        "></div>`;
 
       const targetPopup = new mapboxgl.Popup({
         offset: 16, closeButton: false, closeOnClick: false,
         className: 'rf-map-popup',
-      }).setHTML(`
-        <div style="
-          background: rgba(15,23,42,0.92); backdrop-filter: blur(8px);
-          border: 1px solid ${C.link}44; border-radius: 8px;
-          padding: 8px 12px; color: #f1f5f9; font-family: 'Inter', system-ui, sans-serif;
-        ">
-          <div style="font-size:10px; color:${C.link}; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:2px;">
-            P2P Target
-          </div>
-          <div style="font-size:11px; color:#94a3b8; line-height:1.5;">
-            Distance: <b style="color:#f1f5f9">${Math.round(result.link.distance_m)}m</b><br/>
-            LOS: <b style="color:${result.link.los_clear ? '#22c55e' : '#ef4444'}">
-              ${result.link.los_clear ? 'Clear' : `Blocked @ ${Math.round(result.link.los_obstruction_distance)}m`}
-            </b>
-          </div>
-        </div>
-      `);
+      }).setDOMContent(createRfPopup('P2P Target', C.link, [
+        ['Distance', `${Math.round(result.link.distance_m)}m`],
+        [
+          'LOS',
+          result.link.los_clear
+            ? 'Clear'
+            : `Blocked @ ${Math.round(result.link.los_obstruction_distance)}m`,
+          result.link.los_clear ? '#22c55e' : '#ef4444',
+        ],
+      ]));
 
       targetEl.addEventListener('mouseenter', () => {
         targetPopup.setLngLat([result.link.target_longitude, result.link.target_latitude]).addTo(map);
