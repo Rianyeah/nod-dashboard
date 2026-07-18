@@ -14,7 +14,7 @@
         "template": "PREBUILT",
         "spec": {
           "source": {
-            "image": "ghcr.io/rianyeah/nod-dashboard:latest"
+            "image": "ghcr.io/rianyeah/nod-dashboard:REPLACE_WITH_GIT_SHA"
           },
           "ports": [
             {
@@ -28,6 +28,38 @@
               "description": "PostgreSQL connection string (NeonDB)",
               "default": ""
             },
+            "PUBLIC_APP_ORIGIN": {
+              "description": "Exact public HTTPS origin for cookie-origin validation",
+              "default": "https://nod-dashboard.zeabur.app"
+            },
+            "ALLOWED_HOSTS": {
+              "description": "Comma-separated public hostnames accepted by the API",
+              "default": "nod-dashboard.zeabur.app"
+            },
+            "DASHBOARD_USER": {
+              "description": "Dashboard login username",
+              "default": ""
+            },
+            "DASHBOARD_PASSWORD_HASH": {
+              "description": "Required Argon2id dashboard password hash",
+              "default": ""
+            },
+            "DASHBOARD_SESSION_SECRET": {
+              "description": "Required base64 secret with at least 32 random bytes",
+              "default": ""
+            },
+            "DASHBOARD_SESSION_TTL_SECONDS": {
+              "description": "Fixed dashboard session lifetime in seconds",
+              "default": "28800"
+            },
+            "SESSION_COOKIE_SECURE": {
+              "description": "Require HTTPS-only dashboard cookies in production",
+              "default": "true"
+            },
+            "N8N_API_KEY": {
+              "description": "Required shared key for the n8n alert webhook",
+              "default": ""
+            },
             "REDIS_URL": {
               "description": "Private Redis connection string from the Redis service",
               "default": ""
@@ -38,14 +70,8 @@
             "REDIS_KEY_PREFIX": {
               "default": "nod:v1"
             },
-            "VITE_MAPBOX_TOKEN": {
-              "description": "Mapbox access token for map tiles",
-              "default": ""
-            },
-            "VITE_API_BASE_URL": {
-              "default": "/api/v1"
-            },
             "APP_ENV": {
+              "description": "Application environment; must be production for this template",
               "default": "production"
             }
           }

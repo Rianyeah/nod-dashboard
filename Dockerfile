@@ -1,22 +1,24 @@
 # Stage 1: Build frontend
-FROM node:20-alpine AS frontend-build
+FROM node:22-alpine AS frontend-build
 WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
 ARG VITE_MAPBOX_TOKEN
-ARG VITE_API_BASE_URL=/api/v1
 ENV VITE_MAPBOX_TOKEN=$VITE_MAPBOX_TOKEN
-ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 RUN npm run build
 
 # Stage 2: Python backend + serve frontend dist
 FROM python:3.12-slim
 WORKDIR /app
+ARG GIT_SHA=unknown
+ARG GIT_SOURCE=https://github.com/Rianyeah/nod-dashboard
+LABEL org.opencontainers.image.source=$GIT_SOURCE \
+      org.opencontainers.image.revision=$GIT_SHA
 
 # Install Python dependencies
-COPY backend/requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+COPY backend/requirements.lock ./
+RUN pip install --no-cache-dir --require-hashes -r requirements.lock
 
 # Copy backend
 COPY backend/ ./backend/
