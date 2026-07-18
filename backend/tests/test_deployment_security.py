@@ -63,3 +63,11 @@ def test_hashed_dev_lock_includes_linux_standard_server_dependency():
         lockfile,
         flags=re.MULTILINE,
     ), "uvloop must be pinned and hashed for Linux uvicorn[standard] installs"
+
+
+def test_ghcr_image_owner_is_normalized_to_lowercase():
+    workflow = (ROOT / ".github" / "workflows" / "deploy.yml").read_text(encoding="utf-8")
+
+    assert "tags: ghcr.io/${{ github.repository_owner }}" not in workflow
+    assert "GITHUB_REPOSITORY_OWNER,," in workflow
+    assert "steps.image.outputs.name" in workflow
