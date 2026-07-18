@@ -16,3 +16,9 @@ def test_large_json_body_is_rejected_before_auth_parsing(client):
     )
 
     assert response.status_code == 413
+
+
+def test_production_docs_routes_do_not_fall_through_to_the_spa(client):
+    assert client.get("/docs").status_code == 404
+    assert client.get("/redoc").status_code == 404
+    assert client.get("/api/v1/openapi.json").status_code == 404

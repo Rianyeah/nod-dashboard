@@ -269,7 +269,12 @@ def create_app(settings: SecuritySettings | None = None) -> FastAPI:
         @app.get("/{full_path:path}")
         async def serve_spa(full_path: str):
             api_prefix_path = API_PREFIX.strip("/")
-            if full_path == api_prefix_path or full_path.startswith(f"{api_prefix_path}/"):
+            disabled_docs_paths = {"docs", "redoc"}
+            if (
+                full_path in disabled_docs_paths
+                or full_path == api_prefix_path
+                or full_path.startswith(f"{api_prefix_path}/")
+            ):
                 raise HTTPException(status_code=404, detail="API route not found")
 
             file_path = FRONTEND_DIST / full_path

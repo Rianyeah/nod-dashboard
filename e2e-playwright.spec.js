@@ -1,17 +1,28 @@
 import { test, expect } from '@playwright/test';
 
 const E2E_BASE_URL = process.env.E2E_BASE_URL || 'http://127.0.0.1:5173';
+const E2E_DASHBOARD_USER = requiredEnvironment('E2E_DASHBOARD_USER');
+const E2E_DASHBOARD_PASSWORD = requiredEnvironment('E2E_DASHBOARD_PASSWORD');
 
 test.use({
   channel: 'chrome'
 });
 
+function requiredEnvironment(name) {
+  const value = process.env[name];
+  if (!value) throw new Error(`${name} must be set before running browser tests.`);
+  return value;
+}
+
 async function authenticate(page, theme = 'dark') {
   await page.addInitScript(({ selectedTheme }) => {
-    localStorage.setItem('nod_auth_token', 'test-token');
     localStorage.setItem('nod_theme', selectedTheme);
-    localStorage.setItem('nod_last_activity', String(Date.now()));
   }, { selectedTheme: theme });
+  await page.goto(`${E2E_BASE_URL}/login`);
+  await page.getByPlaceholder('Enter username').fill(E2E_DASHBOARD_USER);
+  await page.getByPlaceholder('Enter password').fill(E2E_DASHBOARD_PASSWORD);
+  await page.getByRole('button', { name: 'Sign In' }).click();
+  await page.waitForURL('**/home');
 }
 
 function shiftIsoDate(value, days) {
@@ -58,26 +69,10 @@ async function expectSeriesTooltipColors(page, chartTestId, shapeSelector = 'pat
 }
 
 test('Dashboard loads and performs basic validations', async ({ page }) => {
-  console.log('Navigating to http://127.0.0.1:5173/login ...');
-  await page.goto('http://127.0.0.1:5173/login');
-
-  console.log('Current page title:', await page.title());
-
-  console.log('Filling login form...');
-  await page.fill('input[placeholder="Enter username"]', 'admin');
-  await page.fill('input[placeholder="Enter password"]', 'admin123');
-
-  console.log('Submitting login form...');
-  await page.click('button:has-text("Sign In")');
-
-  console.log('Waiting for navigation to dashboard...');
-  await page.waitForURL('**/dashboard');
+  await authenticate(page);
+  await page.goto(`${E2E_BASE_URL}/site-map`);
 
   console.log('Verifying key dashboard components...');
-
-  // Verify heading in uppercase
-  await expect(page.locator('h1')).toContainText('NETWORK OPERATION DASHBOARD');
-  console.log('OK Found Dashboard Heading!');
 
   // Check mapbox container
   const mapContainer = page.locator('.mapboxgl-map');
@@ -89,7 +84,6 @@ test('Dashboard loads and performs basic validations', async ({ page }) => {
   const count = await panels.count();
   console.log(`OK Found ${count} dashboard panel/container elements!`);
 
-  console.log('E2E testing completed successfully!');
 });
 
 test('Dashboard sidebar data settles without repeated summary refetches', async ({ page }) => {
@@ -104,11 +98,8 @@ test('Dashboard sidebar data settles without repeated summary refetches', async 
     if (url.includes('/api/v1/availability/worst?')) requests.worst += 1;
   });
 
-  await page.goto('http://127.0.0.1:5173/login');
-  await page.fill('input[placeholder="Enter username"]', 'admin');
-  await page.fill('input[placeholder="Enter password"]', 'admin123');
-  await page.click('button:has-text("Sign In")');
-  await page.waitForURL('**/dashboard');
+  await authenticate(page);
+  await page.goto(`${E2E_BASE_URL}/site-map`);
 
   await chooseSelectOption(page, '#filter-bulan', 'April');
   await chooseSelectOption(page, '#filter-tahun', '2026');
@@ -123,7 +114,7 @@ test('Dashboard sidebar data settles without repeated summary refetches', async 
 
 test('Worst sites cards use light theme colors', async ({ page }) => {
   await authenticate(page, 'light');
-  await page.goto('http://127.0.0.1:5173/dashboard');
+  await page.goto(`${E2E_BASE_URL}/site-map`);
 
   await chooseSelectOption(page, '#filter-bulan', 'April');
   await chooseSelectOption(page, '#filter-tahun', '2026');
@@ -138,15 +129,20 @@ test('Worst sites cards use light theme colors', async ({ page }) => {
 });
 
 test('Performance trend renders monthly availability line', async ({ page, request }) => {
-  const trendResponse = await request.get('http://127.0.0.1:5173/api/v1/reporting/trend');
+  await authenticate(page, 'light');
+  const cookieHeader = (await page.context().cookies())
+    .map((cookie) => `${cookie.name}=${cookie.value}`)
+    .join('; ');
+  const trendResponse = await request.get(`${E2E_BASE_URL}/api/v1/reporting/trend`, {
+    headers: { cookie: cookieHeader },
+  });
   expect(trendResponse.ok()).toBeTruthy();
 
   const trendData = await trendResponse.json();
   const availabilityPoints = trendData.filter((point) => point.avg_availability != null);
   expect(availabilityPoints.length).toBeGreaterThan(1);
 
-  await authenticate(page, 'light');
-  await page.goto('http://127.0.0.1:5173/reporting');
+  await page.goto(`${E2E_BASE_URL}/reporting`);
   await expect(page.getByText('Performance Trend')).toBeVisible({ timeout: 20000 });
 
   const availabilityPath = page.locator('path[stroke="#D97706"]').first();
@@ -165,7 +161,7 @@ test('Reporting NOP filter is sent to scorecards chart and tables', async ({ pag
   });
 
   await authenticate(page, 'light');
-  await page.goto('http://127.0.0.1:5173/reporting');
+  await page.goto(`${E2E_BASE_URL}/reporting`);
   await expect(page.locator('#reporting-nop')).toBeVisible({ timeout: 20000 });
 
   await page.locator('#reporting-nop').click();
