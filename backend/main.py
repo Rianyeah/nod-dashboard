@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 import pathlib
 import asyncio
+import ipaddress
+import socket
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
@@ -145,6 +147,19 @@ def _clear_session_cookie(response: Response, settings: SecuritySettings) -> Non
     )
 
 
+def _runtime_allowed_hosts(configured_hosts: tuple[str, ...]) -> list[str]:
+    allowed_hosts = list(configured_hosts)
+    try:
+        runtime_ip = socket.gethostbyname(socket.gethostname())
+        runtime_address = ipaddress.ip_address(runtime_ip)
+    except (OSError, ValueError):
+        return allowed_hosts
+
+    if runtime_address.is_private and runtime_ip not in allowed_hosts:
+        allowed_hosts.append(runtime_ip)
+    return allowed_hosts
+
+
 def create_app(settings: SecuritySettings | None = None) -> FastAPI:
     """Build the application with explicit security configuration for tests."""
     security_settings = settings or SecuritySettings.from_env()
@@ -166,7 +181,10 @@ def create_app(settings: SecuritySettings | None = None) -> FastAPI:
     app.state.login_limiter = InMemoryRateLimiter()
     app.state.rf_limiter = InMemoryRateLimiter()
     app.state.rf_analysis_semaphore = asyncio.Semaphore(2)
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(security_settings.allowed_hosts))
+    app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=_runtime_allowed_hosts(security_settings.allowed_hosts),
+    )
     app.add_middleware(RequestBodyLimitMiddleware, max_bytes=1_048_576)
     app.add_middleware(SecurityHeadersMiddleware, content_security_policy=CONTENT_SECURITY_POLICY)
 
