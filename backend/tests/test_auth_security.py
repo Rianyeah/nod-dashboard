@@ -1,7 +1,9 @@
 import base64
+import socket
 from dataclasses import replace
 
 import pytest
+from fastapi.testclient import TestClient
 
 
 def test_valid_login_sets_hardened_cookie(client, credentials):
@@ -66,3 +68,18 @@ def test_modified_expired_and_wrong_secret_sessions_are_rejected(
     )
     with pytest.raises(SessionValidationError):
         wrong_secret_manager.verify(token)
+
+
+def test_runtime_private_ip_is_trusted_without_allowing_unknown_hosts(
+    monkeypatch, security_settings
+):
+    from main import create_app
+
+    monkeypatch.setattr(socket, "gethostname", lambda: "zeabur-pod")
+    monkeypatch.setattr(socket, "gethostbyname", lambda _hostname: "10.42.0.133")
+    client = TestClient(create_app(security_settings), base_url="http://10.42.0.133:8000")
+
+    assert client.get("/api/v1/health").status_code == 200
+    assert client.get(
+        "/api/v1/health", headers={"Host": "attacker.example"}
+    ).status_code == 400
