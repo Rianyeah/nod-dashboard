@@ -133,7 +133,7 @@ describe('new home page command center contracts', () => {
     const page = src('pages', 'HomePage.jsx');
 
     assert.match(page, /HOME_DEFAULT_NOP\s*=\s*'SIDOARJO'/);
-    assert.match(page, /setNop\(HOME_DEFAULT_NOP\)/);
+    assert.match(page, /useState\(HOME_DEFAULT_NOP\)/);
     assert.match(page, /const availabilityDelta/);
     assert.match(page, /const payloadDelta/);
     assert.match(page, /title: 'Network Availability'[\s\S]*subtitle:\s*`\$\{formatSignedPercent\(availabilityDelta\)\} MoM`/);
@@ -141,6 +141,38 @@ describe('new home page command center contracts', () => {
     assert.match(page, /title: 'Today Impact Service'[\s\S]*subtitle:\s*`Open: \$\{formatNumber\(latestImpactDaily\?\.open/);
     assert.doesNotMatch(page, /critical sites`/);
     assert.doesNotMatch(page, /subtitle: 'total data usage'/);
+  });
+
+  it('starts latest-period independently and aborts stale overview requests', () => {
+    const page = src('pages', 'HomePage.jsx');
+    const api = src('services', 'api.js');
+    const bootstrap = page.split('export default function HomePage', 2)[1];
+    const filterBatch = bootstrap.split('Promise.all([', 2)[1].split('])', 1)[0];
+
+    assert.match(bootstrap, /fetchLatestPeriod\(\)/);
+    assert.doesNotMatch(filterBatch, /fetchLatestPeriod/);
+    assert.match(page, /latestPeriodReady/);
+    assert.match(page, /if \(!latestPeriodReady \|\| !bulan \|\| !tahun\) return/);
+    assert.match(page, /new AbortController\(\)/);
+    assert.match(page, /fetchOverview\(\{ bulan, tahun, nop \}, controller\.signal\)/);
+    assert.match(page, /controller\.abort\(\)/);
+    assert.match(api, /export async function fetchOverview\(\{ bulan, tahun, nop \} = \{\}, signal\)/);
+
+    const overviewApi = api.split('export async function fetchOverview', 2)[1].split('// ===== Reporting =====', 1)[0];
+    assert.match(overviewApi, /signal/);
+    assert.doesNotMatch(overviewApi, /Date\.now\(\)/);
+    assert.doesNotMatch(overviewApi, /Cache-Control/);
+  });
+
+  it('lazy-loads map routes so Mapbox is absent from the initial Home chunk', () => {
+    const app = src('App.jsx');
+
+    assert.doesNotMatch(app, /import SiteMapPage from/);
+    assert.doesNotMatch(app, /import RfTiltAnalysisPage from/);
+    assert.match(app, /const SiteMapPage = React\.lazy/);
+    assert.match(app, /const RfTiltAnalysisPage = React\.lazy/);
+    assert.match(app, /function MapRoute/);
+    assert.match(app, /Memuat peta/);
   });
 
   it('uses meaningful data charts in each module overview card', () => {

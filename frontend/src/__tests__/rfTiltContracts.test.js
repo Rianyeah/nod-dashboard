@@ -227,6 +227,6 @@ describe('RF Tilt site selection contracts', () => {
 
   it('clears the Mapbox ref during cleanup so StrictMode can recreate the map', () => {
     const map = src('features', 'rf-tilt', 'RfTiltMap.jsx');
-    assert.match(map, /mapRef\.current\.remove\(\);[\s\S]*mapRef\.current = null;/);
+    assert.match(map, /mapInstance\.remove\(\);[\s\S]*mapRef\.current = null;/);
   });
 });

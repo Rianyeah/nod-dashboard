@@ -9,8 +9,12 @@ export function useMapData(bulan, tahun, nop) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const requestIdRef = useRef(0);
+  const abortControllerRef = useRef(null);
 
   const loadData = useCallback(async () => {
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
 
@@ -22,11 +26,12 @@ export function useMapData(bulan, tahun, nop) {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchMapSites(bulan, tahun, nop);
+      const data = await fetchMapSites(bulan, tahun, nop, controller.signal);
       if (requestId !== requestIdRef.current) return;
       setSites(data);
       setError(null);
     } catch (err) {
+      if (controller.signal.aborted || err?.code === 'ERR_CANCELED') return;
       if (requestId !== requestIdRef.current) return;
       setError(err.message || 'Gagal memuat data peta');
       console.error('useMapData error:', err);
@@ -39,6 +44,9 @@ export function useMapData(bulan, tahun, nop) {
 
   useEffect(() => {
     Promise.resolve().then(loadData);
+    return () => {
+      abortControllerRef.current?.abort();
+    };
   }, [loadData]);
 
   return { sites, loading, error, refetch: loadData };

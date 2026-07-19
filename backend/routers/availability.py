@@ -6,11 +6,12 @@ GET /availability/site/{id}       — Single site availability
 GET /availability/trend/{id}      — 12-month trend
 GET /availability/worst           — Worst performing sites
 """
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, Response
 import runtime_compat  # noqa: F401
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
+from cache import CACHE_HIT, CACHE_MISS, FILTER_CACHE_TTL_SECONDS, redis_cache
 from database import get_session
 from queries.metrics_cache import ensure_site_month_metrics
 from queries.sql_queries import (
@@ -36,20 +37,37 @@ router = APIRouter(prefix="/availability", tags=["Availability"])
 @router.get("/latest-period", response_model=LatestPeriod)
 async def get_latest_period(
     session: AsyncSession = Depends(get_session),
+    response: Response = None,
 ):
     """Get the newest month/year with availability data."""
+    cache_key = redis_cache.make_key("filters", "latest-period")
+    cache_status, cached_value = await redis_cache.get_json(cache_key)
+    if cache_status == CACHE_HIT:
+        if response is not None:
+            response.headers["X-Cache"] = cache_status
+        return LatestPeriod.model_validate(cached_value)
+
     result = await session.execute(text(LATEST_PERIOD_QUERY))
     row = result.mappings().first()
 
     if not row:
         raise HTTPException(status_code=404, detail="No availability period found")
 
-    return LatestPeriod(
+    payload = LatestPeriod(
         bulan=int(row["bulan"]),
         tahun=int(row["tahun"]),
         row_count=int(row.get("row_count") or 0),
         site_count=int(row.get("site_count") or 0),
     )
+    if cache_status == CACHE_MISS:
+        await redis_cache.set_json(
+            cache_key,
+            payload.model_dump(mode="json"),
+            ttl_seconds=FILTER_CACHE_TTL_SECONDS,
+        )
+    if response is not None:
+        response.headers["X-Cache"] = cache_status
+    return payload
 
 
 @router.get("/summary", response_model=AvailabilitySummary)

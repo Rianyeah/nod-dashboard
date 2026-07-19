@@ -9,11 +9,12 @@ GET /ticketing/tickets/{ticket_number_swfm} - ticket drilldown detail
 from datetime import date, timedelta
 import math
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 import runtime_compat  # noqa: F401
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from cache import CACHE_HIT, CACHE_MISS, FILTER_CACHE_TTL_SECONDS, redis_cache
 from database import get_session
 from models.ticketing import (
     TicketingDashboard,
@@ -543,10 +544,29 @@ def shared_query_params(
 
 
 @router.get("/filters", response_model=TicketingFilters)
-async def get_ticketing_filters(session: AsyncSession = Depends(get_session)):
+async def get_ticketing_filters(
+    session: AsyncSession = Depends(get_session),
+    response: Response = None,
+):
+    cache_key = redis_cache.make_key("filters", "ticketing")
+    cache_status, cached_value = await redis_cache.get_json(cache_key)
+    if cache_status == CACHE_HIT:
+        if response is not None:
+            response.headers["X-Cache"] = cache_status
+        return TicketingFilters.model_validate(cached_value)
+
     result = await session.execute(text(FILTER_OPTIONS_QUERY))
     row = result.mappings().first() or {}
-    return TicketingFilters(**dict(row))
+    payload = TicketingFilters(**dict(row))
+    if cache_status == CACHE_MISS:
+        await redis_cache.set_json(
+            cache_key,
+            payload.model_dump(mode="json"),
+            ttl_seconds=FILTER_CACHE_TTL_SECONDS,
+        )
+    if response is not None:
+        response.headers["X-Cache"] = cache_status
+    return payload
 
 
 @router.get("/dashboard", response_model=TicketingDashboard)

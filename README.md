@@ -2,6 +2,8 @@
 
 Redis response-cache deployment and N8N invalidation instructions are documented in
 [`docs/redis_cache_zeabur.md`](docs/redis_cache_zeabur.md).
+Mapbox build-token configuration and production troubleshooting are documented in
+[`docs/mapbox_zeabur.md`](docs/mapbox_zeabur.md).
 
 > Real-time availability monitoring for 1,246+ telecom sites across Jawa Timur
 
@@ -49,7 +51,10 @@ npm run dev
 | Variable | Description |
 |----------|-------------|
 | `DATABASE_URL` | NeonDB PostgreSQL connection string |
-| `VITE_MAPBOX_TOKEN` | Mapbox GL access token |
+| `VITE_MAPBOX_TOKEN` | Public Mapbox GL build token (`pk.`); configure as a GitHub Actions repository variable for production |
+| `REDIS_URL` | Private Zeabur Redis connection string; optional and fail-open |
+| `OVERVIEW_CACHE_TTL_SECONDS` | Home overview TTL (default `60`) |
+| `FILTER_CACHE_TTL_SECONDS` | Global filter/latest-period TTL (default `300`) |
 | `APP_ENV` | `development` / `production` |
 | `ALLOWED_ORIGINS` | CORS origins (comma-separated) |
 

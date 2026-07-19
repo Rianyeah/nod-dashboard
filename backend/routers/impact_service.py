@@ -15,11 +15,12 @@ from datetime import date, datetime, timedelta, timezone
 import math
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 import runtime_compat  # noqa: F401
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from cache import CACHE_HIT, CACHE_MISS, FILTER_CACHE_TTL_SECONDS, redis_cache
 from database import get_session
 from models.impact_service import (
     ImpactServiceAlarmDetail,
@@ -416,14 +417,22 @@ def alarm_list_item(row) -> ImpactServiceAlarmListItem:
 @router.get("/filters", response_model=ImpactServiceFilters)
 async def get_impact_service_filters(
     session: AsyncSession = Depends(get_session),
+    response: Response = None,
 ):
     """Date bounds and NOP options for Impact Service filters."""
+    cache_key = redis_cache.make_key("filters", "impact-service")
+    cache_status, cached_value = await redis_cache.get_json(cache_key)
+    if cache_status == CACHE_HIT:
+        if response is not None:
+            response.headers["X-Cache"] = cache_status
+        return ImpactServiceFilters.model_validate(cached_value)
+
     date_result = await session.execute(text(FILTERS_QUERY), {"today": get_jakarta_today()})
     date_row = date_result.mappings().first()
     nop_result = await session.execute(text(FILTER_NOPS_QUERY))
     nop_rows = nop_result.mappings().all()
 
-    return ImpactServiceFilters(
+    payload = ImpactServiceFilters(
         min_date=date_row.get("min_date") if date_row else None,
         max_date=date_row.get("max_date") if date_row else None,
         today=date_row.get("today") if date_row else None,
@@ -431,6 +440,15 @@ async def get_impact_service_filters(
         has_today_data=bool(date_row.get("has_today_data")) if date_row else False,
         nops=[row["nop"] for row in nop_rows if row.get("nop")],
     )
+    if cache_status == CACHE_MISS:
+        await redis_cache.set_json(
+            cache_key,
+            payload.model_dump(mode="json"),
+            ttl_seconds=FILTER_CACHE_TTL_SECONDS,
+        )
+    if response is not None:
+        response.headers["X-Cache"] = cache_status
+    return payload
 
 
 @router.get("/summary", response_model=ImpactServiceSummary)

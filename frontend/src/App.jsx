@@ -1,18 +1,35 @@
 import React, { Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import HomePage from './pages/HomePage';
-import SiteMapPage from './pages/SiteMapPage';
 import NetworkReportingPage from './pages/NetworkReportingPage';
 import ActivityEnomPage from './pages/ActivityEnomPage';
 import TransportQualityPage from './pages/TransportQualityPage';
 import TicketingPage from './pages/TicketingPage';
 import DataPotensiPage from './pages/DataPotensiPage';
-import RfTiltAnalysisPage from './pages/RfTiltAnalysisPage';
 import LoginPage from './pages/LoginPage';
 import { AppShell } from './components/DashboardSidebar';
+import MapRouteErrorBoundary from './components/MapRouteErrorBoundary';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 
 const ImpactServicePage = React.lazy(() => import('./pages/ImpactServicePage'));
+const SiteMapPage = React.lazy(() => import('./pages/SiteMapPage'));
+const RfTiltAnalysisPage = React.lazy(() => import('./pages/RfTiltAnalysisPage'));
+
+function MapRoute({ children }) {
+  return (
+    <Suspense
+      fallback={(
+        <div className="flex min-h-64 items-center justify-center text-sm text-muted-foreground">
+          Memuat peta...
+        </div>
+      )}
+    >
+      <MapRouteErrorBoundary>
+        {children}
+      </MapRouteErrorBoundary>
+    </Suspense>
+  );
+}
 
 function ImpactServiceRoute() {
   return (
@@ -77,7 +94,7 @@ export default function App() {
             path="/site-map"
             element={
               <PrivateRoute>
-                <SiteMapPage />
+                <MapRoute><SiteMapPage /></MapRoute>
               </PrivateRoute>
             }
           />
@@ -134,7 +151,7 @@ export default function App() {
             path="/rf-tilt-analysis"
             element={
               <PrivateRoute>
-                <RfTiltAnalysisPage />
+                <MapRoute><RfTiltAnalysisPage /></MapRoute>
               </PrivateRoute>
             }
           />

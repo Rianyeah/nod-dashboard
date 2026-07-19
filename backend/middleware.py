@@ -68,6 +68,9 @@ class SecurityHeadersMiddleware:
         async def secure_send(message: Message) -> None:
             if message["type"] == "http.response.start":
                 headers = list(message.get("headers", []))
+                if scope.get("path", "").startswith("/api/"):
+                    headers = [header for header in headers if header[0].lower() != b"cache-control"]
+                    headers.append((b"cache-control", b"private, no-store"))
                 headers.extend(
                     [
                         (b"x-content-type-options", b"nosniff"),

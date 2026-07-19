@@ -639,11 +639,40 @@ export default function HomePage() {
   const themeTokens = useDashboardThemeTokens();
   const [bulan, setBulan] = useState(() => Number(import.meta.env.VITE_DEFAULT_BULAN) || null);
   const [tahun, setTahun] = useState(() => Number(import.meta.env.VITE_DEFAULT_TAHUN) || null);
-  const [nop, setNop] = useState(null);
+  const [nop, setNop] = useState(HOME_DEFAULT_NOP);
   const [nopOptions, setNopOptions] = useState([]);
+  const [latestPeriodReady, setLatestPeriodReady] = useState(false);
   const [overview, setOverview] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+
+    fetchLatestPeriod()
+      .then((latest) => {
+        if (cancelled) return;
+        if (latest?.bulan && latest?.tahun) {
+          setBulan(Number(latest.bulan));
+          setTahun(Number(latest.tahun));
+          setLatestPeriodReady(true);
+          return;
+        }
+        const fallbackDate = new Date();
+        setBulan((current) => current || fallbackDate.getMonth() + 1);
+        setTahun((current) => current || fallbackDate.getFullYear());
+        setLatestPeriodReady(true);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        const fallbackDate = new Date();
+        setBulan((current) => current || fallbackDate.getMonth() + 1);
+        setTahun((current) => current || fallbackDate.getFullYear());
+        setLatestPeriodReady(true);
+      });
+
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -653,9 +682,8 @@ export default function HomePage() {
       fetchImpactServiceFilters().catch(() => ({ nops: [] })),
       fetchTransportQualityFilters().catch(() => ({ nops: [] })),
       fetchTicketingFilters().catch(() => ({ nops: [] })),
-      fetchLatestPeriod().catch(() => null),
     ])
-      .then(([siteOptions, impactOptions, transportOptions, ticketingOptions, latest]) => {
+      .then(([siteOptions, impactOptions, transportOptions, ticketingOptions]) => {
         if (cancelled) return;
         const mergedNops = mergeNopOptions(
           siteOptions?.nop,
@@ -664,37 +692,28 @@ export default function HomePage() {
           ticketingOptions?.nops,
         );
         setNopOptions(mergedNops);
-        if (mergedNops.includes(HOME_DEFAULT_NOP)) {
-          setNop(HOME_DEFAULT_NOP);
-        }
-        if (latest?.bulan && latest?.tahun) {
-          setBulan(Number(latest.bulan));
-          setTahun(Number(latest.tahun));
-        } else {
-          const fallbackDate = new Date();
-          setBulan((current) => current || fallbackDate.getMonth() + 1);
-          setTahun((current) => current || fallbackDate.getFullYear());
-        }
       });
 
     return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
-    if (!bulan || !tahun) return;
+    if (!latestPeriodReady || !bulan || !tahun) return;
     let cancelled = false;
+    const controller = new AbortController();
 
     Promise.resolve()
       .then(() => {
         if (cancelled) return null;
         setLoading(true);
         setError('');
-        return fetchOverview({ bulan, tahun, nop });
+        return fetchOverview({ bulan, tahun, nop }, controller.signal);
       })
       .then((data) => {
         if (!cancelled && data) setOverview(data);
       })
       .catch((err) => {
+        if (controller.signal.aborted || err?.code === 'ERR_CANCELED') return;
         console.error('Failed to load Home overview:', err);
         if (!cancelled) setError('Gagal memuat Home overview.');
       })
@@ -702,8 +721,11 @@ export default function HomePage() {
         if (!cancelled) setLoading(false);
       });
 
-    return () => { cancelled = true; };
-  }, [bulan, nop, tahun]);
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [bulan, latestPeriodReady, nop, tahun]);
 
   useEffect(() => {
     setLastUpdates(buildLastUpdateRows(overview, bulan, tahun));

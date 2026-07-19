@@ -4,8 +4,9 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { RF_COLORS } from './rfTiltChartConfig';
 import { domElement, textElement } from '../../utils/safeMapDom';
+import { describeMapboxError, validateMapboxRuntime } from '../../utils/mapboxRuntime';
 
-mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN;
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 
 const C = RF_COLORS;
 const EARTH_R = 6371000;
@@ -184,6 +185,8 @@ export default function RfTiltMap({ result, params, onMapClick, targetMode, sele
   const [currentStyle, setCurrentStyle] = useState('dark');
   const [is3D, setIs3D] = useState(false);
   const [terrainExaggeration, setTerrainExaggeration] = useState(1.5);
+  const [mapInitError, setMapInitError] = useState(null);
+  const [mapRetryKey, setMapRetryKey] = useState(0);
 
   useEffect(() => {
     onMapClickRef.current = onMapClick;
@@ -192,37 +195,66 @@ export default function RfTiltMap({ result, params, onMapClick, targetMode, sele
   /* ── Initialise map ─────────────────────────────────────────────── */
   useEffect(() => {
     if (mapRef.current || !mapContainer.current) return;
-    if (!mapboxgl.accessToken) return;
+    setMapInitError(null);
+    const preflightError = validateMapboxRuntime({
+      token: MAPBOX_TOKEN,
+      mapbox: mapboxgl,
+      container: mapContainer.current,
+    });
+    if (preflightError) {
+      setMapInitError(preflightError.message);
+      return undefined;
+    }
 
     const style = MAP_STYLES.find(s => s.id === currentStyle) || MAP_STYLES[0];
+    mapboxgl.accessToken = MAPBOX_TOKEN;
+    let mapInstance;
+    try {
+      mapInstance = new mapboxgl.Map({
+        container: mapContainer.current,
+        style: style.url,
+        center: [params.longitude, params.latitude],
+        zoom: 14,
+        // Required so html-to-image can include the WebGL map canvas in PNG exports.
+        preserveDrawingBuffer: true,
+      });
+      mapRef.current = mapInstance;
+      mapInstance.addControl(new mapboxgl.NavigationControl(), 'top-right');
+    } catch (err) {
+      setMapInitError(describeMapboxError({ error: err }).message);
+      mapRef.current = null;
+      return undefined;
+    }
 
-    mapRef.current = new mapboxgl.Map({
-      container: mapContainer.current,
-      style: style.url,
-      center: [params.longitude, params.latitude],
-      zoom: 14,
-      // Required so html-to-image can include the WebGL map canvas in PNG exports.
-      preserveDrawingBuffer: true,
-    });
-
-    mapRef.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
-
-    mapRef.current.on('load', () => {
-      mapRef.current.resize();
-      // Pre-add DEM source so it's ready when 3D is toggled
-      if (!mapRef.current.getSource('mapbox-dem')) {
-        mapRef.current.addSource('mapbox-dem', {
-          type: 'raster-dem',
-          url: 'mapbox://mapbox.mapbox-terrain-dem-v1',
-          tileSize: 512,
-          maxzoom: 14,
-        });
+    const onLoad = () => {
+      try {
+        mapInstance.resize();
+        // Pre-add DEM source so it's ready when 3D is toggled
+        if (!mapInstance.getSource('mapbox-dem')) {
+          mapInstance.addSource('mapbox-dem', {
+            type: 'raster-dem',
+            url: 'mapbox://mapbox.mapbox-terrain-dem-v1',
+            tileSize: 512,
+            maxzoom: 14,
+          });
+        }
+      } catch (err) {
+        setMapInitError(describeMapboxError({ error: err }).message);
       }
-    });
+    };
 
-    mapRef.current.on('click', (e) => {
+    const onClick = (e) => {
       onMapClickRef.current?.(e.lngLat.lat, e.lngLat.lng);
-    });
+    };
+    const onMapError = (event) => {
+      const issue = describeMapboxError(event);
+      if (issue.fatal) setMapInitError(issue.message);
+      else console.warn('RF Tilt Mapbox resource error:', issue.message);
+    };
+
+    mapInstance.on('load', onLoad);
+    mapInstance.on('click', onClick);
+    mapInstance.on('error', onMapError);
 
     // Hover popup for polygons
     hoverPopupRef.current = new mapboxgl.Popup({
@@ -230,8 +262,22 @@ export default function RfTiltMap({ result, params, onMapClick, targetMode, sele
       className: 'rf-map-popup',
     });
 
+    return () => {
+      mapInstance.off('load', onLoad);
+      mapInstance.off('click', onClick);
+      mapInstance.off('error', onMapError);
+      markersRef.current.forEach(marker => marker.remove());
+      popupsRef.current.forEach(popup => popup.remove());
+      hoverPopupRef.current?.remove();
+      markersRef.current = [];
+      popupsRef.current = [];
+      hoverPopupRef.current = null;
+      mapInstance.remove();
+      mapRef.current = null;
+    };
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [mapRetryKey]);
 
   /* ── Apply / remove 3D terrain ─────────────────────────────────── */
   const apply3DTerrain = (map, enable, exaggeration = 1.5) => {
@@ -311,12 +357,21 @@ export default function RfTiltMap({ result, params, onMapClick, targetMode, sele
     const style = MAP_STYLES.find(s => s.id === styleId);
     if (!style) return;
     setCurrentStyle(styleId);
-    map.setStyle(style.url);
+    try {
+      map.setStyle(style.url);
+    } catch (err) {
+      setMapInitError(describeMapboxError({ error: err }).message);
+      return;
+    }
     // Re-apply layers and 3D terrain after style loads
     map.once('style.load', () => {
-      applyLayersToMap(map);
-      if (is3D) {
-        apply3DTerrain(map, true, terrainExaggeration);
+      try {
+        applyLayersToMap(map);
+        if (is3D) {
+          apply3DTerrain(map, true, terrainExaggeration);
+        }
+      } catch (err) {
+        setMapInitError(describeMapboxError({ error: err }).message);
       }
     });
   };
@@ -574,20 +629,6 @@ export default function RfTiltMap({ result, params, onMapClick, targetMode, sele
   }, [result, params.latitude, params.longitude, params.azimuth, params.vertical_beamwidth, params.target_latitude, params.target_longitude, targetMode, selectedSiteId, is3D]);
 
   /* ── Cleanup ────────────────────────────────────────────────────── */
-  useEffect(() => {
-    return () => {
-      markersRef.current.forEach(m => m.remove());
-      popupsRef.current.forEach(p => p.remove());
-      hoverPopupRef.current?.remove();
-      markersRef.current = [];
-      popupsRef.current = [];
-      if (mapRef.current) {
-        mapRef.current.remove();
-        mapRef.current = null;
-      }
-    };
-  }, []);
-
   return (
     <Card size="sm">
       <CardHeader className="pb-2">
@@ -622,6 +663,25 @@ export default function RfTiltMap({ result, params, onMapClick, targetMode, sele
       <CardContent>
         <div className="relative">
           <div ref={mapContainer} className="h-[400px] w-full rounded-lg overflow-hidden" />
+
+          {mapInitError && (
+            <div className="absolute inset-0 z-30 flex items-center justify-center rounded-lg bg-[var(--bg-base)]/90 p-6 backdrop-blur-sm">
+              <div className="max-w-md rounded-xl border border-red-400/30 bg-[var(--bg-surface)] p-5 text-center shadow-xl">
+                <div className="text-sm font-semibold text-red-300">Coverage Map tidak tersedia</div>
+                <p className="mt-2 text-xs leading-relaxed text-[var(--text-secondary)]">{mapInitError}</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMapInitError(null);
+                    setMapRetryKey(key => key + 1);
+                  }}
+                  className="mt-3 rounded-md border border-red-300/30 px-3 py-1.5 text-xs font-semibold text-red-200 hover:bg-red-300/10"
+                >
+                  Coba lagi
+                </button>
+              </div>
+            </div>
+          )}
 
           {targetMode && (
             <div className="absolute bottom-3 left-3 z-10 rounded-lg border border-[var(--primary)]/30 bg-[rgba(15,23,42,0.88)] px-3 py-2 text-[10px] text-[var(--primary-light)] shadow-lg backdrop-blur-sm">

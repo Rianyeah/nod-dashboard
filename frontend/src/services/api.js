@@ -53,27 +53,32 @@ export function setUnauthorizedHandler(handler) {
 
 // ===== Map =====
 
-export async function fetchMapSites(bulan, tahun, nop) {
+export async function fetchMapSites(bulan, tahun, nop, signal) {
   const { data } = await api.get('/map/sites', {
     params: { bulan, tahun, nop: nop || undefined },
     timeout: 60000,
+    signal,
   });
   return data;
 }
 
-export async function fetchMapSectors({ nop, siteId } = {}) {
+export async function fetchMapSectors({ nop, siteId, signal } = {}) {
   const { data } = await api.get('/map/sectors', {
     params: {
       nop: nop || undefined,
       site_id: siteId || undefined,
     },
     timeout: 60000,
+    signal,
   });
   return data;
 }
 
-export async function fetchSitePopup(siteId, bulan, tahun) {
-  const { data } = await api.get(`/map/sites/${siteId}/popup`, { params: { bulan, tahun } });
+export async function fetchSitePopup(siteId, bulan, tahun, signal) {
+  const { data } = await api.get(`/map/sites/${siteId}/popup`, {
+    params: { bulan, tahun },
+    signal,
+  });
   return data;
 }
 
@@ -96,13 +101,19 @@ export async function fetchByKabupaten(bulan, tahun) {
   return data;
 }
 
-export async function fetchSiteAvailability(siteId, bulan, tahun) {
-  const { data } = await api.get(`/availability/site/${siteId}`, { params: { bulan, tahun } });
+export async function fetchSiteAvailability(siteId, bulan, tahun, signal) {
+  const { data } = await api.get(`/availability/site/${siteId}`, {
+    params: { bulan, tahun },
+    signal,
+  });
   return data;
 }
 
-export async function fetchTrend(siteId, tahun, bulan) {
-  const { data } = await api.get(`/availability/trend/${siteId}`, { params: { tahun, bulan } });
+export async function fetchTrend(siteId, tahun, bulan, signal) {
+  const { data } = await api.get(`/availability/trend/${siteId}`, {
+    params: { tahun, bulan },
+    signal,
+  });
   return data;
 }
 
@@ -122,8 +133,11 @@ export async function fetchSites({ bulan, tahun, kabupaten, cluster, status, kel
   return data;
 }
 
-export async function fetchSiteDetail(siteId, bulan, tahun) {
-  const { data } = await api.get(`/sites/${siteId}/detail`, { params: { bulan, tahun } });
+export async function fetchSiteDetail(siteId, bulan, tahun, signal) {
+  const { data } = await api.get(`/sites/${siteId}/detail`, {
+    params: { bulan, tahun },
+    signal,
+  });
   return data;
 }
 
@@ -146,15 +160,14 @@ export async function healthCheck() {
 
 // ===== Overview =====
 
-export async function fetchOverview({ bulan, tahun, nop } = {}) {
+export async function fetchOverview({ bulan, tahun, nop } = {}, signal) {
   const { data } = await api.get('/overview', {
     params: {
       bulan: bulan || undefined,
       tahun: tahun || undefined,
       nop: nop || undefined,
-      _: Date.now(),
     },
-    headers: { 'Cache-Control': 'no-cache' },
+    signal,
   });
   return data;
 }
@@ -204,10 +217,7 @@ export async function fetchRevenueTrend(nop) {
 // ===== Impact Service =====
 
 export async function fetchImpactServiceFilters() {
-  const { data } = await api.get('/impact-service/filters', {
-    params: { _: Date.now() },
-    headers: { 'Cache-Control': 'no-cache' },
-  });
+  const { data } = await api.get('/impact-service/filters', {});
   return data;
 }
 
@@ -294,10 +304,7 @@ export async function fetchActivityEnomActivityDetail(activityId, params) {
 // ===== Transport Quality =====
 
 export async function fetchTransportQualityFilters() {
-  const { data } = await api.get('/transport-quality/filters', {
-    params: { _: Date.now() },
-    headers: { 'Cache-Control': 'no-cache' },
-  });
+  const { data } = await api.get('/transport-quality/filters', {});
   return data;
 }
 
@@ -329,10 +336,7 @@ export async function fetchTransportQualityPrioritySites(params) {
 // ===== Ticketing =====
 
 export async function fetchTicketingFilters() {
-  const { data } = await api.get('/ticketing/filters', {
-    params: { _: Date.now() },
-    headers: { 'Cache-Control': 'no-cache' },
-  });
+  const { data } = await api.get('/ticketing/filters', {});
   return data;
 }
 
