@@ -105,6 +105,15 @@ class TransportQualityContractTest(unittest.TestCase):
         self.assertIn("TransportQualityFilters", models)
         self.assertIn("periods: list[TransportQualityPeriod]", models)
 
+    def test_filter_options_use_one_packet_loss_table_scan(self):
+        source = self.read_router_source()
+        query = source.split('FILTER_OPTIONS_QUERY = """', 1)[1].split('"""', 1)[0]
+        normalized = " ".join(query.split()).upper()
+
+        self.assertEqual(normalized.count("FROM PUBLIC.PACKET_LOS_JATIM"), 1)
+        self.assertGreaterEqual(normalized.count("ARRAY_AGG(DISTINCT"), 8)
+        self.assertGreaterEqual(normalized.count("FILTER (WHERE"), 8)
+
     def test_priority_sites_are_paginated(self):
         source = self.read_router_source()
         models = MODELS.read_text(encoding="utf-8")

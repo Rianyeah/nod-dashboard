@@ -6,11 +6,12 @@ GET /sites/search           — Search by name/ID
 GET /sites/filters/options  — Dropdown filter options
 """
 import math
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, Response
 import runtime_compat  # noqa: F401
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
+from cache import CACHE_HIT, CACHE_MISS, FILTER_CACHE_TTL_SECONDS, redis_cache
 from database import get_session
 from queries.metrics_cache import ensure_site_month_metrics
 from queries.sql_queries import (
@@ -72,19 +73,36 @@ def _build_search_filter(q=None):
 @router.get("/filters/options", response_model=SiteFilterOptions)
 async def get_filter_options(
     session: AsyncSession = Depends(get_session),
+    response: Response = None,
 ):
     """Get available values for dropdown filters."""
+    cache_key = redis_cache.make_key("filters", "options")
+    cache_status, cached_value = await redis_cache.get_json(cache_key)
+    if cache_status == CACHE_HIT:
+        if response is not None:
+            response.headers["X-Cache"] = cache_status
+        return SiteFilterOptions.model_validate(cached_value)
+
     kab_result = await session.execute(text(FILTER_OPTIONS_QUERY_KABUPATEN))
     cluster_result = await session.execute(text(FILTER_OPTIONS_QUERY_CLUSTER))
     kelas_result = await session.execute(text(FILTER_OPTIONS_QUERY_KELAS))
     nop_result = await session.execute(text(FILTER_OPTIONS_QUERY_NOP))
 
-    return SiteFilterOptions(
+    payload = SiteFilterOptions(
         kabupaten=[r[0] for r in kab_result.all() if r[0]],
         cluster=[r[0] for r in cluster_result.all() if r[0]],
         kelas=[r[0] for r in kelas_result.all() if r[0]],
         nop=[r[0] for r in nop_result.all() if r[0]],
     )
+    if cache_status == CACHE_MISS:
+        await redis_cache.set_json(
+            cache_key,
+            payload.model_dump(mode="json"),
+            ttl_seconds=FILTER_CACHE_TTL_SECONDS,
+        )
+    if response is not None:
+        response.headers["X-Cache"] = cache_status
+    return payload
 
 
 @router.get("/search", response_model=list[SiteSearchResult])

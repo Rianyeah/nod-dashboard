@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import Header from '../components/Header';
 import SummaryCards from '../components/SummaryCards';
 import MapboxMap from '../components/MapboxMap';
@@ -37,6 +37,8 @@ function hasCoordinates(site) {
 }
 
 export default function SiteMapPage() {
+  const siteFocusAbortRef = useRef(null);
+  const siteDetailAbortRef = useRef(null);
   const [bulan, setBulan] = useState(() => Number(import.meta.env.VITE_DEFAULT_BULAN) || null);
   const [tahun, setTahun] = useState(() => Number(import.meta.env.VITE_DEFAULT_TAHUN) || null);
   const [nop, setNop] = useState(null);
@@ -65,7 +67,7 @@ export default function SiteMapPage() {
   const {
     sites,
     loading: mapLoading,
-    error: mapError,
+    error: mapDataError,
     refetch: refetchMapData,
   } = useMapData(bulan, tahun, nop);
 
@@ -128,10 +130,14 @@ export default function SiteMapPage() {
     );
 
     if (!hasCoordinates(focusFallback)) {
+      siteFocusAbortRef.current?.abort();
+      const controller = new AbortController();
+      siteFocusAbortRef.current = controller;
       try {
-        const detail = await fetchSiteDetail(siteId, bulan, tahun);
+        const detail = await fetchSiteDetail(siteId, bulan, tahun, controller.signal);
         focusFallback = normalizeSiteFocusData(detail, siteId);
       } catch (err) {
+        if (controller.signal.aborted || err?.code === 'ERR_CANCELED') return;
         console.error('Failed to load site coordinate fallback:', err);
       }
     }
@@ -142,11 +148,14 @@ export default function SiteMapPage() {
   }, [bulan, tahun]);
 
   const handleSiteSelect = useCallback(async (siteId) => {
+    siteDetailAbortRef.current?.abort();
+    const controller = new AbortController();
+    siteDetailAbortRef.current = controller;
     try {
       const [detail, trend, daily] = await Promise.all([
-        fetchSiteDetail(siteId, bulan, tahun),
-        fetchTrend(siteId, tahun, bulan),
-        fetchSiteAvailability(siteId, bulan, tahun),
+        fetchSiteDetail(siteId, bulan, tahun, controller.signal),
+        fetchTrend(siteId, tahun, bulan, controller.signal),
+        fetchSiteAvailability(siteId, bulan, tahun, controller.signal),
       ]);
       setSiteDetail(detail);
       setSiteDetailTrend(trend);
@@ -154,9 +163,15 @@ export default function SiteMapPage() {
       setShowModal(true);
       setSelectedSiteId(siteId);
     } catch (err) {
+      if (controller.signal.aborted || err?.code === 'ERR_CANCELED') return;
       console.error('Failed to load site detail:', err);
     }
   }, [bulan, tahun]);
+
+  useEffect(() => () => {
+    siteFocusAbortRef.current?.abort();
+    siteDetailAbortRef.current?.abort();
+  }, [bulan, nop, tahun]);
 
   // Listen for custom event from Mapbox popup button
   useEffect(() => {
@@ -266,7 +281,7 @@ export default function SiteMapPage() {
               selectedSiteId={selectedSiteId}
               selectedSiteFocusKey={selectedSiteFocusKey}
               selectedSiteFallback={selectedSiteFallback}
-              error={mapError}
+              error={mapDataError}
               onRetry={refetchMapData}
               bulan={bulan}
               tahun={tahun}

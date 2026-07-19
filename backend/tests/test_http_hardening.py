@@ -5,6 +5,7 @@ def test_security_headers_and_trusted_host_are_enforced(client):
     assert response.headers["x-frame-options"] == "DENY"
     assert response.headers["referrer-policy"] == "strict-origin-when-cross-origin"
     assert "default-src 'self'" in response.headers["content-security-policy"]
+    assert response.headers["cache-control"] == "private, no-store"
     assert client.get("/api/v1/health", headers={"Host": "attacker.example"}).status_code == 400
 
 

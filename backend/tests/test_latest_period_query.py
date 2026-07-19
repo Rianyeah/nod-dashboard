@@ -11,11 +11,12 @@ class LatestPeriodQueryTest(unittest.TestCase):
 
         normalized = " ".join(LATEST_PERIOD_QUERY.split()).upper()
 
-        self.assertIn('"TAHUN"', normalized)
-        self.assertIn('"BULAN"', normalized)
-        self.assertIn("COUNT(*)", normalized)
+        self.assertIn("FROM SITE_MONTH_METRICS", normalized)
+        self.assertIn("SUM(JUMLAH_HARI_DATA)", normalized)
+        self.assertIn("COUNT(*)::INT AS SITE_COUNT", normalized)
+        self.assertNotIn("AVAILABILITY_LOGS_JATIM", normalized)
         self.assertIn("GROUP BY", normalized)
-        self.assertIn('ORDER BY "TAHUN" DESC, "BULAN" DESC', normalized)
+        self.assertIn("ORDER BY TAHUN DESC, BULAN DESC", normalized)
         self.assertIn("LIMIT 1", normalized)
 
 

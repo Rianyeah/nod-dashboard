@@ -30,11 +30,11 @@
             },
             "PUBLIC_APP_ORIGIN": {
               "description": "Exact public HTTPS origin for cookie-origin validation",
-              "default": "https://nod-dashboard.zeabur.app"
+              "default": "https://nod-dashboard-secure.zeabur.app"
             },
             "ALLOWED_HOSTS": {
               "description": "Comma-separated public hostnames accepted by the API",
-              "default": "nod-dashboard.zeabur.app"
+              "default": "nod-dashboard-secure.zeabur.app"
             },
             "DASHBOARD_USER": {
               "description": "Dashboard login username",
@@ -65,6 +65,14 @@
               "default": ""
             },
             "REDIS_CACHE_TTL_SECONDS": {
+              "default": "300"
+            },
+            "OVERVIEW_CACHE_TTL_SECONDS": {
+              "description": "Home overview Redis TTL in seconds",
+              "default": "60"
+            },
+            "FILTER_CACHE_TTL_SECONDS": {
+              "description": "Global filters and latest-period Redis TTL in seconds",
               "default": "300"
             },
             "REDIS_KEY_PREFIX": {

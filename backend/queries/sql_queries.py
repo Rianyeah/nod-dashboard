@@ -84,14 +84,13 @@ site_month AS (
 # Query - Latest available availability period
 LATEST_PERIOD_QUERY = """
 SELECT
-    "Tahun"::INT AS tahun,
-    "Bulan"::INT AS bulan,
-    COUNT(*)::INT AS row_count,
-    COUNT(DISTINCT "SITE ID")::INT AS site_count
-FROM availability_logs_jatim
-WHERE "Tahun" IS NOT NULL AND "Bulan" IS NOT NULL
-GROUP BY "Tahun", "Bulan"
-ORDER BY "Tahun" DESC, "Bulan" DESC
+    tahun,
+    bulan,
+    COALESCE(SUM(jumlah_hari_data), 0)::INT AS row_count,
+    COUNT(*)::INT AS site_count
+FROM site_month_metrics
+GROUP BY tahun, bulan
+ORDER BY tahun DESC, bulan DESC
 LIMIT 1
 """
 

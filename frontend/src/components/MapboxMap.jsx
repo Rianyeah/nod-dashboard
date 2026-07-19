@@ -4,9 +4,10 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import { getMarkerColor } from '../utils/mapColors';
 import { fetchMapSectors, fetchSiteAvailability } from '../services/api';
 import { domElement, textElement } from '../utils/safeMapDom';
+import { describeMapboxError, validateMapboxRuntime } from '../utils/mapboxRuntime';
 import { Layers, Globe2, Satellite } from 'lucide-react';
 
-mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN;
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 
 const SITE_LAYER_IDS = ['site-pin-label', 'site-pin', 'site-pin-halo'];
 const RADIUS_SOURCE_ID = 'site-radius-source';
@@ -420,6 +421,7 @@ export default function MapboxMap({
   const sitesRef = useRef([]);
   const focusSiteRef = useRef(null);
   const dailyAvailabilityCache = useRef(new Map());
+  const dailyAvailabilityAbort = useRef(null);
   const cameraProgrammatic = useRef(false);
   const lastFocusedRequest = useRef(null);
   const allSectorsLoadedRef = useRef(false);
@@ -430,6 +432,8 @@ export default function MapboxMap({
   const popupDragCleanup = useRef(null);
   const popupDragOffset = useRef({ x: 0, y: 0 });
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [mapInitError, setMapInitError] = useState(null);
+  const [mapRetryKey, setMapRetryKey] = useState(0);
   const [mapStyle, setMapStyle] = useState('standard');
   const [showSectors, setShowSectors] = useState(true);
   const mapStyleRef = useRef('standard');
@@ -519,8 +523,9 @@ export default function MapboxMap({
   useEffect(() => {
     if (!allSectorLoadNop) return;
     let cancelled = false;
+    const controller = new AbortController();
 
-    fetchMapSectors({ nop: allSectorLoadNop.nop })
+    fetchMapSectors({ nop: allSectorLoadNop.nop, signal: controller.signal })
       .then((geoJson) => {
         if (!cancelled && currentNopRef.current === allSectorLoadNop.nop) {
           allSectorsLoadedRef.current = true;
@@ -532,6 +537,7 @@ export default function MapboxMap({
         }
       })
       .catch((err) => {
+        if (controller.signal.aborted || err?.code === 'ERR_CANCELED') return;
         console.error('Failed to load sector polygons:', err);
         if (!cancelled && currentNopRef.current === allSectorLoadNop.nop) {
           allSectorsLoadedRef.current = false;
@@ -545,14 +551,16 @@ export default function MapboxMap({
 
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [allSectorLoadNop]);
 
   useEffect(() => {
     if (!selectedSiteId || allSectorsLoaded) return;
     let cancelled = false;
+    const controller = new AbortController();
 
-    fetchMapSectors({ nop: normalizedNop, siteId: selectedSiteId })
+    fetchMapSectors({ nop: normalizedNop, siteId: selectedSiteId, signal: controller.signal })
       .then((geoJson) => {
         if (!cancelled && currentNopRef.current === normalizedNop) {
           setSectorState(prev => {
@@ -566,6 +574,7 @@ export default function MapboxMap({
         }
       })
       .catch((err) => {
+        if (controller.signal.aborted || err?.code === 'ERR_CANCELED') return;
         console.error('Failed to load selected sector polygons:', err);
         if (!cancelled && currentNopRef.current === normalizedNop) {
           setSectorState(prev => {
@@ -581,58 +590,106 @@ export default function MapboxMap({
 
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [normalizedNop, selectedSiteId, allSectorsLoaded]);
 
   useEffect(() => {
     if (map.current || !mapContainer.current) return;
-    map.current = new mapboxgl.Map({
+    setMapInitError(null);
+    setMapLoaded(false);
+    const preflightError = validateMapboxRuntime({
+      token: MAPBOX_TOKEN,
+      mapbox: mapboxgl,
       container: mapContainer.current,
-      style: 'mapbox://styles/mapbox/standard',
-      config: {
-        basemap: {
-          lightPreset: 'dusk',
-          showPointOfInterestLabels: false,
-          showTransitLabels: false,
+    });
+    if (preflightError) {
+      setMapInitError(preflightError.message);
+      return undefined;
+    }
+
+    mapboxgl.accessToken = MAPBOX_TOKEN;
+    let mapInstance;
+    try {
+      mapInstance = new mapboxgl.Map({
+        container: mapContainer.current,
+        style: 'mapbox://styles/mapbox/standard',
+        config: {
+          basemap: {
+            lightPreset: 'dusk',
+            showPointOfInterestLabels: false,
+            showTransitLabels: false,
+          },
         },
-      },
-      center: [112.65, -7.45],
-      zoom: 8.35,
-      minZoom: 6,
-      maxZoom: 18,
-      pitch: DEFAULT_PITCH,
-      bearing: -18,
-      antialias: true,
-      attributionControl: true,
-    });
-    map.current.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'top-right');
-    map.current.addControl(new mapboxgl.FullscreenControl(), 'top-right');
-    map.current.on('style.load', () => {
-      if (mapStyleRef.current === 'standard') {
-        applyDuskScene(map.current);
+        center: [112.65, -7.45],
+        zoom: 8.35,
+        minZoom: 6,
+        maxZoom: 18,
+        pitch: DEFAULT_PITCH,
+        bearing: -18,
+        antialias: true,
+        attributionControl: true,
+      });
+      map.current = mapInstance;
+      mapInstance.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'top-right');
+      mapInstance.addControl(new mapboxgl.FullscreenControl(), 'top-right');
+    } catch (err) {
+      setMapInitError(describeMapboxError({ error: err }).message);
+      map.current = null;
+      return undefined;
+    }
+
+    const onStyleLoad = () => {
+      if (mapStyleRef.current !== 'standard') return;
+      try {
+        applyDuskScene(mapInstance);
+      } catch (err) {
+        setMapInitError(describeMapboxError({ error: err }).message);
       }
-    });
-    map.current.on('load', () => {
-      applyDuskScene(map.current);
-      setMapLoaded(true);
-    });
+    };
+    const onLoad = () => {
+      try {
+        applyDuskScene(mapInstance);
+        setMapLoaded(true);
+      } catch (err) {
+        setMapInitError(describeMapboxError({ error: err }).message);
+      }
+    };
+    const onMapError = (event) => {
+      const issue = describeMapboxError(event);
+      if (issue.fatal) setMapInitError(issue.message);
+      else console.warn('Mapbox resource error:', issue.message);
+    };
+    mapInstance.on('style.load', onStyleLoad);
+    mapInstance.on('load', onLoad);
+    mapInstance.on('error', onMapError);
+
     return () => {
+      mapInstance.off('style.load', onStyleLoad);
+      mapInstance.off('load', onLoad);
+      mapInstance.off('error', onMapError);
       popupDragCleanup.current?.();
       popupDragCleanup.current = null;
       popup.current?.remove();
       popup.current = null;
       activePopupSiteId.current = null;
       activePopupSiteData.current = null;
+      dailyAvailabilityAbort.current?.abort();
+      dailyAvailabilityAbort.current = null;
       neighborMarkers.current.forEach(marker => marker.remove());
       neighborMarkers.current = [];
       if (resizeFrame.current && typeof window !== 'undefined') {
         window.cancelAnimationFrame(resizeFrame.current);
         resizeFrame.current = null;
       }
-      map.current?.remove();
+      mapInstance.remove();
       map.current = null;
     };
-  }, []);
+  }, [mapRetryKey]);
+
+  useEffect(() => {
+    dailyAvailabilityAbort.current?.abort();
+  }, [bulan, tahun]);
 
   const clearNeighborMarkers = useCallback(() => {
     neighborMarkers.current.forEach(marker => marker.remove());
@@ -928,14 +985,18 @@ export default function MapboxMap({
         return;
       }
 
-      fetchSiteAvailability(p.site_id, bulan, tahun)
+      dailyAvailabilityAbort.current?.abort();
+      const controller = new AbortController();
+      dailyAvailabilityAbort.current = controller;
+      fetchSiteAvailability(p.site_id, bulan, tahun, controller.signal)
         .then((rows) => {
           dailyAvailabilityCache.current.set(cacheKey, rows);
           if (activePopupSiteId.current === p.site_id) {
             chart.replaceChildren(dailySparklineContent(rows, p.avg_availability));
           }
         })
-        .catch(() => {
+        .catch((err) => {
+          if (controller.signal.aborted || err?.code === 'ERR_CANCELED') return;
           if (activePopupSiteId.current === p.site_id) {
             chart.replaceChildren(textElement('div', 'Daily trend gagal dimuat', {
               style: {
@@ -1245,18 +1306,23 @@ export default function MapboxMap({
     const pitch = map.current.getPitch();
     const bearing = map.current.getBearing();
 
-    map.current.setStyle(styleUrl, {
-      diff: false,
-      ...(newStyle === 'standard' ? {
-        config: {
-          basemap: {
-            lightPreset: 'dusk',
-            showPointOfInterestLabels: false,
-            showTransitLabels: false,
+    try {
+      map.current.setStyle(styleUrl, {
+        diff: false,
+        ...(newStyle === 'standard' ? {
+          config: {
+            basemap: {
+              lightPreset: 'dusk',
+              showPointOfInterestLabels: false,
+              showTransitLabels: false,
+            },
           },
-        },
-      } : {}),
-    });
+        } : {}),
+      });
+    } catch (err) {
+      setMapInitError(describeMapboxError({ error: err }).message);
+      return;
+    }
 
     map.current.once('style.load', () => {
       // Restore camera
@@ -1436,6 +1502,24 @@ export default function MapboxMap({
 
   return (
     <div className="relative h-full w-full overflow-hidden rounded-xl border border-[var(--border)]">
+      {mapInitError && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center bg-[var(--bg-base)]/90 p-6 backdrop-blur-sm">
+          <div className="max-w-md rounded-xl border border-red-400/30 bg-[var(--bg-surface)] p-5 text-center shadow-xl">
+            <div className="text-sm font-semibold text-red-300">Basemap tidak tersedia</div>
+            <p className="mt-2 text-xs leading-relaxed text-[var(--text-secondary)]">{mapInitError}</p>
+            <button
+              type="button"
+              onClick={() => {
+                setMapInitError(null);
+                setMapRetryKey(key => key + 1);
+              }}
+              className="mt-3 rounded-md border border-red-300/30 px-3 py-1.5 text-xs font-semibold text-red-200 hover:bg-red-300/10"
+            >
+              Coba lagi
+            </button>
+          </div>
+        </div>
+      )}
       {loading && (
         <div className="absolute inset-0 z-20 bg-[var(--bg-base)]/80 backdrop-blur-sm flex items-center justify-center">
           <div className="flex flex-col items-center gap-3">
@@ -1457,6 +1541,11 @@ export default function MapboxMap({
           >
             Retry
           </button>
+        </div>
+      )}
+      {!loading && !error && !mapInitError && sites.length === 0 && (
+        <div className="absolute left-3 top-3 z-20 rounded-lg border border-[var(--border)] bg-[var(--bg-surface)]/90 px-3 py-2 text-xs text-[var(--text-secondary)] shadow-lg">
+          Belum ada data marker untuk periode dan filter ini.
         </div>
       )}
       {/* Sector Band Legend — hidden when sectors are off */}

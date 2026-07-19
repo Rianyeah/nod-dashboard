@@ -35,6 +35,15 @@ def _positive_int(value: Any, default: int) -> int:
         return default
 
 
+def cache_ttl_seconds(name: str, default: int) -> int:
+    """Read a positive cache TTL while keeping an operationally safe default."""
+    return _positive_int(os.getenv(name, str(default)), default)
+
+
+FILTER_CACHE_TTL_SECONDS = cache_ttl_seconds("FILTER_CACHE_TTL_SECONDS", 300)
+OVERVIEW_CACHE_TTL_SECONDS = cache_ttl_seconds("OVERVIEW_CACHE_TTL_SECONDS", 60)
+
+
 def _json_default(value: Any) -> Any:
     if hasattr(value, "model_dump"):
         return value.model_dump(mode="json")

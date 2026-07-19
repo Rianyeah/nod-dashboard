@@ -66,6 +66,20 @@ jobs:
         shell: bash
         run: echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/nod-dashboard" >> "$GITHUB_OUTPUT"
 
+      - name: Validate public Mapbox build token
+        shell: bash
+        env:
+          VITE_MAPBOX_TOKEN: ${{ vars.VITE_MAPBOX_TOKEN }}
+        run: |
+          if [[ -z "$VITE_MAPBOX_TOKEN" ]]; then
+            echo "ERROR: VITE_MAPBOX_TOKEN is missing. Configure GitHub Actions repository variable VITE_MAPBOX_TOKEN." >&2
+            exit 1
+          fi
+          if [[ "$VITE_MAPBOX_TOKEN" != pk.* ]]; then
+            echo "ERROR: VITE_MAPBOX_TOKEN must be a public token starting with pk. Configure GitHub Actions repository variable VITE_MAPBOX_TOKEN." >&2
+            exit 1
+          fi
+
       - name: Build and publish immutable image
         uses: docker/build-push-action@v6
         with:

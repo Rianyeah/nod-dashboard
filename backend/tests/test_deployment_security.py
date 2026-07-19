@@ -20,6 +20,9 @@ def test_deployment_files_require_secrets_and_immutable_builds():
     assert "--require-hashes" in dockerfile
     assert "node:22-alpine" in dockerfile
     assert "org.opencontainers.image.revision" in dockerfile
+    assert "VITE_MAPBOX_TOKEN" in dockerfile
+    assert "pk.*" in dockerfile
+    assert "Configure GitHub Actions repository variable VITE_MAPBOX_TOKEN" in dockerfile
 
     service = zeabur["spec"]["services"][0]
     image = service["spec"]["source"]["image"]
@@ -42,6 +45,9 @@ def test_deployment_files_require_secrets_and_immutable_builds():
     assert "pip_audit" in workflow
     assert "npm audit --omit=dev --audit-level=high" in workflow
     assert "github.sha" in workflow
+    assert "Validate public Mapbox build token" in workflow
+    assert "vars.VITE_MAPBOX_TOKEN" in workflow
+    assert "Configure GitHub Actions repository variable VITE_MAPBOX_TOKEN" in workflow
 
 
 def test_hashed_dev_lock_includes_bootstrap_dependencies():

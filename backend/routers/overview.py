@@ -2,10 +2,11 @@
 import asyncio
 from datetime import date, timedelta
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from cache import CACHE_HIT, CACHE_MISS, OVERVIEW_CACHE_TTL_SECONDS, redis_cache
 from database import async_session, get_session
 from models.availability import AvailabilitySummary, WorstSite
 from models.impact_service import (
@@ -707,6 +708,45 @@ async def get_overview(
     tahun: int | None = Query(None, ge=2020),
     nop: str | None = Query(None),
     session: AsyncSession = Depends(get_session),
+    response: Response = None,
+):
+    """Return the cached executive Home overview when available."""
+    normalized_nop = normalize_nop_value(nop)
+    cache_key = redis_cache.make_key(
+        "overview",
+        "home",
+        bulan=bulan,
+        tahun=tahun,
+        nop=normalized_nop or "",
+    )
+    cache_status, cached_value = await redis_cache.get_json(cache_key)
+    if cache_status == CACHE_HIT:
+        if response is not None:
+            response.headers["X-Cache"] = cache_status
+        return OverviewResponse.model_validate(cached_value)
+
+    payload = await load_overview_response(
+        bulan=bulan,
+        tahun=tahun,
+        nop=normalized_nop,
+        session=session,
+    )
+    if cache_status == CACHE_MISS and not payload.errors:
+        await redis_cache.set_json(
+            cache_key,
+            payload.model_dump(mode="json"),
+            ttl_seconds=OVERVIEW_CACHE_TTL_SECONDS,
+        )
+    if response is not None:
+        response.headers["X-Cache"] = cache_status
+    return payload
+
+
+async def load_overview_response(
+    bulan: int | None,
+    tahun: int | None,
+    nop: str | None,
+    session: AsyncSession,
 ):
     """Return the executive Home overview using the dashboard's existing contracts."""
     errors: dict[str, str] = {}

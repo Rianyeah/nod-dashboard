@@ -11,11 +11,12 @@ GET /transport-quality/priority-sites - paginated high-priority site table
 from datetime import date
 import math
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 import runtime_compat  # noqa: F401
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from cache import CACHE_HIT, CACHE_MISS, FILTER_CACHE_TTL_SECONDS, redis_cache
 from database import get_session
 from models.transport_quality import (
     TransportQualityBreakdownItem,
@@ -116,53 +117,45 @@ FILTER_OPTIONS_QUERY = """
 SELECT
     MIN(date) AS min_date,
     MAX(date) AS max_date,
-    ARRAY(
-        SELECT DISTINCT NULLIF(TRIM(nop), '')
-        FROM public.packet_los_jatim
-        WHERE NULLIF(TRIM(nop), '') IS NOT NULL
-        ORDER BY 1
+    COALESCE(
+        ARRAY_AGG(DISTINCT NULLIF(TRIM(nop), '') ORDER BY NULLIF(TRIM(nop), ''))
+            FILTER (WHERE NULLIF(TRIM(nop), '') IS NOT NULL),
+        ARRAY[]::text[]
     ) AS nops,
-    ARRAY(
-        SELECT DISTINCT NULLIF(TRIM(kabupaten), '')
-        FROM public.packet_los_jatim
-        WHERE NULLIF(TRIM(kabupaten), '') IS NOT NULL
-        ORDER BY 1
+    COALESCE(
+        ARRAY_AGG(DISTINCT NULLIF(TRIM(kabupaten), '') ORDER BY NULLIF(TRIM(kabupaten), ''))
+            FILTER (WHERE NULLIF(TRIM(kabupaten), '') IS NOT NULL),
+        ARRAY[]::text[]
     ) AS kabupaten,
-    ARRAY(
-        SELECT DISTINCT NULLIF(TRIM(transport_type), '')
-        FROM public.packet_los_jatim
-        WHERE NULLIF(TRIM(transport_type), '') IS NOT NULL
-        ORDER BY 1
+    COALESCE(
+        ARRAY_AGG(DISTINCT NULLIF(TRIM(transport_type), '') ORDER BY NULLIF(TRIM(transport_type), ''))
+            FILTER (WHERE NULLIF(TRIM(transport_type), '') IS NOT NULL),
+        ARRAY[]::text[]
     ) AS transport_types,
-    ARRAY(
-        SELECT DISTINCT NULLIF(TRIM(thi_status), '')
-        FROM public.packet_los_jatim
-        WHERE NULLIF(TRIM(thi_status), '') IS NOT NULL
-        ORDER BY 1
+    COALESCE(
+        ARRAY_AGG(DISTINCT NULLIF(TRIM(thi_status), '') ORDER BY NULLIF(TRIM(thi_status), ''))
+            FILTER (WHERE NULLIF(TRIM(thi_status), '') IS NOT NULL),
+        ARRAY[]::text[]
     ) AS thi_statuses,
-    ARRAY(
-        SELECT DISTINCT NULLIF(TRIM(distribution_pl), '')
-        FROM public.packet_los_jatim
-        WHERE NULLIF(TRIM(distribution_pl), '') IS NOT NULL
-        ORDER BY 1
+    COALESCE(
+        ARRAY_AGG(DISTINCT NULLIF(TRIM(distribution_pl), '') ORDER BY NULLIF(TRIM(distribution_pl), ''))
+            FILTER (WHERE NULLIF(TRIM(distribution_pl), '') IS NOT NULL),
+        ARRAY[]::text[]
     ) AS distribution_pl,
-    ARRAY(
-        SELECT DISTINCT NULLIF(TRIM(pl_status_0_1_pct), '')
-        FROM public.packet_los_jatim
-        WHERE NULLIF(TRIM(pl_status_0_1_pct), '') IS NOT NULL
-        ORDER BY 1
+    COALESCE(
+        ARRAY_AGG(DISTINCT NULLIF(TRIM(pl_status_0_1_pct), '') ORDER BY NULLIF(TRIM(pl_status_0_1_pct), ''))
+            FILTER (WHERE NULLIF(TRIM(pl_status_0_1_pct), '') IS NOT NULL),
+        ARRAY[]::text[]
     ) AS pl_status_0_1_pct,
-    ARRAY(
-        SELECT DISTINCT NULLIF(TRIM(distribution_lat), '')
-        FROM public.packet_los_jatim
-        WHERE NULLIF(TRIM(distribution_lat), '') IS NOT NULL
-        ORDER BY 1
+    COALESCE(
+        ARRAY_AGG(DISTINCT NULLIF(TRIM(distribution_lat), '') ORDER BY NULLIF(TRIM(distribution_lat), ''))
+            FILTER (WHERE NULLIF(TRIM(distribution_lat), '') IS NOT NULL),
+        ARRAY[]::text[]
     ) AS distribution_lat,
-    ARRAY(
-        SELECT DISTINCT NULLIF(TRIM(jitter_status), '')
-        FROM public.packet_los_jatim
-        WHERE NULLIF(TRIM(jitter_status), '') IS NOT NULL
-        ORDER BY 1
+    COALESCE(
+        ARRAY_AGG(DISTINCT NULLIF(TRIM(jitter_status), '') ORDER BY NULLIF(TRIM(jitter_status), ''))
+            FILTER (WHERE NULLIF(TRIM(jitter_status), '') IS NOT NULL),
+        ARRAY[]::text[]
     ) AS jitter_statuses
 FROM public.packet_los_jatim
 """
@@ -477,14 +470,24 @@ BREAKDOWN_DIMENSIONS = {
 
 
 @router.get("/filters", response_model=TransportQualityFilters)
-async def get_transport_quality_filters(session: AsyncSession = Depends(get_session)):
+async def get_transport_quality_filters(
+    session: AsyncSession = Depends(get_session),
+    response: Response = None,
+):
     """Return available period and global filter values."""
+    cache_key = redis_cache.make_key("filters", "transport-quality")
+    cache_status, cached_value = await redis_cache.get_json(cache_key)
+    if cache_status == CACHE_HIT:
+        if response is not None:
+            response.headers["X-Cache"] = cache_status
+        return TransportQualityFilters.model_validate(cached_value)
+
     options_result = await session.execute(text(FILTER_OPTIONS_QUERY))
     options = dict(options_result.one()._mapping)
     periods_result = await session.execute(text(FILTER_PERIODS_QUERY))
     periods = rows_to_models(periods_result.fetchall(), TransportQualityPeriod)
 
-    return TransportQualityFilters(
+    payload = TransportQualityFilters(
         min_date=options.get("min_date"),
         max_date=options.get("max_date"),
         periods=periods,
@@ -497,6 +500,15 @@ async def get_transport_quality_filters(session: AsyncSession = Depends(get_sess
         distribution_lat=options.get("distribution_lat") or [],
         jitter_statuses=options.get("jitter_statuses") or [],
     )
+    if cache_status == CACHE_MISS:
+        await redis_cache.set_json(
+            cache_key,
+            payload.model_dump(mode="json"),
+            ttl_seconds=FILTER_CACHE_TTL_SECONDS,
+        )
+    if response is not None:
+        response.headers["X-Cache"] = cache_status
+    return payload
 
 
 @router.get("/summary", response_model=TransportQualitySummary)

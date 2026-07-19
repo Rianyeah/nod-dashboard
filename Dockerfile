@@ -6,6 +6,11 @@ RUN npm ci
 COPY frontend/ ./
 ARG VITE_MAPBOX_TOKEN
 ENV VITE_MAPBOX_TOKEN=$VITE_MAPBOX_TOKEN
+RUN case "$VITE_MAPBOX_TOKEN" in \
+      pk.*) ;; \
+      "") echo "ERROR: VITE_MAPBOX_TOKEN is missing. Configure GitHub Actions repository variable VITE_MAPBOX_TOKEN." >&2; exit 1 ;; \
+      *) echo "ERROR: VITE_MAPBOX_TOKEN must be a public token starting with pk. Configure GitHub Actions repository variable VITE_MAPBOX_TOKEN." >&2; exit 1 ;; \
+    esac
 RUN npm run build
 
 # Stage 2: Python backend + serve frontend dist

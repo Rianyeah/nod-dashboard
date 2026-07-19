@@ -35,6 +35,17 @@ describe('dashboard loading optimization contracts', () => {
     assert.match(map, /source\.setData\(sitesGeoJson\)/);
   });
 
+  it('aborts stale map site requests when period or NOP changes', () => {
+    const hook = src('hooks', 'useMapData.js');
+    const api = src('services', 'api.js');
+
+    assert.match(hook, /new AbortController\(\)/);
+    assert.match(hook, /fetchMapSites\(bulan, tahun, nop, controller\.signal\)/);
+    assert.match(hook, /abortControllerRef\.current\?\.abort\(\)/);
+    assert.match(api, /export async function fetchMapSites\(bulan, tahun, nop, signal\)/);
+    assert.match(api, /signal/);
+  });
+
   it('renders sector antenna polygon layers from backend GeoJSON', () => {
     const api = src('services', 'api.js');
     const map = src('components', 'MapboxMap.jsx');
@@ -71,8 +82,8 @@ describe('dashboard loading optimization contracts', () => {
     assert.match(map, /const\s+\[sectorState,\s*setSectorState\]\s*=\s*useState\(\{/);
     assert.match(map, /getZoom\(\)\s*>=\s*SECTOR_MIN_ZOOM/);
     assert.match(map, /map\.current\.on\('(?:zoomend|moveend)'/);
-    assert.match(map, /fetchMapSectors\(\{\s*nop:\s*allSectorLoadNop\.nop\s*\}\)/);
-    assert.match(map, /fetchMapSectors\(\{\s*nop:\s*normalizedNop,\s*siteId:\s*selectedSiteId\s*\}\)/);
+    assert.match(map, /fetchMapSectors\(\{\s*nop:\s*allSectorLoadNop\.nop,\s*signal:\s*controller\.signal\s*\}\)/);
+    assert.match(map, /fetchMapSectors\(\{\s*nop:\s*normalizedNop,\s*siteId:\s*selectedSiteId,\s*signal:\s*controller\.signal\s*\}\)/);
     assert.match(map, /sectorState\.nop\s*===\s*normalizedNop\s*\?\s*sectorState\.geoJson\s*:\s*EMPTY_GEOJSON/);
   });
 
@@ -87,7 +98,7 @@ describe('dashboard loading optimization contracts', () => {
     assert.match(map, /const\s+normalizedNop\s*=\s*nop\s*\|\|\s*null/);
     assert.match(map, /setAllSectorLoadNop\(\{\s*nop:\s*normalizedNop\s*\}\)/);
     assert.match(map, /if\s*\(!allSectorLoadNop\)\s*return/);
-    assert.match(map, /fetchMapSectors\(\{\s*nop:\s*allSectorLoadNop\.nop\s*\}\)/);
+    assert.match(map, /fetchMapSectors\(\{\s*nop:\s*allSectorLoadNop\.nop,\s*signal:\s*controller\.signal\s*\}\)/);
     assert.match(map, /setSectorState\(\{\s*nop:\s*allSectorLoadNop\.nop/);
     assert.match(map, /allSectorsLoadedRef\.current\s*=\s*true/);
     assert.match(map, /setSectorState\(prev\s*=>\s*\{[\s\S]*?prev\.nop\s*===\s*normalizedNop\s*&&\s*prev\.allLoaded/);

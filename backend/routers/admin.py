@@ -20,6 +20,7 @@ from security import verify_n8n_key
 
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
+CACHE_NAMESPACES = ("reporting", "overview", "filters")
 
 
 class MetricsRefreshResponse(BaseModel):
@@ -35,17 +36,26 @@ class CacheInvalidationResponse(BaseModel):
     status: str
 
 
+async def invalidate_cache_namespaces(scope: str) -> int:
+    """Invalidate one namespace or every dashboard cache namespace."""
+    namespaces = CACHE_NAMESPACES if scope == "all" else (scope,)
+    deleted_keys = 0
+    for namespace in namespaces:
+        deleted_keys += await redis_cache.invalidate_namespace(namespace)
+    return deleted_keys
+
+
 @router.post(
     "/cache/invalidate",
     response_model=CacheInvalidationResponse,
     dependencies=[Depends(verify_n8n_key)],
 )
 async def invalidate_cache(
-    scope: str = Query("reporting", pattern="^reporting$"),
+    scope: str = Query("reporting", pattern="^(reporting|overview|filters|all)$"),
 ):
     """Invalidate one supported Redis cache namespace."""
     try:
-        deleted_keys = await redis_cache.invalidate_namespace(scope)
+        deleted_keys = await invalidate_cache_namespaces(scope)
     except CacheUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
@@ -81,11 +91,12 @@ async def refresh_site_month_metrics(
         await session.rollback()
         raise
 
-    try:
-        await redis_cache.invalidate_namespace("reporting")
-    except CacheUnavailableError:
-        # PostgreSQL refresh remains successful; the reporting TTL is the fallback.
-        pass
+    for namespace in CACHE_NAMESPACES:
+        try:
+            await redis_cache.invalidate_namespace(namespace)
+        except CacheUnavailableError:
+            # PostgreSQL remains the source of truth; TTL expiry is the fallback.
+            pass
 
     return MetricsRefreshResponse(
         bulan=bulan,
