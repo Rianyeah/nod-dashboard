@@ -31,7 +31,8 @@ Set the following values in the dashboard service configuration:
 - `DASHBOARD_SESSION_SECRET` from the local random-secret command
 - `DASHBOARD_SESSION_TTL_SECONDS=28800`
 - `SESSION_COOKIE_SECURE=true`
-- `N8N_API_KEY` from the local random-key command
+- `N8N_API_KEY` from the local random-key command, for admin refreshes and alert webhooks
+- `N8N_MAP_API_KEY` from a separate local random-key command, for read-only map exports
 
 Configure `REDIS_URL` when the managed Redis service is available. The application still starts without Redis, but distributed rate limiting should be added before scaling past one API process.
 

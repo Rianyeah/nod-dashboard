@@ -9,10 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
 from database import get_session
+from map_sectors import load_sector_feature_collection
 from queries.metrics_cache import ensure_site_month_metrics
-from queries.sql_queries import MAP_SITES_QUERY, POPUP_DETAIL_QUERY, MAP_SECTORS_QUERY
+from queries.sql_queries import MAP_SITES_QUERY, POPUP_DETAIL_QUERY
 from models.site import SiteMapFeature, SiteDetail
-from sector_geometry import sector_row_to_feature
 
 router = APIRouter(prefix="/map", tags=["Map"])
 
@@ -72,29 +72,7 @@ async def get_map_sectors(
     session: AsyncSession = Depends(get_session),
 ):
     """Get sector antenna direction polygons as GeoJSON."""
-    filters = ""
-    params = {}
-    if site_id:
-        filters += " AND site_id = :site_id"
-        params["site_id"] = site_id
-    if nop:
-        filters += " AND nop = :nop"
-        params["nop"] = nop
-
-    result = await session.execute(
-        text(MAP_SECTORS_QUERY.format(filters=filters)),
-        params,
-    )
-    features = []
-    for row in result.mappings().all():
-        feature = sector_row_to_feature(row)
-        if feature is not None:
-            features.append(feature)
-
-    return {
-        "type": "FeatureCollection",
-        "features": features,
-    }
+    return await load_sector_feature_collection(session, site_id=site_id, nop=nop)
 
 
 @router.get("/sites/{site_id}/popup")

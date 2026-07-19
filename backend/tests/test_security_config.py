@@ -15,6 +15,7 @@ def valid_env(**overrides):
         "DASHBOARD_SESSION_TTL_SECONDS": "28800",
         "SESSION_COOKIE_SECURE": "true",
         "N8N_API_KEY": "n" * 32,
+        "N8N_MAP_API_KEY": "m" * 32,
         "REDIS_URL": "",
     }
     env.update(overrides)
@@ -28,6 +29,7 @@ class SecuritySettingsTest(unittest.TestCase):
         self.assertTrue(settings.is_production)
         self.assertEqual(settings.allowed_hosts, ("nod-dashboard.zeabur.app",))
         self.assertEqual(settings.dashboard_session_ttl_seconds, 28800)
+        self.assertEqual(settings.n8n_map_api_key, "m" * 32)
 
     def test_each_required_value_fails_without_echoing_the_value(self):
         for name in (
@@ -37,6 +39,7 @@ class SecuritySettingsTest(unittest.TestCase):
             "DASHBOARD_PASSWORD_HASH",
             "DASHBOARD_SESSION_SECRET",
             "N8N_API_KEY",
+            "N8N_MAP_API_KEY",
         ):
             with self.subTest(name=name):
                 env = valid_env()

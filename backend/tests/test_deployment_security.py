@@ -15,6 +15,7 @@ def test_deployment_files_require_secrets_and_immutable_builds():
     assert "DASHBOARD_PASS=" not in env_example
     assert "DASHBOARD_PASSWORD_HASH=" in env_example
     assert "DASHBOARD_SESSION_SECRET=" in env_example
+    assert "N8N_MAP_API_KEY=" in env_example
     assert "DASHBOARD_PASSWORD_HASH=admin" not in env_example
     assert "requirements.lock" in dockerfile
     assert "--require-hashes" in dockerfile
@@ -37,6 +38,7 @@ def test_deployment_files_require_secrets_and_immutable_builds():
         "DASHBOARD_SESSION_TTL_SECONDS",
         "SESSION_COOKIE_SECURE",
         "N8N_API_KEY",
+        "N8N_MAP_API_KEY",
     ):
         assert name in env
     assert env["DASHBOARD_PASSWORD_HASH"]["default"] == ""
