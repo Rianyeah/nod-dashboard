@@ -47,6 +47,7 @@ class SecuritySettings:
     dashboard_session_ttl_seconds: int
     session_cookie_secure: bool
     n8n_api_key: str
+    n8n_map_api_key: str
     redis_url: str
 
     @property
@@ -129,5 +130,6 @@ class SecuritySettings:
             dashboard_session_ttl_seconds=ttl_seconds,
             session_cookie_secure=cookie_secure,
             n8n_api_key=_required(source, "N8N_API_KEY"),
+            n8n_map_api_key=_required(source, "N8N_MAP_API_KEY"),
             redis_url=source.get("REDIS_URL", "").strip(),
         )

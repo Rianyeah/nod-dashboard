@@ -5,6 +5,9 @@ Redis response-cache deployment and N8N invalidation instructions are documented
 Mapbox build-token configuration and production troubleshooting are documented in
 [`docs/mapbox_zeabur.md`](docs/mapbox_zeabur.md).
 
+N8N static-map sector export configuration is documented in
+[`docs/n8n_map_integration.md`](docs/n8n_map_integration.md).
+
 > Real-time availability monitoring for 1,246+ telecom sites across Jawa Timur
 
 ![Dark Theme Dashboard](https://img.shields.io/badge/theme-OLED%20Dark-0A0E1A?style=flat-square)

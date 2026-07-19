@@ -60,6 +60,10 @@
               "description": "Required shared key for the n8n alert webhook",
               "default": ""
             },
+            "N8N_MAP_API_KEY": {
+              "description": "Required read-only key for N8N static map sector exports",
+              "default": ""
+            },
             "REDIS_URL": {
               "description": "Private Redis connection string from the Redis service",
               "default": ""

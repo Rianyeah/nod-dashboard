@@ -260,6 +260,7 @@ def create_app(settings: SecuritySettings | None = None) -> FastAPI:
     from routers import data_potensi as data_potensi_router
     from routers import impact_service as impact_service_router
     from routers import map as map_router
+    from routers import n8n_map as n8n_map_router
     from routers import overview as overview_router
     from routers import reporting as reporting_router
     from routers import rf_tilt as rf_tilt_router
@@ -280,6 +281,7 @@ def create_app(settings: SecuritySettings | None = None) -> FastAPI:
     app.include_router(data_potensi_router.router, prefix=API_PREFIX, dependencies=dashboard_dependency)
     app.include_router(rf_tilt_router.router, prefix=API_PREFIX, dependencies=dashboard_dependency)
     app.include_router(admin_router.router, prefix=API_PREFIX)
+    app.include_router(n8n_map_router.router, prefix=API_PREFIX)
 
     if FRONTEND_DIST.exists():
         app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIST / "assets")), name="assets")

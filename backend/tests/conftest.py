@@ -20,6 +20,7 @@ os.environ.update(
         "DASHBOARD_SESSION_TTL_SECONDS": "28800",
         "SESSION_COOKIE_SECURE": "true",
         "N8N_API_KEY": "test-only-n8n-key",
+        "N8N_MAP_API_KEY": "test-only-n8n-map-key",
         "DATABASE_URL": "postgresql+asyncpg://test:test@127.0.0.1:5432/test",
         "REDIS_URL": "",
     }

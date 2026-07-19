@@ -60,15 +60,18 @@ class SectorQueryContractTest(unittest.TestCase):
         self.assertIn("{filters}", MAP_SECTORS_QUERY)
 
     def test_map_router_exposes_sector_endpoint(self):
-        router_path = Path(__file__).resolve().parents[1] / "routers" / "map.py"
+        backend_root = Path(__file__).resolve().parents[1]
+        router_path = backend_root / "routers" / "map.py"
         source = router_path.read_text(encoding="utf-8")
+        loader_source = (backend_root / "map_sectors.py").read_text(encoding="utf-8")
 
         self.assertRegex(source, r'@router\.get\(\s*"/sectors"')
-        self.assertIn("MAP_SECTORS_QUERY", source)
-        self.assertIn("sector_row_to_feature", source)
-        self.assertIn('"type": "FeatureCollection"', source)
-        self.assertIn(":site_id", source)
-        self.assertIn(":nop", source)
+        self.assertIn("load_sector_feature_collection", source)
+        self.assertIn("MAP_SECTORS_QUERY", loader_source)
+        self.assertIn("sector_row_to_feature", loader_source)
+        self.assertIn('"type": "FeatureCollection"', loader_source)
+        self.assertIn(":site_id", loader_source)
+        self.assertIn(":nop", loader_source)
 
     def test_map_sectors_endpoint_matches_public_map_route_contract(self):
         backend_root = Path(__file__).resolve().parents[1]

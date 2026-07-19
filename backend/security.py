@@ -109,3 +109,19 @@ def verify_n8n_key(
             detail="Invalid N8N API Key",
         )
     return x_n8n_api_key
+
+
+def verify_n8n_map_key(
+    request: Request,
+    x_n8n_map_api_key: str | None = Header(default=None),
+) -> str:
+    """Authorize read-only N8N map exports without granting admin access."""
+    if not x_n8n_map_api_key or not secrets.compare_digest(
+        x_n8n_map_api_key,
+        _settings_for(request).n8n_map_api_key,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid N8N Map API Key",
+        )
+    return x_n8n_map_api_key
