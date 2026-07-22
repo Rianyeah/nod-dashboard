@@ -76,7 +76,7 @@ export default function RfTiltAnalysisPage() {
           </div>
           <div>
             <h1 className="text-base font-semibold text-[var(--text-primary)]">
-              RF Vertical Tilt Analysis
+              RF Tilt Analysis
             </h1>
             <p className="text-[10px] text-muted-foreground -mt-0.5">
               Terrain profile • Beam geometry • Coverage mapping

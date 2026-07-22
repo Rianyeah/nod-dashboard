@@ -72,6 +72,75 @@ export function inferFrequencyFromAntennaBands(frequencyBands) {
   }, SUPPORTED_RF_TILT_FREQUENCIES[0]);
 }
 
+function sectorOverlapKey(feature) {
+  const properties = feature?.properties || {};
+  const center = feature?.geometry?.coordinates?.[0]?.[0] || [];
+  return [
+    properties.site_id,
+    properties.azimuth,
+    properties.beamwidth,
+    properties.render_radius_m,
+    center[0],
+    center[1],
+  ].join('|');
+}
+
+function scalePolygonAroundCenter(coordinates, scale) {
+  const [centerLongitude, centerLatitude] = coordinates?.[0]?.[0] || [];
+  if (!Number.isFinite(centerLongitude) || !Number.isFinite(centerLatitude)) return coordinates;
+
+  return coordinates.map(ring => ring.map(([longitude, latitude]) => [
+    centerLongitude + ((longitude - centerLongitude) * scale),
+    centerLatitude + ((latitude - centerLatitude) * scale),
+  ]));
+}
+
+/**
+ * Keeps every installed sector while slightly scaling exact geometry overlaps,
+ * so co-located cells remain visible and independently countable on the map.
+ */
+export function prepareSiteSectorDisplayGeoJson(value) {
+  const features = value?.type === 'FeatureCollection' && Array.isArray(value.features)
+    ? value.features
+    : [];
+  const groups = new Map();
+
+  features.forEach((feature) => {
+    const key = sectorOverlapKey(feature);
+    const group = groups.get(key) || [];
+    group.push(feature);
+    groups.set(key, group);
+  });
+
+  const groupIndexes = new Map();
+  return {
+    type: 'FeatureCollection',
+    features: features.map((feature) => {
+      const key = sectorOverlapKey(feature);
+      const overlapCount = groups.get(key)?.length || 1;
+      const overlapIndex = groupIndexes.get(key) || 0;
+      groupIndexes.set(key, overlapIndex + 1);
+      const visualScale = overlapCount > 1
+        ? 1 + ((overlapIndex - ((overlapCount - 1) / 2)) * 0.045)
+        : 1;
+
+      return {
+        ...feature,
+        properties: {
+          ...feature.properties,
+          overlap_count: overlapCount,
+          overlap_index: overlapIndex,
+          visual_scale: visualScale,
+        },
+        geometry: {
+          ...feature.geometry,
+          coordinates: scalePolygonAroundCenter(feature?.geometry?.coordinates, visualScale),
+        },
+      };
+    }),
+  };
+}
+
 function validPositiveNumber(value) {
   const numeric = Number(value);
   return Number.isFinite(numeric) && numeric > 0 ? numeric : null;
