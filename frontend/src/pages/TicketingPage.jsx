@@ -27,6 +27,7 @@ import {
   DashboardPagination,
   DashboardSearchInput,
   DashboardTableToolbar,
+  DashboardMonthRangePicker,
 } from '../components/dashboard-filters/DashboardFilters';
 import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert';
 import { Button } from '../components/ui/button';
@@ -43,13 +44,13 @@ import {
   fetchTicketingFilters,
   fetchTicketingTicketDetail,
   fetchTicketingTickets,
+  exportTicketingTickets,
 } from '../services/api';
+import { getPeriodComparisonLabel } from '../components/dashboard-filters/periodRange';
 import { formatNumber, formatPercent } from '../utils/formatters';
 
 const TABLE_LIMIT = 20;
 const EMPTY_TICKETING_ADVANCED_FILTERS = {
-  tahun: '',
-  bulan: '',
   cluster_to: '',
   kategori_tt: '',
   sla_status: '',
@@ -129,13 +130,13 @@ function formatMinutes(value) {
   return `${Number(value).toFixed(0)}m`;
 }
 
-function formatTicketMoM(summary) {
+function formatTicketComparison(summary, comparisonLabel) {
   const delta = summary?.total_tickets_mom_delta;
   const rate = summary?.total_tickets_mom_rate;
-  if (delta == null) return 'MoM -';
+  if (delta == null) return `${comparisonLabel} -`;
   const sign = delta > 0 ? '+' : delta < 0 ? '-' : '';
   const rateLabel = rate == null ? '-' : `${rate > 0 ? '+' : rate < 0 ? '-' : ''}${Math.abs(Number(rate)).toFixed(1)}%`;
-  return `MoM ${sign}${formatNumber(Math.abs(delta))} (${rateLabel})`;
+  return `${comparisonLabel} ${sign}${formatNumber(Math.abs(delta))} (${rateLabel})`;
 }
 
 function categoryShare(value, total) {
@@ -254,6 +255,7 @@ function TicketingDashboard() {
   const [filterOptions, setFilterOptions] = useState({
     default_start_date: '',
     default_end_date: '',
+    available_months: [],
     years: [],
     months: [],
     nops: [],
@@ -266,6 +268,9 @@ function TicketingDashboard() {
   });
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [periodMode, setPeriodMode] = useState('month');
+  const [selectedPeriod, setSelectedPeriod] = useState({ start: '', end: '' });
+  const [defaultPeriod, setDefaultPeriod] = useState({ start: '', end: '' });
   const [selectedNop, setSelectedNop] = useState('');
   const [advancedFilters, setAdvancedFilters] = useState(EMPTY_TICKETING_ADVANCED_FILTERS);
   const [dashboard, setDashboard] = useState(null);
@@ -294,6 +299,9 @@ function TicketingDashboard() {
       if (defaultStartDate && defaultEndDate) {
         setStartDate((current) => current || defaultStartDate);
         setEndDate((current) => current || defaultEndDate);
+        const latestMonth = String(defaultEndDate).slice(0, 7);
+        setSelectedPeriod((current) => current.start ? current : { start: latestMonth, end: latestMonth });
+        setDefaultPeriod({ start: latestMonth, end: latestMonth });
       }
       setError('');
       setFiltersLoaded(true);
@@ -316,10 +324,10 @@ function TicketingDashboard() {
   const debouncedSearch = useDebouncedValue(search, 300);
 
   const dashboardParams = useMemo(() => ({
-    start_date: startDate || undefined,
-    end_date: endDate || undefined,
-    tahun: advancedFilters.tahun || undefined,
-    bulan: advancedFilters.bulan || undefined,
+    period_start: periodMode === 'month' ? selectedPeriod.start || undefined : undefined,
+    period_end: periodMode === 'month' ? selectedPeriod.end || undefined : undefined,
+    start_date: periodMode === 'custom' ? startDate || undefined : undefined,
+    end_date: periodMode === 'custom' ? endDate || undefined : undefined,
     nop: selectedNop || undefined,
     cluster_to: advancedFilters.cluster_to || undefined,
     kategori_tt: advancedFilters.kategori_tt || undefined,
@@ -328,7 +336,7 @@ function TicketingDashboard() {
     backup_sukses: advancedFilters.backup_sukses || undefined,
     rc_category: advancedFilters.rc_category || undefined,
     is_escalate: advancedFilters.is_escalate || undefined,
-  }), [advancedFilters, endDate, selectedNop, startDate]);
+  }), [advancedFilters, endDate, periodMode, selectedNop, selectedPeriod, startDate]);
 
   const tableParams = useMemo(() => ({
     ...dashboardParams,
@@ -343,7 +351,7 @@ function TicketingDashboard() {
   }, [loadFilterOptions]);
 
   useEffect(() => {
-    if (!filtersLoaded || (!startDate && !endDate && !advancedFilters.tahun)) return;
+    if (!filtersLoaded || (periodMode === 'month' ? !selectedPeriod.start || !selectedPeriod.end : !startDate || !endDate)) return;
     let cancelled = false;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setDashboardLoading(true);
@@ -360,10 +368,10 @@ function TicketingDashboard() {
         if (!cancelled) setDashboardLoading(false);
       });
     return () => { cancelled = true; };
-  }, [advancedFilters.tahun, dashboardParams, endDate, filtersLoaded, refreshKey, startDate]);
+  }, [dashboardParams, endDate, filtersLoaded, periodMode, refreshKey, selectedPeriod, startDate]);
 
   useEffect(() => {
-    if (!filtersLoaded || (!startDate && !endDate && !advancedFilters.tahun)) return;
+    if (!filtersLoaded || (periodMode === 'month' ? !selectedPeriod.start || !selectedPeriod.end : !startDate || !endDate)) return;
     let cancelled = false;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setTableLoading(true);
@@ -379,7 +387,7 @@ function TicketingDashboard() {
         if (!cancelled) setTableLoading(false);
       });
     return () => { cancelled = true; };
-  }, [advancedFilters.tahun, endDate, filtersLoaded, refreshKey, startDate, tableParams]);
+  }, [endDate, filtersLoaded, periodMode, refreshKey, selectedPeriod, startDate, tableParams]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -405,6 +413,8 @@ function TicketingDashboard() {
   const resetFilters = () => {
     setStartDate(filterOptions.default_start_date || '');
     setEndDate(filterOptions.default_end_date || '');
+    setPeriodMode('month');
+    setSelectedPeriod(defaultPeriod);
     setSelectedNop('');
     setAdvancedFilters({ ...EMPTY_TICKETING_ADVANCED_FILTERS });
     setPage(1);
@@ -422,16 +432,25 @@ function TicketingDashboard() {
   const summary = dashboard?.summary;
   const ticketCategory = summary?.ticket_category || { bps: 0, ts: 0, total: 0 };
 
-  const handleExportCsv = () => {
-    const header = ['ticket_number_swfm', 'ticket_number_inap', 'site_id', 'site_name', 'cluster_to', 'kategori_tt', 'sla_status', 'ticket_swfm_status', 'created_at'];
-    const rows = tickets.items.map((row) => header.map((key) => JSON.stringify(row[key] ?? '')).join(','));
-    const blob = new Blob([[header.join(','), ...rows].join('\n')], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'ticketing-current-page.csv';
-    link.click();
-    URL.revokeObjectURL(url);
+  const comparisonLabel = periodMode === 'month'
+    ? getPeriodComparisonLabel(selectedPeriod.start, selectedPeriod.end)
+    : 'vs periode sebelumnya';
+  const coverageMissing = dashboard?.period_meta?.missing_months_by_source?.ticketing || [];
+
+  const handleExportCsv = async () => {
+    try {
+      const response = await exportTicketingTickets({ ...dashboardParams, q: debouncedSearch || undefined });
+      const url = URL.createObjectURL(response.data);
+      const link = document.createElement('a');
+      link.href = url;
+      const disposition = response.headers?.['content-disposition'] || '';
+      link.download = disposition.match(/filename="?([^";]+)"?/)?.[1] || 'ticketing-export.csv';
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Ticketing export failed:', err);
+      setError('Gagal mengekspor seluruh hasil Ticketing.');
+    }
   };
 
   return (
@@ -473,22 +492,6 @@ function TicketingDashboard() {
                   >
                     {({ draftValues, setDraftValue }) => (
                       <>
-                        <DashboardFilterSelect
-                          id="ticketing-year"
-                          label="Tahun / Bulan"
-                          value={draftValues.tahun}
-                          onChange={(value) => setDraftValue('tahun', value)}
-                          options={filterOptions.years}
-                          allLabel="Semua Tahun"
-                        />
-                        <DashboardFilterSelect
-                          id="ticketing-month"
-                          label="Bulan"
-                          value={draftValues.bulan}
-                          onChange={(value) => setDraftValue('bulan', value)}
-                          options={filterOptions.months}
-                          allLabel="Semua Bulan"
-                        />
                         <DashboardCombobox
                           id="ticketing-cluster"
                           label="Cluster TO"
@@ -577,8 +580,6 @@ function TicketingDashboard() {
               chips={(
                 <DashboardFilterChips
                   items={[
-                    { key: 'tahun', label: 'Tahun', value: advancedFilters.tahun },
-                    { key: 'bulan', label: 'Bulan', value: advancedFilters.bulan },
                     { key: 'cluster_to', label: 'Cluster', value: advancedFilters.cluster_to },
                     { key: 'kategori_tt', label: 'Kategori', value: advancedFilters.kategori_tt },
                     { key: 'sla_status', label: 'SLA', value: advancedFilters.sla_status },
@@ -591,16 +592,32 @@ function TicketingDashboard() {
                 />
               )}
             >
-              <DashboardDateRangePicker
-                id="ticketing-start-date"
-                data-end-date-id="ticketing-end-date"
-                label="Date Range"
-                value={{ from: startDate, to: endDate }}
-                onApply={({ from, to }) => {
-                  setStartDate(from);
-                  setEndDate(to);
-                }}
-              />
+              <div className="flex h-8 items-center rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] p-0.5 text-[10px] font-semibold">
+                <button type="button" onClick={() => setPeriodMode('month')} className={`rounded-md px-2 py-1 ${periodMode === 'month' ? 'bg-[var(--primary)] text-white' : 'text-[var(--text-muted)]'}`}>Periode Bulan</button>
+                <button type="button" onClick={() => setPeriodMode('custom')} className={`rounded-md px-2 py-1 ${periodMode === 'custom' ? 'bg-[var(--primary)] text-white' : 'text-[var(--text-muted)]'}`}>Tanggal Kustom</button>
+              </div>
+              {periodMode === 'month' ? (
+                <DashboardMonthRangePicker
+                  id="ticketing-period"
+                  label="Periode"
+                  value={selectedPeriod}
+                  defaultValue={defaultPeriod}
+                  availableMonths={filterOptions.available_months}
+                  onApply={setSelectedPeriod}
+                  onReset={setSelectedPeriod}
+                />
+              ) : (
+                <DashboardDateRangePicker
+                  id="ticketing-start-date"
+                  data-end-date-id="ticketing-end-date"
+                  label="Tanggal Kustom"
+                  value={{ from: startDate, to: endDate }}
+                  onApply={({ from, to }) => {
+                    setStartDate(from);
+                    setEndDate(to);
+                  }}
+                />
+              )}
               <DashboardCombobox
                 id="ticketing-nop"
                 label="NOP"
@@ -624,8 +641,15 @@ function TicketingDashboard() {
           </Alert>
         )}
 
+        {coverageMissing.length ? (
+          <Alert>
+            <AlertTitle>Coverage data belum lengkap</AlertTitle>
+            <AlertDescription>Bulan tanpa data Ticketing: {coverageMissing.join(', ')}. KPI dan ekspor menggunakan data yang tersedia.</AlertDescription>
+          </Alert>
+        ) : null}
+
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-          <Scorecard title="Total Tickets" value={formatNumber(summary?.total_tickets)} subtitle={formatTicketMoM(summary)} icon={TicketCheck} accent={TICKETING_CHART_COLORS.bps} glow="rgba(59,130,246,0.14)" />
+          <Scorecard title="Total Tickets" value={formatNumber(summary?.total_tickets)} subtitle={formatTicketComparison(summary, comparisonLabel)} icon={TicketCheck} accent={TICKETING_CHART_COLORS.bps} glow="rgba(59,130,246,0.14)" />
           <Scorecard
             title="Ticket Category"
             subtitle={`BPS ${categoryShare(ticketCategory.bps, ticketCategory.total)} / TS ${categoryShare(ticketCategory.ts, ticketCategory.total)}`}

@@ -93,6 +93,12 @@ class TransportQualityContractTest(unittest.TestCase):
                     rf"{query_name}\s*=\s*\"\"\"[\s\S]*?\{{filter_clause\}}",
                 )
 
+    def test_summary_casts_the_selected_date_bind_for_asyncpg(self):
+        source = self.read_router_source()
+        summary_query = source.split('SUMMARY_QUERY = """', 1)[1].split('"""', 1)[0]
+
+        self.assertIn("CAST(:date_filter AS date) AS date", summary_query)
+
     def test_filters_endpoint_exposes_date_week_periods_and_options(self):
         source = self.read_router_source().lower()
         models = MODELS.read_text(encoding="utf-8")

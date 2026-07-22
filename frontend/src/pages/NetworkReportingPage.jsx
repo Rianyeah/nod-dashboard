@@ -25,13 +25,19 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  ReferenceArea,
 } from 'recharts';
 import Breadcrumb from '../components/Breadcrumb';
 import {
   DashboardCombobox,
   DashboardFilterBar,
-  DashboardPeriodPicker,
+  DashboardMonthRangePicker,
 } from '../components/dashboard-filters/DashboardFilters';
+import {
+  buildMonthRange,
+  formatMonthRangeLabel,
+  getPeriodComparisonLabel,
+} from '../components/dashboard-filters/periodRange';
 import { useDashboardThemeTokens } from '../hooks/useDashboardThemeTokens';
 import { DashboardChartPanel, DashboardChartTooltip, DashboardKpiCard } from '../components/ui/DashboardPrimitives';
 import {
@@ -254,6 +260,7 @@ function Scorecard({
   metadata = [],
   momRate,
   momDigits = 1,
+  comparisonLabel = 'MoM',
   icon: Icon,
   accent,
   glow,
@@ -283,7 +290,7 @@ function Scorecard({
       <div className="mt-2 min-h-8 space-y-0.5 text-[10px] leading-4">
         {momRate !== undefined && (
           <p className={`font-mono font-semibold tabular-nums ${momTone}`}>
-            {formatRelativePercent(momRate, momDigits)} MoM
+            {formatRelativePercent(momRate, momDigits)} {comparisonLabel}
           </p>
         )}
         {metadata.map((item) => (
@@ -498,7 +505,8 @@ export default function NetworkReportingPage() {
 
   // State
   const [availableMonths, setAvailableMonths] = useState([]);
-  const [selectedMonth, setSelectedMonth] = useState(null);
+  const [selectedPeriod, setSelectedPeriod] = useState({ start: '', end: '' });
+  const [defaultPeriod, setDefaultPeriod] = useState({ start: '', end: '' });
   const [selectedNop, setSelectedNop] = useState(null);
   const [nopOptions, setNopOptions] = useState([]);
   const [filtersReady, setFiltersReady] = useState(false);
@@ -512,12 +520,20 @@ export default function NetworkReportingPage() {
   const [loading, setLoading] = useState(true);
   const [activeTable, setActiveTable] = useState('revenue');
   const [showRevenueDetails, setShowRevenueDetails] = useState(false);
+  const [printTimestamp, setPrintTimestamp] = useState('');
 
-  const previousMonth = useMemo(() => {
-    const selectedIndex = availableMonths.indexOf(selectedMonth);
-    if (selectedIndex < 0) return null;
-    return availableMonths[selectedIndex + 1] || null;
-  }, [availableMonths, selectedMonth]);
+  const resolvedPeriod = useMemo(() => {
+    if (!selectedPeriod.start || !selectedPeriod.end) return null;
+    return buildMonthRange(selectedPeriod.start, selectedPeriod.end);
+  }, [selectedPeriod]);
+  const previousPeriod = useMemo(() => (
+    resolvedPeriod
+      ? { start: resolvedPeriod.comparisonStart, end: resolvedPeriod.comparisonEnd }
+      : null
+  ), [resolvedPeriod]);
+  const comparisonLabel = selectedPeriod.start && selectedPeriod.end
+    ? getPeriodComparisonLabel(selectedPeriod.start, selectedPeriod.end)
+    : 'MoM';
 
   // Load shared filter options on mount
   useEffect(() => {
@@ -546,55 +562,39 @@ export default function NetworkReportingPage() {
       .then((months) => {
         if (cancelled) return;
         setAvailableMonths(months);
-        if (months.length > 0) setSelectedMonth(months[0]); // latest
+        if (months.length > 0) {
+          const latestPeriod = { start: months[0], end: months[0] };
+          setDefaultPeriod(latestPeriod);
+          setSelectedPeriod(latestPeriod);
+        }
       })
       .catch(console.error);
     return () => { cancelled = true; };
   }, []);
 
-  // Load trend data whenever the reporting NOP changes
+  // Load all period-dependent data from the same applied range.
   useEffect(() => {
-    if (!filtersReady) return undefined;
-    let cancelled = false;
-    fetchRevenueTrend(selectedNop)
-      .then((data) => {
-        if (!cancelled) setTrendData(data);
-      })
-      .catch(console.error);
-    return () => { cancelled = true; };
-  }, [filtersReady, selectedNop]);
-
-  // Load battery data whenever the reporting NOP changes
-  useEffect(() => {
-    if (!filtersReady) return undefined;
-    let cancelled = false;
-    fetchBatteryByKabupaten(selectedNop)
-      .then((data) => {
-        if (!cancelled) setBatteryData(data);
-      })
-      .catch(console.error);
-    return () => { cancelled = true; };
-  }, [filtersReady, selectedNop]);
-
-  // Load period-dependent data when selectedMonth changes
-  useEffect(() => {
-    if (!selectedMonth || !filtersReady) return;
+    if (!resolvedPeriod || !filtersReady) return;
     let cancelled = false;
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     Promise.all([
-      fetchReportingScorecards(selectedMonth, selectedNop),
-      fetchRevenueByKabupaten(selectedMonth, selectedNop),
-      fetchSiteClassByKabupaten(selectedMonth, selectedNop),
-      previousMonth ? fetchReportingScorecards(previousMonth, selectedNop) : Promise.resolve(null),
-      previousMonth ? fetchRevenueByKabupaten(previousMonth, selectedNop) : Promise.resolve([]),
+      fetchReportingScorecards(selectedPeriod, selectedNop),
+      fetchRevenueByKabupaten(selectedPeriod, selectedNop),
+      fetchSiteClassByKabupaten(selectedPeriod, selectedNop),
+      fetchBatteryByKabupaten(selectedPeriod, selectedNop),
+      fetchRevenueTrend(selectedPeriod, selectedNop),
+      previousPeriod ? fetchReportingScorecards(previousPeriod, selectedNop) : Promise.resolve(null),
+      previousPeriod ? fetchRevenueByKabupaten(previousPeriod, selectedNop) : Promise.resolve([]),
     ])
-      .then(([sc, rev, cls, prevSc, prevRev]) => {
+      .then(([sc, rev, cls, battery, trend, prevSc, prevRev]) => {
         if (cancelled) return;
         setScorecards(sc);
         setRevenueData(rev);
         setSiteClassData(cls);
+        setBatteryData(battery);
+        setTrendData(trend);
         setPreviousScorecards(prevSc);
         setPreviousRevenueData(prevRev || []);
       })
@@ -604,7 +604,7 @@ export default function NetworkReportingPage() {
       });
 
     return () => { cancelled = true; };
-  }, [filtersReady, selectedMonth, selectedNop, previousMonth]);
+  }, [filtersReady, previousPeriod, resolvedPeriod, selectedNop, selectedPeriod]);
 
   // Compute totals for revenue table
   const revenueTotals = useMemo(() => {
@@ -651,6 +651,13 @@ export default function NetworkReportingPage() {
     );
   }, [batteryData]);
 
+  const coverageWarning = useMemo(() => {
+    const missing = scorecards?.period_meta?.missing_months_by_source || {};
+    const entries = Object.entries(missing).filter(([, months]) => months.length > 0);
+    if (entries.length === 0) return '';
+    return entries.map(([source, months]) => `${source}: ${months.join(', ')}`).join(' | ');
+  }, [scorecards]);
+
   const revenueDomain = useMemo(() => getPaddedDomain(trendData, 'total_revenue'), [trendData]);
   const payloadDomain = useMemo(() => getPaddedDomain(trendData, 'total_payload'), [trendData]);
 
@@ -664,26 +671,31 @@ export default function NetworkReportingPage() {
 
   const handleExportPdf = useCallback(() => {
     const previousTitle = document.title;
-    const periodLabel = formatMonthLabel(selectedMonth) || 'Reporting';
+    const periodLabel = selectedPeriod.start && selectedPeriod.end
+      ? formatMonthRangeLabel(selectedPeriod.start, selectedPeriod.end)
+      : 'Reporting';
     const nopLabel = selectedNop ? selectedNop.replace('NOP ', '') : 'Semua NOP';
+    setPrintTimestamp(new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }));
 
     document.title = `Network Reporting - ${periodLabel} - ${nopLabel}`;
-    window.print();
-    document.title = previousTitle;
-  }, [formatMonthLabel, selectedMonth, selectedNop]);
+    requestAnimationFrame(() => {
+      window.print();
+      document.title = previousTitle;
+    });
+  }, [selectedNop, selectedPeriod]);
 
   const performanceInsights = useMemo(() => {
-    const selectedIndex = trendData.findIndex((row) => row.trx_month === selectedMonth);
+    const selectedIndex = trendData.findIndex((row) => row.trx_month === selectedPeriod.end);
     const currentIndex = selectedIndex >= 0 ? selectedIndex : trendData.length - 1;
     const current = trendData[currentIndex];
     const previous = trendData[currentIndex - 1];
 
-    const currentRevenue = current?.total_revenue ?? scorecards?.total_revenue;
-    const currentPayload = current?.total_payload ?? scorecards?.total_payload;
-    const revenueMom = getRelativeChange(currentRevenue, previous?.total_revenue);
-    const payloadMom = getRelativeChange(currentPayload, previous?.total_payload);
-    const availability = current?.avg_availability ?? scorecards?.avg_availability;
-    const availabilityMom = getRelativeChange(availability, previous?.avg_availability);
+    const currentRevenue = scorecards?.total_revenue ?? current?.total_revenue;
+    const currentPayload = scorecards?.total_payload ?? current?.total_payload;
+    const revenueMom = getRelativeChange(currentRevenue, previousScorecards?.total_revenue ?? previous?.total_revenue);
+    const payloadMom = getRelativeChange(currentPayload, previousScorecards?.total_payload ?? previous?.total_payload);
+    const availability = scorecards?.avg_availability ?? current?.avg_availability;
+    const availabilityMom = getRelativeChange(availability, previousScorecards?.avg_availability ?? previous?.avg_availability);
     const targetDelta = currentRevenue == null ? null : currentRevenue - REVENUE_TARGET;
     const targetPercent = currentRevenue == null ? null : (currentRevenue / REVENUE_TARGET - 1) * 100;
     const revenueTargetMet = targetDelta != null && targetDelta >= 0;
@@ -707,7 +719,7 @@ export default function NetworkReportingPage() {
     const selectedNopLabel = selectedNop ? selectedNop.replace('NOP ', '') : 'Semua NOP';
 
     return {
-      periodLabel: `${formatMonthLabel(selectedMonth)} - ${selectedNopLabel}`,
+      periodLabel: `${selectedPeriod.start && selectedPeriod.end ? formatMonthRangeLabel(selectedPeriod.start, selectedPeriod.end) : 'Reporting'} - ${selectedNopLabel}`,
       cards: [
         {
           label: 'Revenue',
@@ -716,7 +728,7 @@ export default function NetworkReportingPage() {
             : 'Revenue di bawah target',
           summary: currentRevenue == null
             ? 'Data revenue belum tersedia untuk periode terpilih.'
-            : `${formatRevenue(currentRevenue)} | ${formatRelativePercent(revenueMom)} MoM`,
+            : `${formatRevenue(currentRevenue)} | ${formatRelativePercent(revenueMom)} ${comparisonLabel}`,
           detail: currentRevenue == null
             ? null
             : `${revenueTargetMet ? 'Target terlampaui' : 'Gap terhadap target'} ${targetPercent == null ? '-' : `${Math.abs(targetPercent).toFixed(1).replace('.', ',')}%`}. ${getRevenueContributorInsight(revenueTotals, previousRevenueTotals)}`,
@@ -729,7 +741,7 @@ export default function NetworkReportingPage() {
         {
           label: 'Availability',
           title: availabilityInsight.title,
-          summary: `${availability == null ? '-' : formatPercent(availability)} | ${formatRelativePercent(availabilityMom, 2)} MoM`,
+          summary: `${availability == null ? '-' : formatPercent(availability)} | ${formatRelativePercent(availabilityMom, 2)} ${comparisonLabel}`,
           detail: availabilityInsight.body,
           chip: availabilityInsight.chip,
           tone: availability == null || availability < 99.5 ? 'warning' : 'success',
@@ -740,7 +752,7 @@ export default function NetworkReportingPage() {
           title: payloadInsight.title,
           summary: currentPayload == null
             ? 'Data payload belum tersedia untuk periode terpilih.'
-            : `${formatPayload(currentPayload)} | ${formatRelativePercent(payloadMom)} MoM`,
+            : `${formatPayload(currentPayload)} | ${formatRelativePercent(payloadMom)} ${comparisonLabel}`,
           detail: currentPayload == null
             ? null
             : `YTD ${formatPayload(scorecards?.payload_ytd)}. ${payloadInsight.body}`,
@@ -751,12 +763,13 @@ export default function NetworkReportingPage() {
       ],
     };
   }, [
-    formatMonthLabel,
     previousRevenueTotals,
     revenueData,
     revenueTotals,
     scorecards,
-    selectedMonth,
+    comparisonLabel,
+    previousScorecards,
+    selectedPeriod,
     selectedNop,
     trendData,
   ]);
@@ -824,25 +837,39 @@ export default function NetworkReportingPage() {
                 }))}
                 allLabel="Semua NOP"
               />
-              <DashboardPeriodPicker
+              <DashboardMonthRangePicker
                 id="reporting-period"
                 label="Periode"
-                value={selectedMonth || ''}
-                onChange={setSelectedMonth}
-                options={availableMonths.map((month) => ({
-                  value: month,
-                  label: formatMonthLabel(month),
-                }))}
-                includeAll={false}
+                value={selectedPeriod}
+                defaultValue={defaultPeriod}
+                availableMonths={availableMonths}
+                onApply={setSelectedPeriod}
+                onReset={setSelectedPeriod}
               />
             </DashboardFilterBar>
           </div>
         </div>
       </header>
       <Breadcrumb />
+      <section className="reporting-print-meta" aria-label="Metadata export reporting">
+        <strong>Periode:</strong> {selectedPeriod.start && selectedPeriod.end
+          ? formatMonthRangeLabel(selectedPeriod.start, selectedPeriod.end)
+          : '-'}
+        {' · '}<strong>NOP:</strong> {selectedNop ? selectedNop.replace('NOP ', '') : 'Semua NOP'}
+        {' · '}<strong>Perbandingan:</strong> {previousPeriod
+          ? formatMonthRangeLabel(previousPeriod.start, previousPeriod.end)
+          : '-'}
+        {' · '}<strong>Waktu cetak:</strong> {printTimestamp || '-'}
+        {' · '}<strong>Coverage:</strong> {coverageWarning || 'Lengkap'}
+      </section>
 
       {/* Main Content — Scrollable */}
       <main className="flex-1 overflow-y-auto p-4 space-y-4">
+        {coverageWarning ? (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+            Data periode belum lengkap — {coverageWarning}
+          </div>
+        ) : null}
         {/* Scorecards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {loading ? (
@@ -865,6 +892,7 @@ export default function NetworkReportingPage() {
                 title="Total Revenue"
                 value={formatRevenue(scorecards?.total_revenue)}
                 momRate={getRelativeChange(scorecards?.total_revenue, previousScorecards?.total_revenue)}
+                comparisonLabel={comparisonLabel}
                 metadata={[
                   { label: 'YTD', value: formatRevenue(scorecards?.revenue_ytd) },
                 ]}
@@ -877,6 +905,7 @@ export default function NetworkReportingPage() {
                 title="Total Payload"
                 value={formatPayload(scorecards?.total_payload)}
                 momRate={getRelativeChange(scorecards?.total_payload, previousScorecards?.total_payload)}
+                comparisonLabel={comparisonLabel}
                 metadata={[
                   { label: 'YTD', value: formatPayload(scorecards?.payload_ytd) },
                 ]}
@@ -889,6 +918,7 @@ export default function NetworkReportingPage() {
                 title="Availability"
                 value={formatPercent(scorecards?.avg_availability)}
                 momRate={getRelativeChange(scorecards?.avg_availability, previousScorecards?.avg_availability)}
+                comparisonLabel={comparisonLabel}
                 momDigits={2}
                 icon={Activity}
                 accent={
@@ -950,6 +980,13 @@ export default function NetworkReportingPage() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke={themeTokens.chartGrid} vertical={false} />
+                  <ReferenceArea
+                    x1={selectedPeriod.start}
+                    x2={selectedPeriod.end}
+                    fill="var(--primary)"
+                    fillOpacity={0.08}
+                    ifOverflow="extendDomain"
+                  />
                   <XAxis
                     dataKey="trx_month"
                     tickFormatter={formatMonthLabel}

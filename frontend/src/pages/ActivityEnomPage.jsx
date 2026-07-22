@@ -22,7 +22,7 @@ import {
   DashboardFilterBar,
   DashboardFilterSelect,
   DashboardPagination,
-  DashboardPeriodPicker,
+  DashboardMonthRangePicker,
   DashboardSearchInput,
   DashboardTableToolbar,
 } from '../components/dashboard-filters/DashboardFilters';
@@ -48,6 +48,7 @@ import {
   fetchActivityEnomTrend,
 } from '../services/api';
 import { formatNumber } from '../utils/formatters';
+import { formatMonthRangeLabel } from '../components/dashboard-filters/periodRange';
 
 const TABLE_LIMIT = 20;
 const MONTH_FORMATTER = new Intl.DateTimeFormat('id-ID', { month: 'long' });
@@ -127,11 +128,6 @@ function formatMonthLabel(value, withYear = false) {
   if (!value) return '-';
   const formatter = withYear ? MONTH_YEAR_FORMATTER : MONTH_FORMATTER;
   return formatter.format(new Date(`${value}T00:00:00`));
-}
-
-function getYearFromDateValue(value) {
-  if (!value) return '';
-  return String(value).slice(0, 4);
 }
 
 function formatPercent(value) {
@@ -235,9 +231,10 @@ function ActivityEnomDashboard() {
     categories: [],
     default_year: null,
     default_month: null,
+    available_months: [],
   });
-  const [selectedYear, setSelectedYear] = useState('');
-  const [selectedMonth, setSelectedMonth] = useState('');
+  const [selectedPeriod, setSelectedPeriod] = useState({ start: '', end: '' });
+  const [defaultPeriod, setDefaultPeriod] = useState({ start: '', end: '' });
   const [selectedNop, setSelectedNop] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -274,7 +271,7 @@ function ActivityEnomDashboard() {
         const months = Array.isArray(data?.months) ? data.months : [];
         const defaultMonth = data?.default_month || months[0]?.value || '';
         const years = Array.isArray(data?.years) ? data.years : [];
-        const defaultYear = String(data?.default_year || getYearFromDateValue(defaultMonth) || years[0]?.value || '');
+        const defaultPeriodMonth = String(defaultMonth).slice(0, 7);
         setFilterOptions({
           years,
           months,
@@ -282,9 +279,10 @@ function ActivityEnomDashboard() {
           categories: Array.isArray(data?.categories) ? data.categories : [],
           default_year: data?.default_year || null,
           default_month: data?.default_month || null,
+          available_months: Array.isArray(data?.available_months) ? data.available_months : [],
         });
-        setSelectedYear(defaultYear);
-        setSelectedMonth(defaultMonth);
+        setSelectedPeriod({ start: defaultPeriodMonth, end: defaultPeriodMonth });
+        setDefaultPeriod({ start: defaultPeriodMonth, end: defaultPeriodMonth });
         setFiltersLoaded(true);
       })
       .catch((err) => {
@@ -301,16 +299,16 @@ function ActivityEnomDashboard() {
 
   useEffect(() => {
     setPage(1);
-  }, [selectedYear, selectedMonth, selectedNop, selectedCategory, statusFilter, search, sortBy, sortDir]);
+  }, [selectedPeriod, selectedNop, selectedCategory, statusFilter, search, sortBy, sortDir]);
 
   const debouncedSearch = useDebouncedValue(search, 300);
 
   const dashboardParams = useMemo(() => ({
-    month_date: selectedMonth,
-    year: selectedYear || undefined,
+    period_start: selectedPeriod.start,
+    period_end: selectedPeriod.end,
     nop: selectedNop || undefined,
     category: selectedCategory || undefined,
-  }), [selectedCategory, selectedMonth, selectedNop, selectedYear]);
+  }), [selectedCategory, selectedNop, selectedPeriod]);
 
   const tableParams = useMemo(() => ({
     ...dashboardParams,
@@ -323,7 +321,7 @@ function ActivityEnomDashboard() {
   }), [dashboardParams, debouncedSearch, page, sortBy, sortDir, statusFilter]);
 
   useEffect(() => {
-    if (!selectedMonth) return;
+    if (!selectedPeriod.start || !selectedPeriod.end) return;
     let cancelled = false;
     setDashboardLoading(true);
     setError(null);
@@ -348,10 +346,10 @@ function ActivityEnomDashboard() {
         if (!cancelled) setDashboardLoading(false);
       });
     return () => { cancelled = true; };
-  }, [dashboardParams, selectedMonth]);
+  }, [dashboardParams, selectedPeriod]);
 
   useEffect(() => {
-    if (!selectedMonth) return;
+    if (!selectedPeriod.start || !selectedPeriod.end) return;
     let cancelled = false;
     setTableLoading(true);
     fetchActivityEnomActivities(tableParams)
@@ -374,10 +372,10 @@ function ActivityEnomDashboard() {
         if (!cancelled) setTableLoading(false);
       });
     return () => { cancelled = true; };
-  }, [selectedMonth, tableParams]);
+  }, [selectedPeriod, tableParams]);
 
   useEffect(() => {
-    if (!selectedActivityId || !selectedMonth) return;
+    if (!selectedActivityId || !selectedPeriod.start || !selectedPeriod.end) return;
     let cancelled = false;
     setModalLoading(true);
     setSelectedActivityDetail(null);
@@ -393,38 +391,18 @@ function ActivityEnomDashboard() {
         if (!cancelled) setModalLoading(false);
       });
     return () => { cancelled = true; };
-  }, [dashboardParams, selectedActivityId, selectedMonth]);
+  }, [dashboardParams, selectedActivityId, selectedPeriod]);
 
   const closeModal = useCallback(() => {
     setSelectedActivityId(null);
     setSelectedActivityDetail(null);
   }, []);
 
-  const yearOptions = useMemo(() => (
-    (filterOptions.years || []).map((year) => ({
-      value: year.value,
-      label: year.label || String(year.value),
-    }))
-  ), [filterOptions.years]);
-
-  const monthOptions = useMemo(() => (
-    (filterOptions.months || [])
-      .filter((month) => !selectedYear || getYearFromDateValue(month.value) === String(selectedYear))
-      .map((month) => ({
-        value: month.value,
-        label: formatMonthLabel(month.value),
-      }))
-  ), [filterOptions.months, selectedYear]);
-
-  useEffect(() => {
-    if (!selectedYear || !filtersLoaded) return;
-    if (selectedMonth && getYearFromDateValue(selectedMonth) === String(selectedYear)) return;
-    setSelectedMonth(monthOptions[0]?.value || '');
-  }, [filtersLoaded, monthOptions, selectedMonth, selectedYear]);
-
   const contributionTitle = selectedNop ? 'Kabupaten Contribution' : 'NOP Contribution';
   const rankingTitle = selectedNop ? 'Ranking Kabupaten' : 'Ranking NOP';
   const totalPages = activities.total_pages || 0;
+  const annualYear = selectedPeriod.end?.slice(0, 4) || '-';
+  const coverageMissing = summary?.period_meta?.missing_months_by_source?.activity_enom || [];
   const resetTableFilters = () => {
     setSearch('');
     setStatusFilter('');
@@ -461,26 +439,19 @@ function ActivityEnomDashboard() {
             <div className="min-w-0">
               <h1 className="truncate text-lg font-bold tracking-tight text-[var(--text-primary)]">Activity ENOM</h1>
               <p className="truncate text-xs text-[var(--text-muted)]">
-                Proker operational activity - {formatMonthLabel(selectedMonth, true)}
+                Proker operational activity - {selectedPeriod.start && selectedPeriod.end ? formatMonthRangeLabel(selectedPeriod.start, selectedPeriod.end) : '-'}
               </p>
             </div>
           </div>
           <DashboardFilterBar className="w-full border-0 bg-transparent p-0 shadow-none md:w-auto">
-            <DashboardFilterSelect
-              id="activity-enom-year"
-              label="Tahun"
-              value={selectedYear}
-              onChange={setSelectedYear}
-              options={yearOptions}
-              includeAll={false}
-            />
-            <DashboardPeriodPicker
-              id="activity-enom-month"
-              label="Bulan"
-              value={selectedMonth}
-              onChange={setSelectedMonth}
-              options={monthOptions}
-              includeAll={false}
+            <DashboardMonthRangePicker
+              id="activity-enom-period"
+              label="Periode"
+              value={selectedPeriod}
+              defaultValue={defaultPeriod}
+              availableMonths={filterOptions.available_months}
+              onApply={setSelectedPeriod}
+              onReset={setSelectedPeriod}
             />
             <DashboardCombobox
               id="activity-enom-nop"
@@ -512,15 +483,22 @@ function ActivityEnomDashboard() {
           </Alert>
         )}
 
+        {coverageMissing.length ? (
+          <Alert>
+            <AlertTitle>Coverage data belum lengkap</AlertTitle>
+            <AlertDescription>Bulan tanpa data Activity ENOM: {coverageMissing.join(', ')}. Dashboard menampilkan data yang tersedia.</AlertDescription>
+          </Alert>
+        ) : null}
+
         <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
           {dashboardLoading && !summary ? (
             Array.from({ length: 6 }, (_, index) => <div key={index} className="skeleton h-[96px] rounded-xl" />)
           ) : (
             <>
               <DashboardKpiCard
-                title={`Total Activity Tahun ${selectedYear || '-'}`}
+                title={`Total Activity Tahun ${annualYear}`}
                 value={formatNumber(summary?.annual_total_activity)}
-                subtitle={`Open: ${formatNumber(summary?.annual_open_activity)} Closed: ${formatNumber(summary?.annual_close_activity)}`}
+                subtitle={`Open: ${formatNumber(summary?.annual_open_activity)} Closed: ${formatNumber(summary?.annual_close_activity)} · Tidak dipengaruhi periode`}
                 icon={ClipboardList}
                 accent={ACTIVITY_CHART_COLORS.total}
                 glow="rgba(96,165,250,0.14)"
@@ -542,6 +520,7 @@ function ActivityEnomDashboard() {
           contributionTitle={contributionTitle}
           formatMonthLabel={formatMonthLabel}
           topActivities={topActivities}
+          activePeriod={selectedPeriod}
         />
 
         <DashboardTableShell

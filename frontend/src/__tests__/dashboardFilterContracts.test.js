@@ -58,6 +58,7 @@ describe('shared dashboard shadcn filter contracts', () => {
       'DashboardCombobox',
       'DashboardDateRangePicker',
       'DashboardPeriodPicker',
+      'DashboardMonthRangePicker',
       'DashboardFilterChips',
       'DashboardTableToolbar',
       'DashboardFilterSelect',
@@ -89,6 +90,11 @@ describe('shared dashboard shadcn filter contracts', () => {
     assert.match(component, /flex min-w-0 flex-1 flex-wrap items-end gap-2 lg:flex-nowrap/);
     assert.match(component, /CommandInput/);
     assert.match(component, /mode="range"/);
+    assert.match(component, /getSemesterRange/);
+    assert.match(component, /formatMonthRangeLabel/);
+    assert.match(component, /Semester 1/);
+    assert.match(component, /Semester 2/);
+    assert.match(component, /Maksimal 12 bulan/);
     assert.match(component, /numberOfMonths=\{isDesktop \? 2 : 1\}/);
     assert.match(component, /triggerTestId/);
     assert.match(component, /applyTestId/);
@@ -120,7 +126,7 @@ describe('shared dashboard shadcn filter contracts', () => {
     assert.match(filterPanel, /DashboardFilterChips/);
     assert.match(filterPanel, /onApply=\{onFilterChange\}/);
 
-    assert.match(reporting, /DashboardPeriodPicker/);
+    assert.match(reporting, /DashboardMonthRangePicker/);
     assert.match(reporting, /DashboardCombobox/);
     assert.match(reporting, /id="reporting-nop"/);
     assert.match(reporting, /id="reporting-period"/);

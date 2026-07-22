@@ -59,7 +59,7 @@ class ReportingNopContractTest(unittest.TestCase):
 
     def test_reporting_endpoints_pass_nop_params_to_sql(self):
         self.assertIn("build_nop_filter", self.source)
-        self.assertGreaterEqual(self.source.count('"nop": nop'), 5)
+        self.assertGreaterEqual(self.source.count("period_query_params(period, nop)"), 5)
 
     def test_total_site_scorecard_uses_active_master_sites(self):
         for contract in [
@@ -120,6 +120,45 @@ class ReportingNopContractTest(unittest.TestCase):
         ]:
             with self.subTest(contract=contract):
                 self.assertIn(contract, self.source)
+
+    def test_reporting_supports_canonical_month_ranges_and_coverage(self):
+        model_source = (REPORTING_ROUTER.parents[1] / "models" / "reporting.py").read_text(encoding="utf-8")
+
+        for contract in [
+            "period_start: str | None = Query(None",
+            "period_end: str | None = Query(None",
+            "resolve_month_period",
+            "build_period_meta",
+            "trx_month BETWEEN :period_start AND :period_end",
+            "context_start",
+            "end_date_exclusive",
+            "period_start=period.period_start",
+            "period_end=period.period_end",
+        ]:
+            with self.subTest(contract=contract):
+                self.assertIn(contract, self.source)
+
+        self.assertIn("period_meta: MonthPeriodMeta | None = None", model_source)
+
+    def test_reporting_range_queries_recalculate_weighted_metrics(self):
+        for query_name in [
+            "SCORECARDS_QUERY",
+            "AVAILABILITY_SCORECARD_QUERY",
+            "REVENUE_BY_KABUPATEN_QUERY",
+            "SITE_CLASS_BY_KABUPATEN_QUERY",
+            "BATTERY_BY_KABUPATEN_QUERY",
+        ]:
+            query = self.source.split(f'{query_name} = """', 1)[1].split('"""', 1)[0]
+            self.assertIn(":period_start", query, query_name)
+            self.assertIn(":period_end", query, query_name)
+
+        availability_query = self.source.split('AVAILABILITY_SCORECARD_QUERY = """', 1)[1].split('"""', 1)[0]
+        self.assertIn("SUM(smm.total_time_in_minutes)", availability_query)
+        self.assertIn("SUM(smm.total_outage_menit)", availability_query)
+
+        battery_query = self.source.split('BATTERY_BY_KABUPATEN_QUERY = """', 1)[1].split('"""', 1)[0]
+        self.assertIn("traktor_data", battery_query)
+        self.assertIn("COUNT(DISTINCT", battery_query)
 
 
 if __name__ == "__main__":

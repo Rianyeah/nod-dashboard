@@ -2,7 +2,7 @@
 import asyncio
 from datetime import date, timedelta
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,7 +24,13 @@ from models.overview import (
 )
 from models.reporting import ReportingScorecard, RevenueTrendItem
 from models.ticketing import TicketingDashboard, TicketingFilters
-from models.transport_quality import TransportQualityPrioritySiteResponse, TransportQualitySummary
+from models.transport_quality import (
+    TransportQualityPrioritySite,
+    TransportQualityPrioritySiteResponse,
+    TransportQualitySummary,
+    TransportQualityTrendItem,
+)
+from periods import MonthPeriod, build_period_meta, resolve_month_period
 from routers.availability import (
     get_latest_period,
     get_summary,
@@ -57,9 +63,16 @@ from routers.ticketing import (
     rows_to_dicts,
 )
 from routers.transport_quality import (
+    PRIORITY_COUNT_QUERY as TRANSPORT_PRIORITY_COUNT_QUERY,
+    PRIORITY_LIST_QUERY as TRANSPORT_PRIORITY_LIST_QUERY,
+    SUMMARY_QUERY as TRANSPORT_SUMMARY_QUERY,
+    TREND_QUERY as TRANSPORT_TREND_QUERY,
+    build_filter_clause as build_transport_filter_clause,
+    build_filter_params as build_transport_filter_params,
     get_transport_quality_priority_sites,
     get_transport_quality_summary,
     get_transport_quality_trend,
+    rows_to_models as transport_rows_to_models,
 )
 from queries.metrics_cache import ensure_site_month_metrics
 from queries.sql_queries import (
@@ -134,7 +147,7 @@ WITH current_revenue AS (
         COALESCE(SUM(t.payload), 0)::bigint AS total_payload
     FROM public.traktor_data t
     LEFT JOIN public.data_site_master d ON t.site_id = d."Siteid"
-    WHERE t.trx_month = :trx_month
+    WHERE t.trx_month BETWEEN :period_start AND :period_end
       AND NULLIF(TRIM(t.site_id), '') IS NOT NULL
       AND (
         CAST(:site_master_nop AS text) IS NULL
@@ -150,7 +163,7 @@ previous_revenue AS (
         COALESCE(SUM(t.rev), 0)::bigint AS previous_revenue
     FROM public.traktor_data t
     LEFT JOIN public.data_site_master d ON t.site_id = d."Siteid"
-    WHERE t.trx_month = :previous_trx_month
+    WHERE t.trx_month BETWEEN :comparison_start AND :comparison_end
       AND NULLIF(TRIM(t.site_id), '') IS NOT NULL
       AND (
         CAST(:site_master_nop AS text) IS NULL
@@ -182,8 +195,8 @@ RECENT_REVENUE_TREND_QUERY = """
 WITH selected_months AS (
     SELECT TO_CHAR(month_start, 'YYYY-MM') AS trx_month
     FROM generate_series(
-        DATE_TRUNC('month', TO_DATE(:trx_month || '-01', 'YYYY-MM-DD')) - INTERVAL '5 months',
-        DATE_TRUNC('month', TO_DATE(:trx_month || '-01', 'YYYY-MM-DD')),
+        DATE_TRUNC('month', TO_DATE(:context_start || '-01', 'YYYY-MM-DD')),
+        DATE_TRUNC('month', TO_DATE(:period_end || '-01', 'YYYY-MM-DD')),
         INTERVAL '1 month'
     ) AS months(month_start)
 ),
@@ -233,6 +246,90 @@ FROM selected_months sm
 LEFT JOIN revenue r ON r.trx_month = sm.trx_month
 LEFT JOIN availability_cache avail ON avail.trx_month = sm.trx_month
 ORDER BY sm.trx_month
+"""
+
+AVAILABILITY_RANGE_SUMMARY_QUERY = """
+WITH site_aggregate AS (
+    SELECT
+        smm.site_id,
+        SUM(smm.total_time_in_minutes)::numeric AS total_time_in_minutes,
+        SUM(smm.total_outage_menit)::numeric AS total_outage_menit,
+        MAX(smm.jumlah_cell)::int AS jumlah_cell
+    FROM public.site_month_metrics smm
+    JOIN public.data_site_master d ON d."Siteid" = smm.site_id
+    WHERE CONCAT(smm.tahun::text, '-', LPAD(smm.bulan::text, 2, '0')) BETWEEN :period_start AND :period_end
+      AND (
+        CAST(:site_master_nop AS text) IS NULL
+        OR d."NOP" = :site_master_nop
+        OR REGEXP_REPLACE(UPPER(TRIM(COALESCE(d."NOP", ''))), '^NOP\\s+', '') = :module_nop
+      )
+    GROUP BY smm.site_id
+), scored AS (
+    SELECT *, ROUND((total_time_in_minutes - total_outage_menit) / NULLIF(total_time_in_minutes, 0) * 100.0, 4) AS avg_availability
+    FROM site_aggregate
+)
+SELECT
+    COUNT(*)::int AS total_site_dengan_data,
+    COUNT(*)::int AS total_site_master,
+    ROUND((SUM(total_time_in_minutes) - SUM(total_outage_menit)) / NULLIF(SUM(total_time_in_minutes), 0) * 100.0, 4) AS avg_availability,
+    SUM(total_outage_menit) AS total_outage_menit,
+    SUM(jumlah_cell)::int AS total_cell,
+    COUNT(*) FILTER (WHERE avg_availability >= 99.5)::int AS site_excellent,
+    COUNT(*) FILTER (WHERE avg_availability >= 95 AND avg_availability < 99.5)::int AS site_degraded,
+    COUNT(*) FILTER (WHERE avg_availability < 95)::int AS site_critical
+FROM scored
+"""
+
+AVAILABILITY_RANGE_WORST_QUERY = """
+WITH site_aggregate AS (
+    SELECT
+        smm.site_id,
+        SUM(smm.total_time_in_minutes)::numeric AS total_time_in_minutes,
+        SUM(smm.total_outage_menit)::numeric AS total_outage_menit,
+        MAX(smm.jumlah_cell)::int AS jumlah_cell
+    FROM public.site_month_metrics smm
+    JOIN public.data_site_master d ON d."Siteid" = smm.site_id
+    WHERE CONCAT(smm.tahun::text, '-', LPAD(smm.bulan::text, 2, '0')) BETWEEN :period_start AND :period_end
+      AND (
+        CAST(:site_master_nop AS text) IS NULL
+        OR d."NOP" = :site_master_nop
+        OR REGEXP_REPLACE(UPPER(TRIM(COALESCE(d."NOP", ''))), '^NOP\\s+', '') = :module_nop
+      )
+    GROUP BY smm.site_id
+)
+SELECT
+    a.site_id,
+    d."Site Name" AS site_name,
+    d."Kabupaten/KOTA" AS kabupaten,
+    d."Site Class",
+    ROUND((a.total_time_in_minutes - a.total_outage_menit) / NULLIF(a.total_time_in_minutes, 0) * 100.0, 4) AS avg_availability,
+    a.total_outage_menit,
+    a.jumlah_cell
+FROM site_aggregate a
+JOIN public.data_site_master d ON d."Siteid" = a.site_id
+ORDER BY avg_availability ASC NULLS LAST
+LIMIT :limit_val
+"""
+
+OVERVIEW_SOURCE_MONTHS_QUERY = """
+SELECT
+    ARRAY(
+        SELECT DISTINCT CONCAT(tahun::text, '-', LPAD(bulan::text, 2, '0'))
+        FROM public.site_month_metrics
+        ORDER BY 1 DESC
+    ) AS availability,
+    ARRAY(
+        SELECT DISTINCT TO_CHAR(created_at, 'YYYY-MM')
+        FROM public.ticketing_fault_center
+        WHERE created_at IS NOT NULL
+        ORDER BY 1 DESC
+    ) AS ticketing,
+    ARRAY(
+        SELECT DISTINCT TO_CHAR(date, 'YYYY-MM')
+        FROM public.packet_los_jatim
+        WHERE date IS NOT NULL
+        ORDER BY 1 DESC
+    ) AS transport
 """
 
 
@@ -295,8 +392,7 @@ async def load_site_potential(session: AsyncSession, module_nop: str | None) -> 
 
 async def load_worst_revenue_sites(
     session: AsyncSession,
-    trx_month: str,
-    previous_trx_month: str | None,
+    period: MonthPeriod,
     site_master_nop: str | None,
     module_nop: str | None,
     limit: int = 10,
@@ -305,8 +401,10 @@ async def load_worst_revenue_sites(
     result = await session.execute(
         text(WORST_REVENUE_SITES_QUERY),
         {
-            "trx_month": trx_month,
-            "previous_trx_month": previous_trx_month,
+            "period_start": period.period_start,
+            "period_end": period.period_end,
+            "comparison_start": period.comparison_start,
+            "comparison_end": period.comparison_end,
             "site_master_nop": site_master_nop,
             "module_nop": module_nop,
             "limit_val": limit,
@@ -328,18 +426,19 @@ async def load_worst_revenue_sites(
 
 async def load_recent_revenue_trend(
     session: AsyncSession,
-    trx_month: str | None,
+    period: MonthPeriod | None,
     site_master_nop: str | None,
     module_nop: str | None,
 ) -> list[RevenueTrendItem]:
     """Load only the six trend points needed by the Home overview."""
-    if not trx_month:
+    if not period:
         return []
 
     result = await session.execute(
         text(RECENT_REVENUE_TREND_QUERY),
         {
-            "trx_month": trx_month,
+            "context_start": period.context_start,
+            "period_end": period.period_end,
             "site_master_nop": site_master_nop,
             "module_nop": module_nop,
         },
@@ -358,17 +457,18 @@ async def load_recent_revenue_trend(
 
 async def load_reporting_overview_metrics(
     session: AsyncSession,
-    trx_month: str | None,
+    period: MonthPeriod | None,
     site_master_nop: str | None,
     module_nop: str | None,
 ) -> tuple[ReportingScorecard, list[RevenueTrendItem]]:
     """Build Home reporting scorecard and trend from one compact monthly aggregate."""
     rows = []
-    if trx_month:
+    if period:
         result = await session.execute(
             text(RECENT_REVENUE_TREND_QUERY),
             {
-                "trx_month": trx_month,
+                "context_start": period.context_start,
+                "period_end": period.period_end,
                 "site_master_nop": site_master_nop,
                 "module_nop": module_nop,
             },
@@ -385,11 +485,12 @@ async def load_reporting_overview_metrics(
         )
         for row in rows
     ]
-    current = next((row for row in rows if row.get("trx_month") == trx_month), None)
+    active_rows = [row for row in rows if period and row.get("trx_month") in period.active_months]
+    current = active_rows[-1] if active_rows else None
     reporting = ReportingScorecard(
-        total_sites=int(current.get("total_sites") or 0) if current else 0,
-        total_revenue=int(current.get("total_revenue") or 0) if current else 0,
-        total_payload=int(current.get("total_payload") or 0) if current else 0,
+        total_sites=max((int(row.get("total_sites") or 0) for row in active_rows), default=0),
+        total_revenue=sum(int(row.get("total_revenue") or 0) for row in active_rows),
+        total_payload=sum(int(row.get("total_payload") or 0) for row in active_rows),
         avg_availability=float(current["avg_availability"]) if current and current.get("avg_availability") is not None else None,
     )
     return reporting, trend
@@ -498,21 +599,26 @@ async def load_module_with_session(errors: dict[str, str], key: str, fallback, l
 
 async def load_availability_module(
     session: AsyncSession,
-    selected_bulan: int | None,
-    selected_tahun: int | None,
+    period: MonthPeriod | None,
     site_master_nop: str | None,
+    module_nop: str | None,
 ):
-    if not selected_bulan or not selected_tahun:
+    if not period:
         return AvailabilitySummary(), []
 
-    await ensure_site_month_metrics(session, selected_bulan, selected_tahun)
+    for active_month in period.active_months:
+        active_year, active_month_number = (int(part) for part in active_month.split("-"))
+        await ensure_site_month_metrics(session, active_month_number, active_year)
 
-    from routers.sites import _build_filters
-    filters, filter_params = _build_filters(nop=site_master_nop)
-    params = {"bulan": selected_bulan, "tahun": selected_tahun, **filter_params}
+    params = {
+        "period_start": period.period_start,
+        "period_end": period.period_end,
+        "site_master_nop": site_master_nop,
+        "module_nop": module_nop,
+    }
 
     summary_result = await session.execute(
-        text(AVAILABILITY_SUMMARY_QUERY.format(filters=filters)),
+        text(AVAILABILITY_RANGE_SUMMARY_QUERY),
         params,
     )
     summary_row = summary_result.mappings().first()
@@ -530,7 +636,7 @@ async def load_availability_module(
         )
 
     worst_result = await session.execute(
-        text(AVAILABILITY_WORST_SITES_QUERY.format(filters=filters)),
+        text(AVAILABILITY_RANGE_WORST_QUERY),
         {**params, "limit_val": 10},
     )
     worst_sites = [
@@ -550,28 +656,54 @@ async def load_availability_module(
 
 async def load_reporting_module(
     session: AsyncSession,
-    trx_month: str | None,
-    previous_trx_month: str | None,
+    period: MonthPeriod | None,
     site_master_nop: str | None,
     module_nop: str | None,
 ):
     worst_revenue_sites = []
-    reporting, reporting_trend = await load_reporting_overview_metrics(
+    if not period:
+        return ReportingScorecard(), ReportingScorecard(), [], []
+    reporting = ReportingScorecard.model_validate(await get_scorecards(
+        trx_month=None,
+        period_start=period.period_start,
+        period_end=period.period_end,
+        nop=module_nop,
         session=session,
-        trx_month=trx_month,
+        response=None,
+    ))
+    comparison_reporting = ReportingScorecard.model_validate(await get_scorecards(
+        trx_month=None,
+        period_start=period.comparison_start,
+        period_end=period.comparison_end,
+        nop=module_nop,
+        session=session,
+        response=None,
+    ))
+    reporting_trend = await get_revenue_trend(
+        period_start=period.period_start,
+        period_end=period.period_end,
+        nop=module_nop,
+        session=session,
+        response=None,
+    )
+    worst_revenue_sites = await load_worst_revenue_sites(
+        session=session,
+        period=period,
         site_master_nop=site_master_nop,
         module_nop=module_nop,
+        limit=10,
     )
-    if trx_month:
-        worst_revenue_sites = await load_worst_revenue_sites(
-            session=session,
-            trx_month=trx_month,
-            previous_trx_month=previous_trx_month,
-            site_master_nop=site_master_nop,
-            module_nop=module_nop,
-            limit=10,
-        )
-    return reporting, worst_revenue_sites, reporting_trend
+    return reporting, comparison_reporting, worst_revenue_sites, reporting_trend
+
+
+async def load_overview_source_months(session: AsyncSession) -> dict[str, list[str]]:
+    result = await session.execute(text(OVERVIEW_SOURCE_MONTHS_QUERY))
+    row = result.mappings().first() or {}
+    return {
+        "availability": list(row.get("availability") or []),
+        "ticketing": list(row.get("ticketing") or []),
+        "transport": list(row.get("transport") or []),
+    }
 
 
 async def load_impact_module(
@@ -633,44 +765,47 @@ async def load_transport_module(
     transport_quality = TransportQualitySummary(date=transport_date)
     transport_trend = []
     transport_priority_sites = TransportQualityPrioritySiteResponse()
-    if transport_date:
-        transport_quality = await get_transport_quality_summary(
-            date_filter=transport_date,
-            nop=module_nop,
-            kabupaten=None,
-            transport_type=None,
-            thi_status=None,
-            distribution_pl=None,
-            pl_status_0_1_pct=None,
-            distribution_lat=None,
-            jitter_status=None,
-            session=session,
+    if transport_date and month_start and month_end:
+        params = build_transport_filter_params(date_filter=transport_date, nop=module_nop)
+        params.update({
+            "period_start_date": month_start,
+            "period_end_exclusive": month_end + timedelta(days=1),
+            "limit": 5,
+            "offset": 0,
+        })
+        filter_clause = (
+            build_transport_filter_clause(params, include_date=False)
+            + " AND p.date >= :period_start_date AND p.date < :period_end_exclusive"
         )
-        transport_trend = await get_transport_quality_trend(
-            date_filter=transport_date,
-            nop=module_nop,
-            kabupaten=None,
-            transport_type=None,
-            thi_status=None,
-            distribution_pl=None,
-            pl_status_0_1_pct=None,
-            distribution_lat=None,
-            jitter_status=None,
-            session=session,
+        summary_result = await session.execute(
+            text(TRANSPORT_SUMMARY_QUERY.format(filter_clause=filter_clause)),
+            params,
         )
-        transport_priority_sites = await get_transport_quality_priority_sites(
-            date_filter=transport_date,
-            nop=module_nop,
-            kabupaten=None,
-            transport_type=None,
-            thi_status=None,
-            distribution_pl=None,
-            pl_status_0_1_pct=None,
-            distribution_lat=None,
-            jitter_status=None,
+        summary_row = summary_result.first()
+        if summary_row:
+            transport_quality = TransportQualitySummary(**dict(summary_row._mapping))
+
+        trend_result = await session.execute(
+            text(TRANSPORT_TREND_QUERY.format(filter_clause=filter_clause)),
+            params,
+        )
+        transport_trend = transport_rows_to_models(trend_result.fetchall(), TransportQualityTrendItem)
+
+        count_result = await session.execute(
+            text(TRANSPORT_PRIORITY_COUNT_QUERY.format(filter_clause=filter_clause)),
+            params,
+        )
+        priority_total = int(count_result.scalar_one() or 0)
+        list_result = await session.execute(
+            text(TRANSPORT_PRIORITY_LIST_QUERY.format(filter_clause=filter_clause)),
+            params,
+        )
+        transport_priority_sites = TransportQualityPrioritySiteResponse(
+            items=transport_rows_to_models(list_result.fetchall(), TransportQualityPrioritySite),
+            total=priority_total,
             page=1,
             limit=5,
-            session=session,
+            total_pages=(priority_total + 4) // 5,
         )
     return transport_quality, transport_trend, transport_priority_sites
 
@@ -679,8 +814,6 @@ async def load_ticketing_module(
     session: AsyncSession,
     month_start: date | None,
     month_end: date | None,
-    selected_tahun: int | None,
-    selected_bulan: int | None,
     site_master_nop: str | None,
 ):
     ticketing_filters = TicketingFilters()
@@ -694,8 +827,8 @@ async def load_ticketing_module(
     ticketing_params = build_ticketing_filter_params(
         start_date=start_date,
         end_date=end_date,
-        tahun=selected_tahun,
-        bulan=selected_bulan,
+        tahun=None,
+        bulan=None,
         nop=site_master_nop,
     )
     ticketing = await load_ticketing_overview_dashboard(session=session, ticketing_params=ticketing_params)
@@ -706,17 +839,31 @@ async def load_ticketing_module(
 async def get_overview(
     bulan: int | None = Query(None, ge=1, le=12),
     tahun: int | None = Query(None, ge=2020),
+    period_start: str | None = None,
+    period_end: str | None = None,
     nop: str | None = Query(None),
     session: AsyncSession = Depends(get_session),
     response: Response = None,
 ):
     """Return the cached executive Home overview when available."""
+    if (bulan is None) != (tahun is None):
+        raise HTTPException(status_code=422, detail="bulan dan tahun wajib diisi bersama.")
+    if (period_start is not None or period_end is not None) and (bulan is not None or tahun is not None):
+        raise HTTPException(status_code=422, detail="Gunakan periode baru atau bulan/tahun lama, bukan keduanya.")
     normalized_nop = normalize_nop_value(nop)
+    legacy_month = f"{tahun}-{bulan:02d}" if bulan is not None and tahun is not None else None
+    requested_period = None
+    if period_start is not None or period_end is not None or legacy_month is not None:
+        requested_period = resolve_month_period(
+            period_start=period_start,
+            period_end=period_end,
+            legacy_month=legacy_month,
+        )
     cache_key = redis_cache.make_key(
         "overview",
         "home",
-        bulan=bulan,
-        tahun=tahun,
+        period_start=requested_period.period_start if requested_period else "latest",
+        period_end=requested_period.period_end if requested_period else "latest",
         nop=normalized_nop or "",
     )
     cache_status, cached_value = await redis_cache.get_json(cache_key)
@@ -728,6 +875,8 @@ async def get_overview(
     payload = await load_overview_response(
         bulan=bulan,
         tahun=tahun,
+        period_start=period_start,
+        period_end=period_end,
         nop=normalized_nop,
         session=session,
     )
@@ -747,6 +896,8 @@ async def load_overview_response(
     tahun: int | None,
     nop: str | None,
     session: AsyncSession,
+    period_start: str | None = None,
+    period_end: str | None = None,
 ):
     """Return the executive Home overview using the dashboard's existing contracts."""
     errors: dict[str, str] = {}
@@ -754,33 +905,48 @@ async def load_overview_response(
     site_master_nop = f"NOP {module_nop}" if module_nop else None
 
     latest_period = None
-    if not (bulan and tahun):
+    legacy_month = f"{tahun}-{bulan:02d}" if bulan is not None and tahun is not None else None
+    if (bulan is None) != (tahun is None):
+        raise HTTPException(status_code=422, detail="bulan dan tahun wajib diisi bersama.")
+    if (period_start is not None or period_end is not None) and legacy_month is not None:
+        raise HTTPException(status_code=422, detail="Gunakan periode baru atau bulan/tahun lama, bukan keduanya.")
+    if period_start is None and period_end is None and legacy_month is None:
         latest_period = await load_or_error(
             errors,
             "availability_period",
             None,
             lambda: get_latest_period(session=session),
         )
-    selected_bulan = bulan or getattr(latest_period, "bulan", None)
-    selected_tahun = tahun or getattr(latest_period, "tahun", None)
-    month_start = None
-    month_end = None
-    if selected_bulan and selected_tahun:
-        month_start, month_end = month_bounds(selected_tahun, selected_bulan)
-
     available_months = await load_or_error(
         errors,
         "reporting_months",
         [],
         lambda: get_available_months(session=session),
     )
-    preferred_trx_month = f"{selected_tahun}-{selected_bulan:02d}" if selected_bulan and selected_tahun else None
-    trx_month = preferred_trx_month if preferred_trx_month in available_months else (available_months[0] if available_months else preferred_trx_month)
-    previous_trx_month = previous_trx_month_label(trx_month)
+    latest_month = None
+    if latest_period and getattr(latest_period, "bulan", None) and getattr(latest_period, "tahun", None):
+        latest_month = f"{latest_period.tahun}-{latest_period.bulan:02d}"
+    latest_month = latest_month or (available_months[0] if available_months else date.today().strftime("%Y-%m"))
+    period = resolve_month_period(
+        period_start=period_start,
+        period_end=period_end,
+        legacy_month=legacy_month or (latest_month if period_start is None and period_end is None else None),
+    )
+    source_months = await load_or_error(
+        errors,
+        "overview_source_months",
+        {},
+        lambda: load_overview_source_months(session),
+    )
+    source_months["reporting"] = available_months
+    selected_tahun, selected_bulan = (int(part) for part in period.period_end.split("-"))
+    month_start = period.start_date
+    month_end = period.end_date_exclusive - timedelta(days=1)
+    trx_month = period.period_end
 
     (
         (availability, worst_sites),
-        (reporting, worst_revenue_sites, reporting_trend),
+        (reporting, comparison_reporting, worst_revenue_sites, reporting_trend),
         site_potential,
         (impact_start_date, impact_end_date, impact_service, impact_daily_trend, impact_distributions, impact_top_sites),
         (transport_quality, transport_trend, transport_priority_sites),
@@ -792,19 +958,18 @@ async def load_overview_response(
             (AvailabilitySummary(), []),
             lambda module_session: load_availability_module(
                 module_session,
-                selected_bulan,
-                selected_tahun,
+                period,
                 site_master_nop,
+                module_nop,
             ),
         ),
         load_module_with_session(
             errors,
             "reporting",
-            (ReportingScorecard(), [], []),
+            (ReportingScorecard(), ReportingScorecard(), [], []),
             lambda module_session: load_reporting_module(
                 module_session,
-                trx_month,
-                previous_trx_month,
+                period,
                 site_master_nop,
                 module_nop,
             ),
@@ -846,8 +1011,6 @@ async def load_overview_response(
                 module_session,
                 month_start,
                 month_end,
-                selected_tahun,
-                selected_bulan,
                 site_master_nop,
             ),
         ),
@@ -858,6 +1021,11 @@ async def load_overview_response(
             bulan=selected_bulan,
             tahun=selected_tahun,
             trx_month=trx_month,
+            period_start=period.period_start,
+            period_end=period.period_end,
+            comparison_start=period.comparison_start,
+            comparison_end=period.comparison_end,
+            active_months=list(period.active_months),
             impact_start_date=impact_start_date,
             impact_end_date=impact_end_date,
             transport_date=transport_quality.date,
@@ -869,7 +1037,9 @@ async def load_overview_response(
         worst_sites=worst_sites,
         worst_revenue_sites=worst_revenue_sites,
         reporting=reporting,
+        comparison_reporting=comparison_reporting,
         reporting_trend=reporting_trend,
+        period_meta=build_period_meta(period, source_months),
         impact_service=impact_service,
         impact_daily_trend=impact_daily_trend,
         impact_distributions=impact_distributions,

@@ -69,7 +69,10 @@ describe('Activity ENOM dashboard contracts', () => {
     }
 
     assert.match(page, /Intl\.DateTimeFormat\('id-ID',\s*\{\s*month:\s*'long'/);
-    assert.match(page, /id="activity-enom-year"/);
+    assert.match(page, /id="activity-enom-period"/);
+    assert.match(page, /period_start:\s*selectedPeriod\.start/);
+    assert.match(page, /period_end:\s*selectedPeriod\.end/);
+    assert.match(page, /Coverage data belum lengkap/);
     assert.match(page, /selectedNop\s*\?\s*'Kabupaten Contribution'\s*:\s*'NOP Contribution'/);
     assert.match(page, /selectedNop\s*\?\s*'Ranking Kabupaten'\s*:\s*'Ranking NOP'/);
     assert.match(page, /ActivityEnomCharts/);
@@ -155,7 +158,7 @@ describe('Activity ENOM dashboard contracts', () => {
 
     for (const component of [
       'DashboardFilterBar',
-      'DashboardPeriodPicker',
+      'DashboardMonthRangePicker',
       'DashboardCombobox',
       'DashboardSearchInput',
       'DashboardFilterSelect',
@@ -216,7 +219,8 @@ describe('Activity ENOM dashboard contracts', () => {
     const page = src('pages', 'ActivityEnomPage.jsx');
     const scorecardSection = page.split('grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6', 2)[1].split('</section>', 1)[0];
 
-    assert.match(scorecardSection, /DashboardKpiCard[\s\S]*title=\{`Total Activity Tahun \$\{selectedYear/);
+    assert.match(scorecardSection, /DashboardKpiCard[\s\S]*title=\{`Total Activity Tahun \$\{annualYear/);
+    assert.match(scorecardSection, /Tidak dipengaruhi periode/);
     assert.match(scorecardSection, /DashboardKpiCard title="Total Activity"/);
     assert.match(scorecardSection, /DashboardKpiCard title="Completion Rate"/);
     assert.match(scorecardSection, /Open: \$\{formatNumber\(summary\?\.annual_open_activity/);

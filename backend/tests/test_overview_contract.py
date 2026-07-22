@@ -17,6 +17,18 @@ class OverviewContractTest(unittest.TestCase):
         self.assertIn("overview as overview_router", main_source)
         self.assertIn("app.include_router(overview_router.router", main_source)
 
+    def test_reporting_loader_returns_its_complete_tuple_before_next_loader(self):
+        source = ROUTER.read_text(encoding="utf-8")
+        reporting_loader = source.split("async def load_reporting_module(", 1)[1].split(
+            "async def load_overview_source_months(", 1
+        )[0]
+
+        self.assertIn("load_worst_revenue_sites", reporting_loader)
+        self.assertIn(
+            "return reporting, comparison_reporting, worst_revenue_sites, reporting_trend",
+            reporting_loader,
+        )
+
     def test_overview_endpoint_uses_existing_module_contracts(self):
         self.assertTrue(ROUTER.exists(), "overview router must exist")
         self.assertTrue(MODELS.exists(), "overview models must exist")
@@ -157,7 +169,7 @@ class OverviewContractTest(unittest.TestCase):
             "ReportingScorecard(",
             "load_recent_revenue_trend",
             "generate_series",
-            "INTERVAL '5 months'",
+            ":context_start",
             "site_month_metrics smm",
             "ensure_site_month_metrics",
             "AVAILABILITY_SUMMARY_QUERY",
@@ -174,10 +186,11 @@ class OverviewContractTest(unittest.TestCase):
         source = ROUTER.read_text(encoding="utf-8")
 
         for contract in [
-            "month_start, month_end = month_bounds(selected_tahun, selected_bulan)",
+            "period.start_date",
+            "period.end_date_exclusive",
             "resolve_transport_date_for_period",
-            "tahun=selected_tahun",
-            "bulan=selected_bulan",
+            "tahun=None",
+            "bulan=None",
         ]:
             with self.subTest(contract=contract):
                 self.assertIn(contract, source)

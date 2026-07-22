@@ -109,7 +109,6 @@ describe('new home page command center contracts', () => {
       'Active Alarms',
       'P1 Transport',
       'Open Tickets',
-      'Snapshot',
       'Health Status',
     ]) {
       assert.doesNotMatch(page, new RegExp(removedLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
@@ -129,16 +128,18 @@ describe('new home page command center contracts', () => {
     assert.ok(transportIndex > impactIndex, 'Transport Quality scorecard must be placed after Today Impact Service');
   });
 
-  it('defaults Home NOP to SIDOARJO and uses requested MoM and latest impact subtitles', () => {
+  it('defaults Home NOP to SIDOARJO and uses equal-period comparison plus latest impact badges', () => {
     const page = src('pages', 'HomePage.jsx');
 
     assert.match(page, /HOME_DEFAULT_NOP\s*=\s*'SIDOARJO'/);
     assert.match(page, /useState\(HOME_DEFAULT_NOP\)/);
     assert.match(page, /const availabilityDelta/);
     assert.match(page, /const payloadDelta/);
-    assert.match(page, /title: 'Network Availability'[\s\S]*subtitle:\s*`\$\{formatSignedPercent\(availabilityDelta\)\} MoM`/);
-    assert.match(page, /title: 'Payload'[\s\S]*subtitle:\s*`\$\{formatSignedPercent\(payloadDelta\)\} MoM`/);
+    assert.match(page, /title: 'Network Availability'[\s\S]*subtitle:\s*`\$\{formatSignedPercent\(availabilityDelta\)\} \$\{comparisonLabel\}`/);
+    assert.match(page, /title: 'Payload'[\s\S]*subtitle:\s*`\$\{formatSignedPercent\(payloadDelta\)\} \$\{comparisonLabel\}`/);
     assert.match(page, /title: 'Today Impact Service'[\s\S]*subtitle:\s*`Open: \$\{formatNumber\(latestImpactDaily\?\.open/);
+    assert.match(page, /badge: 'Latest \/ live'/);
+    assert.match(page, /Snapshot master · tidak dipengaruhi periode/);
     assert.doesNotMatch(page, /critical sites`/);
     assert.doesNotMatch(page, /subtitle: 'total data usage'/);
   });
@@ -152,11 +153,11 @@ describe('new home page command center contracts', () => {
     assert.match(bootstrap, /fetchLatestPeriod\(\)/);
     assert.doesNotMatch(filterBatch, /fetchLatestPeriod/);
     assert.match(page, /latestPeriodReady/);
-    assert.match(page, /if \(!latestPeriodReady \|\| !bulan \|\| !tahun\) return/);
+    assert.match(page, /if \(!latestPeriodReady \|\| !selectedPeriod\.start \|\| !selectedPeriod\.end\) return/);
     assert.match(page, /new AbortController\(\)/);
-    assert.match(page, /fetchOverview\(\{ bulan, tahun, nop \}, controller\.signal\)/);
+    assert.match(page, /fetchOverview\(\{ period: selectedPeriod, nop \}, controller\.signal\)/);
     assert.match(page, /controller\.abort\(\)/);
-    assert.match(api, /export async function fetchOverview\(\{ bulan, tahun, nop \} = \{\}, signal\)/);
+    assert.match(api, /export async function fetchOverview\(\{ bulan, tahun, period, nop \} = \{\}, signal\)/);
 
     const overviewApi = api.split('export async function fetchOverview', 2)[1].split('// ===== Reporting =====', 1)[0];
     assert.match(overviewApi, /signal/);
@@ -208,7 +209,7 @@ describe('new home page command center contracts', () => {
     assert.match(page, /Top 10 Worst Revenue/);
     assert.match(page, /worst_revenue_sites/);
     assert.match(page, /mom_percentage/);
-    assert.match(page, /MoM/);
+    assert.match(page, /comparisonLabel/);
     assert.match(page, /\.slice\(0,\s*10\)/);
     assert.match(page, /formatRevenue/);
     assert.match(page, /formatOutageHours/);

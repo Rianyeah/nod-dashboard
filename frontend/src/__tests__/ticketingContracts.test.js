@@ -27,6 +27,7 @@ describe('Ticketing dashboard contracts', () => {
       'fetchTicketingDashboard',
       'fetchTicketingTickets',
       'fetchTicketingTicketDetail',
+      'exportTicketingTickets',
     ]) {
       assert.match(api, new RegExp(`export async function ${fn}`));
     }
@@ -48,8 +49,8 @@ describe('Ticketing dashboard contracts', () => {
     for (const label of [
       'Ticketing',
       'Ticket Fault Center',
-      'Date Range',
-      'Tahun / Bulan',
+      'Periode Bulan',
+      'Tanggal Kustom',
       'Cluster TO',
       'Kategori Ticket',
       'SLA Status',
@@ -83,8 +84,7 @@ describe('Ticketing dashboard contracts', () => {
     for (const id of [
       'ticketing-start-date',
       'ticketing-end-date',
-      'ticketing-year',
-      'ticketing-month',
+      'ticketing-period',
       'ticketing-nop',
       'ticketing-cluster',
       'ticketing-category',
@@ -122,14 +122,15 @@ describe('Ticketing dashboard contracts', () => {
     assert.match(charts, /accessibilityLayer/g);
   });
 
-  it('shows Ticketing MoM/category percentages, SLA pie hover, and help hints', () => {
+  it('shows Ticketing equal-period/category percentages, SLA pie hover, and help hints', () => {
     const page = src('pages', 'TicketingPage.jsx');
     const charts = src('features', 'ticketing', 'TicketingCharts.jsx');
     const feature = `${page}\n${charts}`;
 
     assert.match(page, /total_tickets_mom_delta/);
     assert.match(page, /total_tickets_mom_rate/);
-    assert.match(page, /formatTicketMoM/);
+    assert.match(page, /formatTicketComparison/);
+    assert.match(page, /getPeriodComparisonLabel/);
     assert.match(page, /categoryShare/);
     assert.match(page, /BPS \$\{categoryShare/);
     assert.match(page, /TS \$\{categoryShare/);

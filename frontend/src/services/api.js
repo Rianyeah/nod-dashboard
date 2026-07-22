@@ -160,11 +160,13 @@ export async function healthCheck() {
 
 // ===== Overview =====
 
-export async function fetchOverview({ bulan, tahun, nop } = {}, signal) {
+export async function fetchOverview({ bulan, tahun, period, nop } = {}, signal) {
   const { data } = await api.get('/overview', {
     params: {
       bulan: bulan || undefined,
       tahun: tahun || undefined,
+      period_start: period?.start || undefined,
+      period_end: period?.end || undefined,
       nop: nop || undefined,
     },
     signal,
@@ -179,37 +181,45 @@ export async function fetchReportingAvailableMonths() {
   return data;
 }
 
-export async function fetchReportingScorecards(trxMonth, nop) {
+function monthPeriodParams(period) {
+  if (typeof period === 'string') return { trx_month: period };
+  return {
+    period_start: period?.start || undefined,
+    period_end: period?.end || undefined,
+  };
+}
+
+export async function fetchReportingScorecards(period, nop) {
   const { data } = await api.get('/reporting/scorecards', {
-    params: { trx_month: trxMonth, nop: nop || undefined },
+    params: { ...monthPeriodParams(period), nop: nop || undefined },
   });
   return data;
 }
 
-export async function fetchRevenueByKabupaten(trxMonth, nop) {
+export async function fetchRevenueByKabupaten(period, nop) {
   const { data } = await api.get('/reporting/revenue-by-kabupaten', {
-    params: { trx_month: trxMonth, nop: nop || undefined },
+    params: { ...monthPeriodParams(period), nop: nop || undefined },
   });
   return data;
 }
 
-export async function fetchSiteClassByKabupaten(trxMonth, nop) {
+export async function fetchSiteClassByKabupaten(period, nop) {
   const { data } = await api.get('/reporting/site-class-by-kabupaten', {
-    params: { trx_month: trxMonth, nop: nop || undefined },
+    params: { ...monthPeriodParams(period), nop: nop || undefined },
   });
   return data;
 }
 
-export async function fetchBatteryByKabupaten(nop) {
+export async function fetchBatteryByKabupaten(period, nop) {
   const { data } = await api.get('/reporting/battery-by-kabupaten', {
-    params: { nop: nop || undefined },
+    params: { ...monthPeriodParams(period), nop: nop || undefined },
   });
   return data;
 }
 
-export async function fetchRevenueTrend(nop) {
+export async function fetchRevenueTrend(period, nop) {
   const { data } = await api.get('/reporting/trend', {
-    params: { nop: nop || undefined },
+    params: { ...monthPeriodParams(period), nop: nop || undefined },
   });
   return data;
 }
@@ -348,6 +358,10 @@ export async function fetchTicketingDashboard(params) {
 export async function fetchTicketingTickets(params) {
   const { data } = await api.get('/ticketing/tickets', { params: params });
   return data;
+}
+
+export async function exportTicketingTickets(params) {
+  return api.get('/ticketing/tickets/export', { params, responseType: 'blob' });
 }
 
 export async function fetchTicketingTicketDetail(ticketNumberSwfm) {

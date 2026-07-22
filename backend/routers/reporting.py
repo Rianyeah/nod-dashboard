@@ -23,6 +23,7 @@ from models.reporting import (
     BatteryByKabupaten,
     RevenueTrendItem,
 )
+from periods import build_period_meta, resolve_month_period
 
 router = APIRouter(prefix="/reporting", tags=["Reporting"])
 
@@ -41,13 +42,39 @@ def build_nop_filter(nop: str | None, alias: str = "d") -> str:
     return filters[alias]
 
 
+def resolve_reporting_period(
+    trx_month: str | None,
+    period_start: str | None,
+    period_end: str | None,
+):
+    return resolve_month_period(
+        period_start=period_start,
+        period_end=period_end,
+        legacy_month=trx_month,
+    )
+
+
+def period_query_params(period, nop: str | None) -> dict:
+    end_year, end_month = (int(part) for part in period.period_end.split("-", 1))
+    return {
+        "period_start": period.period_start,
+        "period_end": period.period_end,
+        "context_start": period.context_start,
+        "start_date": period.start_date,
+        "end_date_exclusive": period.end_date_exclusive,
+        "tahun": end_year,
+        "bulan": end_month,
+        "nop": nop,
+    }
+
+
 SCORECARDS_QUERY = """
 SELECT
     COALESCE(SUM(t.rev), 0) AS total_revenue,
     COALESCE(SUM(t.payload), 0) AS total_payload
 FROM traktor_data t
 LEFT JOIN data_site_master d ON t.site_id = d."Siteid"
-WHERE t.trx_month = :trx_month
+WHERE t.trx_month BETWEEN :period_start AND :period_end
 {nop_filter}
 """
 
@@ -61,6 +88,11 @@ SELECT
         WHEN UPPER(TRIM(d."Siteid")) NOT LIKE 'EPM%' THEN d."Siteid"
     END) AS non_epm_sites
 FROM data_site_master d
+JOIN (
+    SELECT DISTINCT site_id
+    FROM traktor_data
+    WHERE trx_month BETWEEN :period_start AND :period_end
+) selected_sites ON selected_sites.site_id = d."Siteid"
 WHERE d."Status Site" = 'Active'
 {nop_filter}
 """
@@ -86,7 +118,8 @@ WITH availability_cache AS (
         , 4) AS avg_availability
     FROM site_month_metrics smm
     LEFT JOIN data_site_master d ON smm.site_id = d."Siteid"
-    WHERE smm.tahun = :tahun AND smm.bulan = :bulan
+    WHERE CONCAT(smm.tahun::TEXT, '-', LPAD(smm.bulan::TEXT, 2, '0'))
+          BETWEEN :period_start AND :period_end
     {nop_filter}
 ),
 availability_logs AS (
@@ -96,8 +129,8 @@ availability_logs AS (
     FROM availability_logs_jatim a
     LEFT JOIN data_site_master d ON a."SITE ID" = d."Siteid"
     WHERE a.availability IS NOT NULL
-      AND a."Tahun" = :tahun
-      AND a."Bulan" = :bulan
+      AND CONCAT(a."Tahun"::TEXT, '-', LPAD(a."Bulan"::TEXT, 2, '0'))
+          BETWEEN :period_start AND :period_end
     {nop_filter}
 )
 SELECT
@@ -117,8 +150,8 @@ WITH availability_cache AS (
         , 4) AS avg_availability
     FROM site_month_metrics smm
     JOIN data_site_master d2 ON smm.site_id = d2."Siteid"
-    WHERE smm.tahun = CAST(SPLIT_PART(:trx_month, '-', 1) AS INTEGER)
-      AND smm.bulan = CAST(SPLIT_PART(:trx_month, '-', 2) AS INTEGER)
+    WHERE CONCAT(smm.tahun::TEXT, '-', LPAD(smm.bulan::TEXT, 2, '0'))
+          BETWEEN :period_start AND :period_end
       AND d2."Kabupaten/KOTA" IS NOT NULL
       {availability_nop_filter}
     GROUP BY d2."Kabupaten/KOTA"
@@ -130,8 +163,8 @@ availability_logs AS (
     FROM availability_logs_jatim a
     JOIN data_site_master d2 ON a."SITE ID" = d2."Siteid"
     WHERE a.availability IS NOT NULL
-      AND a."Tahun" = CAST(SPLIT_PART(:trx_month, '-', 1) AS INTEGER)
-      AND a."Bulan" = CAST(SPLIT_PART(:trx_month, '-', 2) AS INTEGER)
+      AND CONCAT(a."Tahun"::TEXT, '-', LPAD(a."Bulan"::TEXT, 2, '0'))
+          BETWEEN :period_start AND :period_end
       AND d2."Kabupaten/KOTA" IS NOT NULL
       {availability_nop_filter}
     GROUP BY d2."Kabupaten/KOTA"
@@ -149,8 +182,8 @@ ticket_aggregate AS (
         COUNT(*) FILTER (WHERE UPPER(TRIM(tfc.kategori_tt)) = 'BPS') AS ticket_swfm_bps,
         COUNT(*) FILTER (WHERE UPPER(TRIM(tfc.kategori_tt)) LIKE 'TS%') AS ticket_swfm_ts
     FROM public.ticketing_fault_center tfc
-    WHERE tfc.tahun = CAST(SPLIT_PART(:trx_month, '-', 1) AS INTEGER)
-      AND EXTRACT(MONTH FROM tfc.created_at)::int = CAST(SPLIT_PART(:trx_month, '-', 2) AS INTEGER)
+    WHERE tfc.created_at >= CAST(:start_date AS date)
+      AND tfc.created_at < CAST(:end_date_exclusive AS date)
       AND NULLIF(TRIM(tfc.kabupaten_kota), '') IS NOT NULL
       {ticket_nop_filter}
     GROUP BY 1
@@ -161,8 +194,8 @@ proker_aggregate AS (
         COUNT(*) FILTER (WHERE UPPER(TRIM(p.status)) = 'OPEN') AS proker_open,
         COUNT(*) FILTER (WHERE UPPER(TRIM(p.status)) = 'CLOSE') AS proker_closed
     FROM public.proker_enom_jatim_2026 p
-    WHERE CAST(SPLIT_PART(:trx_month, '-', 1) AS INTEGER) = 2026
-      AND p.bulan = CAST(SPLIT_PART(:trx_month, '-', 2) AS INTEGER)
+    WHERE p.create_date >= CAST(:start_date AS date)
+      AND p.create_date < CAST(:end_date_exclusive AS date)
       AND NULLIF(TRIM(p.kabupaten), '') IS NOT NULL
       {proker_nop_filter}
     GROUP BY 1
@@ -195,7 +228,7 @@ JOIN data_site_master d ON t.site_id = d."Siteid"
 LEFT JOIN availability avail ON avail.kabupaten = d."Kabupaten/KOTA"
 LEFT JOIN ticket_aggregate tickets ON tickets.kabupaten = d."Kabupaten/KOTA"
 LEFT JOIN proker_aggregate proker ON proker.kabupaten = d."Kabupaten/KOTA"
-WHERE t.trx_month = :trx_month
+WHERE t.trx_month BETWEEN :period_start AND :period_end
   AND d."Kabupaten/KOTA" IS NOT NULL
   {nop_filter}
 GROUP BY d."Kabupaten/KOTA", avail.avg_availability
@@ -213,7 +246,7 @@ SELECT
     COUNT(DISTINCT t.site_id) AS total
 FROM traktor_data t
 JOIN data_site_master d ON t.site_id = d."Siteid"
-WHERE t.trx_month = :trx_month
+WHERE t.trx_month BETWEEN :period_start AND :period_end
   AND d."Kabupaten/KOTA" IS NOT NULL
   AND d."Site Class" NOT LIKE '#N/A%'
   {nop_filter}
@@ -222,6 +255,11 @@ ORDER BY d."Kabupaten/KOTA"
 """
 
 BATTERY_BY_KABUPATEN_QUERY = """
+WITH selected_sites AS (
+    SELECT DISTINCT site_id
+    FROM traktor_data
+    WHERE trx_month BETWEEN :period_start AND :period_end
+)
 SELECT
     d."Kabupaten/KOTA" AS kabupaten,
     COUNT(DISTINCT CASE WHEN LOWER(d."Type Battery") = 'lithium' THEN d."Siteid" END) AS lithium,
@@ -229,6 +267,7 @@ SELECT
     COUNT(DISTINCT CASE WHEN LOWER(d."Type Battery") IN ('tidak ada', '#n/a', '') OR d."Type Battery" IS NULL THEN d."Siteid" END) AS tidak_ada,
     COUNT(DISTINCT d."Siteid") AS total
 FROM data_site_master d
+JOIN selected_sites t ON t.site_id = d."Siteid"
 WHERE d."Kabupaten/KOTA" IS NOT NULL
 {nop_filter}
 GROUP BY d."Kabupaten/KOTA"
@@ -246,7 +285,7 @@ WITH revenue AS (
         COALESCE(SUM(t.traffic), 0) AS total_traffic
     FROM traktor_data t
     LEFT JOIN data_site_master d ON t.site_id = d."Siteid"
-    WHERE 1 = 1
+    WHERE t.trx_month BETWEEN :context_start AND :period_end
       {nop_filter}
     GROUP BY t.trx_month
 ),
@@ -260,7 +299,8 @@ availability_cache AS (
         , 4) AS avg_availability
     FROM site_month_metrics smm
     LEFT JOIN data_site_master d ON smm.site_id = d."Siteid"
-    WHERE 1 = 1
+    WHERE CONCAT(smm.tahun::TEXT, '-', LPAD(smm.bulan::TEXT, 2, '0'))
+          BETWEEN :context_start AND :period_end
       {availability_nop_filter}
     GROUP BY smm.tahun, smm.bulan
 ),
@@ -271,6 +311,8 @@ availability_logs AS (
     FROM availability_logs_jatim a
     LEFT JOIN data_site_master d ON a."SITE ID" = d."Siteid"
     WHERE a.availability IS NOT NULL
+      AND CONCAT(a."Tahun"::TEXT, '-', LPAD(a."Bulan"::TEXT, 2, '0'))
+          BETWEEN :context_start AND :period_end
       {availability_nop_filter}
     GROUP BY a."Tahun", a."Bulan"
 ),
@@ -326,16 +368,20 @@ async def get_available_months(
 
 @router.get("/scorecards", response_model=ReportingScorecard)
 async def get_scorecards(
-    trx_month: str = Query(..., description="Period in YYYY-MM format"),
+    trx_month: str | None = Query(None, description="Legacy period in YYYY-MM format"),
+    period_start: str | None = Query(None, description="Inclusive period start in YYYY-MM format"),
+    period_end: str | None = Query(None, description="Inclusive period end in YYYY-MM format"),
     nop: str = Query(None),
     session: AsyncSession = Depends(get_session),
     response: Response = None,
 ):
     """Scorecard KPIs: total sites, revenue, payload, availability."""
+    period = resolve_reporting_period(trx_month, period_start, period_end)
     cache_key = redis_cache.make_key(
         "reporting",
         "scorecards",
-        trx_month=trx_month,
+        period_start=period.period_start,
+        period_end=period.period_end,
         nop=nop or "",
     )
     cache_status, cached_value = await redis_cache.get_json(cache_key)
@@ -345,7 +391,7 @@ async def get_scorecards(
         return cached_value
 
     # Revenue/payload from traktor_data
-    params = {"trx_month": trx_month, "nop": nop}
+    params = period_query_params(period, nop)
     result = await session.execute(
         text(SCORECARDS_QUERY.format(nop_filter=build_nop_filter(nop, "d"))),
         params,
@@ -357,7 +403,7 @@ async def get_scorecards(
 
     site_result = await session.execute(
         text(ACTIVE_MASTER_SITE_BREAKDOWN_QUERY.format(nop_filter=build_nop_filter(nop, "d"))),
-        {"nop": nop},
+        params,
     )
     site_row = site_result.mappings().first()
     total_sites = int(site_row.get("total_sites") or 0) if site_row else 0
@@ -368,11 +414,9 @@ async def get_scorecards(
     payload_ytd = 0
     avg_availability = None
     try:
-        tahun, bulan = (int(part) for part in trx_month.split("-", 1))
-
         ytd_result = await session.execute(
             text(YTD_SCORECARDS_QUERY.format(nop_filter=build_nop_filter(nop, "d"))),
-            {"tahun": tahun, "bulan": bulan, "nop": nop},
+            params,
         )
         ytd_row = ytd_result.mappings().first()
         if ytd_row:
@@ -381,7 +425,7 @@ async def get_scorecards(
 
         avail_result = await session.execute(
             text(AVAILABILITY_SCORECARD_QUERY.format(nop_filter=build_nop_filter(nop, "d"))),
-            {"tahun": tahun, "bulan": bulan, "nop": nop},
+            params,
         )
         avail_row = avail_result.mappings().first()
         if avail_row:
@@ -390,6 +434,7 @@ async def get_scorecards(
     except (ValueError, IndexError):
         pass
 
+    available_months = await get_available_months(session=session)
     payload = ReportingScorecard(
         total_sites=total_sites,
         epm_sites=epm_sites,
@@ -399,6 +444,7 @@ async def get_scorecards(
         revenue_ytd=revenue_ytd,
         payload_ytd=payload_ytd,
         avg_availability=avg_availability,
+        period_meta=build_period_meta(period, {"reporting": available_months}),
     )
     if cache_status == "MISS":
         await redis_cache.set_json(cache_key, payload)
@@ -409,16 +455,20 @@ async def get_scorecards(
 
 @router.get("/revenue-by-kabupaten", response_model=list[RevenueByKabupaten])
 async def get_revenue_by_kabupaten(
-    trx_month: str = Query(..., description="Period in YYYY-MM format"),
+    trx_month: str | None = Query(None, description="Legacy period in YYYY-MM format"),
+    period_start: str | None = Query(None),
+    period_end: str | None = Query(None),
     nop: str = Query(None),
     session: AsyncSession = Depends(get_session),
     response: Response = None,
 ):
     """Revenue & payload breakdown pivot by Kabupaten/Kota."""
+    period = resolve_reporting_period(trx_month, period_start, period_end)
     cache_key = redis_cache.make_key(
         "reporting",
         "revenue-by-kabupaten",
-        trx_month=trx_month,
+        period_start=period.period_start,
+        period_end=period.period_end,
         nop=nop or "",
     )
     cache_status, cached_value = await redis_cache.get_json(cache_key)
@@ -434,7 +484,7 @@ async def get_revenue_by_kabupaten(
             ticket_nop_filter=build_nop_filter(nop, "tfc"),
             proker_nop_filter=build_nop_filter(nop, "p"),
         )),
-        {"trx_month": trx_month, "nop": nop},
+        period_query_params(period, nop),
     )
     rows = result.mappings().all()
 
@@ -474,16 +524,20 @@ async def get_revenue_by_kabupaten(
 
 @router.get("/site-class-by-kabupaten", response_model=list[SiteClassByKabupaten])
 async def get_site_class_by_kabupaten(
-    trx_month: str = Query(..., description="Period in YYYY-MM format"),
+    trx_month: str | None = Query(None, description="Legacy period in YYYY-MM format"),
+    period_start: str | None = Query(None),
+    period_end: str | None = Query(None),
     nop: str = Query(None),
     session: AsyncSession = Depends(get_session),
     response: Response = None,
 ):
     """Site class distribution cross-tab by Kabupaten/Kota."""
+    period = resolve_reporting_period(trx_month, period_start, period_end)
     cache_key = redis_cache.make_key(
         "reporting",
         "site-class-by-kabupaten",
-        trx_month=trx_month,
+        period_start=period.period_start,
+        period_end=period.period_end,
         nop=nop or "",
     )
     cache_status, cached_value = await redis_cache.get_json(cache_key)
@@ -494,7 +548,7 @@ async def get_site_class_by_kabupaten(
 
     result = await session.execute(
         text(SITE_CLASS_BY_KABUPATEN_QUERY.format(nop_filter=build_nop_filter(nop, "d"))),
-        {"trx_month": trx_month, "nop": nop},
+        period_query_params(period, nop),
     )
     rows = result.mappings().all()
 
@@ -519,14 +573,24 @@ async def get_site_class_by_kabupaten(
 
 @router.get("/battery-by-kabupaten", response_model=list[BatteryByKabupaten])
 async def get_battery_by_kabupaten(
+    period_start: str | None = Query(None),
+    period_end: str | None = Query(None),
     nop: str = Query(None),
     session: AsyncSession = Depends(get_session),
     response: Response = None,
 ):
     """Battery type distribution cross-tab by Kabupaten/Kota."""
+    if period_start is None and period_end is None:
+        available_months = await get_available_months(session=session)
+        latest_month = available_months[0] if available_months else None
+        period = resolve_month_period(legacy_month=latest_month)
+    else:
+        period = resolve_month_period(period_start=period_start, period_end=period_end)
     cache_key = redis_cache.make_key(
         "reporting",
         "battery-by-kabupaten",
+        period_start=period.period_start,
+        period_end=period.period_end,
         nop=nop or "",
     )
     cache_status, cached_value = await redis_cache.get_json(cache_key)
@@ -537,7 +601,7 @@ async def get_battery_by_kabupaten(
 
     result = await session.execute(
         text(BATTERY_BY_KABUPATEN_QUERY.format(nop_filter=build_nop_filter(nop, "d"))),
-        {"nop": nop},
+        period_query_params(period, nop),
     )
     rows = result.mappings().all()
 
@@ -560,14 +624,24 @@ async def get_battery_by_kabupaten(
 
 @router.get("/trend", response_model=list[RevenueTrendItem])
 async def get_revenue_trend(
+    period_start: str | None = Query(None),
+    period_end: str | None = Query(None),
     nop: str = Query(None),
     session: AsyncSession = Depends(get_session),
     response: Response = None,
 ):
-    """Monthly revenue/payload/traffic trend across all available months."""
+    """Monthly revenue/payload/traffic trend with six months of context."""
+    if period_start is None and period_end is None:
+        available_months = await get_available_months(session=session)
+        latest_month = available_months[0] if available_months else None
+        period = resolve_month_period(legacy_month=latest_month)
+    else:
+        period = resolve_month_period(period_start=period_start, period_end=period_end)
     cache_key = redis_cache.make_key(
         "reporting",
         "trend",
+        period_start=period.period_start,
+        period_end=period.period_end,
         nop=nop or "",
     )
     cache_status, cached_value = await redis_cache.get_json(cache_key)
@@ -581,7 +655,7 @@ async def get_revenue_trend(
             nop_filter=build_nop_filter(nop, "d"),
             availability_nop_filter=build_nop_filter(nop, "d"),
         )),
-        {"nop": nop},
+        period_query_params(period, nop),
     )
     rows = result.mappings().all()
 

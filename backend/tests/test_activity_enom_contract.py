@@ -37,7 +37,9 @@ class ActivityEnomContractTest(unittest.TestCase):
                 self.assertIn(route, source)
 
         for query_param in [
-            "month_date: date = Query(",
+            "month_date: date | None = Query(None",
+            "period_start: str | None = None",
+            "period_end: str | None = None",
             "year: int | None = Query(None",
             "nop: str | None = Query(None",
             "category: str | None = Query(None",
@@ -60,7 +62,8 @@ class ActivityEnomContractTest(unittest.TestCase):
             "COUNT(*) FILTER (WHERE a.xcek IS NULL AND UPPER(a.status) = 'OPEN') AS annual_open_activity",
             "COUNT(*) FILTER (WHERE a.xcek IS NULL AND UPPER(a.status) = 'CLOSE') AS annual_close_activity",
             "annual_filter_clause = build_filter_clause(params, include_month=False, include_year=True)",
-            "EXTRACT(YEAR FROM a.create_date) = :year",
+            "EXTRACT(YEAR FROM a.create_date) = :annual_year",
+            '"annual_year": year or annual_year',
         ]:
             with self.subTest(contract=contract):
                 self.assertIn(contract, source + models)
@@ -72,7 +75,8 @@ class ActivityEnomContractTest(unittest.TestCase):
             "TABLE_NAME = \"public.proker_enom_jatim_2026\"",
             "build_filter_clause",
             "CAST(:month_date AS date) AS month_date",
-            "a.create_date = :month_date",
+            "{alias}.create_date >= :period_start_date",
+            "{alias}.create_date < :period_end_exclusive",
             "a.nop = :nop",
             "a.part = :category",
             "COALESCE(NULLIF(TRIM(a.kabupaten), ''), 'Unknown')",

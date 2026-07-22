@@ -28,6 +28,7 @@ class TicketingContractTest(unittest.TestCase):
             '@router.get("/filters"',
             '@router.get("/dashboard"',
             '@router.get("/tickets"',
+            '@router.get("/tickets/export"',
             '@router.get("/tickets/{ticket_number_swfm}"',
         ]:
             with self.subTest(route=route):
@@ -46,9 +47,25 @@ class TicketingContractTest(unittest.TestCase):
             "backup_sukses: str | None = Query(None",
             "rc_category: str | None = Query(None",
             "is_escalate: bool | None = Query(None",
+            "period_start: str | None = Query(None",
+            "period_end: str | None = Query(None",
         ]:
             with self.subTest(query_param=query_param):
                 self.assertIn(query_param, source)
+
+    def test_full_filtered_csv_export_includes_period_coverage_metadata(self):
+        source = self.read_router_source()
+
+        for contract in [
+            "StreamingResponse",
+            "session.stream",
+            '"report_period"',
+            '"missing_months"',
+            "period_meta.period_start",
+            "period_meta.period_end",
+        ]:
+            with self.subTest(contract=contract):
+                self.assertIn(contract, source)
 
     def test_global_filters_and_category_normalization_are_applied(self):
         source = self.read_router_source()

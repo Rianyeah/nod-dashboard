@@ -21,6 +21,7 @@ import {
   CartesianGrid,
   ComposedChart,
   Line,
+  ReferenceArea,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -40,9 +41,14 @@ import {
   fetchImpactServiceFilters,
   fetchLatestPeriod,
   fetchOverview,
+  fetchReportingAvailableMonths,
   fetchTicketingFilters,
   fetchTransportQualityFilters,
 } from '../services/api';
+import {
+  formatMonthRangeLabel,
+  getPeriodComparisonLabel,
+} from '../components/dashboard-filters/periodRange';
 import {
   formatNumber,
   formatPayload,
@@ -190,16 +196,11 @@ function getMomTone(value) {
   return 'text-[var(--text-muted)]';
 }
 
-function getTrendDelta(trendRows, keyName) {
-  if (!trendRows?.length || trendRows.length < 2) return null;
-  const current = asNumber(trendRows[trendRows.length - 1]?.[keyName], null);
-  const previous = asNumber(trendRows[trendRows.length - 2]?.[keyName], null);
+function getAggregateDelta(currentValue, previousValue) {
+  const current = asNumber(currentValue, null);
+  const previous = asNumber(previousValue, null);
   if (current == null || previous == null || previous === 0) return null;
   return ((current - previous) / previous) * 100;
-}
-
-function getRevenueDelta(trendRows) {
-  return getTrendDelta(trendRows, 'total_revenue');
 }
 
 function formatSignedPercent(value) {
@@ -282,9 +283,12 @@ function TrendTooltip({ active, payload, label }) {
   );
 }
 
-function MetricCard({ title, value, subtitle, icon: Icon, tone = 'info' }) {
+function MetricCard({ title, value, subtitle, icon: Icon, tone = 'info', badge }) {
   return (
-    <DashboardKpiCard title={title} value={value} subtitle={subtitle} icon={Icon} tone={tone} />
+    <div className="relative">
+      {badge ? <span className="absolute right-2 top-2 z-10 rounded-full border border-sky-400/30 bg-sky-400/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-sky-300">{badge}</span> : null}
+      <DashboardKpiCard title={title} value={value} subtitle={subtitle} icon={Icon} tone={tone} />
+    </div>
   );
 }
 
@@ -637,8 +641,9 @@ function buildPrioritySignals(overview, latestImpactDaily) {
 export default function HomePage() {
   const { setLastUpdates } = useDashboardSidebar();
   const themeTokens = useDashboardThemeTokens();
-  const [bulan, setBulan] = useState(() => Number(import.meta.env.VITE_DEFAULT_BULAN) || null);
-  const [tahun, setTahun] = useState(() => Number(import.meta.env.VITE_DEFAULT_TAHUN) || null);
+  const [selectedPeriod, setSelectedPeriod] = useState({ start: '', end: '' });
+  const [defaultPeriod, setDefaultPeriod] = useState({ start: '', end: '' });
+  const [availableMonths, setAvailableMonths] = useState([]);
   const [nop, setNop] = useState(HOME_DEFAULT_NOP);
   const [nopOptions, setNopOptions] = useState([]);
   const [latestPeriodReady, setLatestPeriodReady] = useState(false);
@@ -653,21 +658,24 @@ export default function HomePage() {
       .then((latest) => {
         if (cancelled) return;
         if (latest?.bulan && latest?.tahun) {
-          setBulan(Number(latest.bulan));
-          setTahun(Number(latest.tahun));
+          const latestMonth = `${latest.tahun}-${String(latest.bulan).padStart(2, '0')}`;
+          setSelectedPeriod({ start: latestMonth, end: latestMonth });
+          setDefaultPeriod({ start: latestMonth, end: latestMonth });
           setLatestPeriodReady(true);
           return;
         }
         const fallbackDate = new Date();
-        setBulan((current) => current || fallbackDate.getMonth() + 1);
-        setTahun((current) => current || fallbackDate.getFullYear());
+        const fallbackMonth = `${fallbackDate.getFullYear()}-${String(fallbackDate.getMonth() + 1).padStart(2, '0')}`;
+        setSelectedPeriod({ start: fallbackMonth, end: fallbackMonth });
+        setDefaultPeriod({ start: fallbackMonth, end: fallbackMonth });
         setLatestPeriodReady(true);
       })
       .catch(() => {
         if (cancelled) return;
         const fallbackDate = new Date();
-        setBulan((current) => current || fallbackDate.getMonth() + 1);
-        setTahun((current) => current || fallbackDate.getFullYear());
+        const fallbackMonth = `${fallbackDate.getFullYear()}-${String(fallbackDate.getMonth() + 1).padStart(2, '0')}`;
+        setSelectedPeriod({ start: fallbackMonth, end: fallbackMonth });
+        setDefaultPeriod({ start: fallbackMonth, end: fallbackMonth });
         setLatestPeriodReady(true);
       });
 
@@ -682,8 +690,9 @@ export default function HomePage() {
       fetchImpactServiceFilters().catch(() => ({ nops: [] })),
       fetchTransportQualityFilters().catch(() => ({ nops: [] })),
       fetchTicketingFilters().catch(() => ({ nops: [] })),
+      fetchReportingAvailableMonths().catch(() => []),
     ])
-      .then(([siteOptions, impactOptions, transportOptions, ticketingOptions]) => {
+      .then(([siteOptions, impactOptions, transportOptions, ticketingOptions, reportingMonths]) => {
         if (cancelled) return;
         const mergedNops = mergeNopOptions(
           siteOptions?.nop,
@@ -692,13 +701,14 @@ export default function HomePage() {
           ticketingOptions?.nops,
         );
         setNopOptions(mergedNops);
+        setAvailableMonths(reportingMonths || []);
       });
 
     return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
-    if (!latestPeriodReady || !bulan || !tahun) return;
+    if (!latestPeriodReady || !selectedPeriod.start || !selectedPeriod.end) return;
     let cancelled = false;
     const controller = new AbortController();
 
@@ -707,7 +717,7 @@ export default function HomePage() {
         if (cancelled) return null;
         setLoading(true);
         setError('');
-        return fetchOverview({ bulan, tahun, nop }, controller.signal);
+        return fetchOverview({ period: selectedPeriod, nop }, controller.signal);
       })
       .then((data) => {
         if (!cancelled && data) setOverview(data);
@@ -725,15 +735,23 @@ export default function HomePage() {
       cancelled = true;
       controller.abort();
     };
-  }, [bulan, latestPeriodReady, nop, tahun]);
+  }, [latestPeriodReady, nop, selectedPeriod]);
+
+  const [periodEndYear, periodEndMonth] = selectedPeriod.end
+    ? selectedPeriod.end.split('-').map(Number)
+    : [null, null];
+  const periodLabel = selectedPeriod.start && selectedPeriod.end
+    ? formatMonthRangeLabel(selectedPeriod.start, selectedPeriod.end)
+    : 'Latest period';
+  const comparisonLabel = getPeriodComparisonLabel(selectedPeriod.start, selectedPeriod.end);
 
   useEffect(() => {
-    setLastUpdates(buildLastUpdateRows(overview, bulan, tahun));
-  }, [bulan, overview, setLastUpdates, tahun]);
+    setLastUpdates(buildLastUpdateRows(overview, periodEndMonth, periodEndYear));
+  }, [overview, periodEndMonth, periodEndYear, setLastUpdates]);
 
   const availability = overview?.availability || {};
   const reporting = overview?.reporting || {};
-  const trendRows = (overview?.reporting_trend || []).slice(-6);
+  const trendRows = overview?.reporting_trend || [];
   const impact = overview?.impact_service || {};
   const impactDailyTrend = overview?.impact_daily_trend || [];
   const latestImpactDaily = getLatestDailyRow(impactDailyTrend);
@@ -745,9 +763,14 @@ export default function HomePage() {
   const worstAvailabilitySites = overview?.worst_sites || [];
   const worstRevenueSites = overview?.worst_revenue_sites || [];
 
-  const revenueDelta = getRevenueDelta(overview?.reporting_trend || []);
-  const availabilityDelta = getTrendDelta(trendRows, 'avg_availability');
-  const payloadDelta = getTrendDelta(trendRows, 'total_payload');
+  const comparisonReporting = overview?.comparison_reporting || {};
+  const revenueDelta = getAggregateDelta(reporting.total_revenue, comparisonReporting.total_revenue);
+  const availabilityDelta = getAggregateDelta(reporting.avg_availability, comparisonReporting.avg_availability);
+  const payloadDelta = getAggregateDelta(reporting.total_payload, comparisonReporting.total_payload);
+  const coverageMissing = overview?.period_meta?.missing_months_by_source || {};
+  const coverageWarning = Object.entries(coverageMissing)
+    .map(([source, months]) => `${source}: ${months.join(', ')}`)
+    .join(' · ');
   const prioritySignals = buildPrioritySignals(overview, latestImpactDaily);
   const homeRevenueDomain = buildPaddedDomain(trendRows, 'total_revenue');
   const homePayloadDomain = buildPaddedDomain(trendRows, 'total_payload');
@@ -757,28 +780,28 @@ export default function HomePage() {
     {
       title: 'Total Sites',
       value: formatNumber(availability.total_site_dengan_data || reporting.total_sites),
-      subtitle: formatPeriodLabel(bulan, tahun),
+      subtitle: periodLabel,
       icon: Network,
       tone: 'info',
     },
     {
       title: 'Network Availability',
       value: formatPercent(availability.avg_availability),
-      subtitle: `${formatSignedPercent(availabilityDelta)} MoM`,
+      subtitle: `${formatSignedPercent(availabilityDelta)} ${comparisonLabel}`,
       icon: Signal,
       tone: getAvailabilityTone(availability.avg_availability),
     },
     {
       title: 'Revenue',
       value: formatRevenue(reporting.total_revenue),
-      subtitle: `${formatSignedPercent(revenueDelta)} MoM`,
+      subtitle: `${formatSignedPercent(revenueDelta)} ${comparisonLabel}`,
       icon: BarChart3,
       tone: revenueDelta == null || revenueDelta >= 0 ? 'success' : 'warning',
     },
     {
       title: 'Payload',
       value: formatPayload(reporting.total_payload),
-      subtitle: `${formatSignedPercent(payloadDelta)} MoM`,
+      subtitle: `${formatSignedPercent(payloadDelta)} ${comparisonLabel}`,
       icon: HardDrive,
       tone: 'info',
     },
@@ -795,6 +818,7 @@ export default function HomePage() {
       subtitle: `Open: ${formatNumber(latestImpactDaily?.open ?? impact.open_alarms)} Clear: ${formatNumber(latestImpactDaily?.clear ?? impact.clear_alarms)}`,
       icon: BellRing,
       tone: getCountTone(latestImpactDaily?.open ?? impact.open_alarms, 1, 50),
+      badge: 'Latest / live',
     },
     {
       title: 'Transport Quality',
@@ -808,12 +832,12 @@ export default function HomePage() {
   return (
     <div className="flex min-h-screen flex-col bg-[var(--bg-base)] text-[var(--text-primary)]">
       <Header
-        bulan={bulan}
-        tahun={tahun}
+        period={selectedPeriod}
+        defaultPeriod={defaultPeriod}
+        availableMonths={availableMonths}
         nop={nop}
         nopOptions={nopOptions}
-        onBulanChange={setBulan}
-        onTahunChange={setTahun}
+        onPeriodApply={setSelectedPeriod}
         onNopChange={setNop}
       />
       <Breadcrumb />
@@ -823,7 +847,7 @@ export default function HomePage() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">Command Center</h1>
             <p className="mt-1 text-sm text-[var(--text-muted)]">
-              {formatPeriodLabel(bulan, tahun)} {nop ? `- ${nop}` : '- Semua NOP'}
+              {periodLabel} {nop ? `- ${nop}` : '- Semua NOP'}
             </p>
           </div>
         </section>
@@ -840,6 +864,12 @@ export default function HomePage() {
           </section>
         )}
 
+        {coverageWarning ? (
+          <section className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-xs text-amber-200">
+            Coverage data belum lengkap — {coverageWarning}
+          </section>
+        ) : null}
+
         <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
           {loading && !overview
             ? Array.from({ length: 7 }, (_, index) => <div key={index} className="skeleton h-[104px] rounded-xl" />)
@@ -850,6 +880,7 @@ export default function HomePage() {
           <div className="mb-2 flex items-center gap-2">
             <Gauge className="size-4 text-[var(--primary-light)]" />
             <h2 className="text-sm font-semibold text-[var(--text-primary)]">Data Potensi Site</h2>
+            <span className="rounded-full border border-violet-400/30 bg-violet-400/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-violet-300">Snapshot master · tidak dipengaruhi periode</span>
           </div>
           <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-5">
             <PotentialItem label="Site Lithium" metric={sitePotential.site_lithium} tone="success" />
@@ -875,6 +906,7 @@ export default function HomePage() {
             {trendRows.length ? (
               <ResponsiveContainer width="100%" height={260}>
                 <ComposedChart data={trendRows} margin={{ top: 8, right: 60, left: 4, bottom: 0 }}>
+                  <ReferenceArea x1={selectedPeriod.start} x2={selectedPeriod.end} fill="#0EA5E9" fillOpacity={0.08} strokeOpacity={0} />
                   <defs>
                     <linearGradient id="homeRevenueGradient" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#60A5FA" stopOpacity={0.28} />
@@ -1026,7 +1058,7 @@ export default function HomePage() {
                           {formatRevenue(site.total_revenue)}
                         </p>
                         <p className={`mt-1 whitespace-nowrap font-mono text-[10px] font-semibold ${getMomTone(site.mom_percentage)}`}>
-                          MoM {formatSignedPercent(site.mom_percentage)}
+                          {comparisonLabel} {formatSignedPercent(site.mom_percentage)}
                         </p>
                       </div>
                     </Link>

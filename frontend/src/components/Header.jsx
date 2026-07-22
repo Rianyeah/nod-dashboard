@@ -4,6 +4,7 @@ import {
   DashboardCombobox,
   DashboardFilterBar,
   DashboardFilterSelect,
+  DashboardMonthRangePicker,
 } from './dashboard-filters/DashboardFilters';
 
 const BULAN_OPTIONS = [
@@ -24,7 +25,19 @@ const BULAN_OPTIONS = [
 const currentYear = new Date().getFullYear();
 const TAHUN_OPTIONS = Array.from({ length: 5 }, (_, i) => currentYear - i);
 
-export default function Header({ bulan, tahun, nop, nopOptions = [], onBulanChange, onTahunChange, onNopChange }) {
+export default function Header({
+  bulan,
+  tahun,
+  period,
+  defaultPeriod,
+  availableMonths = [],
+  nop,
+  nopOptions = [],
+  onBulanChange,
+  onTahunChange,
+  onPeriodApply,
+  onNopChange,
+}) {
   return (
     <header className="relative border-b border-[var(--border)] bg-[var(--bg-header)] backdrop-blur-xl">
       <div
@@ -73,25 +86,39 @@ export default function Header({ bulan, tahun, nop, nopOptions = [], onBulanChan
             />
           </div>
 
-          <DashboardFilterSelect
-            id="filter-bulan"
-            label="Bulan"
-            value={bulan}
-            onChange={(nextValue) => onBulanChange(Number(nextValue))}
-            options={BULAN_OPTIONS}
-            includeAll={false}
-            className="min-w-[120px]"
-          />
+          {period ? (
+            <DashboardMonthRangePicker
+              id="filter-period"
+              label="Periode"
+              value={period}
+              defaultValue={defaultPeriod}
+              availableMonths={availableMonths}
+              onApply={onPeriodApply}
+              onReset={onPeriodApply}
+            />
+          ) : (
+            <>
+              <DashboardFilterSelect
+                id="filter-bulan"
+                label="Bulan"
+                value={bulan}
+                onChange={(nextValue) => onBulanChange(Number(nextValue))}
+                options={BULAN_OPTIONS}
+                includeAll={false}
+                className="min-w-[120px]"
+              />
 
-          <DashboardFilterSelect
-            id="filter-tahun"
-            label="Tahun"
-            value={tahun}
-            onChange={(nextValue) => onTahunChange(Number(nextValue))}
-            options={TAHUN_OPTIONS}
-            includeAll={false}
-            className="min-w-[96px]"
-          />
+              <DashboardFilterSelect
+                id="filter-tahun"
+                label="Tahun"
+                value={tahun}
+                onChange={(nextValue) => onTahunChange(Number(nextValue))}
+                options={TAHUN_OPTIONS}
+                includeAll={false}
+                className="min-w-[96px]"
+              />
+            </>
+          )}
         </DashboardFilterBar>
       </div>
     </header>
