@@ -3,6 +3,7 @@ from datetime import date, datetime
 from typing import Optional
 
 from pydantic import BaseModel, Field
+from models.period import MonthPeriodMeta
 
 
 class ActivityEnomMonthOption(BaseModel):
@@ -25,6 +26,7 @@ class ActivityEnomFilters(BaseModel):
     categories: list[str] = Field(default_factory=list)
     default_year: Optional[int] = None
     default_month: Optional[date] = None
+    available_months: list[str] = Field(default_factory=list)
 
 
 class ActivityEnomSummary(BaseModel):
@@ -38,6 +40,7 @@ class ActivityEnomSummary(BaseModel):
     open_activity: int = 0
     close_activity: int = 0
     completion_rate: float = 0
+    period_meta: Optional[MonthPeriodMeta] = None
 
 
 class ActivityEnomDistributionItem(BaseModel):
@@ -103,6 +106,7 @@ class ActivityEnomActivityResponse(BaseModel):
     page: int = 1
     limit: int = 20
     total_pages: int = 0
+    period_meta: Optional[MonthPeriodMeta] = None
 
 
 class ActivityEnomActivityDetail(ActivityEnomActivityRow):

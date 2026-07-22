@@ -2,6 +2,7 @@ from datetime import date, datetime
 from typing import Any
 
 from pydantic import BaseModel
+from models.period import MonthPeriodMeta
 
 
 class TicketingFilters(BaseModel):
@@ -11,6 +12,7 @@ class TicketingFilters(BaseModel):
     default_end_date: date | None = None
     years: list[int] = []
     months: list[int] = []
+    available_months: list[str] = []
     nops: list[str] = []
     clusters: list[str] = []
     categories: list[str] = []
@@ -99,6 +101,7 @@ class TicketingDashboard(BaseModel):
     visiting_backup_distribution: list[TicketingVisitingBackupItem] = []
     rc_category_pareto: list[TicketingRcParetoItem] = []
     top_sites: list[TicketingTopSite] = []
+    period_meta: MonthPeriodMeta | None = None
 
 
 class TicketingTicketItem(BaseModel):
@@ -124,6 +127,7 @@ class TicketingTicketResponse(BaseModel):
     page: int
     limit: int
     total_pages: int
+    period_meta: MonthPeriodMeta | None = None
 
 
 class TicketingTicketDetail(BaseModel):

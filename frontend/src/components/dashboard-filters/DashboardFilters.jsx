@@ -71,6 +71,11 @@ import {
   parseLocalDate,
   toFilterControlValue,
 } from './dashboardFilterUtils';
+import {
+  buildMonthRange,
+  formatMonthRangeLabel,
+  getSemesterRange,
+} from './periodRange';
 
 function useDesktopCalendar() {
   const [isDesktop, setIsDesktop] = useState(() => (
@@ -256,6 +261,142 @@ export function DashboardCombobox({
 
 export function DashboardPeriodPicker(props) {
   return <DashboardCombobox searchPlaceholder="Cari periode..." {...props} />;
+}
+
+export function DashboardMonthRangePicker({
+  id: controlId,
+  label = 'Periode',
+  value = { start: '', end: '' },
+  defaultValue,
+  availableMonths = [],
+  onApply,
+  onReset,
+  className,
+  triggerClassName,
+  disabled,
+  ...props
+}) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const [error, setError] = useState('');
+  const currentYear = Number((value.end || value.start || `${new Date().getFullYear()}-01`).slice(0, 4));
+  const [shortcutYear, setShortcutYear] = useState(currentYear);
+  const yearOptions = useMemo(() => {
+    const years = [...new Set(availableMonths
+      .map((month) => Number(String(month).slice(0, 4)))
+      .filter(Number.isInteger))]
+      .sort((left, right) => right - left);
+    if (years.length > 0) return years;
+    return Array.from({ length: 5 }, (_, index) => new Date().getFullYear() - index);
+  }, [availableMonths]);
+  const rangeLabel = value.start && value.end
+    ? formatMonthRangeLabel(value.start, value.end)
+    : 'Pilih periode';
+
+  const applyDraft = () => {
+    try {
+      buildMonthRange(draft.start, draft.end);
+      onApply?.(draft);
+      setError('');
+      setOpen(false);
+    } catch (nextError) {
+      setError(nextError.message || 'Periode tidak valid.');
+    }
+  };
+
+  const selectSemester = (semester) => {
+    const nextRange = getSemesterRange(shortcutYear, semester);
+    setDraft(nextRange);
+    setError('');
+  };
+
+  const resetRange = () => {
+    const nextValue = defaultValue || value;
+    setDraft(nextValue);
+    setError('');
+    onReset?.(nextValue);
+    setOpen(false);
+  };
+
+  return (
+    <CompactField id={controlId} label={label} className={className}>
+      <Popover
+        open={open}
+        onOpenChange={(nextOpen) => {
+          setOpen(nextOpen);
+          if (nextOpen) {
+            setDraft(value);
+            setShortcutYear(Number((value.end || value.start).slice(0, 4)) || currentYear);
+            setError('');
+          }
+        }}
+      >
+        <PopoverTrigger asChild>
+          <Button
+            id={controlId}
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={disabled}
+            className={cn('w-full min-w-[210px] justify-start rounded-lg font-normal', triggerClassName)}
+            {...props}
+          >
+            <CalendarBlankIcon data-icon="inline-start" />
+            <span className="truncate">{rangeLabel}</span>
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-[320px] space-y-3 p-3">
+          <PopoverHeader>
+            <PopoverTitle>Pilih periode laporan</PopoverTitle>
+            <PopoverDescription>Bulan harus berurutan. Maksimal 12 bulan.</PopoverDescription>
+          </PopoverHeader>
+
+          <div className="grid grid-cols-2 gap-2">
+            <label className="space-y-1 text-xs text-muted-foreground">
+              Bulan awal
+              <input
+                type="month"
+                value={draft.start || ''}
+                onChange={(event) => setDraft((current) => ({ ...current, start: event.target.value }))}
+                className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm text-foreground"
+              />
+            </label>
+            <label className="space-y-1 text-xs text-muted-foreground">
+              Bulan akhir
+              <input
+                type="month"
+                value={draft.end || ''}
+                onChange={(event) => setDraft((current) => ({ ...current, end: event.target.value }))}
+                className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm text-foreground"
+              />
+            </label>
+          </div>
+
+          <div className="grid grid-cols-[1fr_auto_auto] gap-2">
+            <Select value={String(shortcutYear)} onValueChange={(nextYear) => setShortcutYear(Number(nextYear))}>
+              <SelectTrigger size="sm" aria-label="Tahun shortcut semester">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {yearOptions.map((year) => <SelectItem key={year} value={String(year)}>{year}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Button type="button" size="sm" variant="secondary" onClick={() => selectSemester(1)}>Semester 1</Button>
+            <Button type="button" size="sm" variant="secondary" onClick={() => selectSemester(2)}>Semester 2</Button>
+          </div>
+
+          {error ? <p role="alert" className="text-xs text-destructive">{error}</p> : null}
+
+          <div className="flex items-center justify-between border-t border-border pt-2">
+            <Button type="button" size="sm" variant="ghost" onClick={resetRange}>
+              <ArrowCounterClockwiseIcon /> Reset
+            </Button>
+            <Button type="button" size="sm" onClick={applyDraft}>Terapkan</Button>
+          </div>
+        </PopoverContent>
+      </Popover>
+    </CompactField>
+  );
 }
 
 export function DashboardDateRangePicker({

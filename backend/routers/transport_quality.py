@@ -181,7 +181,7 @@ site_rollup AS (
     GROUP BY site_id
 )
 SELECT
-    :date_filter AS date,
+    CAST(:date_filter AS date) AS date,
     (SELECT MAX(week) FROM base) AS week,
     (SELECT COUNT(*) FROM base) AS total_records,
     COUNT(*) AS total_sites,

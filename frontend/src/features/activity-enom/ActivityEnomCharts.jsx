@@ -14,6 +14,7 @@ import {
   ComposedChart,
   LabelList,
   Line,
+  ReferenceArea,
   XAxis,
   YAxis,
 } from 'recharts';
@@ -107,6 +108,7 @@ export function ActivityEnomCharts({
   contributionTitle,
   formatMonthLabel,
   topActivities = [],
+  activePeriod,
 }) {
   const contribution = (breakdowns.contribution || []).slice(0, 10);
 
@@ -120,6 +122,7 @@ export function ActivityEnomCharts({
           {trend.length ? (
             <ChartContainer config={activityEnomChartConfig} className="h-[260px] w-full aspect-auto" data-testid="activity-monthly-trend-chart">
               <ComposedChart accessibilityLayer data={trend} margin={DASHBOARD_CHART_MARGIN}>
+                <ReferenceArea x1={`${activePeriod?.start}-01`} x2={`${activePeriod?.end}-01`} fill="#0EA5E9" fillOpacity={0.08} strokeOpacity={0} />
                 <CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 3" />
                 <XAxis dataKey="create_date" tickFormatter={formatMonthLabel} tickLine={false} axisLine={false} minTickGap={24} />
                 <YAxis tickLine={false} axisLine={false} width={44} />

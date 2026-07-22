@@ -6,10 +6,13 @@ GET /ticketing/dashboard                  - scorecards, charts, top sites
 GET /ticketing/tickets                    - paginated ticket table
 GET /ticketing/tickets/{ticket_number_swfm} - ticket drilldown detail
 """
+import csv
 from datetime import date, timedelta
+import io
 import math
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi.responses import StreamingResponse
 import runtime_compat  # noqa: F401
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,6 +25,7 @@ from models.ticketing import (
     TicketingTicketDetail,
     TicketingTicketResponse,
 )
+from periods import MonthPeriod, build_period_meta, resolve_month_period
 
 router = APIRouter(prefix="/ticketing", tags=["Ticketing"])
 
@@ -143,13 +147,24 @@ def previous_month_bounds(params: dict) -> dict | None:
         previous_params.update({"tahun": year, "bulan": month, "start_date": None, "end_date": None})
         return previous_params
 
-    anchor = params.get("start_date")
-    if not anchor:
-        return None
+    period = params.get("_period")
+    if period:
+        previous_params.update({
+            "start_date": date.fromisoformat(f"{period.comparison_start}-01"),
+            "end_date": date.fromisoformat(f"{period.period_start}-01") - timedelta(days=1),
+            "tahun": None,
+            "bulan": None,
+            "_period": None,
+        })
+        return previous_params
 
-    current_month = date(anchor.year, anchor.month, 1)
-    previous_end = current_month - timedelta(days=1)
-    previous_start = date(previous_end.year, previous_end.month, 1)
+    anchor = params.get("start_date")
+    end_anchor = params.get("end_date")
+    if not anchor or not end_anchor:
+        return None
+    selected_days = (end_anchor - anchor).days + 1
+    previous_end = anchor - timedelta(days=1)
+    previous_start = previous_end - timedelta(days=selected_days - 1)
     previous_params.update({
         "start_date": previous_start,
         "end_date": previous_end,
@@ -197,6 +212,12 @@ SELECT
         WHERE {period_month_sql('periode_bulan')} IS NOT NULL
         ORDER BY 1
     ) AS months,
+    ARRAY(
+        SELECT DISTINCT TO_CHAR(created_at, 'YYYY-MM')
+        FROM {TABLE_NAME}
+        WHERE created_at IS NOT NULL
+        ORDER BY 1 DESC
+    ) AS available_months,
     ARRAY(
         SELECT DISTINCT NULLIF(TRIM(nop), '')
         FROM {TABLE_NAME}
@@ -518,6 +539,8 @@ def shared_query_params(
     end_date: date | None = Query(None),
     tahun: int | None = Query(None),
     bulan: int | None = Query(None, ge=1, le=12),
+    period_start: str | None = Query(None),
+    period_end: str | None = Query(None),
     nop: str | None = Query(None),
     cluster_to: str | None = Query(None),
     kategori_tt: str | None = Query(None),
@@ -527,7 +550,19 @@ def shared_query_params(
     rc_category: str | None = Query(None),
     is_escalate: bool | None = Query(None),
 ) -> dict:
-    return build_filter_params(
+    has_canonical = period_start is not None or period_end is not None
+    has_custom = start_date is not None or end_date is not None
+    has_legacy = tahun is not None or bulan is not None
+    if has_canonical and (has_custom or has_legacy):
+        raise HTTPException(status_code=422, detail="Periode bulan tidak boleh digabung dengan tanggal kustom atau tahun/bulan lama.")
+    if has_custom and (start_date is None or end_date is None):
+        raise HTTPException(status_code=422, detail="start_date dan end_date wajib diisi bersama.")
+    period: MonthPeriod | None = None
+    if has_canonical:
+        period = resolve_month_period(period_start=period_start, period_end=period_end)
+        start_date = period.start_date
+        end_date = period.end_date_exclusive - timedelta(days=1)
+    params = build_filter_params(
         start_date=start_date,
         end_date=end_date,
         tahun=tahun,
@@ -541,6 +576,19 @@ def shared_query_params(
         rc_category=rc_category,
         is_escalate=is_escalate,
     )
+    params["_period"] = period
+    return params
+
+
+async def ticketing_period_meta(session: AsyncSession, params: dict):
+    period = params.get("_period")
+    if not period:
+        return None
+    result = await session.execute(text(
+        f"SELECT DISTINCT TO_CHAR(created_at, 'YYYY-MM') AS month FROM {TABLE_NAME} WHERE created_at IS NOT NULL"
+    ))
+    available_months = [row[0] for row in result.fetchall() if row[0]]
+    return build_period_meta(period, {"ticketing": available_months})
 
 
 @router.get("/filters", response_model=TicketingFilters)
@@ -658,6 +706,7 @@ async def get_ticketing_dashboard(
         visiting_backup_distribution=visiting_backup_distribution,
         rc_category_pareto=rc_category_pareto,
         top_sites=top_sites,
+        period_meta=await ticketing_period_meta(session, params),
     )
 
 
@@ -718,6 +767,86 @@ async def list_ticketing_tickets(
         page=page,
         limit=limit,
         total_pages=math.ceil((total or 0) / limit) if limit else 0,
+        period_meta=await ticketing_period_meta(session, params),
+    )
+
+
+@router.get("/tickets/export")
+async def export_ticketing_tickets(
+    params: dict = Depends(shared_query_params),
+    q: str | None = Query(None),
+    sort_by: str = Query("created_at"),
+    sort_dir: str = Query("desc"),
+    session: AsyncSession = Depends(get_session),
+):
+    """Stream every ticket matching the same dashboard/list filters as CSV."""
+    filter_clause = build_filter_clause(params)
+    search_clause = ""
+    sql_params = {**params}
+    if q:
+        search_clause = """
+        AND (
+            t.ticket_number_swfm ILIKE :search
+            OR t.ticket_number_inap ILIKE :search
+            OR t.site_id ILIKE :search
+            OR t.site_name ILIKE :search
+            OR t.summary ILIKE :search
+        )
+        """
+        sql_params["search"] = f"%{q}%"
+
+    sort_map = {
+        "created_at": "t.created_at",
+        "ticket_number_swfm": "t.ticket_number_swfm",
+        "site_id": "t.site_id",
+        "sla_status": "t.sla_status",
+        "ticket_swfm_status": "t.ticket_swfm_status",
+        "mttr": "t.mttr",
+    }
+    sort_column = sort_map.get(sort_by, "t.created_at")
+    sort_direction = "ASC" if sort_dir.lower() == "asc" else "DESC"
+    export_query = TICKETS_LIST_QUERY.rsplit("LIMIT :limit OFFSET :offset", 1)[0]
+    period_meta = await ticketing_period_meta(session, params)
+    result = await session.stream(
+        text(export_query.format(
+            filter_clause=filter_clause,
+            search_clause=search_clause,
+            category_expr=normalize_category_sql("t.kategori_tt"),
+            sort_column=sort_column,
+            sort_direction=sort_direction,
+        )),
+        sql_params,
+    )
+    missing_months = ";".join((period_meta.missing_months_by_source.get("ticketing") if period_meta else []) or [])
+    report_period = (
+        f"{period_meta.period_start}..{period_meta.period_end}"
+        if period_meta else f"{params.get('start_date') or 'all'}..{params.get('end_date') or 'all'}"
+    )
+    header = [
+        "report_period", "missing_months", "ticket_number_swfm", "ticket_number_inap",
+        "site_id", "site_name", "cluster_to", "kategori_tt", "sla_status",
+        "ticket_swfm_status", "created_at", "mttr_hours", "response_minutes",
+        "backup_sukses", "rc_category", "is_escalate",
+    ]
+
+    async def csv_rows():
+        buffer = io.StringIO()
+        writer = csv.writer(buffer)
+        writer.writerow(header)
+        yield buffer.getvalue()
+        async for row in result.mappings():
+            buffer.seek(0)
+            buffer.truncate(0)
+            item = dict(row)
+            writer.writerow([report_period, missing_months, *[item.get(column) for column in header[2:]]])
+            yield buffer.getvalue()
+
+    filename_start = period_meta.period_start if period_meta else str(params.get("start_date") or "all")
+    filename_end = period_meta.period_end if period_meta else str(params.get("end_date") or "all")
+    return StreamingResponse(
+        csv_rows(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="ticketing-{filename_start}-{filename_end}.csv"'},
     )
 
 

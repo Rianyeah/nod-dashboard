@@ -51,13 +51,13 @@ describe('dashboard and reporting visual/data contracts', () => {
     assert.match(page, /fetchFilterOptions/);
     assert.match(page, /selectedNop/);
     assert.match(page, /id="reporting-nop"/);
-    assert.match(page, /fetchReportingScorecards\(selectedMonth,\s*selectedNop\)/);
-    assert.match(page, /fetchRevenueByKabupaten\(selectedMonth,\s*selectedNop\)/);
-    assert.match(page, /fetchSiteClassByKabupaten\(selectedMonth,\s*selectedNop\)/);
-    assert.match(page, /fetchBatteryByKabupaten\(selectedNop\)/);
-    assert.match(page, /fetchRevenueTrend\(selectedNop\)/);
-    assert.match(api, /fetchReportingScorecards\(trxMonth,\s*nop/);
-    assert.match(api, /fetchRevenueTrend\(nop/);
+    assert.match(page, /fetchReportingScorecards\(selectedPeriod,\s*selectedNop\)/);
+    assert.match(page, /fetchRevenueByKabupaten\(selectedPeriod,\s*selectedNop\)/);
+    assert.match(page, /fetchSiteClassByKabupaten\(selectedPeriod,\s*selectedNop\)/);
+    assert.match(page, /fetchBatteryByKabupaten\(selectedPeriod,\s*selectedNop\)/);
+    assert.match(page, /fetchRevenueTrend\(selectedPeriod,\s*selectedNop\)/);
+    assert.match(api, /fetchReportingScorecards\(period,\s*nop/);
+    assert.match(api, /fetchRevenueTrend\(period,\s*nop/);
     assert.match(api, /params:\s*\{[\s\S]*nop:\s*nop\s*\|\|\s*undefined/);
   });
 
@@ -87,9 +87,9 @@ describe('dashboard and reporting visual/data contracts', () => {
   it('shows previous-month deltas on scorecards and key revenue table metrics', () => {
     const page = src('pages', 'NetworkReportingPage.jsx');
 
-    assert.match(page, /previousMonth/);
-    assert.match(page, /fetchReportingScorecards\(previousMonth,\s*selectedNop\)/);
-    assert.match(page, /fetchRevenueByKabupaten\(previousMonth,\s*selectedNop\)/);
+    assert.match(page, /previousPeriod/);
+    assert.match(page, /fetchReportingScorecards\(previousPeriod,\s*selectedNop\)/);
+    assert.match(page, /fetchRevenueByKabupaten\(previousPeriod,\s*selectedNop\)/);
     assert.match(page, /DeltaValue/);
     assert.match(page, /getDelta/);
     assert.match(page, /getRelativeChange/);
@@ -107,8 +107,7 @@ describe('dashboard and reporting visual/data contracts', () => {
     assert.match(page, /normalizeReportingNop/);
     assert.match(page, /setSelectedNop/);
     assert.match(page, /const \[filtersReady, setFiltersReady\] = useState\(false\)/);
-    assert.match(page, /if \(!filtersReady\) return/);
-    assert.match(page, /if \(!selectedMonth \|\| !filtersReady\) return/);
+    assert.match(page, /if \(!resolvedPeriod \|\| !filtersReady\) return/);
     assert.match(page, /epm_sites/);
     assert.match(page, /non_epm_sites/);
     assert.match(page, /revenue_ytd/);
@@ -188,6 +187,25 @@ describe('dashboard and reporting visual/data contracts', () => {
     assert.match(css, /@media print/);
     assert.match(css, /\.reporting-no-print/);
     assert.match(css, /\.reporting-export-root/);
+    assert.match(page, /reporting-print-meta/);
+    assert.match(page, /Waktu cetak/);
+    assert.match(page, /Perbandingan/);
+    assert.match(page, /Coverage/);
+    assert.match(css, /\.reporting-print-meta/);
+  });
+
+  it('applies a canonical month range to every reporting surface', () => {
+    const page = src('pages', 'NetworkReportingPage.jsx');
+    const api = src('services', 'api.js');
+
+    assert.match(page, /DashboardMonthRangePicker/);
+    assert.match(page, /buildMonthRange/);
+    assert.match(page, /formatMonthRangeLabel/);
+    assert.match(page, /comparisonLabel/);
+    assert.match(page, /missing_months_by_source/);
+    assert.match(page, /ReferenceArea/);
+    assert.match(api, /period_start:\s*period\?\.start/);
+    assert.match(api, /period_end:\s*period\?\.end/);
   });
 
   it('wires the Impact Service route, navigation, global filters, and API params', () => {

@@ -12,6 +12,7 @@ from models.impact_service import (
     ImpactServiceTopSite,
 )
 from models.reporting import ReportingScorecard, RevenueTrendItem
+from models.period import MonthPeriodMeta
 from models.ticketing import TicketingDashboard
 from models.transport_quality import (
     TransportQualityPrioritySiteResponse,
@@ -25,6 +26,11 @@ class OverviewPeriod(BaseModel):
     bulan: Optional[int] = None
     tahun: Optional[int] = None
     trx_month: Optional[str] = None
+    period_start: Optional[str] = None
+    period_end: Optional[str] = None
+    comparison_start: Optional[str] = None
+    comparison_end: Optional[str] = None
+    active_months: list[str] = Field(default_factory=list)
     impact_start_date: Optional[date] = None
     impact_end_date: Optional[date] = None
     transport_date: Optional[date] = None
@@ -74,7 +80,9 @@ class OverviewResponse(BaseModel):
     worst_sites: list[WorstSite] = Field(default_factory=list)
     worst_revenue_sites: list[WorstRevenueSite] = Field(default_factory=list)
     reporting: ReportingScorecard = Field(default_factory=ReportingScorecard)
+    comparison_reporting: ReportingScorecard = Field(default_factory=ReportingScorecard)
     reporting_trend: list[RevenueTrendItem] = Field(default_factory=list)
+    period_meta: Optional[MonthPeriodMeta] = None
     impact_service: ImpactServiceSummary = Field(default_factory=ImpactServiceSummary)
     impact_daily_trend: list[ImpactServiceDailyTrendItem] = Field(default_factory=list)
     impact_distributions: ImpactServiceDistributions = Field(default_factory=ImpactServiceDistributions)

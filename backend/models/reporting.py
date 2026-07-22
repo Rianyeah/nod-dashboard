@@ -4,6 +4,8 @@ Pydantic schemas for network reporting data.
 from pydantic import BaseModel
 from typing import Optional
 
+from models.period import MonthPeriodMeta
+
 
 class ReportingScorecard(BaseModel):
     """Top-level KPI scorecards for the reporting page."""
@@ -15,6 +17,7 @@ class ReportingScorecard(BaseModel):
     revenue_ytd: int = 0
     payload_ytd: int = 0
     avg_availability: Optional[float] = None
+    period_meta: MonthPeriodMeta | None = None
 
 
 class RevenueByKabupaten(BaseModel):

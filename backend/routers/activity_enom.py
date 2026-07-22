@@ -31,6 +31,7 @@ from models.activity_enom import (
     ActivityEnomTrendItem,
     ActivityEnomYearOption,
 )
+from periods import MonthPeriod, build_period_meta, resolve_month_period
 
 router = APIRouter(prefix="/activity-enom", tags=["Activity ENOM"])
 TABLE_NAME = "public.proker_enom_jatim_2026"
@@ -41,18 +42,21 @@ SORT_ORDER_TEMPLATE = "ORDER BY {sort_column} {sort_direction}, a.id DESC"
 def build_filter_clause(
     params: dict,
     include_month: bool = True,
-    include_year: bool = True,
+    include_year: bool = False,
     alias: str = "a",
 ) -> str:
     """Build shared Activity ENOM global filter clause."""
     clauses = []
-    if include_month and params.get("month_date"):
+    if include_month and params.get("period_start_date"):
+        clauses.append(f"{alias}.create_date >= :period_start_date")
+        clauses.append(f"{alias}.create_date < :period_end_exclusive")
+    elif include_month and params.get("month_date"):
         clauses.append("a.create_date = :month_date" if alias == "a" else f"{alias}.create_date = :month_date")
-    if include_year and params.get("year"):
+    if include_year and params.get("annual_year"):
         clauses.append(
-            f"EXTRACT(YEAR FROM {alias}.create_date) = :year"
+            f"EXTRACT(YEAR FROM {alias}.create_date) = :annual_year"
             if alias != "a"
-            else "EXTRACT(YEAR FROM a.create_date) = :year"
+            else "EXTRACT(YEAR FROM a.create_date) = :annual_year"
         )
     if params.get("nop"):
         clauses.append("a.nop = :nop" if alias == "a" else f"{alias}.nop = :nop")
@@ -77,12 +81,33 @@ def build_search_clause(q: str | None, alias: str = "a") -> str:
 
 
 def base_params(
-    month_date: date,
+    month_date: date | None,
     year: int | None = None,
     nop: str | None = None,
     category: str | None = None,
+    period_start: str | None = None,
+    period_end: str | None = None,
 ) -> dict:
-    return {"month_date": month_date, "year": year, "nop": nop, "category": category}
+    has_canonical = period_start is not None or period_end is not None
+    if has_canonical and (month_date is not None or year is not None):
+        raise HTTPException(status_code=422, detail="Gunakan period_start/period_end atau month_date/year lama, bukan keduanya.")
+    legacy_month = month_date.strftime("%Y-%m") if month_date else None
+    period: MonthPeriod = resolve_month_period(
+        period_start=period_start,
+        period_end=period_end,
+        legacy_month=legacy_month,
+    )
+    annual_year = int(period.period_end[:4])
+    return {
+        "month_date": date.fromisoformat(f"{period.period_end}-01"),
+        "year": year,
+        "annual_year": year or annual_year,
+        "nop": nop,
+        "category": category,
+        "period_start_date": period.start_date,
+        "period_end_exclusive": period.end_date_exclusive,
+        "_period": period,
+    }
 
 
 def int_value(value, fallback: int = 0) -> int:
@@ -381,9 +406,18 @@ async def fetch_distribution(
     return [distribution_item(row) for row in result.mappings().all()]
 
 
+async def activity_period_meta(session: AsyncSession, params: dict):
+    result = await session.execute(text(
+        f"SELECT DISTINCT TO_CHAR(create_date, 'YYYY-MM') AS month FROM {TABLE_NAME} WHERE create_date IS NOT NULL"
+    ))
+    available_months = [row[0] for row in result.fetchall() if row[0]]
+    return build_period_meta(params["_period"], {"activity_enom": available_months})
+
+
 @router.get("/filters", response_model=ActivityEnomFilters)
 async def get_activity_enom_filters(session: AsyncSession = Depends(get_session)):
     months_result = await session.execute(text(FILTER_MONTHS_QUERY))
+    month_rows = months_result.mappings().all()
     option_result = await session.execute(text(FILTER_OPTIONS_QUERY))
     option_row = option_result.mappings().first() or {}
     return ActivityEnomFilters(
@@ -392,23 +426,30 @@ async def get_activity_enom_filters(session: AsyncSession = Depends(get_session)
             for year in (option_row.get("years") or [])
             if year is not None
         ],
-        months=[ActivityEnomMonthOption(**dict(row)) for row in months_result.mappings().all()],
+        months=[ActivityEnomMonthOption(**dict(row)) for row in month_rows],
         nops=option_row.get("nops") or [],
         categories=option_row.get("categories") or [],
         default_year=option_row.get("default_year"),
         default_month=option_row.get("default_month"),
+        available_months=[
+            row.get("value").strftime("%Y-%m")
+            for row in month_rows
+            if row.get("value")
+        ],
     )
 
 
 @router.get("/summary", response_model=ActivityEnomSummary)
 async def get_activity_enom_summary(
-    month_date: date = Query(...),
+    month_date: date | None = Query(None),
     year: int | None = Query(None),
+    period_start: str | None = None,
+    period_end: str | None = None,
     nop: str | None = Query(None),
     category: str | None = Query(None),
     session: AsyncSession = Depends(get_session),
 ):
-    params = base_params(month_date, year, nop, category)
+    params = base_params(month_date, year, nop, category, period_start, period_end)
     annual_filter_clause = build_filter_clause(params, include_month=False, include_year=True)
     result = await session.execute(
         text(SUMMARY_QUERY.format(
@@ -419,7 +460,7 @@ async def get_activity_enom_summary(
     )
     row = result.mappings().first() or {}
     return ActivityEnomSummary(
-        month_date=month_date,
+        month_date=params["month_date"],
         annual_total_activity=int_value(row.get("annual_total_activity")),
         annual_open_activity=int_value(row.get("annual_open_activity")),
         annual_close_activity=int_value(row.get("annual_close_activity")),
@@ -428,34 +469,44 @@ async def get_activity_enom_summary(
         open_activity=int_value(row.get("open_activity")),
         close_activity=int_value(row.get("close_activity")),
         completion_rate=float_value(row.get("completion_rate")),
+        period_meta=await activity_period_meta(session, params),
     )
 
 
 @router.get("/trend", response_model=list[ActivityEnomTrendItem])
 async def get_activity_enom_trend(
-    month_date: date = Query(...),
+    month_date: date | None = Query(None),
     year: int | None = Query(None),
+    period_start: str | None = None,
+    period_end: str | None = None,
     nop: str | None = Query(None),
     category: str | None = Query(None),
     session: AsyncSession = Depends(get_session),
 ):
-    params = base_params(month_date, year, nop, category)
+    params = base_params(month_date, year, nop, category, period_start, period_end)
+    period = params["_period"]
+    trend_params = {
+        **params,
+        "period_start_date": date.fromisoformat(f"{period.context_start}-01"),
+    }
     result = await session.execute(
-        text(TREND_QUERY.format(filter_clause=build_filter_clause(params, include_month=False))),
-        params,
+        text(TREND_QUERY.format(filter_clause=build_filter_clause(trend_params))),
+        trend_params,
     )
     return [ActivityEnomTrendItem(**dict(row)) for row in result.mappings().all()]
 
 
 @router.get("/breakdowns", response_model=ActivityEnomBreakdowns)
 async def get_activity_enom_breakdowns(
-    month_date: date = Query(...),
+    month_date: date | None = Query(None),
     year: int | None = Query(None),
+    period_start: str | None = None,
+    period_end: str | None = None,
     nop: str | None = Query(None),
     category: str | None = Query(None),
     session: AsyncSession = Depends(get_session),
 ):
-    params = base_params(month_date, year, nop, category)
+    params = base_params(month_date, year, nop, category, period_start, period_end)
     filter_clause = build_filter_clause(params)
     selected_nop_breakdown = bool(params.get("nop"))
     label_expr = (
@@ -494,14 +545,16 @@ async def get_activity_enom_breakdowns(
 
 @router.get("/top-activities", response_model=list[ActivityEnomTopActivity])
 async def get_activity_enom_top_activities(
-    month_date: date = Query(...),
+    month_date: date | None = Query(None),
     year: int | None = Query(None),
+    period_start: str | None = None,
+    period_end: str | None = None,
     nop: str | None = Query(None),
     category: str | None = Query(None),
     limit: int = Query(10, ge=1, le=50),
     session: AsyncSession = Depends(get_session),
 ):
-    params = {**base_params(month_date, year, nop, category), "limit": limit}
+    params = {**base_params(month_date, year, nop, category, period_start, period_end), "limit": limit}
     result = await session.execute(
         text(TOP_ACTIVITIES_QUERY.format(filter_clause=build_filter_clause(params))),
         params,
@@ -511,8 +564,10 @@ async def get_activity_enom_top_activities(
 
 @router.get("/activities", response_model=ActivityEnomActivityResponse)
 async def list_activity_enom_activities(
-    month_date: date = Query(...),
+    month_date: date | None = Query(None),
     year: int | None = Query(None),
+    period_start: str | None = None,
+    period_end: str | None = None,
     nop: str | None = Query(None),
     category: str | None = Query(None),
     status: str | None = Query(None),
@@ -524,7 +579,7 @@ async def list_activity_enom_activities(
     session: AsyncSession = Depends(get_session),
 ):
     params = {
-        **base_params(month_date, year, nop, category),
+        **base_params(month_date, year, nop, category, period_start, period_end),
         "q": f"%{q.strip()}%" if q and q.strip() else None,
         "status": status,
         "limit": limit,
@@ -568,19 +623,22 @@ async def list_activity_enom_activities(
         page=page,
         limit=limit,
         total_pages=math.ceil((total or 0) / limit) if limit else 0,
+        period_meta=await activity_period_meta(session, params),
     )
 
 
 @router.get("/activities/{activity_id}", response_model=ActivityEnomActivityDetail)
 async def get_activity_enom_activity_detail(
     activity_id: int,
-    month_date: date = Query(...),
+    month_date: date | None = Query(None),
     year: int | None = Query(None),
+    period_start: str | None = None,
+    period_end: str | None = None,
     nop: str | None = Query(None),
     category: str | None = Query(None),
     session: AsyncSession = Depends(get_session),
 ):
-    params = {**base_params(month_date, year, nop, category), "activity_id": activity_id}
+    params = {**base_params(month_date, year, nop, category, period_start, period_end), "activity_id": activity_id}
     result = await session.execute(
         text(ACTIVITY_DETAIL_QUERY.format(filter_clause=build_filter_clause(params))),
         params,
