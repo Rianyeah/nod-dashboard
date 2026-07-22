@@ -1,23 +1,44 @@
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useMemo, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { RF_COLORS } from './rfTiltChartConfig';
 import { domElement, textElement } from '../../utils/safeMapDom';
 import { describeMapboxError, validateMapboxRuntime } from '../../utils/mapboxRuntime';
+import { fetchMapSectors } from '../../services/api';
+import { prepareSiteSectorDisplayGeoJson } from './rfTiltSiteUtils';
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 
 const C = RF_COLORS;
 const EARTH_R = 6371000;
+const SITE_SECTOR_SOURCE_ID = 'rf-site-sectors';
+const SITE_SECTOR_LAYER_IDS = ['rf-site-sectors-fill', 'rf-site-sectors-outline'];
+const EMPTY_SECTOR_GEOJSON = { type: 'FeatureCollection', features: [] };
 
 /* ─── Map style options ────────────────────────────────────────────── */
 const MAP_STYLES = [
   { id: 'dark',      label: 'Dark',      url: 'mapbox://styles/mapbox/dark-v11' },
   { id: 'satellite', label: 'Satellite',  url: 'mapbox://styles/mapbox/satellite-streets-v12' },
-  { id: 'streets',   label: 'Streets',    url: 'mapbox://styles/mapbox/streets-v12' },
-  { id: 'outdoors',  label: 'Outdoors',   url: 'mapbox://styles/mapbox/outdoors-v12' },
+  { id: 'buildings', label: '3D Buildings', url: 'mapbox://styles/mapbox/standard' },
+  { id: 'sectors',   label: 'All Sectors', url: 'mapbox://styles/mapbox/satellite-streets-v12' },
 ];
+
+function featureCollectionOrEmpty(value) {
+  return value?.type === 'FeatureCollection' && Array.isArray(value.features)
+    ? value
+    : EMPTY_SECTOR_GEOJSON;
+}
+
+function apply3DBuildingScene(map) {
+  if (!map) return;
+  if (typeof map.setConfigProperty === 'function') {
+    map.setConfigProperty('basemap', 'lightPreset', 'day');
+    map.setConfigProperty('basemap', 'show3dObjects', true);
+    map.setConfigProperty('basemap', 'showPointOfInterestLabels', false);
+    map.setConfigProperty('basemap', 'showTransitLabels', false);
+  }
+}
 
 /* ─── Geo helpers ──────────────────────────────────────────────────── */
 function destinationPointJS(lat, lon, azimuthDeg, distanceM) {
@@ -182,15 +203,63 @@ export default function RfTiltMap({ result, params, onMapClick, targetMode, sele
   const popupsRef = useRef([]);
   const hoverPopupRef = useRef(null);
   const onMapClickRef = useRef(onMapClick);
+  const currentStyleRef = useRef('dark');
   const [currentStyle, setCurrentStyle] = useState('dark');
   const [is3D, setIs3D] = useState(false);
   const [terrainExaggeration, setTerrainExaggeration] = useState(1.5);
   const [mapInitError, setMapInitError] = useState(null);
   const [mapRetryKey, setMapRetryKey] = useState(0);
+  const [siteSectorState, setSiteSectorState] = useState({
+    siteId: null,
+    geoJson: EMPTY_SECTOR_GEOJSON,
+    loading: false,
+    error: null,
+  });
+
+  const activeSiteSectors = siteSectorState.siteId === selectedSiteId
+    ? featureCollectionOrEmpty(siteSectorState.geoJson)
+    : EMPTY_SECTOR_GEOJSON;
+  const displaySiteSectors = useMemo(
+    () => prepareSiteSectorDisplayGeoJson(activeSiteSectors),
+    [activeSiteSectors],
+  );
+  const separatedSectorCount = displaySiteSectors.features.filter(
+    feature => Number(feature?.properties?.overlap_index) > 0,
+  ).length;
+  const siteSectorsLoading = Boolean(selectedSiteId && siteSectorState.siteId !== selectedSiteId);
 
   useEffect(() => {
     onMapClickRef.current = onMapClick;
   }, [onMapClick]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!selectedSiteId) return undefined;
+
+    fetchMapSectors({ siteId: selectedSiteId })
+      .then((geoJson) => {
+        if (cancelled) return;
+        setSiteSectorState({
+          siteId: selectedSiteId,
+          geoJson: featureCollectionOrEmpty(geoJson),
+          loading: false,
+          error: null,
+        });
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setSiteSectorState({
+          siteId: selectedSiteId,
+          geoJson: EMPTY_SECTOR_GEOJSON,
+          loading: false,
+          error: error?.message || 'Data sektor tidak dapat dimuat.',
+        });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedSiteId]);
 
   /* ── Initialise map ─────────────────────────────────────────────── */
   useEffect(() => {
@@ -313,10 +382,71 @@ export default function RfTiltMap({ result, params, onMapClick, targetMode, sele
     }
   };
 
+  const syncSiteSectorLayers = (map, styleId = currentStyleRef.current) => {
+    if (!map) return;
+    const visibility = styleId === 'sectors' ? 'visible' : 'none';
+    const existingSource = map.getSource(SITE_SECTOR_SOURCE_ID);
+
+    if (existingSource) {
+      existingSource.setData(displaySiteSectors);
+    } else {
+      map.addSource(SITE_SECTOR_SOURCE_ID, { type: 'geojson', data: displaySiteSectors });
+    }
+
+    if (!map.getLayer('rf-site-sectors-fill')) {
+      map.addLayer({
+        id: 'rf-site-sectors-fill',
+        type: 'fill',
+        source: SITE_SECTOR_SOURCE_ID,
+        minzoom: 10,
+        layout: { visibility },
+        paint: {
+          'fill-color': [
+            'match', ['get', 'band'],
+            'L900', '#facc15',
+            'L1800', '#22d3ee',
+            'L2100', '#34d399',
+            'L2300', '#c084fc',
+            '#fb7185',
+          ],
+          'fill-opacity': 0.48,
+        },
+      });
+    }
+
+    if (!map.getLayer('rf-site-sectors-outline')) {
+      map.addLayer({
+        id: 'rf-site-sectors-outline',
+        type: 'line',
+        source: SITE_SECTOR_SOURCE_ID,
+        minzoom: 10,
+        layout: { visibility },
+        paint: {
+          'line-color': [
+            'match', ['get', 'band'],
+            'L900', '#fef08a',
+            'L1800', '#a5f3fc',
+            'L2100', '#a7f3d0',
+            'L2300', '#e9d5ff',
+            '#fecdd3',
+          ],
+          'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1.5, 16, 3],
+          'line-opacity': 0.98,
+        },
+      });
+    }
+
+    SITE_SECTOR_LAYER_IDS.forEach((layerId) => {
+      if (!map.getLayer(layerId)) return;
+      map.setLayoutProperty(layerId, 'visibility', visibility);
+      map.moveLayer(layerId);
+    });
+  };
+
   /* ── Toggle 3D with smooth camera transition ──────────────────── */
   const toggle3D = () => {
     const map = mapRef.current;
-    if (!map) return;
+    if (!map || currentStyleRef.current === 'sectors') return;
     const next3D = !is3D;
     setIs3D(next3D);
 
@@ -356,9 +486,24 @@ export default function RfTiltMap({ result, params, onMapClick, targetMode, sele
     if (!map) return;
     const style = MAP_STYLES.find(s => s.id === styleId);
     if (!style) return;
+    const isAllSectorsStyle = styleId === 'sectors';
+    const isBuildingsStyle = styleId === 'buildings';
     setCurrentStyle(styleId);
+    currentStyleRef.current = styleId;
+    if (isAllSectorsStyle) setIs3D(false);
+    if (isBuildingsStyle) setIs3D(true);
     try {
-      map.setStyle(style.url);
+      map.setStyle(style.url, isBuildingsStyle ? {
+        diff: false,
+        config: {
+          basemap: {
+            lightPreset: 'day',
+            show3dObjects: true,
+            showPointOfInterestLabels: false,
+            showTransitLabels: false,
+          },
+        },
+      } : { diff: false });
     } catch (err) {
       setMapInitError(describeMapboxError({ error: err }).message);
       return;
@@ -366,9 +511,25 @@ export default function RfTiltMap({ result, params, onMapClick, targetMode, sele
     // Re-apply layers and 3D terrain after style loads
     map.once('style.load', () => {
       try {
+        if (isBuildingsStyle) apply3DBuildingScene(map);
+        syncSiteSectorLayers(map, styleId);
         applyLayersToMap(map);
-        if (is3D) {
+        if (isAllSectorsStyle) {
+          apply3DTerrain(map, false);
+          map.easeTo({
+            pitch: 0,
+            bearing: 0,
+            zoom: Math.max(map.getZoom(), 13),
+            duration: 800,
+          });
+        } else if (isBuildingsStyle || is3D) {
           apply3DTerrain(map, true, terrainExaggeration);
+          map.easeTo({
+            pitch: 58,
+            bearing: params.azimuth ?? 0,
+            zoom: Math.max(map.getZoom(), 14),
+            duration: 1000,
+          });
         }
       } catch (err) {
         setMapInitError(describeMapboxError({ error: err }).message);
@@ -610,12 +771,30 @@ export default function RfTiltMap({ result, params, onMapClick, targetMode, sele
     // Toggle extrusion layer visibility based on 3D mode
     polygonConfigs.forEach(cfg => {
       if (map.getLayer(`${cfg.id}-extrusion`)) {
-        map.setLayoutProperty(`${cfg.id}-extrusion`, 'visibility', is3D ? 'visible' : 'none');
+        map.setLayoutProperty(
+          `${cfg.id}-extrusion`,
+          'visibility',
+          is3D && currentStyleRef.current !== 'sectors' ? 'visible' : 'none',
+        );
       }
     });
   };
 
   /* ── React to result / param changes ────────────────────────────── */
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return undefined;
+    const syncLayers = () => syncSiteSectorLayers(map, currentStyle);
+
+    if (map.isStyleLoaded()) syncLayers();
+    else map.once('style.load', syncLayers);
+
+    return () => {
+      map.off('style.load', syncLayers);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displaySiteSectors, currentStyle]);
+
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !result) return;
@@ -689,17 +868,36 @@ export default function RfTiltMap({ result, params, onMapClick, targetMode, sele
             </div>
           )}
 
+          {currentStyle === 'sectors' && (
+            <div className="absolute right-12 top-3 z-10 max-w-[270px] rounded-lg border border-cyan-300/35 bg-[rgba(8,47,73,0.9)] px-3 py-2 text-[10px] leading-relaxed text-cyan-100 shadow-lg backdrop-blur-sm">
+              {!selectedSiteId && 'Pilih Site ID untuk menampilkan seluruh sektor.'}
+              {selectedSiteId && siteSectorsLoading && `Memuat seluruh sektor ${selectedSiteId}...`}
+              {selectedSiteId && !siteSectorsLoading && siteSectorState.error && `Sektor gagal dimuat: ${siteSectorState.error}`}
+              {selectedSiteId && !siteSectorsLoading && !siteSectorState.error && displaySiteSectors.features.length === 0
+                && `Tidak ada polygon sektor untuk ${selectedSiteId}.`}
+              {selectedSiteId && !siteSectorsLoading && !siteSectorState.error && displaySiteSectors.features.length > 0 && (
+                <>
+                  <strong>{displaySiteSectors.features.length} sektor</strong> dari {selectedSiteId} ditampilkan berdasarkan band.
+                  {separatedSectorCount > 0 && ` ${separatedSectorCount} sektor yang bertumpuk dipisahkan secara visual.`}
+                </>
+              )}
+            </div>
+          )}
+
           {/* 3D Toggle button */}
           <button
             type="button"
             onClick={toggle3D}
+            disabled={currentStyle === 'sectors'}
             className={`absolute top-3 left-3 z-10 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-300 ${
-              is3D
+              currentStyle === 'sectors'
+                ? 'cursor-not-allowed bg-[rgba(15,23,42,0.85)] text-[var(--text-muted)] opacity-75 border border-[rgba(148,163,184,0.2)]'
+                : is3D
                 ? 'bg-[var(--primary)]/90 text-white shadow-lg shadow-[var(--primary)]/30 border border-[var(--primary)]'
                 : 'bg-[rgba(15,23,42,0.85)] text-[var(--text-muted)] border border-[rgba(148,163,184,0.2)] hover:border-[var(--primary)]/40 hover:text-[var(--primary-light)]'
             }`}
             style={{ backdropFilter: 'blur(8px)' }}
-            title={is3D ? 'Switch to 2D view' : 'Switch to 3D terrain view'}
+            title={currentStyle === 'sectors' ? 'All Sectors menggunakan tampilan 2D' : is3D ? 'Switch to 2D view' : 'Switch to 3D terrain view'}
           >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
               {is3D ? (
@@ -718,7 +916,7 @@ export default function RfTiltMap({ result, params, onMapClick, targetMode, sele
           </button>
 
           {/* Terrain exaggeration slider — only visible in 3D mode */}
-          {is3D && (
+          {is3D && currentStyle !== 'sectors' && (
             <div
               className="absolute top-14 left-3 z-10 rounded-lg px-3 py-2"
               style={{
@@ -762,6 +960,12 @@ export default function RfTiltMap({ result, params, onMapClick, targetMode, sele
               <span style={{ width: 10, height: 10, borderRadius: 2, background: C.sector, opacity: 0.5, display: 'inline-block' }} />
               <span className="text-muted-foreground">Sector</span>
             </div>
+            {currentStyle === 'sectors' && (
+              <div className="flex items-center gap-2">
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: '#60a5fa', opacity: 0.8, display: 'inline-block' }} />
+                <span className="text-muted-foreground">All site sectors (by band)</span>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <span style={{ width: 8, height: 8, borderRadius: '50%', background: C.impactMain, border: '1.5px solid #fff', display: 'inline-block' }} />
               <span className="text-muted-foreground">Main beam (LOS)</span>

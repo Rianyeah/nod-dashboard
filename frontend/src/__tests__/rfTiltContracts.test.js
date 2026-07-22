@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import * as rfTiltSiteUtils from '../features/rf-tilt/rfTiltSiteUtils.js';
 
 import {
   inferAntennaSeries,
@@ -199,6 +200,46 @@ describe('RF Tilt site selection contracts', () => {
     assert.match(page, /<RfTiltChart result=\{result\} \/>[\s\S]*<RfTiltAntennaSpecPanel/);
     assert.match(page, /<RfTiltMap[\s\S]*<RfTiltResultPanel/);
     assert.match(page, /xl:grid-cols-\[minmax\(0,3fr\)_minmax\(280px,1fr\)\]/);
+  });
+
+  it('uses a flat All Sectors map fed by the selected site sector API', () => {
+    const page = src('pages', 'RfTiltAnalysisPage.jsx');
+    const map = src('features', 'rf-tilt', 'RfTiltMap.jsx');
+
+    assert.match(page, /RF Tilt Analysis/);
+    assert.doesNotMatch(page, /RF Vertical Tilt Analysis/);
+    assert.match(map, /id: 'buildings',\s+label: '3D Buildings'/);
+    assert.match(map, /id: 'sectors',\s+label: 'All Sectors',\s+url: 'mapbox:\/\/styles\/mapbox\/satellite-streets-v12'/);
+    assert.match(map, /fetchMapSectors\(\{ siteId: selectedSiteId \}\)/);
+    assert.match(map, /const isAllSectorsStyle = styleId === 'sectors'/);
+    assert.match(map, /if \(isAllSectorsStyle\) setIs3D\(false\)/);
+    assert.match(map, /isAllSectorsStyle[\s\S]*pitch: 0[\s\S]*bearing: 0/);
+    assert.doesNotMatch(map, /if \(!map \|\| !map\.isStyleLoaded\(\)\) return/);
+  });
+
+  it('keeps all sector records and separates exact visual overlaps', () => {
+    const polygon = (radius) => [[
+      [112.95, -7.94],
+      [112.95 + radius, -7.94],
+      [112.95, -7.94 + radius],
+      [112.95, -7.94],
+    ]];
+    const source = {
+      type: 'FeatureCollection',
+      features: [
+        { type: 'Feature', properties: { site_id: 'PSN003', azimuth: 255, beamwidth: 70, render_radius_m: 450 }, geometry: { type: 'Polygon', coordinates: polygon(0.004) } },
+        { type: 'Feature', properties: { site_id: 'PSN003', azimuth: 255, beamwidth: 70, render_radius_m: 450 }, geometry: { type: 'Polygon', coordinates: polygon(0.004) } },
+        { type: 'Feature', properties: { site_id: 'PSN003', azimuth: 125, beamwidth: 30, render_radius_m: 800 }, geometry: { type: 'Polygon', coordinates: polygon(0.007) } },
+      ],
+    };
+
+    assert.equal(typeof rfTiltSiteUtils.prepareSiteSectorDisplayGeoJson, 'function');
+    const prepared = rfTiltSiteUtils.prepareSiteSectorDisplayGeoJson(source);
+    assert.equal(prepared.features.length, 3);
+    assert.equal(prepared.features[0].properties.overlap_count, 2);
+    assert.equal(prepared.features[1].properties.overlap_count, 2);
+    assert.notDeepEqual(prepared.features[0].geometry.coordinates, prepared.features[1].geometry.coordinates);
+    assert.deepEqual(prepared.features[2].geometry.coordinates, source.features[2].geometry.coordinates);
   });
 
   it('exports the complete RF Tilt page, including the Mapbox canvas', () => {
