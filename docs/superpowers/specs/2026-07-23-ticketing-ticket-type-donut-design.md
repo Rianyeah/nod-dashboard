@@ -44,7 +44,8 @@ The donut follows the established SLA distribution pattern:
 
 - Incident and Event appear as two donut segments.
 - The center label shows the combined Incident plus Event total and the caption `Total`.
-- A compact legend lists `Incident` and `Event`, their counts, and their percentages of the two-category total.
+- The chart uses a compact vertical composition inside the narrow panel: a centered donut occupies the upper area, followed by two full-width legend rows below it.
+- Each legend row lists `Incident` or `Event`, its count, and its percentage of the two-category total. This layout does not depend on enough width for a side-by-side chart and legend.
 - Incident uses the existing primary cyan chart token.
 - Event uses the existing amber chart token.
 - Hover and keyboard focus expand the active segment using the current active-pie treatment.
@@ -74,6 +75,8 @@ Because the aggregation is part of the existing dashboard response, period, cust
 
 The implementation reuses the current donut-center and active-segment behavior rather than introducing a second donut implementation with different interaction rules. Ticket-type colors are added to `ticketingChartConfig` so Recharts, the tooltip, and the legend share one source of truth.
 
+To keep RC Category Pareto readable in its reduced-width layouts, its visible x-axis tick text is capped at ten characters with an ellipsis. The underlying category label is not renamed: the complete business label remains in the chart data, tooltip, and accessible SVG title.
+
 The existing chart order, RC Pareto data, Kabupaten/Kota data, titles, filter behavior, and table behavior remain unchanged.
 
 ## Loading, empty, and error behavior
@@ -88,6 +91,8 @@ The existing chart order, RC Pareto data, Kabupaten/Kota data, titles, filter be
 - The PieChart keeps Recharts `accessibilityLayer` enabled.
 - Each segment remains keyboard focusable and receives the same active visual treatment on focus and hover.
 - The legend conveys category names and exact numeric values without relying on color alone.
+- The donut and legend stack vertically, so neither component depends on a minimum side-by-side width.
+- Compact Pareto tick labels retain their complete value in the tooltip and accessible title.
 - The two colors use existing theme tokens that already support the dashboard's dark and light modes.
 - The layout collapses to one column below 1280 pixels, avoiding horizontal scrolling.
 - Motion remains limited to direct hover and focus feedback, consistent with the dashboard's low-motion operational design.
@@ -104,6 +109,8 @@ Frontend coverage will verify:
 
 - the title `Tipe Ticket INAP` and a dedicated chart test ID exist;
 - the donut reads `type_ticket_distribution` and renders Incident and Event;
+- the donut uses the narrow-panel vertical composition and exposes counts plus percentages;
+- the RC Pareto x-axis compacts long visual labels without changing the full source label;
 - the responsive grid contains the approved wide-desktop `2fr 1fr 1fr`, laptop equal-thirds, and single-column behavior;
 - the existing RC Pareto, Kabupaten/Kota, tooltip, accessibility, and 220-pixel height contracts remain intact.
 
