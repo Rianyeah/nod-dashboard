@@ -181,6 +181,8 @@ describe('Ticketing dashboard contracts', () => {
     assert.match(charts, /typeTicketTotal\s*>\s*0/);
     assert.match(charts, /entry\.share/);
     assert.match(charts, /<title>\{fullLabel\}<\/title>/);
+    assert.match(charts, /rotate\(-35/);
+    assert.match(charts, /bottom:\s*44/);
   });
 
   it('keeps Ticketing page free from static sidebar shell and uses backend default date range', () => {

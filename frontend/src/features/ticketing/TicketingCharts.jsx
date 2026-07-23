@@ -91,14 +91,15 @@ function DonutCenterLabel({ viewBox, total }) {
 
 function CompactParetoTick({ x, y, payload }) {
   const fullLabel = String(payload?.value || '');
+  const tickY = Number(y || 0) + 12;
   return (
     <text
       x={x}
-      y={y}
-      dy={16}
-      textAnchor="middle"
+      y={tickY}
+      transform={`rotate(-35 ${x} ${tickY})`}
+      textAnchor="end"
       fill="var(--muted-foreground)"
-      fontSize={12}
+      fontSize={10}
     >
       <title>{fullLabel}</title>
       {formatCompactParetoLabel(fullLabel)}
@@ -266,7 +267,7 @@ export function TicketingCharts({ dashboard }) {
         >
           {dashboard?.rc_category_pareto?.length ? (
             <ChartContainer config={ticketingChartConfig} className="h-[220px] w-full aspect-auto" data-testid="ticketing-pareto-chart">
-              <ComposedChart accessibilityLayer data={dashboard.rc_category_pareto} margin={{ top: 18, right: 12, left: 0, bottom: 0 }}>
+              <ComposedChart accessibilityLayer data={dashboard.rc_category_pareto} margin={{ top: 18, right: 12, left: 0, bottom: 44 }}>
                 <CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 3" />
                 <XAxis
                   dataKey="label"
