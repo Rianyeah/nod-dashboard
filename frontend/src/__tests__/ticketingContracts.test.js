@@ -71,6 +71,7 @@ describe('Ticketing dashboard contracts', () => {
       'Visiting Site vs Backup Genset',
       'Kabupaten/Kota Distribution',
       'RC Category Pareto',
+      'Tipe Ticket INAP',
       'Top Problem Sites',
       'Ticket List',
     ]) {
@@ -156,7 +157,30 @@ describe('Ticketing dashboard contracts', () => {
     assert.match(charts, /h-\[220px\]/);
     assert.doesNotMatch(charts, /h-\[280px\]/);
     assert.ok(charts.includes('xl:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.65fr)_minmax(280px,0.65fr)]'));
-    assert.match(charts, /xl:grid-cols-2/);
+    assert.match(charts, /xl:grid-cols-3/);
+    assert.ok(charts.includes('2xl:grid-cols-[minmax(0,2fr)_minmax(260px,1fr)_minmax(260px,1fr)]'));
+  });
+
+  it('renders the filtered ticket type donut in the approved responsive grid', () => {
+    const charts = src('features', 'ticketing', 'TicketingCharts.jsx');
+
+    for (const contract of [
+      'Tipe Ticket INAP',
+      'type_ticket_distribution',
+      'ticketing-type-ticket-donut-chart',
+      'Ticket type values',
+      'activeTicketTypeIndex',
+      'getTicketTypeColor',
+      'CompactParetoTick',
+      'xl:grid-cols-3',
+      '2xl:grid-cols-[minmax(0,2fr)_minmax(260px,1fr)_minmax(260px,1fr)]',
+    ]) {
+      assert.ok(charts.includes(contract), contract);
+    }
+
+    assert.match(charts, /typeTicketTotal\s*>\s*0/);
+    assert.match(charts, /entry\.share/);
+    assert.match(charts, /<title>\{fullLabel\}<\/title>/);
   });
 
   it('keeps Ticketing page free from static sidebar shell and uses backend default date range', () => {

@@ -4,6 +4,7 @@ import {
   HelpCircle,
   ListChecks,
   ShieldCheck,
+  TicketCheck,
   TrendingUp,
 } from 'lucide-react';
 import {
@@ -39,7 +40,9 @@ import { ChartContainer, ChartTooltip } from '@/components/ui/chart';
 import { formatNumber } from '@/utils/formatters';
 
 import {
+  formatCompactParetoLabel,
   getSlaStatusColor,
+  getTicketTypeColor,
   ticketingChartConfig,
 } from './ticketingChartConfig';
 
@@ -86,6 +89,23 @@ function DonutCenterLabel({ viewBox, total }) {
   );
 }
 
+function CompactParetoTick({ x, y, payload }) {
+  const fullLabel = String(payload?.value || '');
+  return (
+    <text
+      x={x}
+      y={y}
+      dy={16}
+      textAnchor="middle"
+      fill="var(--muted-foreground)"
+      fontSize={12}
+    >
+      <title>{fullLabel}</title>
+      {formatCompactParetoLabel(fullLabel)}
+    </text>
+  );
+}
+
 function ChartCard({ title, icon, children, action }) {
   return (
     <DashboardChartPanel title={title} icon={icon} action={action}>
@@ -111,8 +131,15 @@ function StandardTooltip({ valueFormatter = formatNumber, ...props }) {
 
 export function TicketingCharts({ dashboard }) {
   const [activeSlaIndex, setActiveSlaIndex] = useState(null);
+  const [activeTicketTypeIndex, setActiveTicketTypeIndex] = useState(null);
   const slaDistribution = dashboard?.sla_distribution || [];
   const slaTotal = sumChartValues(slaDistribution, 'tickets');
+  const rawTypeTicketDistribution = dashboard?.type_ticket_distribution || [];
+  const typeTicketTotal = sumChartValues(rawTypeTicketDistribution, 'tickets');
+  const typeTicketDistribution = rawTypeTicketDistribution.map((entry) => ({
+    ...entry,
+    share: typeTicketTotal > 0 ? (Number(entry.tickets || 0) / typeTicketTotal) * 100 : 0,
+  }));
 
   return (
     <>
@@ -215,7 +242,7 @@ export function TicketingCharts({ dashboard }) {
         </ChartCard>
       </section>
 
-      <section className="grid gap-3 xl:grid-cols-2">
+      <section className="grid gap-3 xl:grid-cols-3 2xl:grid-cols-[minmax(0,2fr)_minmax(260px,1fr)_minmax(260px,1fr)]">
         <ChartCard title={dashboard?.location_breakdown_title || 'Kabupaten/Kota Distribution'} icon={BarChart3}>
           {dashboard?.location_breakdown?.length ? (
             <ChartContainer config={ticketingChartConfig} className="h-[220px] w-full aspect-auto" data-testid="ticketing-location-chart">
@@ -241,7 +268,13 @@ export function TicketingCharts({ dashboard }) {
             <ChartContainer config={ticketingChartConfig} className="h-[220px] w-full aspect-auto" data-testid="ticketing-pareto-chart">
               <ComposedChart accessibilityLayer data={dashboard.rc_category_pareto} margin={{ top: 18, right: 12, left: 0, bottom: 0 }}>
                 <CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 3" />
-                <XAxis dataKey="label" tickLine={false} axisLine={false} minTickGap={12} />
+                <XAxis
+                  dataKey="label"
+                  tick={<CompactParetoTick />}
+                  tickLine={false}
+                  axisLine={false}
+                  interval={0}
+                />
                 <YAxis yAxisId="tickets" tickLine={false} axisLine={false} width={38} />
                 <YAxis yAxisId="percentage" orientation="right" domain={[0, 100]} tickFormatter={(value) => `${value}%`} tickLine={false} axisLine={false} width={42} />
                 <StandardTooltip
@@ -258,6 +291,83 @@ export function TicketingCharts({ dashboard }) {
                 <Line yAxisId="percentage" type="monotone" dataKey="cumulative_rate" stroke="var(--color-cumulative_rate)" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} isAnimationActive={false} />
               </ComposedChart>
             </ChartContainer>
+          ) : <DashboardChartEmpty />}
+        </ChartCard>
+
+        <ChartCard title="Tipe Ticket INAP" icon={TicketCheck}>
+          {typeTicketDistribution.length && typeTicketTotal > 0 ? (
+            <div className="grid min-h-[220px] grid-rows-[150px_auto] items-center gap-1">
+              <ChartContainer
+                config={ticketingChartConfig}
+                className="mx-auto h-[150px] w-full max-w-[180px] overflow-visible aspect-auto"
+                data-testid="ticketing-type-ticket-donut-chart"
+              >
+                <PieChart accessibilityLayer>
+                  <ChartTooltip
+                    content={(
+                      <DashboardChartTooltipContent
+                        config={ticketingChartConfig}
+                        hideLabel
+                        seriesLabelFormatter={(_, item) => item?.payload?.label ?? item?.name}
+                        valueFormatter={(value, _name, item) => {
+                          const share = Number(item?.payload?.share || 0)
+                            .toFixed(1)
+                            .replace('.', ',');
+                          return `${formatNumber(value)} (${share}%)`;
+                        }}
+                      />
+                    )}
+                  />
+                  <Pie
+                    data={typeTicketDistribution}
+                    dataKey="tickets"
+                    nameKey="label"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={38}
+                    outerRadius={58}
+                    paddingAngle={2}
+                    cornerRadius={8}
+                    strokeWidth={0}
+                    activeIndex={activeTicketTypeIndex}
+                    activeShape={renderActivePieShape}
+                    onMouseEnter={(_, index) => setActiveTicketTypeIndex(index)}
+                    onMouseLeave={() => setActiveTicketTypeIndex(null)}
+                    isAnimationActive={false}
+                  >
+                    {typeTicketDistribution.map((entry, index) => (
+                      <Cell
+                        key={entry.label}
+                        fill={getTicketTypeColor(entry.label)}
+                        tabIndex={0}
+                        onFocus={() => setActiveTicketTypeIndex(index)}
+                        onBlur={() => setActiveTicketTypeIndex(null)}
+                      />
+                    ))}
+                    <Label content={<DonutCenterLabel total={typeTicketTotal} />} />
+                  </Pie>
+                </PieChart>
+              </ChartContainer>
+              <div aria-label="Ticket type values" className="grid gap-1.5">
+                {typeTicketDistribution.map((entry) => (
+                  <div key={entry.label} className="flex min-w-0 items-center gap-2 text-xs">
+                    <span
+                      className="size-2.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: getTicketTypeColor(entry.label) }}
+                    />
+                    <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                      {entry.label}
+                    </span>
+                    <span className="font-mono font-semibold tabular-nums text-muted-foreground">
+                      {Number(entry.share || 0).toFixed(1).replace('.', ',')}%
+                    </span>
+                    <span className="font-mono text-sm font-bold tabular-nums text-foreground">
+                      {formatNumber(entry.tickets)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
           ) : <DashboardChartEmpty />}
         </ChartCard>
       </section>

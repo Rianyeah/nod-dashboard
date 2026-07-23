@@ -9,7 +9,11 @@ import {
   shouldRenderChartValue,
   sumChartValues,
 } from '../components/dashboard-charts/dashboardChartUtils.js';
-import { getSlaStatusColor } from '../features/ticketing/ticketingChartConfig.js';
+import {
+  formatCompactParetoLabel,
+  getSlaStatusColor,
+  getTicketTypeColor,
+} from '../features/ticketing/ticketingChartConfig.js';
 
 const src = (...parts) => readFileSync(resolve(process.cwd(), 'src', ...parts), 'utf8');
 const srcPath = (...parts) => resolve(process.cwd(), 'src', ...parts);
@@ -36,6 +40,18 @@ describe('shared dashboard chart contracts', () => {
     assert.equal(getSlaStatusColor('OUT SLA'), 'var(--chart-2)');
     assert.equal(getSlaStatusColor('PENDING'), 'var(--chart-4)');
     assert.equal(getSlaStatusColor('UNKNOWN'), 'var(--chart-5)');
+  });
+
+  it('maps ticket types to existing chart tokens', () => {
+    assert.equal(getTicketTypeColor('Incident'), 'var(--chart-1)');
+    assert.equal(getTicketTypeColor(' EVENT '), 'var(--chart-4)');
+    assert.equal(getTicketTypeColor('UNKNOWN'), 'var(--chart-5)');
+  });
+
+  it('compacts only long Pareto tick labels', () => {
+    assert.equal(formatCompactParetoLabel('Power'), 'Power');
+    assert.equal(formatCompactParetoLabel('Unclassified'), 'Unclassif…');
+    assert.equal(formatCompactParetoLabel(null), '');
   });
 
   it('provides focused shadcn chart helpers without changing the generated primitive', () => {
