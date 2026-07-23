@@ -100,6 +100,7 @@ class TicketingDashboard(BaseModel):
     location_breakdown: list[TicketingDistributionItem] = []
     visiting_backup_distribution: list[TicketingVisitingBackupItem] = []
     rc_category_pareto: list[TicketingRcParetoItem] = []
+    type_ticket_distribution: list[TicketingDistributionItem] = []
     top_sites: list[TicketingTopSite] = []
     period_meta: MonthPeriodMeta | None = None
 

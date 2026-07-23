@@ -409,6 +409,27 @@ ORDER BY tickets DESC, label
 LIMIT 8
 """
 
+TYPE_TICKET_DISTRIBUTION_QUERY = """
+WITH categories(sort_order, normalized_label, label) AS (
+    VALUES
+        (1, 'INCIDENT', 'Incident'),
+        (2, 'EVENT', 'Event')
+),
+base AS (
+    SELECT UPPER(TRIM(t.type_ticket)) AS normalized_label
+    FROM public.ticketing_fault_center t
+    WHERE 1=1
+    {filter_clause}
+)
+SELECT
+    c.label,
+    COUNT(b.normalized_label)::int AS tickets
+FROM categories c
+LEFT JOIN base b ON b.normalized_label = c.normalized_label
+GROUP BY c.sort_order, c.label
+ORDER BY c.sort_order
+"""
+
 TOP_SITES_QUERY = """
 WITH base AS (
     SELECT t.*
@@ -690,6 +711,11 @@ async def get_ticketing_dashboard(
         RC_CATEGORY_PARETO_QUERY.format(filter_clause=filter_clause),
         sql_params,
     )
+    type_ticket_distribution = await rows_to_dicts(
+        session,
+        TYPE_TICKET_DISTRIBUTION_QUERY.format(filter_clause=filter_clause),
+        sql_params,
+    )
     top_sites = await rows_to_dicts(
         session,
         TOP_SITES_QUERY.format(filter_clause=filter_clause),
@@ -705,6 +731,7 @@ async def get_ticketing_dashboard(
         location_breakdown=location_rows,
         visiting_backup_distribution=visiting_backup_distribution,
         rc_category_pareto=rc_category_pareto,
+        type_ticket_distribution=type_ticket_distribution,
         top_sites=top_sites,
         period_meta=await ticketing_period_meta(session, params),
     )

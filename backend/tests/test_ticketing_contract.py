@@ -135,6 +135,33 @@ class TicketingContractTest(unittest.TestCase):
         self.assertIn("t.backup_sukses = 'BU Genset'", source)
         self.assertIn("coalesce(NULLIF(TRIM(t.kabupaten_kota), ''), 'Unknown')", source)
 
+    def test_type_ticket_distribution_is_filter_aware_and_deterministic(self):
+        source = self.read_router_source()
+        models = MODELS.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "type_ticket_distribution: list[TicketingDistributionItem] = []",
+            models,
+        )
+        self.assertIn('TYPE_TICKET_DISTRIBUTION_QUERY = """', source)
+
+        query = source.split('TYPE_TICKET_DISTRIBUTION_QUERY = """', 1)[1].split('"""', 1)[0]
+        normalized = " ".join(query.split()).upper()
+        for contract in [
+            "UPPER(TRIM(T.TYPE_TICKET))",
+            "{FILTER_CLAUSE}",
+            "'INCIDENT'",
+            "'EVENT'",
+            "LEFT JOIN",
+            "ORDER BY C.SORT_ORDER",
+        ]:
+            with self.subTest(contract=contract):
+                self.assertIn(contract, normalized)
+
+        self.assertIn("type_ticket_distribution = await rows_to_dicts(", source)
+        self.assertIn("TYPE_TICKET_DISTRIBUTION_QUERY.format(filter_clause=filter_clause)", source)
+        self.assertIn("type_ticket_distribution=type_ticket_distribution", source)
+
     def test_ticketing_models_include_dashboard_and_paginated_table_contracts(self):
         models = MODELS.read_text(encoding="utf-8")
 
