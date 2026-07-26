@@ -26,7 +26,7 @@ export default function TowerPlanAntennaEditor({
       className="rounded-xl border border-border bg-muted/20 p-4"
       style={{ borderLeft: `4px solid ${antenna.color}` }}
     >
-      <div className="mb-4 flex items-center justify-between gap-3">
+      <div className="mb-4 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-2">
           <GripVertical className="size-4 shrink-0 text-muted-foreground" />
           <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold">
@@ -43,7 +43,7 @@ export default function TowerPlanAntennaEditor({
             </div>
           </div>
         </div>
-        <div className="flex gap-1">
+        <div className="flex self-end sm:self-auto">
           <Button
             aria-label={`Duplikasi ${antenna.name}`}
             size="icon-sm"

@@ -138,12 +138,12 @@ async function svgToPng(svg) {
 
 function SectionTitle({ icon: Icon, title, description, action }) {
   return (
-    <div className="flex items-start justify-between gap-3">
-      <div className="flex items-start gap-3">
+    <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex min-w-0 items-start gap-3">
         <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
           <Icon className="size-4" />
         </div>
-        <div>
+        <div className="min-w-0">
           <h2 className="text-sm font-semibold">{title}</h2>
           <p className="mt-0.5 text-[11px] text-muted-foreground">{description}</p>
         </div>
@@ -421,8 +421,8 @@ export default function TowerPlanGeneratorPage() {
           </div>
         )}
 
-        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(420px,2fr)]">
-          <div className="space-y-4">
+        <div className="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(420px,2fr)]">
+          <div className="min-w-0 space-y-4">
             <Card>
               <CardHeader className="border-b border-border">
                 <SectionTitle
@@ -611,7 +611,7 @@ export default function TowerPlanGeneratorPage() {
             </Card>
           </div>
 
-          <aside className="space-y-4 xl:sticky xl:top-4">
+          <aside className="min-w-0 space-y-4 xl:sticky xl:top-4">
             <TowerPlanPreview plan={plan} validationErrors={validationErrors} />
 
             <Card>
