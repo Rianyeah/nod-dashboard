@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Copy, GripVertical, RadioTower, Trash2 } from 'lucide-react';
 
 import { Badge } from '../../components/ui/badge';
@@ -12,6 +13,27 @@ import {
 
 const FIELD_CLASS = 'space-y-1.5';
 
+function CidInput({ antennaId, initialValue, onChange }) {
+  const [cidDraft, setCidDraft] = useState(initialValue);
+
+  const commitCidDraft = () => {
+    if (cidDraft !== initialValue) onChange(cidDraft);
+  };
+
+  return (
+    <Input
+      id={`antenna-cid-${antennaId}`}
+      placeholder="Contoh: 11, 14, 15"
+      value={cidDraft}
+      onBlur={commitCidDraft}
+      onChange={(event) => setCidDraft(event.target.value)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') event.currentTarget.blur();
+      }}
+    />
+  );
+}
+
 export default function TowerPlanAntennaEditor({
   antenna,
   index,
@@ -21,6 +43,8 @@ export default function TowerPlanAntennaEditor({
   onRemove,
 }) {
   const towerConfig = TOWER_TYPE_CONFIG[towerType] || TOWER_TYPE_CONFIG[FOUR_LEG_TOWER];
+  const committedCidValue = (antenna.cids || []).join(', ');
+
   return (
     <article
       className="rounded-xl border border-border bg-muted/20 p-4"
@@ -147,11 +171,11 @@ export default function TowerPlanAntennaEditor({
         </div>
         <div className={FIELD_CLASS}>
           <Label htmlFor={`antenna-cid-${antenna.id}`}>CID(s)</Label>
-          <Input
-            id={`antenna-cid-${antenna.id}`}
-            placeholder="Contoh: 11, 14, 15"
-            value={(antenna.cids || []).join(', ')}
-            onChange={(event) => onChange({ cids: event.target.value })}
+          <CidInput
+            key={`${antenna.id}-${committedCidValue}`}
+            antennaId={antenna.id}
+            initialValue={committedCidValue}
+            onChange={(cids) => onChange({ cids })}
           />
         </div>
         <div className={FIELD_CLASS}>

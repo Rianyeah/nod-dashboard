@@ -5,3 +5,9 @@ export function selectSiteFromResults(items, query) {
     String(item?.site_id || '').trim().toUpperCase() === normalizedQuery
   )) || items[0];
 }
+
+export function canSelectCurrentSiteResult(query, resultsQuery, loading) {
+  const normalizedQuery = String(query || '').trim().toUpperCase();
+  const normalizedResultsQuery = String(resultsQuery || '').trim().toUpperCase();
+  return !loading && normalizedQuery.length >= 2 && normalizedQuery === normalizedResultsQuery;
+}

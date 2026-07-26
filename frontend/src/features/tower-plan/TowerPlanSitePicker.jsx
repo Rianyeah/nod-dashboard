@@ -3,18 +3,21 @@ import { Database, LoaderCircle, Search, TowerControl } from 'lucide-react';
 
 import { searchTowerPlanSites } from '../../services/api';
 import { Input } from '../../components/ui/input';
-import { selectSiteFromResults } from './towerPlanSiteSelection';
+import { canSelectCurrentSiteResult, selectSiteFromResults } from './towerPlanSiteSelection';
 
 export default function TowerPlanSitePicker({ disabled, onSelect }) {
   const [query, setQuery] = useState('');
   const [items, setItems] = useState([]);
+  const [resultsQuery, setResultsQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [open, setOpen] = useState(false);
   const firstResultRef = useRef(null);
+  const requestIdRef = useRef(0);
 
   useEffect(() => {
     const normalized = query.trim();
+    const requestId = requestIdRef.current;
     if (normalized.length < 2) {
       return undefined;
     }
@@ -24,16 +27,19 @@ export default function TowerPlanSitePicker({ disabled, onSelect }) {
       setError('');
       try {
         const response = await searchTowerPlanSites(normalized, controller.signal);
+        if (requestId !== requestIdRef.current) return;
         setItems(response.items || []);
+        setResultsQuery(normalized);
         setOpen(true);
       } catch (requestError) {
+        if (requestId !== requestIdRef.current) return;
         if (requestError.name !== 'CanceledError' && requestError.name !== 'AbortError') {
           setItems([]);
           setError('Pencarian Site ID gagal. Mode manual tetap dapat digunakan.');
           setOpen(true);
         }
       } finally {
-        if (!controller.signal.aborted) setLoading(false);
+        if (!controller.signal.aborted && requestId === requestIdRef.current) setLoading(false);
       }
     }, 300);
     return () => {
@@ -47,6 +53,9 @@ export default function TowerPlanSitePicker({ disabled, onSelect }) {
     setOpen(false);
     onSelect(siteId);
   };
+
+  const hasCurrentResults = canSelectCurrentSiteResult(query, resultsQuery, loading);
+  const visibleItems = hasCurrentResults ? items : [];
 
   return (
     <div className="relative">
@@ -63,16 +72,17 @@ export default function TowerPlanSitePicker({ disabled, onSelect }) {
           disabled={disabled}
           onChange={(event) => {
             const nextQuery = event.target.value;
+            requestIdRef.current += 1;
             setQuery(nextQuery);
-            if (nextQuery.trim().length < 2) {
-              setItems([]);
-              setError('');
-            }
+            setItems([]);
+            setResultsQuery('');
+            setError('');
+            setLoading(nextQuery.trim().length >= 2);
             setOpen(true);
           }}
           onFocus={() => query.trim().length >= 2 && setOpen(true)}
           onKeyDown={(event) => {
-            if (event.key === 'Enter' && open) {
+            if (event.key === 'Enter' && open && hasCurrentResults) {
               const selected = selectSiteFromResults(items, query);
               if (selected) {
                 event.preventDefault();
@@ -113,12 +123,12 @@ export default function TowerPlanSitePicker({ disabled, onSelect }) {
               </p>
             )}
             {error && <p className="px-3 py-4 text-xs text-destructive">{error}</p>}
-            {!loading && !error && items.length === 0 && (
+            {!loading && !error && visibleItems.length === 0 && (
               <p className="px-3 py-4 text-xs text-muted-foreground">
                 Site ID tidak ditemukan.
               </p>
             )}
-            {items.map((item, index) => (
+            {visibleItems.map((item, index) => (
               <button
                 key={item.site_id}
                 ref={index === 0 ? firstResultRef : null}

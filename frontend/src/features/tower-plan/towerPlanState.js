@@ -42,6 +42,15 @@ function numeric(value, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function numericOrBlank(value, fallback = 0) {
+  if (value === '' || value === null) return '';
+  return value === undefined ? fallback : numeric(value, fallback);
+}
+
+function isBlank(value) {
+  return value === null || value === undefined || String(value).trim() === '';
+}
+
 function normalizeAzimuth(value) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return null;
@@ -88,18 +97,23 @@ export function createBlankTowerPlan() {
 function normalizeAntenna(antenna = {}, index = 0, towerType = FOUR_LEG_TOWER) {
   const status = VALID_STATUSES.has(antenna.status) ? antenna.status : 'Existing';
   const cids = normalizeCids(antenna.cids ?? antenna.cid);
-  const azimuth = numeric(antenna.azimuth, 0);
+  const azimuth = numericOrBlank(antenna.azimuth, 0);
+  const validPositions = TOWER_TYPE_CONFIG[towerType]?.positions
+    || TOWER_TYPE_CONFIG[FOUR_LEG_TOWER].positions;
+  const suppliedLeg = String(antenna.leg || '').trim();
   return {
     id: antenna.id || makeId(),
     name: String(antenna.name || `Antenna ${index + 1}`),
     operator: String(antenna.operator || ''),
     status,
     sector: String(antenna.sector ?? index + 1),
-    height: numeric(antenna.height, 0),
+    height: numericOrBlank(antenna.height, 0),
     azimuth,
     cids,
     cid: cids.join(', '),
-    leg: installationForAzimuth(towerType, azimuth),
+    leg: validPositions.includes(suppliedLeg)
+      ? suppliedLeg
+      : installationForAzimuth(towerType, azimuth),
     color: /^#[0-9a-f]{6}$/i.test(antenna.color || '')
       ? antenna.color
       : STATUS_COLORS[status],
@@ -116,7 +130,6 @@ export function migrateTowerPlan(raw) {
     : FOUR_LEG_TOWER;
   const antennas = Array.isArray(raw.antennas)
     ? raw.antennas
-      .slice(0, MAX_ANTENNAS)
       .map((antenna, index) => normalizeAntenna(antenna, index, towerType))
     : [];
   return {
@@ -127,8 +140,8 @@ export function migrateTowerPlan(raw) {
     planTitle: String(raw.planTitle || ''),
     siteName: String(raw.siteName || ''),
     towerType,
-    towerHeight: numeric(raw.towerHeight, 50),
-    legABearingDeg: numeric(raw.legABearingDeg, 45),
+    towerHeight: numericOrBlank(raw.towerHeight, 50),
+    legABearingDeg: numericOrBlank(raw.legABearingDeg, 45),
     antennas,
     source: raw.source && typeof raw.source === 'object'
       ? structuredClone(raw.source)
@@ -291,14 +304,19 @@ export function updateAntenna(state, antennaId, changes) {
       const nextCids = Object.hasOwn(changes, 'cids')
         ? normalizeCids(changes.cids)
         : normalizeCids(changes.cid ?? antenna.cids ?? antenna.cid);
+      const validPositions = TOWER_TYPE_CONFIG[state.towerType]?.positions
+        || TOWER_TYPE_CONFIG[FOUR_LEG_TOWER].positions;
+      const nextLeg = Object.hasOwn(changes, 'azimuth')
+        ? installationForAzimuth(state.towerType, nextAzimuth)
+        : (Object.hasOwn(changes, 'leg') && validPositions.includes(changes.leg)
+          ? changes.leg
+          : antenna.leg);
       return {
         ...antenna,
         ...changes,
         cids: nextCids,
         cid: nextCids.join(', '),
-        leg: Object.hasOwn(changes, 'azimuth')
-          ? installationForAzimuth(state.towerType, nextAzimuth)
-          : antenna.leg,
+        leg: nextLeg,
         azimuthConflict: Object.hasOwn(changes, 'azimuth')
           ? false
           : Boolean(antenna.azimuthConflict),
@@ -380,8 +398,14 @@ export function validateTowerPlan(state) {
   if (!state.planTitle.trim()) errors.push('Plan title wajib diisi.');
   if (!state.siteName.trim()) errors.push('Site ID wajib diisi.');
   if (!TOWER_TYPES.includes(state.towerType)) errors.push('Tower type tidak didukung.');
-  if (!(towerHeight > 0)) errors.push('Tinggi tower harus lebih besar dari 0.');
-  if (!Number.isFinite(bearing) || bearing < 0 || bearing >= 360) {
+  if (isBlank(state.towerHeight)) {
+    errors.push('Tinggi tower wajib diisi.');
+  } else if (!(towerHeight > 0)) {
+    errors.push('Tinggi tower harus lebih besar dari 0.');
+  }
+  if (isBlank(state.legABearingDeg)) {
+    errors.push('Leg A bearing wajib diisi.');
+  } else if (!Number.isFinite(bearing) || bearing < 0 || bearing >= 360) {
     errors.push('Leg A bearing harus berada pada 0–359,9°.');
   }
   if (state.antennas.length > MAX_ANTENNAS) {
@@ -394,10 +418,17 @@ export function validateTowerPlan(state) {
     const height = Number(antenna.height);
     const azimuth = Number(antenna.azimuth);
     if (!antenna.name.trim()) errors.push(`Antenna ${index + 1}: nama wajib diisi.`);
-    if (!(height >= 0) || height > towerHeight) {
+    if (isBlank(antenna.sector)) {
+      errors.push(`Antenna ${index + 1}: sector wajib diisi.`);
+    }
+    if (isBlank(antenna.height)) {
+      errors.push(`Antenna ${index + 1}: tinggi wajib diisi.`);
+    } else if (!(height >= 0) || height > towerHeight) {
       errors.push(`Antenna ${index + 1}: tinggi melebihi tinggi tower.`);
     }
-    if (!Number.isFinite(azimuth) || azimuth < 0 || azimuth >= 360) {
+    if (isBlank(antenna.azimuth)) {
+      errors.push(`Antenna ${index + 1}: azimuth wajib diisi.`);
+    } else if (!Number.isFinite(azimuth) || azimuth < 0 || azimuth >= 360) {
       errors.push(`Antenna ${index + 1}: azimuth harus 0–359,9°.`);
     }
     if (!validPositions.includes(antenna.leg)) {
@@ -413,6 +444,7 @@ export function validateTowerPlan(state) {
 
 export function buildEngineeringPrompt(state, revisionInstruction = '') {
   const formatMeasurement = (value) => {
+    if (isBlank(value)) return null;
     const measurement = Number(value);
     return Number.isFinite(measurement) ? String(measurement) : String(value);
   };
@@ -428,22 +460,33 @@ export function buildEngineeringPrompt(state, revisionInstruction = '') {
   const antennaLines = state.antennas.map((antenna) => {
     const cids = normalizeCids(antenna.cids ?? antenna.cid);
     const cidText = cids.length ? `CIDs ${cids.join(', ')}` : 'CID not specified';
+    const antennaHeight = formatMeasurement(antenna.height);
+    const antennaAzimuth = formatMeasurement(antenna.azimuth);
     return `- ${antenna.name} — ${antenna.status}; Sector ${antenna.sector}; `
-      + `${formatMeasurement(antenna.height)} m; azimuth ${formatMeasurement(antenna.azimuth)}°; `
+      + `${antennaHeight === null ? 'height not specified' : `${antennaHeight} m`}; `
+      + `${antennaAzimuth === null ? 'azimuth not specified' : `azimuth ${antennaAzimuth}\u00b0`}; `
       + `${cidText}; ${installationName} ${antenna.leg}.`;
   });
   const revision = revisionInstruction.trim();
+  const towerHeight = formatMeasurement(state.towerHeight);
+  const legABearing = formatMeasurement(state.legABearingDeg);
+  const revisionSentence = revision && !/[.!?]$/.test(revision)
+    ? `${revision}.`
+    : revision;
 
   return [
     `Create a professional ${towerPlanningSubject} planning illustration for site ${state.siteName}. `
       + `Plan title: ${state.planTitle || 'not specified'}.`,
-    `The tower is ${formatMeasurement(state.towerHeight)} metres high, with ${installationName} A `
-      + `oriented ${formatMeasurement(state.legABearingDeg)} degrees clockwise from North.`,
+    towerHeight === null || legABearing === null
+      ? `Tower height is ${towerHeight === null ? 'not specified' : `${towerHeight} metres`}; `
+        + `${installationName} A orientation is ${legABearing === null ? 'not specified' : `${legABearing} degrees clockwise from North`}.`
+      : `The tower is ${towerHeight} metres high, with ${installationName} A `
+        + `oriented ${legABearing} degrees clockwise from North.`,
     antennaLines.length
       ? ['Install the following antennas exactly:', ...antennaLines].join('\n')
       : 'No antennas are currently defined for this plan.',
     `Use a ${visualStyle} visual style with a portrait engineering composition on a white background.`,
-    ...(revision ? [`Revision request: ${revision}`] : []),
+    ...(revisionSentence ? [`Revision request: ${revisionSentence}`] : []),
     'Do not add, remove, merge, or change any supplied antenna or measurement.',
   ].join('\n\n');
 }

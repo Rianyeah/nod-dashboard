@@ -9,6 +9,7 @@ import {
   buildAutofillDraft,
   buildAutofillWarnings,
   buildEngineeringPrompt,
+  normalizeCids,
   createBlankTowerPlan,
   changeTowerType,
   installationForAzimuth,
@@ -18,7 +19,10 @@ import {
   validateAutofillDraft,
   validateTowerPlan,
 } from '../features/tower-plan/towerPlanState.js';
-import { selectSiteFromResults } from '../features/tower-plan/towerPlanSiteSelection.js';
+import {
+  canSelectCurrentSiteResult,
+  selectSiteFromResults,
+} from '../features/tower-plan/towerPlanSiteSelection.js';
 import { getTowerGeometry } from '../features/tower-plan/towerPlanGeometry.js';
 import {
   buildElevationRings,
@@ -195,6 +199,47 @@ describe('Tower Plan state contracts', () => {
     assert.equal(next.antennas[0].height, 40);
   });
 
+  it('keeps a manual installation leg until its azimuth changes', () => {
+    const state = applyAutofillDraft(
+      createBlankTowerPlan(),
+      buildAutofillDraft(groupedConfiguration),
+    );
+
+    const manuallyPlaced = updateAntenna(state, 'group-a', { leg: 'C' });
+    const preservedAfterOtherEdit = updateAntenna(manuallyPlaced, 'group-a', { note: 'field verified' });
+    const remappedAfterAzimuthEdit = updateAntenna(preservedAfterOtherEdit, 'group-a', { azimuth: 110 });
+
+    assert.equal(manuallyPlaced.antennas[0].leg, 'C');
+    assert.equal(preservedAfterOtherEdit.antennas[0].leg, 'C');
+    assert.equal(remappedAfterAzimuthEdit.antennas[0].leg, 'B');
+  });
+
+  it('preserves a valid intentional auto-fill leg override during apply', () => {
+    const draft = buildAutofillDraft(groupedConfiguration);
+    draft.antennas[0].leg = 'B';
+
+    const applied = applyAutofillDraft(createBlankTowerPlan(), draft);
+
+    assert.equal(applied.antennas[0].leg, 'B');
+  });
+
+  it('commits multi-CID input only after the draft is complete', () => {
+    const editorSource = readFileSync(
+      new URL('../features/tower-plan/TowerPlanAntennaEditor.jsx', import.meta.url),
+      'utf8',
+    );
+    const state = applyAutofillDraft(
+      createBlankTowerPlan(),
+      buildAutofillDraft(groupedConfiguration),
+    );
+
+    assert.match(editorSource, /const \[cidDraft, setCidDraft\] = useState/);
+    assert.match(editorSource, /onBlur=\{commitCidDraft\}/);
+    assert.match(editorSource, /event\.key === 'Enter'/);
+    assert.deepEqual(normalizeCids('11, 12'), ['11', '12']);
+    assert.deepEqual(updateAntenna(state, 'group-a', { cids: '11, 12' }).antennas[0].cids, ['11', '12']);
+  });
+
   it('validates tower geometry and duplicate CID values', () => {
     const base = applyAutofillDraft(
       createBlankTowerPlan(),
@@ -234,6 +279,23 @@ describe('Tower Plan state contracts', () => {
     assert.equal(migrated.towerHeight, 60);
     assert.equal(migrated.antennas[0].name, 'Legacy');
     assert.equal(migrated.antennas[0].status, 'Existing');
+  });
+
+  it('preserves imported antennas above the validation limit instead of dropping them', () => {
+    const migrated = migrateTowerPlan({
+      towerHeight: 50,
+      antennas: Array.from({ length: MAX_ANTENNAS + 1 }, (_, index) => ({
+        id: `import-${index}`,
+        name: `Imported ${index + 1}`,
+        sector: String(index + 1),
+        height: 30,
+        azimuth: index * 10,
+        leg: 'A',
+      })),
+    });
+
+    assert.equal(migrated.antennas.length, MAX_ANTENNAS + 1);
+    assert.match(validateTowerPlan(migrated).join(' '), /maksimal 16/i);
   });
 
   it('maps installation positions for every tower type', () => {
@@ -323,6 +385,21 @@ describe('Tower Plan state contracts', () => {
     assert.deepEqual(selectSiteFromResults(items, 'psn003'), { site_id: 'PSN003' });
     assert.deepEqual(selectSiteFromResults(items, 'unknown'), { site_id: 'PSN003A' });
     assert.equal(selectSiteFromResults([], 'PSN003'), null);
+  });
+
+  it('only allows Enter selection for results belonging to the current Site ID query', () => {
+    const pickerSource = readFileSync(
+      new URL('../features/tower-plan/TowerPlanSitePicker.jsx', import.meta.url),
+      'utf8',
+    );
+
+    assert.equal(canSelectCurrentSiteResult('PSN003', 'PSN003', false), true);
+    assert.equal(canSelectCurrentSiteResult('PSN003B', 'PSN003', false), false);
+    assert.equal(canSelectCurrentSiteResult('PSN003', 'PSN003', true), false);
+    assert.equal(canSelectCurrentSiteResult('P', 'P', false), false);
+    assert.match(pickerSource, /const \[resultsQuery, setResultsQuery\] = useState\(''\)/);
+    assert.match(pickerSource, /setResultsQuery\(normalized\)/);
+    assert.match(pickerSource, /event\.key === 'Enter' && open && hasCurrentResults/);
   });
 
   it('builds a professional Monopole prompt with grouped CIDs and mounting sides', () => {
@@ -423,6 +500,75 @@ describe('Tower Plan state contracts', () => {
     const prompt = buildEngineeringPrompt(createBlankTowerPlan(), 'Show clearer sector labels.');
 
     assert.match(prompt, /Revision request: Show clearer sector labels\./);
+  });
+
+  it('finishes a revision instruction with terminal punctuation', () => {
+    const prompt = buildEngineeringPrompt(createBlankTowerPlan(), 'Darken the steel finish');
+
+    assert.match(prompt, /Revision request: Darken the steel finish\./);
+  });
+
+  it('does not treat blank engineering fields as zero in validation or prompts', () => {
+    const plan = {
+      ...createBlankTowerPlan(),
+      planTitle: 'BLANK INPUT CHECK',
+      siteName: 'PSNBLANK',
+      towerHeight: '',
+      legABearingDeg: '',
+      antennas: [{
+        id: 'blank-fields',
+        name: 'Blank field antenna',
+        sector: '',
+        height: '',
+        azimuth: '',
+        cids: [],
+        leg: 'A',
+        status: 'Existing',
+      }],
+    };
+
+    const errors = validateTowerPlan(plan).join(' ');
+    const prompt = buildEngineeringPrompt(plan);
+    const migrated = migrateTowerPlan(plan);
+
+    assert.match(errors, /tinggi tower wajib diisi/i);
+    assert.match(errors, /Leg A bearing wajib diisi/i);
+    assert.match(errors, /sector wajib diisi/i);
+    assert.match(errors, /tinggi wajib diisi/i);
+    assert.match(errors, /azimuth wajib diisi/i);
+    assert.match(prompt, /height not specified/i);
+    assert.match(prompt, /azimuth not specified/i);
+    assert.doesNotMatch(prompt, /Blank field antenna[^\n]*; 0 m; azimuth 0\u00b0/);
+    assert.equal(migrated.towerHeight, '');
+    assert.equal(migrated.legABearingDeg, '');
+    assert.equal(migrated.antennas[0].height, '');
+    assert.equal(migrated.antennas[0].azimuth, '');
+  });
+
+  it('details a non-default Three-leg antenna orientation in the prompt', () => {
+    const state = {
+      ...changeTowerType(createBlankTowerPlan(), 'Three-leg lattice tower'),
+      planTitle: 'TOWER PLAN PSN333',
+      siteName: 'PSN333',
+      towerHeight: 48,
+      legABearingDeg: 15,
+      antennas: [{
+        id: 'three-leg-sector',
+        name: 'Antenna Sectoral Delta',
+        status: 'Relocation',
+        sector: '3',
+        height: 41,
+        azimuth: 285,
+        cids: ['71', '72'],
+        leg: 'C',
+      }],
+    };
+
+    const prompt = buildEngineeringPrompt(state);
+
+    assert.match(prompt, /Create a professional Three-leg lattice tower planning illustration for site PSN333\./);
+    assert.match(prompt, /Leg A oriented 15 degrees clockwise from North/);
+    assert.match(prompt, /- Antenna Sectoral Delta .*Relocation; Sector 3; 41 m; azimuth 285\u00b0; CIDs 71, 72; Leg C\./);
   });
 
   it('states when no antenna records are defined', () => {
@@ -542,6 +688,48 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
         (svg.match(/data-top-antenna=/g) || []).length,
         plan.antennas.length,
       );
+    });
+  });
+
+  it('lays out sixteen SVG callout cards without overlap', () => {
+    const state = applyAutofillDraft(
+      createBlankTowerPlan(),
+      buildAutofillDraft(groupedConfiguration),
+    );
+    const plan = {
+      ...state,
+      antennas: Array.from({ length: MAX_ANTENNAS }, (_, index) => ({
+        ...state.antennas[0],
+        id: `callout-${index + 1}`,
+        name: `Sectoral ${index + 1}`,
+        sector: String(index + 1),
+        height: 46 - index * 0.5,
+        azimuth: (index * 22.5) % 360,
+        leg: 'A',
+      })),
+    };
+
+    const svg = renderTowerPlanSvg(plan);
+    const cards = [...svg.matchAll(
+      /<rect data-callout-card="(\d+)" x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)"/g,
+    )].map(([, id, x, y, width, height]) => ({
+      id: Number(id),
+      x: Number(x),
+      y: Number(y),
+      width: Number(width),
+      height: Number(height),
+    }));
+
+    assert.equal(cards.length, MAX_ANTENNAS);
+    assert.equal(new Set(cards.map((card) => card.id)).size, MAX_ANTENNAS);
+    cards.forEach((card, index) => {
+      cards.slice(index + 1).forEach((other) => {
+        const separated = card.x + card.width <= other.x
+          || other.x + other.width <= card.x
+          || card.y + card.height <= other.y
+          || other.y + other.height <= card.y;
+        assert.equal(separated, true, `callout cards ${card.id} and ${other.id} overlap`);
+      });
     });
   });
 

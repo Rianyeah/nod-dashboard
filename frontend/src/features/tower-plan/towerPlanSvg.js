@@ -141,16 +141,37 @@ function towerStructure(towerHeight, geometry) {
 
 function antennaCallouts(state, towerHeight, geometry) {
   const antennas = [...(state.antennas || [])]
-    .sort((a, b) => Number(b.height) - Number(a.height));
-  return antennas.map((antenna, index) => {
+    .map((antenna, sourceIndex) => ({ antenna, sourceIndex }))
+    .sort((a, b) => Number(b.antenna.height) - Number(a.antenna.height)
+      || a.sourceIndex - b.sourceIndex);
+  const cardsPerColumn = 8;
+  const cardSlotHeight = 104;
+  const cardStartY = 180;
+  const columns = { left: 0, right: 0 };
+  const arranged = antennas.map(({ antenna }, index) => {
     const world = installationPoint(geometry, antenna.leg);
+    const preferredColumn = world.x < 0 ? 'left' : 'right';
+    const column = columns[preferredColumn] < cardsPerColumn
+      ? preferredColumn
+      : (preferredColumn === 'left' ? 'right' : 'left');
+    const slot = columns[column];
+    columns[column] += 1;
+    return {
+      antenna,
+      index,
+      world,
+      left: column === 'left',
+      cardY: cardStartY + slot * cardSlotHeight,
+    };
+  });
+  return arranged.map(({
+    antenna, index, world, left, cardY,
+  }) => {
     const anchor = projectPoint({ ...world, height: antenna.height }, towerHeight, geometry);
-    const left = world.x < 0;
     const direction = left ? -1 : 1;
     const mastX = anchor.x + direction * 42;
     const mastY = anchor.y - 30;
     const cardX = left ? 62 : 688;
-    const cardY = Math.max(180, Math.min(910, 205 + index * 105));
     const cardWidth = 274;
     const edgeX = left ? cardX + cardWidth : cardX;
     const elbowX = left ? 345 : 668;
@@ -162,7 +183,7 @@ function antennaCallouts(state, towerHeight, geometry) {
       <line x1="${anchor.x}" y1="${anchor.y}" x2="${mastX}" y2="${mastY + 30}" stroke="#64748b" stroke-width="5"/>
       <rect x="${mastX - 13}" y="${mastY - 42}" width="26" height="84" rx="5" fill="${color}" stroke="#fff" stroke-width="3"/>
       <path d="M${mastX} ${mastY} L${elbowX} ${cardY + 30} L${edgeX} ${cardY + 30}" fill="none" stroke="${color}" stroke-width="2.5"/>
-      <rect x="${cardX}" y="${cardY}" width="${cardWidth}" height="92" rx="7" fill="#fff" stroke="${color}" stroke-width="1.5"/>
+      <rect data-callout-card="${index + 1}" x="${cardX}" y="${cardY}" width="${cardWidth}" height="92" rx="7" fill="#fff" stroke="${color}" stroke-width="1.5"/>
       <path d="M${cardX + 7} ${cardY} H${cardX + cardWidth - 7} Q${cardX + cardWidth} ${cardY} ${cardX + cardWidth} ${cardY + 7} V${cardY + 29} H${cardX} V${cardY + 7} Q${cardX} ${cardY} ${cardX + 7} ${cardY}" fill="${color}"/>
       <text x="${cardX + 12}" y="${cardY + 20}" fill="#fff" font-size="13" font-weight="800">${index + 1}. ${escapeXml(antenna.name.toUpperCase())}</text>
       <text x="${cardX + 13}" y="${cardY + 48}" fill="#26384d" font-size="12">SECTOR: ${escapeXml(antenna.sector)} · ${positionLabel}: ${escapeXml(antenna.leg)} · ${Number(antenna.height).toFixed(1)} m</text>
