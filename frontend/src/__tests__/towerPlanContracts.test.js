@@ -21,6 +21,10 @@ import {
 } from '../features/tower-plan/towerPlanState.js';
 import { selectSiteFromResults } from '../features/tower-plan/towerPlanSiteSelection.js';
 import { getTowerGeometry } from '../features/tower-plan/towerPlanGeometry.js';
+import {
+  buildElevationRings,
+  radiusForHeight,
+} from '../features/tower-plan/towerPlanHelicopter.js';
 import { renderTowerPlanSvg } from '../features/tower-plan/towerPlanSvg.js';
 
 
@@ -54,6 +58,33 @@ const groupedConfiguration = {
 
 
 describe('Tower Plan state contracts', () => {
+  it('builds unique elevation rings with deterministic radii', () => {
+    assert.deepEqual(
+      buildElevationRings([{ height: 46 }, { height: '40' }, { height: 46 }, { height: 'bad' }]),
+      [
+        { height: 46, radius: 72 },
+        { height: 40, radius: 42 },
+      ],
+    );
+
+    assert.deepEqual(
+      buildElevationRings([{ height: 46 }]),
+      [{ height: 46, radius: 62 }],
+    );
+
+    assert.deepEqual(
+      buildElevationRings([{ height: 46 }, { height: 40 }, { height: 32 }]),
+      [
+        { height: 46, radius: 72 },
+        { height: 40, radius: 57 },
+        { height: 32, radius: 42 },
+      ],
+    );
+
+    assert.equal(radiusForHeight([{ height: 46, radius: 72 }], 46), 72);
+    assert.equal(radiusForHeight([], 46), 62);
+  });
+
   it('starts from a blank four-leg tower rather than the legacy preset', () => {
     const state = createBlankTowerPlan();
 
