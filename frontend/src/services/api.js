@@ -439,18 +439,4 @@ export async function fetchTowerPlanConfiguration(siteId, signal) {
   return data;
 }
 
-export async function fetchTowerPlanAiCapabilities(signal) {
-  const { data } = await api.get('/tower-plan/ai-capabilities', { signal });
-  return data;
-}
-
-export async function generateTowerPlanAiVisualization(payload, signal) {
-  const { data } = await api.post('/tower-plan/ai-visualizations', payload, {
-    responseType: 'blob',
-    timeout: 125000,
-    signal,
-  });
-  return data;
-}
-
 export default api;

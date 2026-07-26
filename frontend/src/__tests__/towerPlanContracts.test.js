@@ -6,7 +6,6 @@ import {
   MAX_ANTENNAS,
   TOWER_PLAN_SCHEMA_VERSION,
   applyAutofillDraft,
-  buildAiPayload,
   buildAutofillDraft,
   buildAutofillWarnings,
   buildEngineeringPrompt,
@@ -326,43 +325,6 @@ describe('Tower Plan state contracts', () => {
     assert.equal(selectSiteFromResults([], 'PSN003'), null);
   });
 
-  it('builds an anonymous AI payload with geometry only', () => {
-    const state = applyAutofillDraft(
-      createBlankTowerPlan(),
-      buildAutofillDraft(groupedConfiguration),
-    );
-    const payload = buildAiPayload({
-      ...state,
-      planTitle: 'SECRET TITLE',
-      siteName: 'SECRET SITE',
-      antennas: [{
-        ...state.antennas[0],
-        name: 'SECRET CELL',
-        operator: 'SECRET OPERATOR',
-        cid: 'SECRET CID',
-        note: 'SECRET NOTE',
-      }],
-    }, 'final', 'Darker steel');
-
-    assert.deepEqual(Object.keys(payload).sort(), [
-      'antennas',
-      'leg_a_bearing_deg',
-      'mode',
-      'revision_instruction',
-      'tower_height_m',
-      'tower_type',
-      'visual_style',
-    ]);
-    assert.deepEqual(Object.keys(payload.antennas[0]).sort(), [
-      'azimuth_deg',
-      'color',
-      'height_m',
-      'leg',
-      'status',
-    ]);
-    assert.doesNotMatch(JSON.stringify(payload), /SECRET/);
-  });
-
   it('builds a professional Monopole prompt with grouped CIDs and mounting sides', () => {
     const state = {
       ...changeTowerType(createBlankTowerPlan(), 'Monopole'),
@@ -415,7 +377,7 @@ describe('Tower Plan state contracts', () => {
     ]) {
       assert.doesNotMatch(prompt, banned);
     }
-    assert.doesNotMatch(prompt, /[\{\}\[\]"]/);
+    assert.doesNotMatch(prompt, /[{}[\]"]/);
   });
 
   it('uses Leg wording for lattice tower prompts', () => {
@@ -589,6 +551,14 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
       'utf8',
     );
     const api = readFileSync(new URL('../services/api.js', import.meta.url), 'utf8');
+    const stateSource = readFileSync(
+      new URL('../features/tower-plan/towerPlanState.js', import.meta.url),
+      'utf8',
+    );
+    const storageSource = readFileSync(
+      new URL('../features/tower-plan/towerPlanStorage.js', import.meta.url),
+      'utf8',
+    );
 
     assert.match(app, /TowerPlanGeneratorPage/);
     assert.match(app, /path="\/tower-plan-generator"/);
@@ -599,7 +569,13 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
     assert.match(breadcrumb, /'tower-plan-generator': 'Tower Plan Generator'/);
     assert.match(api, /searchTowerPlanSites/);
     assert.match(api, /fetchTowerPlanConfiguration/);
-    assert.match(api, /generateTowerPlanAiVisualization/);
+    assert.doesNotMatch(api, /tower-plan\/ai-capabilities/);
+    assert.doesNotMatch(api, /tower-plan\/ai-visualizations/);
+    assert.doesNotMatch(api, /generateTowerPlanAiVisualization/);
+    assert.doesNotMatch(stateSource, /export function buildAiPayload/);
+    assert.doesNotMatch(storageSource, /export async function loadTowerPlanAsset/);
+    assert.doesNotMatch(storageSource, /export async function saveTowerPlanAsset/);
+    assert.match(storageSource, /createObjectStore\(ASSET_STORE\)/);
   });
 
   it('renders the complete professional workbench and review flow', () => {
@@ -621,7 +597,16 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
     assert.match(page, /TowerPlanPreview/);
     assert.match(page, /TOWER_TYPES\.map/);
     assert.match(page, /changeTowerType/);
-    assert.match(page, /Visualisasi AI/);
+    assert.match(page, /title="Prompt generator"/);
+    assert.match(page, /Create Prompt/);
+    assert.match(page, /Copy/);
+    assert.doesNotMatch(page, /Referensi visual/);
+    assert.doesNotMatch(page, /Visualisasi AI/);
+    assert.doesNotMatch(page, /fetchTowerPlanAiCapabilities/);
+    assert.doesNotMatch(page, /generateTowerPlanAiVisualization/);
+    assert.doesNotMatch(page, /loadTowerPlanAsset/);
+    assert.doesNotMatch(page, /saveTowerPlanAsset/);
+    assert.doesNotMatch(page, /manualImageUrl|aiImageUrl|aiCapabilities|aiMode|aiLoading/);
     assert.match(page, /Urungkan/);
     assert.match(
       page,

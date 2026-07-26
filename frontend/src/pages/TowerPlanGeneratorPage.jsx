@@ -2,13 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   ArrowDownUp,
-  Bot,
   CheckCircle2,
   Clipboard,
   Database,
   Download,
   FileJson,
-  Image as ImageIcon,
   LoaderCircle,
   Plus,
   RadioTower,
@@ -27,11 +25,7 @@ import { Card, CardContent, CardHeader } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
-import {
-  fetchTowerPlanAiCapabilities,
-  fetchTowerPlanConfiguration,
-  generateTowerPlanAiVisualization,
-} from '../services/api';
+import { fetchTowerPlanConfiguration } from '../services/api';
 import TowerPlanAntennaEditor from '../features/tower-plan/TowerPlanAntennaEditor';
 import TowerPlanAutofillDialog from '../features/tower-plan/TowerPlanAutofillDialog';
 import TowerPlanPreview from '../features/tower-plan/TowerPlanPreview';
@@ -42,7 +36,6 @@ import {
   TOWER_TYPE_CONFIG,
   addAntenna,
   applyAutofillDraft,
-  buildAiPayload,
   buildAutofillDraft,
   buildEngineeringPrompt,
   changeTowerType,
@@ -57,13 +50,10 @@ import {
 } from '../features/tower-plan/towerPlanState';
 import { renderTowerPlanSvg } from '../features/tower-plan/towerPlanSvg';
 import {
-  loadTowerPlanAsset,
   loadTowerPlanDraft,
-  saveTowerPlanAsset,
   saveTowerPlanDraft,
 } from '../features/tower-plan/towerPlanStorage';
 
-const MAX_ASSET_SIZE = 10 * 1024 * 1024;
 const VISUAL_STYLES = [
   'Technical Blueprint',
   'Clean Engineering Infographic',
@@ -163,36 +153,20 @@ export default function TowerPlanGeneratorPage() {
   const [notice, setNotice] = useState(null);
   const [promptOutput, setPromptOutput] = useState('');
   const [revisionInstruction, setRevisionInstruction] = useState('');
-  const [aiMode, setAiMode] = useState('draft');
-  const [aiCapabilities, setAiCapabilities] = useState(null);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiImageUrl, setAiImageUrl] = useState('');
-  const [manualImageUrl, setManualImageUrl] = useState('');
   const jsonInputRef = useRef(null);
-  const imageInputRef = useRef(null);
   const configRequestRef = useRef(null);
   const validationErrors = useMemo(() => validateTowerPlan(plan), [plan]);
   const towerTypeConfig = TOWER_TYPE_CONFIG[plan.towerType];
 
   useEffect(() => {
     let active = true;
-    const controller = new AbortController();
-    Promise.all([
-      loadTowerPlanDraft(),
-      loadTowerPlanAsset('latest-ai'),
-      loadTowerPlanAsset('manual-reference'),
-      fetchTowerPlanAiCapabilities(controller.signal).catch(() => null),
-    ]).then(([storedPlan, aiAsset, manualAsset, capabilities]) => {
+    loadTowerPlanDraft().then((storedPlan) => {
       if (!active) return;
       if (storedPlan) setPlan(storedPlan);
-      if (aiAsset?.blob) setAiImageUrl(URL.createObjectURL(aiAsset.blob));
-      if (manualAsset?.blob) setManualImageUrl(URL.createObjectURL(manualAsset.blob));
-      setAiCapabilities(capabilities);
       setHydrated(true);
     });
     return () => {
       active = false;
-      controller.abort();
     };
   }, []);
 
@@ -201,16 +175,6 @@ export default function TowerPlanGeneratorPage() {
     const timer = setTimeout(() => saveTowerPlanDraft(plan), 250);
     return () => clearTimeout(timer);
   }, [hydrated, plan]);
-
-  useEffect(
-    () => () => aiImageUrl && URL.revokeObjectURL(aiImageUrl),
-    [aiImageUrl],
-  );
-
-  useEffect(
-    () => () => manualImageUrl && URL.revokeObjectURL(manualImageUrl),
-    [manualImageUrl],
-  );
 
   const notify = (type, message) => setNotice({ type, message });
 
@@ -311,45 +275,6 @@ export default function TowerPlanGeneratorPage() {
   const createPrompt = () => {
     if (!requireValidPlan()) return;
     setPromptOutput(buildEngineeringPrompt(plan, revisionInstruction));
-  };
-
-  const uploadReference = async (file) => {
-    if (!file) return;
-    if (!['image/png', 'image/webp'].includes(file.type) || file.size > MAX_ASSET_SIZE) {
-      notify('error', 'Gunakan PNG/WebP maksimal 10 MB.');
-      return;
-    }
-    await saveTowerPlanAsset('manual-reference', file, file.name);
-    if (manualImageUrl) URL.revokeObjectURL(manualImageUrl);
-    setManualImageUrl(URL.createObjectURL(file));
-    notify('success', 'Referensi visual tersimpan di browser.');
-  };
-
-  const generateAi = async () => {
-    if (!requireValidPlan()) return;
-    if (!aiCapabilities?.enabled) {
-      notify('error', 'Visualisasi AI belum diaktifkan pada server.');
-      return;
-    }
-    if (!window.confirm(`Generate visualisasi AI mode ${aiMode}? Request ini dapat menggunakan kuota berbayar.`)) {
-      return;
-    }
-    const controller = new AbortController();
-    setAiLoading(true);
-    try {
-      const blob = await generateTowerPlanAiVisualization(
-        buildAiPayload(plan, aiMode, revisionInstruction),
-        controller.signal,
-      );
-      await saveTowerPlanAsset('latest-ai', blob, `${safeFilename(plan)}-ai.png`);
-      if (aiImageUrl) URL.revokeObjectURL(aiImageUrl);
-      setAiImageUrl(URL.createObjectURL(blob));
-      notify('success', 'Visualisasi AI terbaru berhasil dibuat.');
-    } catch (error) {
-      notify('error', error.response?.data?.detail || 'Visualisasi AI gagal dibuat.');
-    } finally {
-      setAiLoading(false);
-    }
   };
 
   return (
@@ -543,8 +468,8 @@ export default function TowerPlanGeneratorPage() {
               <CardHeader className="border-b border-border">
                 <SectionTitle
                   icon={WandSparkles}
-                  title="Prompt & visualisasi"
-                  description="Prompt lokal dapat memuat data proyek; request AI selalu disanitasi otomatis."
+                  title="Prompt generator"
+                  description="Buat instruksi profesional yang siap disalin ke generator gambar eksternal."
                 />
               </CardHeader>
               <CardContent className="space-y-4">
@@ -566,47 +491,7 @@ export default function TowerPlanGeneratorPage() {
                     <Clipboard /> Copy
                   </Button>
                 </div>
-                <Textarea className="min-h-52 font-mono text-xs" placeholder="Prompt engineering akan tampil di sini." readOnly value={promptOutput} />
-
-                <div className="grid gap-4 border-t border-border pt-4 lg:grid-cols-2">
-                  <div className="space-y-3 rounded-xl border border-border bg-muted/20 p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <h3 className="flex items-center gap-2 text-sm font-semibold"><ImageIcon className="size-4" /> Referensi visual</h3>
-                      <Badge variant="outline">PNG/WebP · 10 MB</Badge>
-                    </div>
-                    <input ref={imageInputRef} accept="image/png,image/webp" className="hidden" type="file" onChange={(event) => uploadReference(event.target.files?.[0])} />
-                    <Button variant="outline" onClick={() => imageInputRef.current?.click()}><Upload /> Upload image</Button>
-                    {manualImageUrl && <img alt="Manual tower visual reference" className="aspect-[2/3] max-h-72 w-full rounded-lg border border-border bg-white object-contain" src={manualImageUrl} />}
-                  </div>
-
-                  <div className="space-y-3 rounded-xl border border-border bg-muted/20 p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <h3 className="flex items-center gap-2 text-sm font-semibold"><Bot className="size-4" /> Visualisasi AI</h3>
-                      <Badge variant={aiCapabilities?.enabled ? 'secondary' : 'outline'}>
-                        {aiCapabilities?.enabled ? aiCapabilities.model : 'Disabled'}
-                      </Badge>
-                    </div>
-                    <div className="flex gap-2">
-                      <select
-                        aria-label="AI quality mode"
-                        className="dashboard-control h-9 min-w-28 rounded-full px-3 text-sm outline-none"
-                        value={aiMode}
-                        onChange={(event) => setAiMode(event.target.value)}
-                      >
-                        <option value="draft">Draft · low</option>
-                        <option value="final">Final · medium</option>
-                      </select>
-                      <Button disabled={aiLoading || !aiCapabilities?.enabled} onClick={generateAi}>
-                        {aiLoading ? <LoaderCircle className="animate-spin" /> : <Sparkles />}
-                        Generate
-                      </Button>
-                    </div>
-                    <p className="text-[10px] text-muted-foreground">
-                      Output AI adalah referensi visual terpisah; SVG deterministik tetap sumber engineering.
-                    </p>
-                    {aiImageUrl && <img alt="Latest AI tower visualization" className="aspect-[2/3] max-h-72 w-full rounded-lg border border-border bg-white object-contain" src={aiImageUrl} />}
-                  </div>
-                </div>
+                <Textarea className="min-h-52 font-mono text-xs" placeholder="Prompt profesional akan tampil di sini." readOnly value={promptOutput} />
               </CardContent>
             </Card>
           </div>

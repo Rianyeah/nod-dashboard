@@ -77,20 +77,3 @@ export async function saveTowerPlanDraft(plan) {
     localStorage.setItem(FALLBACK_KEY, JSON.stringify(snapshot));
   }
 }
-
-export async function loadTowerPlanAsset(key) {
-  try {
-    return await readStore(ASSET_STORE, key);
-  } catch {
-    return null;
-  }
-}
-
-export async function saveTowerPlanAsset(key, fileOrBlob, name = 'tower-plan.png') {
-  await writeStore(ASSET_STORE, key, {
-    blob: fileOrBlob,
-    name,
-    type: fileOrBlob.type,
-    savedAt: new Date().toISOString(),
-  });
-}

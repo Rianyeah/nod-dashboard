@@ -411,26 +411,6 @@ export function validateTowerPlan(state) {
   return errors;
 }
 
-export function buildAiPayload(state, mode = 'draft', revisionInstruction = '') {
-  return {
-    mode,
-    tower_type: state.towerType,
-    tower_height_m: Number(state.towerHeight),
-    leg_a_bearing_deg: Number(state.legABearingDeg),
-    visual_style: state.visualStyle === 'Custom Style' && state.customStyle.trim()
-      ? state.customStyle.trim()
-      : state.visualStyle,
-    revision_instruction: revisionInstruction,
-    antennas: state.antennas.map((antenna) => ({
-      status: antenna.status,
-      height_m: Number(antenna.height),
-      azimuth_deg: Number(antenna.azimuth),
-      leg: antenna.leg,
-      color: antenna.color,
-    })),
-  };
-}
-
 export function buildEngineeringPrompt(state, revisionInstruction = '') {
   const formatMeasurement = (value) => {
     const measurement = Number(value);
