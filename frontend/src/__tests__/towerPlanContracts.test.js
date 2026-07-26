@@ -128,6 +128,36 @@ describe('Tower Plan state contracts', () => {
     assert.match(validateAutofillDraft(missing)[0], /tinggi tower/i);
   });
 
+  it('keeps a missing source antenna height blank through draft validation and prompt generation', () => {
+    const withoutHeight = Object.fromEntries(
+      Object.entries(groupedConfiguration.antennas[0]).filter(([key]) => key !== 'height_m'),
+    );
+    const draft = buildAutofillDraft({
+      ...groupedConfiguration,
+      antennas: [
+        {
+          ...groupedConfiguration.antennas[0],
+          group_key: 'null-height',
+          height_m: null,
+        },
+        {
+          ...withoutHeight,
+          group_key: 'omitted-height',
+        },
+      ],
+    });
+    const errors = validateAutofillDraft(draft).join(' ');
+    const applied = applyAutofillDraft(createBlankTowerPlan(), draft);
+    const prompt = buildEngineeringPrompt(applied);
+
+    assert.deepEqual(draft.antennas.map((antenna) => antenna.height), ['', '']);
+    assert.match(errors, /Antenna 1: tinggi wajib diisi/i);
+    assert.match(errors, /Antenna 2: tinggi wajib diisi/i);
+    assert.deepEqual(applied.antennas.map((antenna) => antenna.height), ['', '']);
+    assert.equal((prompt.match(/height not specified/g) || []).length, 2);
+    assert.doesNotMatch(prompt, /; 0 m; azimuth/i);
+  });
+
   it('shows one actionable warning when tower_hight is unavailable', () => {
     const draft = buildAutofillDraft({
       ...groupedConfiguration,

@@ -180,7 +180,7 @@ export function buildAutofillDraft(configuration, towerType = FOUR_LEG_TOWER) {
         operator: '',
         status: 'Existing',
         sector: String(antenna.sector ?? ''),
-        height: numeric(antenna.height_m, 0),
+        height: numericOrBlank(antenna.height_m, ''),
         azimuth,
         cids,
         cid: cids.join(', '),
@@ -242,7 +242,9 @@ export function validateAutofillDraft(draft) {
     if (!String(antenna.sector || '').trim()) {
       errors.push(`Antenna ${index + 1}: sector wajib diisi.`);
     }
-    if (!(Number(antenna.height) >= 0) || Number(antenna.height) > towerHeight) {
+    if (isBlank(antenna.height)) {
+      errors.push(`Antenna ${index + 1}: tinggi wajib diisi.`);
+    } else if (!(Number(antenna.height) >= 0) || Number(antenna.height) > towerHeight) {
       errors.push(`Antenna ${index + 1}: tinggi melebihi tinggi tower.`);
     }
   });
