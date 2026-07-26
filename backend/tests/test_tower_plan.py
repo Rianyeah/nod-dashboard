@@ -3,15 +3,9 @@ from __future__ import annotations
 from decimal import Decimal
 
 import pytest
-from unittest.mock import AsyncMock
 
-from models.tower_plan import (
-    TowerPlanAiAntenna,
-    TowerPlanAiRequest,
-    TowerPlanSourceColumns,
-)
+from models.tower_plan import TowerPlanSourceColumns
 from routers.tower_plan import (
-    build_ai_prompt,
     extract_cid,
     group_antenna_rows,
     leg_for_azimuth,
@@ -276,37 +270,6 @@ def test_tower_height_reports_available_missing_and_conflicting_values():
     assert conflict.values_m == [50, 60]
 
 
-def test_ai_prompt_contains_only_anonymous_engineering_geometry():
-    request = TowerPlanAiRequest(
-        mode="draft",
-        tower_type="Monopole",
-        tower_height_m=50,
-        leg_a_bearing_deg=45,
-        visual_style="Clean Engineering Infographic",
-        revision_instruction="Make the tower steel slightly darker",
-        antennas=[
-            TowerPlanAiAntenna(
-                status="Existing",
-                height_m=42,
-                azimuth_deg=30,
-                leg="A",
-                color="#334155",
-            )
-        ],
-    )
-
-    prompt = build_ai_prompt(request)
-
-    assert "SITE001" not in prompt
-    assert "CELL-A" not in prompt
-    assert "50.0 m" in prompt
-    assert "Monopole" in prompt
-    assert "four-leg" not in prompt
-    assert "30.0 degrees" in prompt
-    assert "Leg A" in prompt
-    assert "Make the tower steel slightly darker" in prompt
-
-
 @pytest.mark.asyncio
 async def test_site_search_uses_parameterized_query_and_returns_group_estimate():
     from routers.tower_plan import search_tower_plan_sites
@@ -428,70 +391,18 @@ async def test_configuration_fallback_never_references_missing_schema_columns():
     assert "NULL::text AS enodeb_ci" in session.calls[1][0]
 
 
-def test_ai_capabilities_are_disabled_by_default(authenticated_client, monkeypatch):
-    monkeypatch.delenv("TOWER_PLAN_AI_ENABLED", raising=False)
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-
-    response = authenticated_client.get("/api/v1/tower-plan/ai-capabilities")
-
-    assert response.status_code == 200
-    assert response.json() == {
-        "enabled": False,
-        "model": "gpt-image-2",
-        "qualities": ["draft", "final"],
-        "request_limit_per_hour": 5,
-    }
-
-
-def test_ai_generation_rejects_sensitive_extra_fields(authenticated_client, monkeypatch):
-    monkeypatch.setenv("TOWER_PLAN_AI_ENABLED", "true")
-    monkeypatch.setenv("OPENAI_API_KEY", "test-only-openai-key")
-
-    response = authenticated_client.post(
-        "/api/v1/tower-plan/ai-visualizations",
-        headers={"Origin": TEST_ORIGIN},
-        json={
-            "mode": "draft",
-            "tower_height_m": 50,
-            "leg_a_bearing_deg": 45,
-            "visual_style": "Technical Blueprint",
-            "revision_instruction": "",
-            "antennas": [],
-            "site_id": "SECRET-SITE",
-        },
-    )
-
-    assert response.status_code == 422
-
-
-def test_ai_generation_returns_png_from_server_side_adapter(
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("get", "/api/v1/tower-plan/ai-capabilities"),
+        ("post", "/api/v1/tower-plan/ai-visualizations"),
+    ],
+)
+def test_retired_tower_plan_ai_routes_are_not_registered(
     authenticated_client,
-    monkeypatch,
-    mocker,
+    method,
+    path,
 ):
-    monkeypatch.setenv("TOWER_PLAN_AI_ENABLED", "true")
-    monkeypatch.setenv("OPENAI_API_KEY", "test-only-openai-key")
-    generate = mocker.patch(
-        "routers.tower_plan.generate_ai_image",
-        new_callable=AsyncMock,
-        return_value=b"\x89PNG\r\n\x1a\nimage",
-    )
-
-    response = authenticated_client.post(
-        "/api/v1/tower-plan/ai-visualizations",
-        headers={"Origin": TEST_ORIGIN},
-        json={
-            "mode": "final",
-            "tower_height_m": 50,
-            "leg_a_bearing_deg": 45,
-            "visual_style": "Technical Blueprint",
-            "revision_instruction": "",
-            "antennas": [],
-        },
-    )
-
-    assert response.status_code == 200
-    assert response.headers["content-type"] == "image/png"
-    assert response.content.startswith(b"\x89PNG")
-    request = generate.await_args.args[0]
-    assert request.mode == "final"
+    headers = {"Origin": TEST_ORIGIN} if method == "post" else {}
+    response = getattr(authenticated_client, method)(path, headers=headers)
+    assert response.status_code == 404

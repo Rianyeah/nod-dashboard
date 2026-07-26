@@ -181,8 +181,6 @@ def create_app(settings: SecuritySettings | None = None) -> FastAPI:
     app.state.login_limiter = InMemoryRateLimiter()
     app.state.rf_limiter = InMemoryRateLimiter()
     app.state.rf_analysis_semaphore = asyncio.Semaphore(2)
-    app.state.tower_plan_ai_limiter = InMemoryRateLimiter()
-    app.state.tower_plan_ai_semaphore = asyncio.Semaphore(1)
     app.add_middleware(
         TrustedHostMiddleware,
         allowed_hosts=_runtime_allowed_hosts(security_settings.allowed_hosts),

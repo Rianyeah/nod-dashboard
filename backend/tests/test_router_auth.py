@@ -14,7 +14,6 @@ PROTECTED_PATHS = (
     "/api/v1/data-potensi/filter-options",
     "/api/v1/rf-tilt/sites?q=x",
     "/api/v1/tower-plan/sites?q=x",
-    "/api/v1/tower-plan/ai-capabilities",
 )
 
 

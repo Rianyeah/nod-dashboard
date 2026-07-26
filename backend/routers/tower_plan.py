@@ -1,26 +1,19 @@
-"""Tower Plan Generator site configuration and optional AI visualization API."""
+"""Tower Plan Generator site search and configuration API."""
 
 from __future__ import annotations
 
-import asyncio
-import base64
 import hashlib
 import json
-import logging
-import os
 import re
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any, Iterable
 
-import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_session
 from models.tower_plan import (
-    TowerPlanAiCapabilities,
-    TowerPlanAiRequest,
     TowerPlanAntennaGroup,
     TowerPlanSiteSearchItem,
     TowerPlanSiteConfigurationResponse,
@@ -29,19 +22,11 @@ from models.tower_plan import (
     TowerPlanSourceColumns,
     TowerPlanTowerHeight,
 )
-from rate_limit import RateLimitExceeded
-from security import verify_browser_origin
 
 
 router = APIRouter(prefix="/tower-plan", tags=["Tower Plan Generator"])
-logger = logging.getLogger(__name__)
 
 ONE_DECIMAL = Decimal("0.1")
-AI_REQUEST_LIMIT = 5
-AI_WINDOW_SECONDS = 60 * 60
-AI_CONCURRENCY_TIMEOUT_SECONDS = 0.01
-AI_TIMEOUT_SECONDS = 120
-OPENAI_IMAGE_URL = "https://api.openai.com/v1/images/generations"
 
 RANSYS_COLUMNS_QUERY = """
 SELECT column_name
@@ -274,28 +259,6 @@ def group_antenna_rows(
     return groups, warnings
 
 
-def build_ai_prompt(request: TowerPlanAiRequest) -> str:
-    antenna_lines = "\n".join(
-        (
-            f"- Antenna {index + 1}: {antenna.status}, {antenna.height_m:.1f} m, "
-            f"{antenna.azimuth_deg:.1f} degrees, Leg {antenna.leg}, color {antenna.color}"
-        )
-        for index, antenna in enumerate(request.antennas)
-    )
-    return (
-        "Create a professional portrait 2:3 telecommunications tower planning "
-        f"visualization in {request.visual_style} style. Use an opaque white background.\n"
-        f"Tower: {request.tower_type}, {request.tower_height_m:.1f} m overall height, "
-        f"Leg A bearing {request.leg_a_bearing_deg:.1f} degrees from North.\n"
-        "Show a three-quarter elevation, technical callouts, a helicopter-view inset, "
-        "a height scale, and the appropriate installation-position legend. "
-        "Do not invent antennas, "
-        "site names, cell names, operators, CID values, or technical measurements.\n"
-        f"{antenna_lines or '- No antennas.'}\n"
-        f"Revision: {request.revision_instruction.strip() or 'None.'}"
-    )
-
-
 async def _get_ransys_columns(session: AsyncSession) -> set[str]:
     result = await session.execute(text(RANSYS_COLUMNS_QUERY))
     return {
@@ -464,114 +427,6 @@ async def get_tower_plan_site_configuration(
     )
 
 
-def _ai_configuration() -> tuple[bool, str, str]:
-    enabled = os.environ.get("TOWER_PLAN_AI_ENABLED", "false").strip().lower() == "true"
-    api_key = os.environ.get("OPENAI_API_KEY", "").strip()
-    model = os.environ.get("OPENAI_IMAGE_MODEL", "gpt-image-2").strip() or "gpt-image-2"
-    return enabled and bool(api_key), api_key, model
-
-
-@router.get("/ai-capabilities", response_model=TowerPlanAiCapabilities)
-async def get_tower_plan_ai_capabilities():
-    enabled, _, model = _ai_configuration()
-    return TowerPlanAiCapabilities(
-        enabled=enabled,
-        model=model,
-        qualities=["draft", "final"],
-        request_limit_per_hour=AI_REQUEST_LIMIT,
-    )
-
-
-async def generate_ai_image(request: TowerPlanAiRequest) -> bytes:
-    enabled, api_key, model = _ai_configuration()
-    if not enabled:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Visualisasi AI belum diaktifkan pada server.",
-        )
-
-    payload = {
-        "model": model,
-        "prompt": build_ai_prompt(request),
-        "size": "1024x1536",
-        "quality": "low" if request.mode == "draft" else "medium",
-        "background": "opaque",
-        "output_format": "png",
-    }
-    try:
-        async with httpx.AsyncClient(timeout=AI_TIMEOUT_SECONDS) as client:
-            response = await client.post(
-                OPENAI_IMAGE_URL,
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                },
-                json=payload,
-            )
-            response.raise_for_status()
-            body = response.json()
-            encoded = body["data"][0]["b64_json"]
-            image = base64.b64decode(encoded, validate=True)
-    except (httpx.HTTPError, KeyError, IndexError, ValueError) as exc:
-        logger.exception("Tower Plan AI generation failed")
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Visualisasi AI gagal dibuat. Silakan coba kembali.",
-        ) from exc
-    if not image.startswith(b"\x89PNG\r\n\x1a\n"):
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Server AI mengembalikan format gambar yang tidak valid.",
-        )
-    return image
-
-
-@router.post("/ai-visualizations")
-async def create_tower_plan_ai_visualization(
-    payload: TowerPlanAiRequest,
-    request: Request,
-):
-    verify_browser_origin(request)
-    enabled, _, _ = _ai_configuration()
-    if not enabled:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Visualisasi AI belum diaktifkan pada server.",
-        )
-
-    subject = getattr(request.state, "dashboard_subject", "unknown")
-    client_address = request.client.host if request.client else "unknown"
-    try:
-        request.app.state.tower_plan_ai_limiter.consume(
-            f"{subject}:{client_address}",
-            AI_REQUEST_LIMIT,
-            AI_WINDOW_SECONDS,
-        )
-    except RateLimitExceeded as exc:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Batas visualisasi AI telah tercapai.",
-            headers={"Retry-After": str(exc.retry_after)},
-        ) from exc
-
-    try:
-        await asyncio.wait_for(
-            request.app.state.tower_plan_ai_semaphore.acquire(),
-            timeout=AI_CONCURRENCY_TIMEOUT_SECONDS,
-        )
-    except TimeoutError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Generator AI sedang digunakan. Silakan coba kembali.",
-            headers={"Retry-After": "1"},
-        ) from exc
-
-    try:
-        image = await generate_ai_image(payload)
-        return Response(
-            content=image,
-            media_type="image/png",
-            headers={"Cache-Control": "no-store"},
-        )
-    finally:
-        request.app.state.tower_plan_ai_semaphore.release()
+@router.post("/{unmatched_path:path}", include_in_schema=False)
+async def reject_unmatched_tower_plan_post(unmatched_path: str):
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
