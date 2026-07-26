@@ -18,6 +18,7 @@ import {
   validateTowerPlan,
 } from '../features/tower-plan/towerPlanState.js';
 import { selectSiteFromResults } from '../features/tower-plan/towerPlanSiteSelection.js';
+import { getTowerGeometry } from '../features/tower-plan/towerPlanGeometry.js';
 import { renderTowerPlanSvg } from '../features/tower-plan/towerPlanSvg.js';
 
 
@@ -308,6 +309,24 @@ describe('Tower Plan state contracts', () => {
 
 
 describe('Tower Plan deterministic output and dashboard wiring', () => {
+  it('provides aligned feet and safe helicopter spacing for every tower type', () => {
+    const expected = [
+      ['Four-leg lattice tower', 4, 'lattice-four'],
+      ['Three-leg lattice tower', 3, 'lattice-three'],
+      ['Monopole', 1, 'monopole'],
+    ];
+
+    expected.forEach(([towerType, footCount, structureKind]) => {
+      const geometry = getTowerGeometry(towerType);
+      assert.equal(geometry.feet.length, footCount);
+      assert.equal(geometry.structureKind, structureKind);
+      assert.ok(
+        geometry.helicopterPanel.x - geometry.towerEnvelopeRight >= 50,
+        `${towerType} must keep at least 50 px of clear space`,
+      );
+    });
+  });
+
   it('renders escaped site data, antenna geometry, and helicopter view in SVG', () => {
     const state = applyAutofillDraft(
       createBlankTowerPlan(),
@@ -319,8 +338,32 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
     assert.match(svg, /HELICOPTER VIEW/);
     assert.match(svg, /MODEL-A/);
     assert.match(svg, /LEG A/);
+    assert.match(svg, /CID\(S\): 11, 14/);
+    assert.equal((svg.match(/data-foot-plate=/g) || []).length, 4);
+    assert.match(svg, /data-installation-label="A"/);
+    assert.match(svg, /data-structure-kind="lattice-four"/);
     assert.match(svg, /&lt;SITE&amp;001&gt;/);
     assert.doesNotMatch(svg, /<SITE&001>/);
+  });
+
+  it('renders distinct three-leg and monopole structures', () => {
+    const state = applyAutofillDraft(
+      createBlankTowerPlan(),
+      buildAutofillDraft(groupedConfiguration),
+    );
+    const threeLeg = renderTowerPlanSvg(changeTowerType(
+      state,
+      'Three-leg lattice tower',
+    ));
+    const monopole = renderTowerPlanSvg(changeTowerType(state, 'Monopole'));
+
+    assert.match(threeLeg, /data-structure-kind="lattice-three"/);
+    assert.equal((threeLeg.match(/data-foot-plate=/g) || []).length, 3);
+    assert.match(threeLeg, /data-installation-label="C"/);
+    assert.doesNotMatch(threeLeg, /data-installation-label="D"/);
+    assert.match(monopole, /data-structure-kind="monopole"/);
+    assert.equal((monopole.match(/data-foot-plate=/g) || []).length, 1);
+    assert.match(monopole, /data-anchor-bolt=/);
   });
 
   it('wires the lazy route, sidebar placement, breadcrumb, and API functions', () => {
