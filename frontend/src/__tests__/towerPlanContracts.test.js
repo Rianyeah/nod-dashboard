@@ -17,6 +17,7 @@ import {
   validateAutofillDraft,
   validateTowerPlan,
 } from '../features/tower-plan/towerPlanState.js';
+import { selectSiteFromResults } from '../features/tower-plan/towerPlanSiteSelection.js';
 import { renderTowerPlanSvg } from '../features/tower-plan/towerPlanSvg.js';
 
 
@@ -258,6 +259,14 @@ describe('Tower Plan state contracts', () => {
     assert.equal(draft.antennas[0].azimuth, '');
     assert.equal(draft.antennas[0].azimuthConflict, true);
     assert.match(validateAutofillDraft(draft).join(' '), /azimuth/i);
+  });
+
+  it('selects exact Site ID before the first fuzzy result', () => {
+    const items = [{ site_id: 'PSN003A' }, { site_id: 'PSN003' }];
+
+    assert.deepEqual(selectSiteFromResults(items, 'psn003'), { site_id: 'PSN003' });
+    assert.deepEqual(selectSiteFromResults(items, 'unknown'), { site_id: 'PSN003A' });
+    assert.equal(selectSiteFromResults([], 'PSN003'), null);
   });
 
   it('builds an anonymous AI payload with geometry only', () => {
