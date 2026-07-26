@@ -400,11 +400,44 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
   });
 
   it('renders escaped site data, antenna geometry, and helicopter view in SVG', () => {
-    const state = applyAutofillDraft(
+    const baseState = applyAutofillDraft(
       createBlankTowerPlan(),
       buildAutofillDraft(groupedConfiguration),
     );
-    const svg = renderTowerPlanSvg({ ...state, siteName: '<SITE&001>' });
+    const plan = {
+      ...baseState,
+      siteName: '<SITE&001>',
+      antennas: [
+        {
+          ...baseState.antennas[0],
+          id: 'sector-3-primary',
+          sector: '3',
+          height: 46,
+          azimuth: 310,
+          leg: 'A',
+          color: '#334155',
+        },
+        {
+          ...baseState.antennas[0],
+          id: 'sector-3-overlap',
+          sector: '3',
+          height: 46,
+          azimuth: 310,
+          leg: 'A',
+          color: '#7c3aed',
+        },
+        {
+          ...baseState.antennas[0],
+          id: 'sector-2-inner',
+          sector: '2',
+          height: 40,
+          azimuth: 190,
+          leg: 'B',
+          color: '#be123c',
+        },
+      ],
+    };
+    const svg = renderTowerPlanSvg(plan);
 
     assert.match(svg, /viewBox="0 0 1024 1536"/);
     assert.match(svg, /HELICOPTER VIEW/);
@@ -416,6 +449,37 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
     assert.match(svg, /data-structure-kind="lattice-four"/);
     assert.match(svg, /&lt;SITE&amp;001&gt;/);
     assert.doesNotMatch(svg, /<SITE&001>/);
+    assert.equal((svg.match(/data-elevation-ring=/g) || []).length, 2);
+    assert.match(svg, /data-elevation-ring="46"[^>]*r="72"/);
+    assert.match(svg, /data-elevation-ring="40"[^>]*r="42"/);
+    assert.match(svg, />SEC 3 \| 310(?:\.0)?Â°</);
+    assert.match(svg, /data-arrow-color="#334155"/);
+    assert.match(svg, /data-overlap-index="0"/);
+    assert.match(svg, /data-overlap-index="1"/);
+  });
+
+  it('renders every antenna in the helicopter view for every tower type', () => {
+    const state = applyAutofillDraft(
+      createBlankTowerPlan(),
+      buildAutofillDraft(groupedConfiguration),
+    );
+    const plan = {
+      ...state,
+      antennas: [
+        { ...state.antennas[0], id: 'a', leg: 'A', height: 46, azimuth: 310 },
+        { ...state.antennas[0], id: 'b', leg: 'A', height: 46, azimuth: 310 },
+        { ...state.antennas[0], id: 'c', leg: 'B', height: 40, azimuth: 190 },
+      ],
+    };
+
+    ['Four-leg lattice tower', 'Three-leg lattice tower', 'Monopole'].forEach((towerType) => {
+      const svg = renderTowerPlanSvg(changeTowerType(plan, towerType));
+
+      assert.equal(
+        (svg.match(/data-top-antenna=/g) || []).length,
+        plan.antennas.length,
+      );
+    });
   });
 
   it('renders distinct three-leg and monopole structures', () => {

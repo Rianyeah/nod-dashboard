@@ -3,6 +3,10 @@ import {
   TOWER_DRAWING_LAYOUT,
   getTowerGeometry,
 } from './towerPlanGeometry.js';
+import {
+  buildElevationRings,
+  radiusForHeight,
+} from './towerPlanHelicopter.js';
 
 const escapeXml = (value) => String(value ?? '')
   .replaceAll('&', '&amp;')
@@ -18,6 +22,13 @@ const polar = (cx, cy, radius, bearing) => {
     y: cy - Math.cos(radians) * radius,
   };
 };
+
+function coloredArrowHead(x, y, bearing, color) {
+  const tail = polar(x, y, 8, Number(bearing) + 180);
+  const left = polar(tail.x, tail.y, 4, Number(bearing) + 90);
+  const right = polar(tail.x, tail.y, 4, Number(bearing) - 90);
+  return `<path data-arrow-color="${escapeXml(color)}" d="M${x} ${y} L${left.x} ${left.y} L${right.x} ${right.y} Z" fill="${escapeXml(color)}"/>`;
+}
 
 function projectPoint(point, towerHeight, geometry) {
   const height = Math.max(0, Math.min(towerHeight, Number(point.height) || 0));
@@ -172,6 +183,14 @@ function helicopterView(state, geometry) {
     position,
     polar(cx, cy, 35, bearing + index * geometry.interval),
   ]));
+  const rings = buildElevationRings(state.antennas);
+  const ringMarkup = rings.map(({ height: ringHeight, radius }, index) => `
+  <circle data-elevation-ring="${escapeXml(ringHeight)}"
+    cx="${cx}" cy="${cy}" r="${radius}" fill="none"
+    stroke="#d3dce7" stroke-width="1.5"/>
+  <text x="${cx + radius + 5}" y="${cy + (index % 2 === 0 ? -3 : 10)}"
+    fill="#637389" font-size="9">${ringHeight} m</text>
+`).join('');
   const footprint = geometry.structureKind === 'monopole'
     ? `<circle cx="${cx}" cy="${cy}" r="23" fill="#eef2f6" stroke="#58697c" stroke-width="3"/>`
     : `<path d="M${geometry.positions.map((position) => {
@@ -185,19 +204,40 @@ function helicopterView(state, geometry) {
       <text x="${point.x}" y="${point.y + 4}" text-anchor="middle" fill="#fff" font-size="11" font-weight="800">${position}</text>
     </g>`;
   }).join('');
+  const overlapCounts = new Map();
   const antennas = (state.antennas || []).map((antenna) => {
     const positionIndex = Math.max(0, geometry.positions.indexOf(antenna.leg));
     const positionPoint = positionPoints[antenna.leg] || positionPoints[geometry.positions[0]];
-    const start = polar(
+    const positionBearing = bearing + positionIndex * geometry.interval;
+    const overlapKey = `${antenna.leg}|${Number(antenna.height)}|${Number(antenna.azimuth)}`;
+    const occurrence = overlapCounts.get(overlapKey) || 0;
+    overlapCounts.set(overlapKey, occurrence + 1);
+    const tangent = polar(0, 0, occurrence * 6, positionBearing + 90);
+    const startRing = radiusForHeight(rings, antenna.height);
+    const startBase = polar(
       cx,
       cy,
-      72,
-      bearing + positionIndex * geometry.interval,
+      startRing,
+      positionBearing,
     );
+    const start = {
+      x: startBase.x + tangent.x,
+      y: startBase.y + tangent.y,
+    };
     const end = polar(start.x, start.y, 45, Number(antenna.azimuth));
-    return `<line x1="${positionPoint.x}" y1="${positionPoint.y}" x2="${start.x}" y2="${start.y}" stroke="${escapeXml(antenna.color)}" stroke-dasharray="3 3"/>
-      <line x1="${start.x}" y1="${start.y}" x2="${end.x}" y2="${end.y}" stroke="${escapeXml(antenna.color)}" stroke-width="3" marker-end="url(#arrow)"/>
-      <text x="${end.x}" y="${end.y - 6}" text-anchor="middle" fill="#24364a" font-size="9" font-weight="700">S${escapeXml(antenna.sector)}</text>`;
+    const shiftedPosition = {
+      x: positionPoint.x + tangent.x,
+      y: positionPoint.y + tangent.y,
+    };
+    const azimuth = Number(antenna.azimuth);
+    const azimuthLabel = Number.isFinite(azimuth) ? String(azimuth) : '';
+    const color = antenna.color;
+    return `<g data-top-antenna="${escapeXml(antenna.id)}" data-overlap-index="${occurrence}">
+      <line x1="${shiftedPosition.x}" y1="${shiftedPosition.y}" x2="${start.x}" y2="${start.y}" stroke="${escapeXml(color)}" stroke-dasharray="3 3"/>
+      <line x1="${start.x}" y1="${start.y}" x2="${end.x}" y2="${end.y}" stroke="${escapeXml(color)}" stroke-width="3"/>
+      ${coloredArrowHead(end.x, end.y, azimuth, color)}
+      <text x="${end.x}" y="${end.y - 6}" text-anchor="middle" fill="#24364a" font-size="9" font-weight="700">SEC ${escapeXml(antenna.sector)} | ${escapeXml(azimuthLabel)}Â°</text>
+    </g>`;
   }).join('');
   const footerLabel = state.towerType === MONOPOLE_TOWER
     ? 'Mounting Side A bearing'
@@ -208,7 +248,7 @@ function helicopterView(state, geometry) {
     <text x="${x + width / 2}" y="${y + 23}" text-anchor="middle" fill="#fff" font-size="14" font-weight="800">HELICOPTER VIEW</text>
     <text x="${cx}" y="${y + 57}" text-anchor="middle" fill="#17263b" font-size="11" font-weight="800">N · 0°</text>
     <line x1="${cx}" y1="${y + 65}" x2="${cx}" y2="${y + 94}" stroke="#17263b" stroke-width="2" marker-end="url(#arrowDark)"/>
-    ${footprint}${labels}${antennas}
+    ${ringMarkup}${footprint}${labels}${antennas}
     <text x="${x + 12}" y="${y + height - 14}" fill="#5e6f84" font-size="9">${footerLabel}: ${Number(state.legABearingDeg).toFixed(1)}° · North fixed</text>
   </g>`;
 }
