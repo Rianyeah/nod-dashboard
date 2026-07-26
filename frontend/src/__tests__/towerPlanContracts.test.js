@@ -394,6 +394,31 @@ describe('Tower Plan state contracts', () => {
     assert.match(prompt, /CIDs 31; Leg A\./);
   });
 
+  it('uses natural planning wording for every lattice tower prompt', () => {
+    const expectedOpenings = [
+      [
+        'Four-leg lattice tower',
+        'Create a professional Four-leg lattice tower planning illustration for site PSN003. '
+          + 'Plan title: TOWER PLAN PSN003.',
+      ],
+      [
+        'Three-leg lattice tower',
+        'Create a professional Three-leg lattice tower planning illustration for site PSN003. '
+          + 'Plan title: TOWER PLAN PSN003.',
+      ],
+    ];
+
+    expectedOpenings.forEach(([towerType, expectedOpening]) => {
+      const prompt = buildEngineeringPrompt({
+        ...changeTowerType(createBlankTowerPlan(), towerType),
+        planTitle: 'TOWER PLAN PSN003',
+        siteName: 'PSN003',
+      });
+
+      assert.equal(prompt.split('\n\n', 1)[0], expectedOpening);
+    });
+  });
+
   it('includes a natural revision request when one is supplied', () => {
     const prompt = buildEngineeringPrompt(createBlankTowerPlan(), 'Show clearer sector labels.');
 

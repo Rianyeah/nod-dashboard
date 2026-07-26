@@ -422,6 +422,9 @@ export function buildEngineeringPrompt(state, revisionInstruction = '') {
   const visualStyle = state.visualStyle === 'Custom Style' && state.customStyle.trim()
     ? state.customStyle.trim()
     : state.visualStyle;
+  const towerPlanningSubject = state.towerType === MONOPOLE_TOWER
+    ? `${state.towerType} tower`
+    : state.towerType;
   const antennaLines = state.antennas.map((antenna) => {
     const cids = normalizeCids(antenna.cids ?? antenna.cid);
     const cidText = cids.length ? `CIDs ${cids.join(', ')}` : 'CID not specified';
@@ -432,7 +435,7 @@ export function buildEngineeringPrompt(state, revisionInstruction = '') {
   const revision = revisionInstruction.trim();
 
   return [
-    `Create a professional ${state.towerType} tower planning illustration for site ${state.siteName}. `
+    `Create a professional ${towerPlanningSubject} planning illustration for site ${state.siteName}. `
       + `Plan title: ${state.planTitle || 'not specified'}.`,
     `The tower is ${formatMeasurement(state.towerHeight)} metres high, with ${installationName} A `
       + `oriented ${formatMeasurement(state.legABearingDeg)} degrees clockwise from North.`,
