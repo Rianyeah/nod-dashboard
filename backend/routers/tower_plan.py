@@ -285,10 +285,11 @@ def build_ai_prompt(request: TowerPlanAiRequest) -> str:
     return (
         "Create a professional portrait 2:3 telecommunications tower planning "
         f"visualization in {request.visual_style} style. Use an opaque white background.\n"
-        f"Tower: four-leg lattice, {request.tower_height_m:.1f} m overall height, "
+        f"Tower: {request.tower_type}, {request.tower_height_m:.1f} m overall height, "
         f"Leg A bearing {request.leg_a_bearing_deg:.1f} degrees from North.\n"
         "Show a three-quarter elevation, technical callouts, a helicopter-view inset, "
-        "a height scale, and an A-B-C-D clockwise leg legend. Do not invent antennas, "
+        "a height scale, and the appropriate installation-position legend. "
+        "Do not invent antennas, "
         "site names, cell names, operators, CID values, or technical measurements.\n"
         f"{antenna_lines or '- No antennas.'}\n"
         f"Revision: {request.revision_instruction.strip() or 'None.'}"

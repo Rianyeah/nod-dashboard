@@ -9,11 +9,13 @@ import {
   buildAiPayload,
   buildAutofillDraft,
   buildAutofillWarnings,
+  buildEngineeringPrompt,
   createBlankTowerPlan,
   changeTowerType,
   installationForAzimuth,
   migrateTowerPlan,
   updateAntenna,
+  updateAutofillAntennaDraft,
   validateAutofillDraft,
   validateTowerPlan,
 } from '../features/tower-plan/towerPlanState.js';
@@ -262,6 +264,29 @@ describe('Tower Plan state contracts', () => {
     assert.match(validateAutofillDraft(draft).join(' '), /azimuth/i);
   });
 
+  it('resolves an auto-fill azimuth conflict and recalculates the position', () => {
+    const draft = buildAutofillDraft({
+      ...groupedConfiguration,
+      antennas: [{
+        ...groupedConfiguration.antennas[0],
+        azimuth_deg: null,
+        leg: null,
+        azimuth_values_deg: [120, 125],
+        azimuth_conflict: true,
+      }],
+    }, 'Three-leg lattice tower');
+
+    const resolved = updateAutofillAntennaDraft(
+      draft,
+      draft.antennas[0].id,
+      { azimuth: 125 },
+    );
+
+    assert.equal(resolved.antennas[0].azimuthConflict, false);
+    assert.equal(resolved.antennas[0].leg, 'B');
+    assert.deepEqual(validateAutofillDraft(resolved), []);
+  });
+
   it('selects exact Site ID before the first fuzzy result', () => {
     const items = [{ site_id: 'PSN003A' }, { site_id: 'PSN003' }];
 
@@ -294,6 +319,7 @@ describe('Tower Plan state contracts', () => {
       'mode',
       'revision_instruction',
       'tower_height_m',
+      'tower_type',
       'visual_style',
     ]);
     assert.deepEqual(Object.keys(payload.antennas[0]).sort(), [
@@ -304,6 +330,21 @@ describe('Tower Plan state contracts', () => {
       'status',
     ]);
     assert.doesNotMatch(JSON.stringify(payload), /SECRET/);
+  });
+
+  it('includes selected tower type and grouped CIDs in the engineering prompt', () => {
+    const state = changeTowerType(
+      applyAutofillDraft(
+        createBlankTowerPlan(),
+        buildAutofillDraft(groupedConfiguration),
+      ),
+      'Monopole',
+    );
+
+    const prompt = buildEngineeringPrompt(state);
+
+    assert.match(prompt, /deterministic Monopole planning drawing/);
+    assert.match(prompt, /"cids": \[\s*"11",\s*"14"\s*\]/);
   });
 });
 
@@ -407,6 +448,8 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
     assert.match(page, /Auto-fill Site ID/);
     assert.match(page, /TowerPlanAutofillDialog/);
     assert.match(page, /TowerPlanPreview/);
+    assert.match(page, /TOWER_TYPES\.map/);
+    assert.match(page, /changeTowerType/);
     assert.match(page, /Visualisasi AI/);
     assert.match(page, /Urungkan/);
     assert.match(
@@ -420,6 +463,8 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
     assert.match(review, /Review Auto-fill/);
     assert.match(review, /Terapkan konfigurasi/);
     assert.match(review, /maksimal 16/i);
+    assert.match(review, /sector_base \+ antenna_type \+ antenna_height/);
+    assert.match(review, /azimuthConflict/);
     assert.match(preview, /Sumber engineering deterministik/);
   });
 });

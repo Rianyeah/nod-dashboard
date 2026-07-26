@@ -279,6 +279,7 @@ def test_tower_height_reports_available_missing_and_conflicting_values():
 def test_ai_prompt_contains_only_anonymous_engineering_geometry():
     request = TowerPlanAiRequest(
         mode="draft",
+        tower_type="Monopole",
         tower_height_m=50,
         leg_a_bearing_deg=45,
         visual_style="Clean Engineering Infographic",
@@ -299,6 +300,8 @@ def test_ai_prompt_contains_only_anonymous_engineering_geometry():
     assert "SITE001" not in prompt
     assert "CELL-A" not in prompt
     assert "50.0 m" in prompt
+    assert "Monopole" in prompt
+    assert "four-leg" not in prompt
     assert "30.0 degrees" in prompt
     assert "Leg A" in prompt
     assert "Make the tower steel slightly darker" in prompt

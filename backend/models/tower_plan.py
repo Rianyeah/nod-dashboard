@@ -8,6 +8,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 TowerPlanLeg = Literal["A", "B", "C", "D"]
+TowerPlanTowerType = Literal[
+    "Four-leg lattice tower",
+    "Three-leg lattice tower",
+    "Monopole",
+]
 
 
 class TowerPlanSourceColumns(BaseModel):
@@ -93,6 +98,7 @@ class TowerPlanAiRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     mode: Literal["draft", "final"] = "draft"
+    tower_type: TowerPlanTowerType = "Four-leg lattice tower"
     tower_height_m: float = Field(gt=0, le=500)
     leg_a_bearing_deg: float = Field(ge=0, lt=360)
     visual_style: str = Field(min_length=1, max_length=120)

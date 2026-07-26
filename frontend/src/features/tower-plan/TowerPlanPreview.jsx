@@ -1,0 +1,43 @@
+import { useMemo } from 'react';
+import { BadgeCheck, Braces, Maximize2 } from 'lucide-react';
+
+import { Badge } from '../../components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
+import { towerPlanSvgDataUrl } from './towerPlanSvg';
+
+export default function TowerPlanPreview({ plan, validationErrors }) {
+  const source = useMemo(() => towerPlanSvgDataUrl(plan), [plan]);
+  return (
+    <Card className="overflow-visible py-0">
+      <CardHeader className="flex-row items-center justify-between border-b border-border px-4 py-3">
+        <div>
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <Braces className="size-4 text-primary" />
+            Engineering preview
+          </CardTitle>
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            Sumber engineering deterministik · 1024 × 1536
+          </p>
+        </div>
+        <Badge variant={validationErrors.length ? 'destructive' : 'secondary'}>
+          {validationErrors.length ? `${validationErrors.length} issue` : (
+            <span className="flex items-center gap-1"><BadgeCheck className="size-3" /> Valid</span>
+          )}
+        </Badge>
+      </CardHeader>
+      <CardContent className="p-3">
+        <div className="group relative overflow-hidden rounded-xl border border-border bg-white shadow-inner">
+          <img
+            alt={`Tower plan ${plan.siteName || 'tanpa Site ID'}`}
+            className="block aspect-[2/3] w-full object-contain"
+            src={source}
+          />
+          <div className="pointer-events-none absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-slate-950/75 px-2 py-1 text-[9px] text-white opacity-0 transition-opacity group-hover:opacity-100">
+            <Maximize2 className="size-3" />
+            Preview 2:3
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}

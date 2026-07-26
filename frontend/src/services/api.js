@@ -421,4 +421,36 @@ export async function searchAntennaModels(q) {
   return data;
 }
 
+// ===== Tower Plan Generator =====
+
+export async function searchTowerPlanSites(q, signal) {
+  const { data } = await api.get('/tower-plan/sites', {
+    params: { q: q || undefined, limit: 20 },
+    signal,
+  });
+  return data;
+}
+
+export async function fetchTowerPlanConfiguration(siteId, signal) {
+  const { data } = await api.get(
+    `/tower-plan/sites/${encodeURIComponent(siteId)}/configuration`,
+    { signal },
+  );
+  return data;
+}
+
+export async function fetchTowerPlanAiCapabilities(signal) {
+  const { data } = await api.get('/tower-plan/ai-capabilities', { signal });
+  return data;
+}
+
+export async function generateTowerPlanAiVisualization(payload, signal) {
+  const { data } = await api.post('/tower-plan/ai-visualizations', payload, {
+    responseType: 'blob',
+    timeout: 125000,
+    signal,
+  });
+  return data;
+}
+
 export default api;

@@ -147,6 +147,7 @@ export function buildAutofillDraft(configuration, towerType = FOUR_LEG_TOWER) {
   return {
     siteName,
     planTitle: siteName ? `TOWER PLAN ${siteName}` : '',
+    towerType: TOWER_TYPES.includes(towerType) ? towerType : FOUR_LEG_TOWER,
     towerHeight,
     towerHeightStatus: configuration?.tower_height?.status || 'missing',
     towerHeightValues: [...(configuration?.tower_height?.values_m || [])],
@@ -210,6 +211,8 @@ export function validateAutofillDraft(draft) {
   const errors = [];
   const towerHeight = Number(draft?.towerHeight);
   const selected = (draft?.antennas || []).filter((antenna) => antenna.selected);
+  const validPositions = TOWER_TYPE_CONFIG[draft?.towerType]?.positions
+    || TOWER_TYPE_CONFIG[FOUR_LEG_TOWER].positions;
   if (!draft?.siteName?.trim()) errors.push('Site ID wajib diisi.');
   if (!(towerHeight > 0)) errors.push('Tinggi tower wajib diisi dengan nilai valid.');
   if (!selected.length) errors.push('Pilih minimal satu antena.');
@@ -220,7 +223,7 @@ export function validateAutofillDraft(draft) {
     if (antenna.azimuthConflict || antenna.azimuth === '') {
       errors.push(`Antenna ${index + 1}: azimuth konflik wajib diselesaikan.`);
     }
-    if (!TOWER_TYPE_CONFIG[FOUR_LEG_TOWER].positions.includes(antenna.leg)) {
+    if (!validPositions.includes(antenna.leg)) {
       errors.push(`Antenna ${index + 1}: posisi instalasi wajib diisi.`);
     }
     if (!String(antenna.sector || '').trim()) {
@@ -231,6 +234,26 @@ export function validateAutofillDraft(draft) {
     }
   });
   return errors;
+}
+
+export function updateAutofillAntennaDraft(draft, antennaId, changes) {
+  return {
+    ...draft,
+    antennas: draft.antennas.map((antenna) => {
+      if (antenna.id !== antennaId) return antenna;
+      if (!Object.hasOwn(changes, 'azimuth')) return { ...antenna, ...changes };
+      const resolved = changes.azimuth !== ''
+        && Number.isFinite(Number(changes.azimuth));
+      return {
+        ...antenna,
+        ...changes,
+        azimuthConflict: !resolved,
+        leg: resolved
+          ? installationForAzimuth(draft.towerType, changes.azimuth)
+          : '',
+      };
+    }),
+  };
 }
 
 export function applyAutofillDraft(state, draft) {
@@ -391,6 +414,7 @@ export function validateTowerPlan(state) {
 export function buildAiPayload(state, mode = 'draft', revisionInstruction = '') {
   return {
     mode,
+    tower_type: state.towerType,
     tower_height_m: Number(state.towerHeight),
     leg_a_bearing_deg: Number(state.legABearingDeg),
     visual_style: state.visualStyle === 'Custom Style' && state.customStyle.trim()
