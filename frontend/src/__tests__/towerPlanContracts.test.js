@@ -399,6 +399,7 @@ describe('Tower Plan state contracts', () => {
     assert.match(prompt, /52 metres high/);
     assert.match(prompt, /Mounting Side A oriented 45 degrees clockwise from North/);
     assert.match(prompt, /- Antenna Sectoral Alpha .*Existing; Sector 1; 46 m; azimuth 40°; CIDs 11, 12; Mounting Side A\./);
+    assert.match(prompt, /- Antenna Sectoral Beta .*New; Sector 2; 38 m; azimuth 150°; CIDs 21, 22; Mounting Side B\./);
     assert.match(prompt, /Use a Clean Engineering Infographic visual style/);
     assert.match(prompt, /Do not add, remove, merge, or change any supplied antenna or measurement\./);
 
