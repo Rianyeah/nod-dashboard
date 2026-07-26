@@ -236,7 +236,7 @@ function helicopterView(state, geometry) {
       <line x1="${shiftedPosition.x}" y1="${shiftedPosition.y}" x2="${start.x}" y2="${start.y}" stroke="${escapeXml(color)}" stroke-dasharray="3 3"/>
       <line x1="${start.x}" y1="${start.y}" x2="${end.x}" y2="${end.y}" stroke="${escapeXml(color)}" stroke-width="3"/>
       ${coloredArrowHead(end.x, end.y, azimuth, color)}
-      <text x="${end.x}" y="${end.y - 6}" text-anchor="middle" fill="#24364a" font-size="9" font-weight="700">SEC ${escapeXml(antenna.sector)} | ${escapeXml(azimuthLabel)}Â°</text>
+      <text x="${end.x}" y="${end.y - 6}" text-anchor="middle" fill="#24364a" font-size="9" font-weight="700">SEC ${escapeXml(antenna.sector)} | ${escapeXml(azimuthLabel)}°</text>
     </g>`;
   }).join('');
   const footerLabel = state.towerType === MONOPOLE_TOWER

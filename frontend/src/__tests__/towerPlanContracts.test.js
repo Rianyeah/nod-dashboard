@@ -452,7 +452,7 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
     assert.equal((svg.match(/data-elevation-ring=/g) || []).length, 2);
     assert.match(svg, /data-elevation-ring="46"[^>]*r="72"/);
     assert.match(svg, /data-elevation-ring="40"[^>]*r="42"/);
-    assert.match(svg, />SEC 3 \| 310(?:\.0)?Â°</);
+    assert.match(svg, />SEC 3 \| 310(?:\.0)?°</);
     assert.match(svg, /data-arrow-color="#334155"/);
     assert.match(svg, /data-overlap-index="0"/);
     assert.match(svg, /data-overlap-index="1"/);
