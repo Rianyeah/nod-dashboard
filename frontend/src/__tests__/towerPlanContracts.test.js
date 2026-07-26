@@ -363,19 +363,94 @@ describe('Tower Plan state contracts', () => {
     assert.doesNotMatch(JSON.stringify(payload), /SECRET/);
   });
 
-  it('includes selected tower type and grouped CIDs in the engineering prompt', () => {
-    const state = changeTowerType(
-      applyAutofillDraft(
-        createBlankTowerPlan(),
-        buildAutofillDraft(groupedConfiguration),
-      ),
-      'Monopole',
-    );
+  it('builds a professional Monopole prompt with grouped CIDs and mounting sides', () => {
+    const state = {
+      ...changeTowerType(createBlankTowerPlan(), 'Monopole'),
+      planTitle: 'TOWER PLAN PSN099',
+      siteName: 'PSN099',
+      towerHeight: 52,
+      antennas: [
+        {
+          id: 'existing-sector-1',
+          name: 'Antenna Sectoral Alpha',
+          status: 'Existing',
+          sector: '1',
+          height: 46,
+          azimuth: 40,
+          cids: ['12', '11', '12'],
+          leg: 'A',
+        },
+        {
+          id: 'new-sector-2',
+          name: 'Antenna Sectoral Beta',
+          status: 'New',
+          sector: '2',
+          height: 38,
+          azimuth: 150,
+          cids: ['21', '22'],
+          leg: 'B',
+        },
+      ],
+    };
 
     const prompt = buildEngineeringPrompt(state);
 
-    assert.match(prompt, /deterministic Monopole planning drawing/);
-    assert.match(prompt, /"cids": \[\s*"11",\s*"14"\s*\]/);
+    assert.match(prompt, /Create a professional Monopole tower planning illustration for site PSN099\./);
+    assert.match(prompt, /52 metres high/);
+    assert.match(prompt, /Mounting Side A oriented 45 degrees clockwise from North/);
+    assert.match(prompt, /- Antenna Sectoral Alpha .*Existing; Sector 1; 46 m; azimuth 40°; CIDs 11, 12; Mounting Side A\./);
+    assert.match(prompt, /Use a Clean Engineering Infographic visual style/);
+    assert.match(prompt, /Do not add, remove, merge, or change any supplied antenna or measurement\./);
+
+    for (const banned of [
+      /TEMPLATE/i,
+      /TARGET/i,
+      /deterministic/i,
+      /schemaVersion/i,
+      /promptTemplateVersion/i,
+      /heightM/i,
+      /azimuthDeg/i,
+      /approved engineering source/i,
+    ]) {
+      assert.doesNotMatch(prompt, banned);
+    }
+    assert.doesNotMatch(prompt, /[\{\}\[\]"]/);
+  });
+
+  it('uses Leg wording for lattice tower prompts', () => {
+    const prompt = buildEngineeringPrompt({
+      ...createBlankTowerPlan(),
+      siteName: 'PSN100',
+      antennas: [{
+        name: 'Antenna Sectoral Gamma', status: 'Existing', sector: '1', height: 42,
+        azimuth: 90, cids: ['31'], leg: 'A',
+      }],
+    });
+
+    assert.match(prompt, /Leg A oriented 45 degrees clockwise from North/);
+    assert.match(prompt, /CIDs 31; Leg A\./);
+  });
+
+  it('includes a natural revision request when one is supplied', () => {
+    const prompt = buildEngineeringPrompt(createBlankTowerPlan(), 'Show clearer sector labels.');
+
+    assert.match(prompt, /Revision request: Show clearer sector labels\./);
+  });
+
+  it('states when no antenna records are defined', () => {
+    const prompt = buildEngineeringPrompt(createBlankTowerPlan());
+
+    assert.match(prompt, /No antennas are currently defined for this plan\./);
+  });
+
+  it('uses a non-empty custom visual style in the prompt', () => {
+    const prompt = buildEngineeringPrompt({
+      ...createBlankTowerPlan(),
+      visualStyle: 'Custom Style',
+      customStyle: 'Blueprint watercolor',
+    });
+
+    assert.match(prompt, /Use a Blueprint watercolor visual style/);
   });
 });
 

@@ -432,25 +432,35 @@ export function buildAiPayload(state, mode = 'draft', revisionInstruction = '') 
 }
 
 export function buildEngineeringPrompt(state, revisionInstruction = '') {
+  const formatMeasurement = (value) => {
+    const measurement = Number(value);
+    return Number.isFinite(measurement) ? String(measurement) : String(value);
+  };
+  const installationName = state.towerType === MONOPOLE_TOWER
+    ? 'Mounting Side'
+    : 'Leg';
+  const visualStyle = state.visualStyle === 'Custom Style' && state.customStyle.trim()
+    ? state.customStyle.trim()
+    : state.visualStyle;
+  const antennaLines = state.antennas.map((antenna) => {
+    const cids = normalizeCids(antenna.cids ?? antenna.cid);
+    const cidText = cids.length ? `CIDs ${cids.join(', ')}` : 'CID not specified';
+    return `- ${antenna.name} — ${antenna.status}; Sector ${antenna.sector}; `
+      + `${formatMeasurement(antenna.height)} m; azimuth ${formatMeasurement(antenna.azimuth)}°; `
+      + `${cidText}; ${installationName} ${antenna.leg}.`;
+  });
+  const revision = revisionInstruction.trim();
+
   return [
-    `TEMPLATE: ${TOWER_PLAN_TEMPLATE_VERSION}`,
-    `TARGET: deterministic ${state.towerType} planning drawing`,
-    `TITLE: ${state.planTitle}`,
-    `SITE: ${state.siteName}`,
-    `TOWER: ${state.towerType}, ${Number(state.towerHeight).toFixed(1)} m`,
-    `LEG A BEARING: ${Number(state.legABearingDeg).toFixed(1)} degrees`,
-    'ANTENNAS:',
-    JSON.stringify(state.antennas.map((antenna) => ({
-      name: antenna.name,
-      status: antenna.status,
-      sector: antenna.sector,
-      heightM: Number(antenna.height),
-      azimuthDeg: Number(antenna.azimuth),
-      cids: normalizeCids(antenna.cids ?? antenna.cid),
-      leg: antenna.leg,
-      color: antenna.color,
-    })), null, 2),
-    `REVISION: ${revisionInstruction.trim() || 'None.'}`,
-    'Use the deterministic SVG/PNG export as the approved engineering source.',
-  ].join('\n');
+    `Create a professional ${state.towerType} tower planning illustration for site ${state.siteName}. `
+      + `Plan title: ${state.planTitle || 'not specified'}.`,
+    `The tower is ${formatMeasurement(state.towerHeight)} metres high, with ${installationName} A `
+      + `oriented ${formatMeasurement(state.legABearingDeg)} degrees clockwise from North.`,
+    antennaLines.length
+      ? ['Install the following antennas exactly:', ...antennaLines].join('\n')
+      : 'No antennas are currently defined for this plan.',
+    `Use a ${visualStyle} visual style with a portrait engineering composition on a white background.`,
+    ...(revision ? [`Revision request: ${revision}`] : []),
+    'Do not add, remove, merge, or change any supplied antenna or measurement.',
+  ].join('\n\n');
 }
