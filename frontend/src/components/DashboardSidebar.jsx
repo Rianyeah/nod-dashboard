@@ -15,6 +15,7 @@ import {
   Radio,
   Sun,
   TicketCheck,
+  TowerControl,
   Wrench,
 } from 'lucide-react';
 import { useTheme } from '../hooks/useTheme';
@@ -36,6 +37,7 @@ const NAV_ITEMS = [
 
 const TOOL_ITEMS = [
   { to: '/rf-tilt-analysis', label: 'RF Tilt Analysis', icon: Radio },
+  { to: '/tower-plan-generator', label: 'Tower Plan Generator', icon: TowerControl },
 ];
 
 function SidebarNavItem({ item, collapsed }) {

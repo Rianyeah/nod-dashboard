@@ -14,6 +14,7 @@ import { AuthProvider, useAuth } from './auth/AuthContext';
 const ImpactServicePage = React.lazy(() => import('./pages/ImpactServicePage'));
 const SiteMapPage = React.lazy(() => import('./pages/SiteMapPage'));
 const RfTiltAnalysisPage = React.lazy(() => import('./pages/RfTiltAnalysisPage'));
+const TowerPlanGeneratorPage = React.lazy(() => import('./pages/TowerPlanGeneratorPage'));
 
 function MapRoute({ children }) {
   return (
@@ -41,6 +42,20 @@ function ImpactServiceRoute() {
       )}
     >
       <ImpactServicePage />
+    </Suspense>
+  );
+}
+
+function TowerPlanRoute() {
+  return (
+    <Suspense
+      fallback={(
+        <div className="flex min-h-64 items-center justify-center text-sm text-muted-foreground">
+          Memuat Tower Plan Generator...
+        </div>
+      )}
+    >
+      <TowerPlanGeneratorPage />
     </Suspense>
   );
 }
@@ -152,6 +167,14 @@ export default function App() {
             element={
               <PrivateRoute>
                 <MapRoute><RfTiltAnalysisPage /></MapRoute>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/tower-plan-generator"
+            element={
+              <PrivateRoute>
+                <TowerPlanRoute />
               </PrivateRoute>
             }
           />
