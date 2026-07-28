@@ -699,21 +699,26 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
   });
 
   it('places every lattice leg label outside its physical foot plate', () => {
-    const svg = renderTowerPlanSvg(createBlankTowerPlan());
-    const labels = [...svg.matchAll(
-      /<g data-leg-label="([A-D])" data-leg-label-side="(left|right)" data-foot-x="([\d.]+)" data-label-x="([\d.]+)"/g,
-    )].map(([, leg, side, footX, labelX]) => ({
-      leg,
-      side,
-      footX: Number(footX),
-      labelX: Number(labelX),
-    }));
+    [
+      ['Four-leg lattice tower', ['A', 'B', 'C', 'D']],
+      ['Three-leg lattice tower', ['A', 'B', 'C']],
+    ].forEach(([towerType, expectedLegs]) => {
+      const svg = renderTowerPlanSvg(changeTowerType(createBlankTowerPlan(), towerType));
+      const labels = [...svg.matchAll(
+        /<g data-leg-label="([A-D])" data-leg-label-side="(left|right)" data-foot-x="([\d.]+)" data-label-x="([\d.]+)"/g,
+      )].map(([, leg, side, footX, labelX]) => ({
+        leg,
+        side,
+        footX: Number(footX),
+        labelX: Number(labelX),
+      }));
 
-    assert.equal(labels.length, 4);
-    assert.deepEqual(labels.map(({ leg }) => leg), ['A', 'B', 'C', 'D']);
-    labels.forEach(({ leg, side, footX, labelX }) => {
-      const exterior = side === 'left' ? labelX < footX - 24 : labelX > footX + 24;
-      assert.equal(exterior, true, `LEG ${leg} label must be outside its foot plate`);
+      assert.equal(labels.length, expectedLegs.length);
+      assert.deepEqual(labels.map(({ leg }) => leg), expectedLegs);
+      labels.forEach(({ leg, side, footX, labelX }) => {
+        const exterior = side === 'left' ? labelX < footX - 24 : labelX > footX + 24;
+        assert.equal(exterior, true, `LEG ${leg} label must be outside its foot plate`);
+      });
     });
   });
 
