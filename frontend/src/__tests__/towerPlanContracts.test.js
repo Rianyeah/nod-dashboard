@@ -116,15 +116,13 @@ describe('Tower Plan state contracts', () => {
     assert.equal(draft.antennas[0].selected, true);
   });
 
-  it('carries resolved tilt values into editable antenna state and the generated prompt', () => {
+  it('carries resolved mechanical tilt into editable antenna state without electrical tilt', () => {
     const draft = buildAutofillDraft({
       ...groupedConfiguration,
       antennas: [{
         ...groupedConfiguration.antennas[0],
         mechanical_tilt_deg: 1,
         mechanical_tilt_conflict: false,
-        electrical_tilt_deg: 2.5,
-        electrical_tilt_conflict: false,
       }],
     });
     const applied = applyAutofillDraft(createBlankTowerPlan(), draft);
@@ -135,12 +133,29 @@ describe('Tower Plan state contracts', () => {
     const prompt = buildEngineeringPrompt(edited);
 
     assert.equal(draft.antennas[0].mechanicalTilt, 1);
-    assert.equal(draft.antennas[0].electricalTilt, 2.5);
     assert.equal(draft.antennas[0].source.mechanicalTiltConflict, false);
     assert.equal(edited.antennas[0].mechanicalTilt, '1.5');
-    assert.equal(edited.antennas[0].electricalTilt, '3');
+    assert.equal('electricalTilt' in edited.antennas[0], false);
     assert.match(prompt, /mechanical tilt 1\.5\u00b0/i);
-    assert.match(prompt, /electrical tilt 3\u00b0/i);
+    assert.doesNotMatch(prompt, /electrical tilt/i);
+  });
+
+  it('drops legacy electrical tilt during Tower Visualizer plan migration', () => {
+    const migrated = migrateTowerPlan({
+      antennas: [{
+        id: 'legacy-tilt',
+        name: 'Legacy antenna',
+        sector: '1',
+        height: 35,
+        azimuth: 45,
+        leg: 'A',
+        electricalTilt: 6,
+        mechanicalTilt: 2,
+      }],
+    });
+
+    assert.equal(migrated.antennas[0].mechanicalTilt, 2);
+    assert.equal('electricalTilt' in migrated.antennas[0], false);
   });
 
   it('requires manual tower height when the source is missing or conflicting', () => {
@@ -1017,7 +1032,7 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
     assert.match(page, /Konfigurasi valid/);
     assert.doesNotMatch(editor, /Operator\/owner/);
     assert.match(editor, /Mechanical Tilt \(MT\)/);
-    assert.match(editor, /Electrical Tilt \(ET\)/);
+    assert.doesNotMatch(editor, /Electrical Tilt \(ET\)/);
     assert.match(review, /Review Auto-fill/);
     assert.match(review, /Terapkan konfigurasi/);
     assert.match(review, /maksimal 16/i);

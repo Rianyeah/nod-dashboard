@@ -110,7 +110,6 @@ function normalizeAntenna(antenna = {}, index = 0, towerType = FOUR_LEG_TOWER) {
     height: numericOrBlank(antenna.height, 0),
     azimuth,
     mechanicalTilt: numericOrBlank(antenna.mechanicalTilt, ''),
-    electricalTilt: numericOrBlank(antenna.electricalTilt, ''),
     cids,
     cid: cids.join(', '),
     leg: validPositions.includes(suppliedLeg)
@@ -176,7 +175,6 @@ export function buildAutofillDraft(configuration, towerType = FOUR_LEG_TOWER) {
         && Number.isFinite(Number(antenna.azimuth_deg));
       const azimuth = hasAzimuth ? Number(antenna.azimuth_deg) : '';
       const mechanicalTiltConflict = Boolean(antenna.mechanical_tilt_conflict);
-      const electricalTiltConflict = Boolean(antenna.electrical_tilt_conflict);
       const cids = normalizeCids(antenna.cids);
       return {
         id: antenna.group_key || makeId(),
@@ -189,9 +187,6 @@ export function buildAutofillDraft(configuration, towerType = FOUR_LEG_TOWER) {
         mechanicalTilt: mechanicalTiltConflict
           ? ''
           : numericOrBlank(antenna.mechanical_tilt_deg, ''),
-        electricalTilt: electricalTiltConflict
-          ? ''
-          : numericOrBlank(antenna.electrical_tilt_deg, ''),
         cids,
         cid: cids.join(', '),
         leg: hasAzimuth ? installationForAzimuth(towerType, azimuth) : '',
@@ -209,7 +204,6 @@ export function buildAutofillDraft(configuration, towerType = FOUR_LEG_TOWER) {
           technologies: [...(antenna.technologies || [])],
           cells: structuredClone(antenna.cells || []),
           mechanicalTiltConflict,
-          electricalTiltConflict,
         },
       };
     }),
@@ -307,36 +301,42 @@ export function applyAutofillDraft(state, draft) {
 }
 
 export function updateAntenna(state, antennaId, changes) {
+  const nextChanges = Object.fromEntries(
+    Object.entries(changes).filter(([key]) => key !== 'electricalTilt'),
+  );
   return {
     ...state,
     antennas: state.antennas.map((antenna) => {
       if (antenna.id !== antennaId) return antenna;
-      const nextStatus = changes.status || antenna.status;
-      const nextAzimuth = Object.hasOwn(changes, 'azimuth')
-        ? changes.azimuth
+      const currentAntenna = Object.fromEntries(
+        Object.entries(antenna).filter(([key]) => key !== 'electricalTilt'),
+      );
+      const nextStatus = nextChanges.status || currentAntenna.status;
+      const nextAzimuth = Object.hasOwn(nextChanges, 'azimuth')
+        ? nextChanges.azimuth
         : antenna.azimuth;
-      const nextCids = Object.hasOwn(changes, 'cids')
-        ? normalizeCids(changes.cids)
-        : normalizeCids(changes.cid ?? antenna.cids ?? antenna.cid);
+      const nextCids = Object.hasOwn(nextChanges, 'cids')
+        ? normalizeCids(nextChanges.cids)
+        : normalizeCids(nextChanges.cid ?? currentAntenna.cids ?? currentAntenna.cid);
       const validPositions = TOWER_TYPE_CONFIG[state.towerType]?.positions
         || TOWER_TYPE_CONFIG[FOUR_LEG_TOWER].positions;
-      const nextLeg = Object.hasOwn(changes, 'azimuth')
+      const nextLeg = Object.hasOwn(nextChanges, 'azimuth')
         ? installationForAzimuth(state.towerType, nextAzimuth)
-        : (Object.hasOwn(changes, 'leg') && validPositions.includes(changes.leg)
-          ? changes.leg
-          : antenna.leg);
+        : (Object.hasOwn(nextChanges, 'leg') && validPositions.includes(nextChanges.leg)
+          ? nextChanges.leg
+          : currentAntenna.leg);
       return {
-        ...antenna,
-        ...changes,
+        ...currentAntenna,
+        ...nextChanges,
         cids: nextCids,
         cid: nextCids.join(', '),
         leg: nextLeg,
-        azimuthConflict: Object.hasOwn(changes, 'azimuth')
+        azimuthConflict: Object.hasOwn(nextChanges, 'azimuth')
           ? false
-          : Boolean(antenna.azimuthConflict),
-        color: changes.status && !changes.color
+          : Boolean(currentAntenna.azimuthConflict),
+        color: nextChanges.status && !nextChanges.color
           ? STATUS_COLORS[nextStatus]
-          : (changes.color || antenna.color),
+          : (nextChanges.color || currentAntenna.color),
       };
     }),
   };
@@ -477,10 +477,8 @@ export function buildEngineeringPrompt(state, revisionInstruction = '') {
     const antennaHeight = formatMeasurement(antenna.height);
     const antennaAzimuth = formatMeasurement(antenna.azimuth);
     const mechanicalTilt = formatMeasurement(antenna.mechanicalTilt);
-    const electricalTilt = formatMeasurement(antenna.electricalTilt);
     const tiltDetails = [
       mechanicalTilt === null ? null : `mechanical tilt ${mechanicalTilt}\u00b0`,
-      electricalTilt === null ? null : `electrical tilt ${electricalTilt}\u00b0`,
     ].filter(Boolean);
     return `- ${antenna.name} — ${antenna.status}; Sector ${antenna.sector}; `
       + `${antennaHeight === null ? 'height not specified' : `${antennaHeight} m`}; `

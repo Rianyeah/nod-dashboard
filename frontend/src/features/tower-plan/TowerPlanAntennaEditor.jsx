@@ -142,16 +142,6 @@ export default function TowerPlanAntennaEditor({
           />
         </div>
         <div className={FIELD_CLASS}>
-          <Label htmlFor={`antenna-electrical-tilt-${antenna.id}`}>Electrical Tilt (ET)</Label>
-          <Input
-            id={`antenna-electrical-tilt-${antenna.id}`}
-            step="0.1"
-            type="number"
-            value={antenna.electricalTilt ?? ''}
-            onChange={(event) => onChange({ electricalTilt: event.target.value })}
-          />
-        </div>
-        <div className={FIELD_CLASS}>
           <Label htmlFor={`antenna-azimuth-${antenna.id}`}>Azimuth</Label>
           <div className="relative">
             <RadioTower className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
