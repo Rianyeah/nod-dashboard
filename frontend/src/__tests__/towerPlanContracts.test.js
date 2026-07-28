@@ -113,6 +113,33 @@ describe('Tower Plan state contracts', () => {
     assert.equal(draft.antennas[0].selected, true);
   });
 
+  it('carries resolved tilt values into editable antenna state and the generated prompt', () => {
+    const draft = buildAutofillDraft({
+      ...groupedConfiguration,
+      antennas: [{
+        ...groupedConfiguration.antennas[0],
+        mechanical_tilt_deg: 1,
+        mechanical_tilt_conflict: false,
+        electrical_tilt_deg: 2.5,
+        electrical_tilt_conflict: false,
+      }],
+    });
+    const applied = applyAutofillDraft(createBlankTowerPlan(), draft);
+    const edited = updateAntenna(applied, 'group-a', {
+      mechanicalTilt: '1.5',
+      electricalTilt: '3',
+    });
+    const prompt = buildEngineeringPrompt(edited);
+
+    assert.equal(draft.antennas[0].mechanicalTilt, 1);
+    assert.equal(draft.antennas[0].electricalTilt, 2.5);
+    assert.equal(draft.antennas[0].source.mechanicalTiltConflict, false);
+    assert.equal(edited.antennas[0].mechanicalTilt, '1.5');
+    assert.equal(edited.antennas[0].electricalTilt, '3');
+    assert.match(prompt, /mechanical tilt 1\.5\u00b0/i);
+    assert.match(prompt, /electrical tilt 3\u00b0/i);
+  });
+
   it('requires manual tower height when the source is missing or conflicting', () => {
     const missing = buildAutofillDraft({
       ...groupedConfiguration,
@@ -860,6 +887,10 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
       new URL('../features/tower-plan/TowerPlanPreview.jsx', import.meta.url),
       'utf8',
     );
+    const editor = readFileSync(
+      new URL('../features/tower-plan/TowerPlanAntennaEditor.jsx', import.meta.url),
+      'utf8',
+    );
 
     assert.match(page, /Tower Visualizer/);
     assert.doesNotMatch(page, /Auto-filled/);
@@ -896,10 +927,15 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
       page,
       /tower-revision[\s\S]{0,500}setRevisionInstruction[\s\S]{0,200}setPromptOutput\(''\)/,
     );
-    assert.match(page, /Export PNG/);
-    assert.match(page, /Export SVG/);
-    assert.match(page, /Export JSON/);
-    assert.match(page, /Import JSON/);
+    assert.match(page, /title="Download"/);
+    assert.match(page, /PNG file/);
+    assert.match(page, /SVG file/);
+    assert.doesNotMatch(page, /Export JSON|Import JSON|jsonInputRef/);
+    assert.doesNotMatch(page, /title="Validation"/);
+    assert.match(page, /Konfigurasi valid/);
+    assert.doesNotMatch(editor, /Operator\/owner/);
+    assert.match(editor, /Mechanical Tilt \(MT\)/);
+    assert.match(editor, /Electrical Tilt \(ET\)/);
     assert.match(review, /Review Auto-fill/);
     assert.match(review, /Terapkan konfigurasi/);
     assert.match(review, /maksimal 16/i);

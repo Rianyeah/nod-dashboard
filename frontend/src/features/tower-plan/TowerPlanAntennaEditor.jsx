@@ -99,15 +99,6 @@ export default function TowerPlanAntennaEditor({
           />
         </div>
         <div className={FIELD_CLASS}>
-          <Label htmlFor={`antenna-operator-${antenna.id}`}>Operator/owner</Label>
-          <Input
-            id={`antenna-operator-${antenna.id}`}
-            placeholder="Opsional"
-            value={antenna.operator}
-            onChange={(event) => onChange({ operator: event.target.value })}
-          />
-        </div>
-        <div className={FIELD_CLASS}>
           <Label htmlFor={`antenna-status-${antenna.id}`}>Status</Label>
           <select
             id={`antenna-status-${antenna.id}`}
@@ -138,6 +129,26 @@ export default function TowerPlanAntennaEditor({
             type="number"
             value={antenna.height}
             onChange={(event) => onChange({ height: event.target.value })}
+          />
+        </div>
+        <div className={FIELD_CLASS}>
+          <Label htmlFor={`antenna-mechanical-tilt-${antenna.id}`}>Mechanical Tilt (MT)</Label>
+          <Input
+            id={`antenna-mechanical-tilt-${antenna.id}`}
+            step="0.1"
+            type="number"
+            value={antenna.mechanicalTilt ?? ''}
+            onChange={(event) => onChange({ mechanicalTilt: event.target.value })}
+          />
+        </div>
+        <div className={FIELD_CLASS}>
+          <Label htmlFor={`antenna-electrical-tilt-${antenna.id}`}>Electrical Tilt (ET)</Label>
+          <Input
+            id={`antenna-electrical-tilt-${antenna.id}`}
+            step="0.1"
+            type="number"
+            value={antenna.electricalTilt ?? ''}
+            onChange={(event) => onChange({ electricalTilt: event.target.value })}
           />
         </div>
         <div className={FIELD_CLASS}>
@@ -188,7 +199,7 @@ export default function TowerPlanAntennaEditor({
             onChange={(event) => onChange({ color: event.target.value })}
           />
         </div>
-        <div className={`${FIELD_CLASS} sm:col-span-2 xl:col-span-3`}>
+        <div className={`${FIELD_CLASS} sm:col-span-2 xl:col-span-4`}>
           <Label htmlFor={`antenna-note-${antenna.id}`}>Notes</Label>
           <Input
             id={`antenna-note-${antenna.id}`}

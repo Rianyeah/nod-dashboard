@@ -6,7 +6,6 @@ import {
   Clipboard,
   Database,
   Download,
-  FileJson,
   LoaderCircle,
   Plus,
   RadioTower,
@@ -14,7 +13,6 @@ import {
   Sparkles,
   TowerControl,
   Undo2,
-  Upload,
   WandSparkles,
 } from 'lucide-react';
 
@@ -153,7 +151,6 @@ export default function TowerPlanGeneratorPage() {
   const [notice, setNotice] = useState(null);
   const [promptOutput, setPromptOutput] = useState('');
   const [revisionInstruction, setRevisionInstruction] = useState('');
-  const jsonInputRef = useRef(null);
   const configRequestRef = useRef(null);
   const validationErrors = useMemo(() => validateTowerPlan(plan), [plan]);
   const towerTypeConfig = TOWER_TYPE_CONFIG[plan.towerType];
@@ -249,26 +246,6 @@ export default function TowerPlanGeneratorPage() {
       downloadBlob(png, `${safeFilename(plan)}-tower-plan.png`);
     } catch (error) {
       notify('error', error.message);
-    }
-  };
-
-  const exportJson = () => {
-    downloadBlob(
-      new Blob([JSON.stringify(plan, null, 2)], { type: 'application/json' }),
-      `${safeFilename(plan)}-tower-plan.json`,
-    );
-  };
-
-  const importJson = async (file) => {
-    if (!file) return;
-    try {
-      const imported = migrateTowerPlan(JSON.parse(await file.text()));
-      setUndoSnapshot(structuredClone(plan));
-      setPromptOutput('');
-      setPlan(imported);
-      notify('success', `Konfigurasi ${file.name} berhasil diimpor.`);
-    } catch {
-      notify('error', 'File JSON tidak valid atau tidak kompatibel.');
     }
   };
 
@@ -493,33 +470,22 @@ export default function TowerPlanGeneratorPage() {
 
             <Card>
               <CardHeader className="border-b border-border">
-                <SectionTitle icon={Download} title="Export & konfigurasi" description="Engineering output dan backup konfigurasi." />
+                <SectionTitle
+                  action={validationErrors.length === 0 ? (
+                    <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-300">
+                      <CheckCircle2 className="size-4" /> Konfigurasi valid
+                    </span>
+                  ) : null}
+                  icon={Download}
+                  title="Download"
+                />
               </CardHeader>
-              <CardContent className="grid grid-cols-2 gap-2">
-                <Button onClick={exportPng}><Download /> Export PNG</Button>
-                <Button variant="outline" onClick={exportSvg}><Download /> Export SVG</Button>
-                <Button variant="outline" onClick={exportJson}><FileJson /> Export JSON</Button>
-                <Button variant="outline" onClick={() => jsonInputRef.current?.click()}><Upload /> Import JSON</Button>
-                <input ref={jsonInputRef} accept="application/json,.json" className="hidden" type="file" onChange={(event) => importJson(event.target.files?.[0])} />
+              <CardContent className="flex gap-2">
+                <Button className="flex-1" onClick={exportPng}><Download /> PNG file</Button>
+                <Button className="flex-1" variant="outline" onClick={exportSvg}><Download /> SVG file</Button>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="border-b border-border">
-                <SectionTitle icon={AlertCircle} title="Validation" description="Kontrol kualitas sebelum export." />
-              </CardHeader>
-              <CardContent>
-                {validationErrors.length === 0 ? (
-                  <p className="flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-300">
-                    <CheckCircle2 className="size-4" /> Konfigurasi valid.
-                  </p>
-                ) : (
-                  <ul className="space-y-2 text-xs text-destructive">
-                    {validationErrors.map((error) => <li key={error}>• {error}</li>)}
-                  </ul>
-                )}
-              </CardContent>
-            </Card>
           </aside>
         </div>
       </main>

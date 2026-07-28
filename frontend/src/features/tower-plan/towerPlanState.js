@@ -109,6 +109,8 @@ function normalizeAntenna(antenna = {}, index = 0, towerType = FOUR_LEG_TOWER) {
     sector: String(antenna.sector ?? index + 1),
     height: numericOrBlank(antenna.height, 0),
     azimuth,
+    mechanicalTilt: numericOrBlank(antenna.mechanicalTilt, ''),
+    electricalTilt: numericOrBlank(antenna.electricalTilt, ''),
     cids,
     cid: cids.join(', '),
     leg: validPositions.includes(suppliedLeg)
@@ -173,6 +175,8 @@ export function buildAutofillDraft(configuration, towerType = FOUR_LEG_TOWER) {
         && antenna.azimuth_deg !== ''
         && Number.isFinite(Number(antenna.azimuth_deg));
       const azimuth = hasAzimuth ? Number(antenna.azimuth_deg) : '';
+      const mechanicalTiltConflict = Boolean(antenna.mechanical_tilt_conflict);
+      const electricalTiltConflict = Boolean(antenna.electrical_tilt_conflict);
       const cids = normalizeCids(antenna.cids);
       return {
         id: antenna.group_key || makeId(),
@@ -182,6 +186,12 @@ export function buildAutofillDraft(configuration, towerType = FOUR_LEG_TOWER) {
         sector: String(antenna.sector ?? ''),
         height: numericOrBlank(antenna.height_m, ''),
         azimuth,
+        mechanicalTilt: mechanicalTiltConflict
+          ? ''
+          : numericOrBlank(antenna.mechanical_tilt_deg, ''),
+        electricalTilt: electricalTiltConflict
+          ? ''
+          : numericOrBlank(antenna.electrical_tilt_deg, ''),
         cids,
         cid: cids.join(', '),
         leg: hasAzimuth ? installationForAzimuth(towerType, azimuth) : '',
@@ -198,6 +208,8 @@ export function buildAutofillDraft(configuration, towerType = FOUR_LEG_TOWER) {
           bands: [...(antenna.bands || [])],
           technologies: [...(antenna.technologies || [])],
           cells: structuredClone(antenna.cells || []),
+          mechanicalTiltConflict,
+          electricalTiltConflict,
         },
       };
     }),
@@ -464,10 +476,17 @@ export function buildEngineeringPrompt(state, revisionInstruction = '') {
     const cidText = cids.length ? `CIDs ${cids.join(', ')}` : 'CID not specified';
     const antennaHeight = formatMeasurement(antenna.height);
     const antennaAzimuth = formatMeasurement(antenna.azimuth);
+    const mechanicalTilt = formatMeasurement(antenna.mechanicalTilt);
+    const electricalTilt = formatMeasurement(antenna.electricalTilt);
+    const tiltDetails = [
+      mechanicalTilt === null ? null : `mechanical tilt ${mechanicalTilt}\u00b0`,
+      electricalTilt === null ? null : `electrical tilt ${electricalTilt}\u00b0`,
+    ].filter(Boolean);
     return `- ${antenna.name} — ${antenna.status}; Sector ${antenna.sector}; `
       + `${antennaHeight === null ? 'height not specified' : `${antennaHeight} m`}; `
       + `${antennaAzimuth === null ? 'azimuth not specified' : `azimuth ${antennaAzimuth}\u00b0`}; `
-      + `${cidText}; ${installationName} ${antenna.leg}.`;
+      + `${cidText}${tiltDetails.length ? `; ${tiltDetails.join('; ')}` : ''}; `
+      + `${installationName} ${antenna.leg}.`;
   });
   const revision = revisionInstruction.trim();
   const towerHeight = formatMeasurement(state.towerHeight);
