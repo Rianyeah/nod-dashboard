@@ -609,9 +609,9 @@ function footerHeader(card, title) {
 }
 
 function footerPanels(state, towerHeight, layout) {
-  const { footer } = layout;
-  const siteData = { ...footer.siteData, y: footer.y };
-  const legend = footer.legend;
+  const { sidebar } = layout;
+  const siteData = sidebar.siteData;
+  const legend = sidebar.legend;
   const antennaCount = (state.antennas || []).length;
   const totalCells = new Set(
     (state.antennas || []).flatMap((antenna) => normalizeCids(antenna.cids ?? antenna.cid)),
@@ -658,15 +658,14 @@ export function renderTowerPlanSvg(state) {
     <marker id="arrowDark" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#17263b"/></marker>
   </defs>
   <rect width="${layout.canvasWidth}" height="${layout.canvasHeight}" fill="#ffffff"/>
-  <text x="${layout.canvasWidth / 2}" y="55" text-anchor="middle" fill="#111827" font-size="34" font-weight="900">${escapeXml(state.planTitle || 'UNTITLED PLAN')}</text>
-  <text x="512" y="90" text-anchor="middle" fill="#111827" font-size="21" font-weight="800">SITE: <tspan fill="#1769e0">${escapeXml(state.siteName || '—')}</tspan></text>
-  <rect x="170" y="66" width="860" height="32" fill="#fff"/>
-  <text x="${layout.canvasWidth / 2}" y="90" text-anchor="middle" fill="#111827" font-size="21" font-weight="800">SITE: <tspan fill="#1769e0">${escapeXml(state.siteName || 'SITE NOT SET')}</tspan></text>
+  <text x="${layout.drawingCenterX}" y="55" text-anchor="middle" fill="#111827" font-size="34" font-weight="900">${escapeXml(state.planTitle || 'UNTITLED PLAN')}</text>
+  <rect x="210" y="66" width="980" height="32" fill="#fff"/>
+  <text x="${layout.drawingCenterX}" y="90" text-anchor="middle" fill="#111827" font-size="21" font-weight="800">SITE: <tspan fill="#1769e0">${escapeXml(state.siteName || 'SITE NOT SET')}</tspan></text>
   <g data-tower-height-dimension="true" data-corridor-right="${layout.heightDimensionCorridorRight}">
     <rect x="18" y="118" width="145" height="31" rx="6" fill="#17263b"/>
     <text x="90" y="139" text-anchor="middle" fill="#fff" font-size="13" font-weight="800">TOWER HEIGHT</text>
     <line x1="42" y1="165" x2="42" y2="${layout.towerBaseY}" stroke="#17263b" stroke-width="1.5" stroke-dasharray="6 5"/>
-    <text x="23" y="680" transform="rotate(-90 23 680)" text-anchor="middle" fill="#17263b" font-size="14" font-weight="800">${towerHeight.toFixed(1)} m OVERALL TOWER HEIGHT</text>
+    <text x="23" y="${(165 + layout.towerBaseY) / 2}" transform="rotate(-90 23 ${(165 + layout.towerBaseY) / 2})" text-anchor="middle" fill="#17263b" font-size="14" font-weight="800">${towerHeight.toFixed(1)} m OVERALL TOWER HEIGHT</text>
     ${guides}
   </g>
   ${towerStructure(towerHeight, geometry)}

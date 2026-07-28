@@ -5,27 +5,27 @@ import {
 } from './towerPlanState.js';
 
 export const TOWER_DRAWING_LAYOUT = {
-  canvasWidth: 1200,
-  canvasHeight: 1536,
-  towerCenterX: 600,
-  towerBaseY: 1190,
-  towerVerticalSpan: 1015,
-  heightDimensionCorridorRight: 170,
-  towerEnvelopeRight: 770,
+  canvasWidth: 1900,
+  canvasHeight: 1200,
+  drawingCenterX: 700,
+  towerCenterX: 700,
+  towerBaseY: 1080,
+  towerVerticalSpan: 880,
+  heightDimensionCorridorRight: 175,
+  towerEnvelopeRight: 880,
   calloutColumns: {
-    left: { x: 180, width: 260, elbowX: 460 },
-    right: { x: 820, width: 330, elbowX: 800 },
+    left: { x: 190, width: 280, elbowX: 490 },
+    right: { x: 920, width: 320, elbowX: 895 },
   },
-  footer: {
-    y: 1320,
-    siteData: { x: 40, width: 360, height: 130 },
-    legend: { x: 40, y: 1460, width: 360, height: 70 },
+  sidebar: {
+    siteData: { x: 1330, y: 150, width: 520, height: 130 },
+    legend: { x: 1330, y: 302, width: 520, height: 70 },
   },
   helicopterPanel: {
-    x: 430,
-    y: 1320,
-    width: 730,
-    height: 210,
+    x: 1330,
+    y: 398,
+    width: 520,
+    height: 420,
   },
 };
 
@@ -82,6 +82,10 @@ export function getTowerGeometry(towerType) {
     positions: [...geometry.positions],
     towerCenterX: TOWER_DRAWING_LAYOUT.towerCenterX,
     towerEnvelopeRight: TOWER_DRAWING_LAYOUT.towerEnvelopeRight,
+    sidebar: {
+      siteData: { ...TOWER_DRAWING_LAYOUT.sidebar.siteData },
+      legend: { ...TOWER_DRAWING_LAYOUT.sidebar.legend },
+    },
     helicopterPanel: { ...TOWER_DRAWING_LAYOUT.helicopterPanel },
   };
 }
