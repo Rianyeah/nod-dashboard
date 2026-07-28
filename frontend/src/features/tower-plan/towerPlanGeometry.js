@@ -17,16 +17,15 @@ export const TOWER_DRAWING_LAYOUT = {
     right: { x: 820, width: 330, elbowX: 800 },
   },
   footer: {
-    y: 1360,
-    height: 145,
-    siteData: { x: 40, width: 420 },
-    legend: { x: 480, width: 215 },
+    y: 1320,
+    siteData: { x: 40, width: 360, height: 130 },
+    legend: { x: 40, y: 1460, width: 360, height: 70 },
   },
   helicopterPanel: {
-    x: 715,
-    y: 1360,
-    width: 445,
-    height: 145,
+    x: 430,
+    y: 1320,
+    width: 730,
+    height: 210,
   },
 };
 

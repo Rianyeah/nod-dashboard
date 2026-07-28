@@ -71,18 +71,23 @@ function labelBoxCandidates(panel, anchor, width, height) {
     { x: anchor.x - width - 7, y: anchor.y - height / 2 },
     { x: anchor.x + 7, y: anchor.y - height / 2 },
   ];
-  const grid = Array.from({ length: 18 }, (_, index) => {
-    const column = index % 6;
-    const row = Math.floor(index / 6);
+  const columnWidth = width + 6;
+  const rowHeight = height + 4;
+  const columns = Math.max(1, Math.floor((panel.width - 20) / columnWidth));
+  const rows = Math.max(1, Math.ceil(24 / columns));
+  const gridStartY = panel.y + panel.height - rows * rowHeight - 8;
+  const grid = Array.from({ length: 24 }, (_, index) => {
+    const column = index % columns;
+    const row = Math.floor(index / columns);
     return {
-      x: panel.x + 10 + column * 70,
-      y: panel.y + 98 + row * 14,
+      x: panel.x + 10 + column * columnWidth,
+      y: gridStartY + row * rowHeight,
     };
   });
   return [...radial, ...grid];
 }
 
-function placeHelicopterLabelBox(panel, anchor, boxes, width = 64, height = 12) {
+function placeHelicopterLabelBox(panel, anchor, boxes, width = 76, height = 13) {
   const candidates = labelBoxCandidates(panel, anchor, width, height);
   const withinPanel = (box) => (
     box.x >= panel.x + 6
@@ -134,11 +139,54 @@ function groundPad(points) {
   return `<path d="M${expanded.map((point) => `${point.x} ${point.y}`).join(' L')} Z" fill="#d8d4cc" stroke="#9f9789"/>`;
 }
 
+function towerPaintBand(height) {
+  const index = Math.max(0, Math.floor(Number(height) / 10));
+  return {
+    index,
+    color: index % 2 === 0 ? 'red' : 'white',
+    stroke: index % 2 === 0 ? '#c81e1e' : '#ffffff',
+    outline: index % 2 === 0 ? '#8f1d1d' : '#cbd5e1',
+  };
+}
+
+function paintBandSegments(towerHeight) {
+  const segmentCount = Math.max(1, Math.ceil(towerHeight / 10));
+  return Array.from({ length: segmentCount }, (_, index) => {
+    const start = index * 10;
+    return {
+      start,
+      end: Math.min(towerHeight, start + 10),
+      ...towerPaintBand(start),
+    };
+  });
+}
+
+function paintedTowerLine(start, end, band, strokeWidth = 12) {
+  const whiteOutline = band.color === 'white'
+    ? `<line x1="${start.x}" y1="${start.y}" x2="${end.x}" y2="${end.y}" stroke="${band.outline}" stroke-width="${strokeWidth + 4}"/>`
+    : '';
+  return `<g data-tower-paint-band="${band.index}" data-paint-color="${band.color}">
+    ${whiteOutline}
+    <line x1="${start.x}" y1="${start.y}" x2="${end.x}" y2="${end.y}" stroke="${band.stroke}" stroke-width="${strokeWidth}"/>
+  </g>`;
+}
+
+function paintedTowerPath(path, band, strokeWidth) {
+  const whiteOutline = band.color === 'white'
+    ? `<path d="${path}" fill="none" stroke="${band.outline}" stroke-width="${strokeWidth + 2}"/>`
+    : '';
+  return `<g data-tower-paint-band="${band.index}" data-paint-color="${band.color}">
+    ${whiteOutline}
+    <path d="${path}" fill="none" stroke="${band.stroke}" stroke-width="${strokeWidth}"/>
+  </g>`;
+}
+
 function latticeStructure(towerHeight, geometry) {
   const positions = geometry.positions;
   const levels = Array.from({ length: 13 }, (_, index) => (
     index === 12 ? towerHeight : index * towerHeight / 12
   ));
+  const paintSegments = paintBandSegments(towerHeight);
   const projected = (position, height) => projectPoint(
     { ...installationPoint(geometry, position), height },
     towerHeight,
@@ -147,14 +195,20 @@ function latticeStructure(towerHeight, geometry) {
   const faces = positions.map((position, index) => (
     [position, positions[(index + 1) % positions.length]]
   ));
-  const legs = positions.map((position) => {
-    const bottom = projected(position, 0);
-    const top = projected(position, towerHeight);
-    return `<line x1="${bottom.x}" y1="${bottom.y}" x2="${top.x}" y2="${top.y}" stroke="url(#tower-red-white)" stroke-width="12"/>`;
-  }).join('');
+  const legs = positions.map((position) => paintSegments.map((band) => (
+    paintedTowerLine(
+      projected(position, band.start),
+      projected(position, band.end),
+      band,
+    )
+  )).join('')).join('');
   const rings = levels.map((height) => {
     const points = positions.map((position) => projected(position, height));
-    return `<path d="M${points.map((point) => `${point.x} ${point.y}`).join(' L')} Z" fill="none" stroke="#be123c" stroke-width="3"/>`;
+    return paintedTowerPath(
+      `M${points.map((point) => `${point.x} ${point.y}`).join(' L')} Z`,
+      towerPaintBand(height),
+      3,
+    );
   }).join('');
   const braces = levels.slice(0, -1).map((height, levelIndex) => (
     faces.map(([first, second]) => {
@@ -162,7 +216,11 @@ function latticeStructure(towerHeight, geometry) {
       const b = projected(second, height);
       const c = projected(first, levels[levelIndex + 1]);
       const d = projected(second, levels[levelIndex + 1]);
-      return `<path d="M${a.x} ${a.y} L${d.x} ${d.y} M${b.x} ${b.y} L${c.x} ${c.y}" fill="none" stroke="#fda4af" stroke-width="2"/>`;
+      return paintedTowerPath(
+        `M${a.x} ${a.y} L${d.x} ${d.y} M${b.x} ${b.y} L${c.x} ${c.y}`,
+        towerPaintBand((height + levels[levelIndex + 1]) / 2),
+        2,
+      );
     }).join('')
   )).join('');
   const footPoints = geometry.feet.map((foot) => projectPoint(
@@ -192,20 +250,23 @@ function latticeStructure(towerHeight, geometry) {
 
 function monopoleStructure(towerHeight, geometry) {
   const base = projectPoint({ x: 0, z: 0, height: 0 }, towerHeight, geometry);
-  const top = projectPoint({ x: 0, z: 0, height: towerHeight }, towerHeight, geometry);
+  const paintSegments = paintBandSegments(towerHeight);
   const anchorBolts = Array.from({ length: 6 }, (_, index) => {
     const point = polar(base.x, base.y + 6, 31, index * 60);
     return `<circle data-anchor-bolt="${index + 1}" cx="${point.x}" cy="${point.y}" r="4.5" fill="#475569"/>`;
   }).join('');
-  const seams = [0.25, 0.5, 0.75].map((fraction) => {
-    const y = base.y - (base.y - top.y) * fraction;
-    const halfWidth = 26 - 18 * fraction;
-    return `<line x1="${base.x - halfWidth}" y1="${y}" x2="${base.x + halfWidth}" y2="${y}" stroke="#64748b" stroke-width="3"/>`;
+  const shaftSegments = paintSegments.map((band) => {
+    const lower = projectPoint({ x: 0, z: 0, height: band.start }, towerHeight, geometry);
+    const upper = projectPoint({ x: 0, z: 0, height: band.end }, towerHeight, geometry);
+    const lowerWidth = 27 - 19 * (band.start / towerHeight);
+    const upperWidth = 27 - 19 * (band.end / towerHeight);
+    return `<g data-tower-paint-band="${band.index}" data-paint-color="${band.color}">
+      <path d="M${lower.x - lowerWidth} ${lower.y} L${upper.x - upperWidth} ${upper.y} L${upper.x + upperWidth} ${upper.y} L${lower.x + lowerWidth} ${lower.y} Z" fill="${band.stroke}" stroke="${band.outline}" stroke-width="3"/>
+    </g>`;
   }).join('');
   return `
     <ellipse cx="${base.x}" cy="${base.y + 18}" rx="68" ry="22" fill="#d8d4cc" stroke="#9f9789"/>
-    <path d="M${base.x - 27} ${base.y} L${top.x - 8} ${top.y} L${top.x + 8} ${top.y} L${base.x + 27} ${base.y} Z" fill="url(#tower-red-white)" stroke="#b42318" stroke-width="3"/>
-    ${seams}
+    ${shaftSegments}
     <ellipse data-foot-plate="BASE" cx="${base.x}" cy="${base.y + 6}" rx="48" ry="15" fill="#cbd5e1" stroke="#475569" stroke-width="2"/>
     ${anchorBolts}
     <text x="${base.x}" y="${base.y + 58}" text-anchor="middle" fill="#17263b" font-size="11" font-weight="800">MONOPOLE BASE</text>`;
@@ -290,10 +351,8 @@ function antennaCallouts(state, towerHeight, geometry) {
     columns[column] += 1;
     const titleLines = wrapSvgText(String(antenna.name || '').toUpperCase());
     const mechanicalTilt = displayNumber(antenna.mechanicalTilt);
-    const electricalTilt = displayNumber(antenna.electricalTilt);
     const tiltText = [
       mechanicalTilt === null ? null : `MT: ${mechanicalTilt}\u00b0`,
-      electricalTilt === null ? null : `ET: ${electricalTilt}\u00b0`,
     ].filter(Boolean).join(' \u00b7 ');
     const positionLabel = state.towerType === MONOPOLE_TOWER ? 'SIDE' : 'LEG';
     const cids = normalizeCids(antenna.cids ?? antenna.cid);
@@ -439,21 +498,21 @@ function helicopterView(state, geometry) {
   } = geometry.helicopterPanel;
   const panel = { x, y, width, height };
   const cx = x + width / 2;
-  const cy = y + 64;
+  const cy = y + 90;
   const bearing = Number(state.legABearingDeg) || 0;
   const positionPoints = Object.fromEntries(geometry.positions.map((position, index) => [
     position,
-    polar(cx, cy, 14, bearing + index * geometry.interval),
+    polar(cx, cy, 24, bearing + index * geometry.interval),
   ]));
   const rings = buildElevationRings(state.antennas).map((ring) => ({
     ...ring,
-    displayRadius: Math.max(9, Math.min(18, ring.radius * 0.25)),
+    displayRadius: Math.max(12, Math.min(34, ring.radius * 0.42)),
   }));
   const ringMarkup = rings.map(({ height: ringHeight, displayRadius }) => (
     `<circle data-elevation-ring="${escapeXml(ringHeight)}" cx="${cx}" cy="${cy}" r="${displayRadius}" fill="none" stroke="#f3b5bc" stroke-width="1.2"/>`
   )).join('');
   const footprint = geometry.structureKind === 'monopole'
-    ? `<circle cx="${cx}" cy="${cy}" r="9" fill="#fee2e2" stroke="#b42318" stroke-width="2"/>`
+    ? `<circle cx="${cx}" cy="${cy}" r="14" fill="#fee2e2" stroke="#b42318" stroke-width="2"/>`
     : `<path d="M${geometry.positions.map((position) => {
       const point = positionPoints[position];
       return `${point.x} ${point.y}`;
@@ -461,8 +520,8 @@ function helicopterView(state, geometry) {
   const labels = geometry.positions.map((position) => {
     const point = positionPoints[position];
     return `<g data-installation-label="${position}">
-      <circle cx="${point.x}" cy="${point.y}" r="7" fill="#17263b"/>
-      <text x="${point.x}" y="${point.y + 3}" text-anchor="middle" fill="#fff" font-size="8" font-weight="800">${position}</text>
+      <circle cx="${point.x}" cy="${point.y}" r="9" fill="#17263b"/>
+      <text x="${point.x}" y="${point.y + 3.5}" text-anchor="middle" fill="#fff" font-size="9" font-weight="800">${position}</text>
     </g>`;
   }).join('');
   const overlapCounts = new Map();
@@ -480,7 +539,7 @@ function helicopterView(state, geometry) {
     const start = { x: startBase.x + tangent.x, y: startBase.y + tangent.y };
     const azimuth = Number(antenna.azimuth);
     const azimuthBearing = Number.isFinite(azimuth) ? azimuth : 0;
-    const end = polar(start.x, start.y, 18, azimuthBearing);
+    const end = polar(start.x, start.y, 28, azimuthBearing);
     const shiftedPosition = {
       x: positionPoint.x + tangent.x,
       y: positionPoint.y + tangent.y,
@@ -498,7 +557,7 @@ function helicopterView(state, geometry) {
       <line x1="${end.x}" y1="${end.y}" x2="${labelCenterX}" y2="${labelCenterY}" stroke="${color}" stroke-width="0.8" stroke-dasharray="2 2" opacity=".72"/>
       <g data-helicopter-label-box="${escapeXml(antenna.id)}" data-box-x="${labelBox.x}" data-box-y="${labelBox.y}" data-box-width="${labelBox.width}" data-box-height="${labelBox.height}">
         <rect x="${labelBox.x}" y="${labelBox.y}" width="${labelBox.width}" height="${labelBox.height}" rx="3" fill="#fff" stroke="${color}" stroke-width=".8"/>
-        <text x="${labelCenterX}" y="${labelBox.y + 8.5}" text-anchor="middle" fill="#24364a" font-size="7" font-weight="800">${escapeXml(labelText)}</text>
+        <text x="${labelCenterX}" y="${labelBox.y + 9.5}" text-anchor="middle" fill="#24364a" font-size="7" font-weight="800">${escapeXml(labelText)}</text>
       </g>
     </g>`;
   }).join('');
@@ -509,17 +568,49 @@ function helicopterView(state, geometry) {
     <rect x="${x}" y="${y}" width="${width}" height="${height}" rx="8" fill="#fff" stroke="#7f8fa2" stroke-width="1.5"/>
     <path d="M${x + 8} ${y} H${x + width - 8} Q${x + width} ${y} ${x + width} ${y + 8} V${y + 26} H${x} V${y + 8} Q${x} ${y} ${x + 8} ${y}" fill="#17263b"/>
     <text x="${cx}" y="${y + 18}" text-anchor="middle" fill="#fff" font-size="11" font-weight="800">HELICOPTER VIEW</text>
-    <text x="${cx}" y="${y + 40}" text-anchor="middle" fill="#17263b" font-size="8" font-weight="800">N · 0°</text>
-    <line x1="${cx}" y1="${y + 44}" x2="${cx}" y2="${y + 55}" stroke="#17263b" stroke-width="1.5" marker-end="url(#arrowDark)"/>
+    <text x="${cx}" y="${y + 44}" text-anchor="middle" fill="#17263b" font-size="9" font-weight="800">N · 0°</text>
+    <line x1="${cx}" y1="${y + 48}" x2="${cx}" y2="${y + 68}" stroke="#17263b" stroke-width="1.5" marker-end="url(#arrowDark)"/>
     ${ringMarkup}${footprint}${labels}${antennas}
-    <text x="${x + 10}" y="${y + 92}" fill="#5e6f84" font-size="7">${footerLabel}: ${displayNumber(state.legABearingDeg) || 'N/A'}° · North fixed</text>
+    <text x="${x + 12}" y="${y + height - 10}" fill="#5e6f84" font-size="8">${footerLabel}: ${displayNumber(state.legABearingDeg) || 'N/A'}° · North fixed</text>
+  </g>`;
+}
+
+function footerHeader(card, title) {
+  return `<path d="M${card.x + 8} ${card.y} H${card.x + card.width - 8} Q${card.x + card.width} ${card.y} ${card.x + card.width} ${card.y + 8} V${card.y + 26} H${card.x} V${card.y + 8} Q${card.x} ${card.y} ${card.x + 8} ${card.y}" fill="#17263b"/>
+    <text x="${card.x + card.width / 2}" y="${card.y + 18}" text-anchor="middle" fill="#fff" font-size="11" font-weight="800">${title}</text>`;
+}
+
+function footerPanels(state, towerHeight, layout) {
+  const { footer } = layout;
+  const siteData = { ...footer.siteData, y: footer.y };
+  const legend = footer.legend;
+  const antennaCount = (state.antennas || []).length;
+  const totalCells = new Set(
+    (state.antennas || []).flatMap((antenna) => normalizeCids(antenna.cids ?? antenna.cid)),
+  ).size;
+  const cardAttributes = (id, card) => (
+    `data-footer-card="${id}" data-footer-x="${card.x}" data-footer-y="${card.y}" data-footer-width="${card.width}" data-footer-height="${card.height}"`
+  );
+  return `<g ${cardAttributes('site-data', siteData)}>
+    <rect x="${siteData.x}" y="${siteData.y}" width="${siteData.width}" height="${siteData.height}" rx="8" fill="#fff" stroke="#8493a6"/>
+    ${footerHeader(siteData, 'SITE DATA')}
+    <text x="${siteData.x + 18}" y="${siteData.y + 46}" fill="#26384d" font-size="10">SITE ID: <tspan font-weight="700">${escapeXml(state.siteName || 'SITE NOT SET')}</tspan></text>
+    <text x="${siteData.x + 18}" y="${siteData.y + 64}" fill="#26384d" font-size="10">TOWER: <tspan font-weight="700">${escapeXml(String(state.towerType).toUpperCase())}</tspan></text>
+    <text x="${siteData.x + 18}" y="${siteData.y + 82}" fill="#26384d" font-size="10">HEIGHT: <tspan font-weight="700">${towerHeight.toFixed(1)} m</tspan></text>
+    <text x="${siteData.x + 18}" y="${siteData.y + 100}" fill="#26384d" font-size="10">TOTAL ANTENNA: <tspan font-weight="700">${antennaCount}</tspan></text>
+    <text x="${siteData.x + 18}" y="${siteData.y + 118}" fill="#26384d" font-size="10">TOTAL CELL: <tspan font-weight="700">${totalCells}</tspan></text>
+  </g>
+  <g ${cardAttributes('legend', legend)}>
+    <rect x="${legend.x}" y="${legend.y}" width="${legend.width}" height="${legend.height}" rx="8" fill="#fff" stroke="#8493a6"/>
+    ${footerHeader(legend, 'LEGEND')}
+    <rect x="${legend.x + 18}" y="${legend.y + 35}" width="13" height="13" rx="2" fill="#334155"/><text x="${legend.x + 40}" y="${legend.y + 45}" fill="#26384d" font-size="10">Existing</text>
+    <rect x="${legend.x + 150}" y="${legend.y + 35}" width="13" height="13" rx="2" fill="#1769e0"/><text x="${legend.x + 172}" y="${legend.y + 45}" fill="#26384d" font-size="10">New</text>
   </g>`;
 }
 
 export function renderTowerPlanSvg(state) {
   const geometry = getTowerGeometry(state.towerType);
   const layout = TOWER_DRAWING_LAYOUT;
-  const footer = layout.footer;
   const towerHeight = Math.max(Number(state.towerHeight) || 1, 1);
   const guideHeights = [...new Set((state.antennas || []).map(
     (antenna) => Number(antenna.height),
@@ -534,7 +625,6 @@ export function renderTowerPlanSvg(state) {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${layout.canvasWidth}" height="${layout.canvasHeight}" viewBox="0 0 ${layout.canvasWidth} ${layout.canvasHeight}" role="img" aria-label="${escapeXml(state.towerType)} plan" font-family="Inter, system-ui, sans-serif">
   <defs>
-    <linearGradient id="tower-red-white" x1="0" x2="1"><stop offset="0" stop-color="#b42318"/><stop offset=".5" stop-color="#ffffff"/><stop offset="1" stop-color="#e11d48"/></linearGradient>
     <filter id="towerShadow" x="-25%" y="-10%" width="150%" height="135%"><feDropShadow dx="3" dy="4" stdDeviation="3" flood-color="#1d2939" flood-opacity=".18"/></filter>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#1769e0"/></marker>
     <marker id="arrowDark" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#17263b"/></marker>
@@ -553,37 +643,7 @@ export function renderTowerPlanSvg(state) {
   </g>
   ${towerStructure(towerHeight, geometry)}
   ${antennaCallouts(state, towerHeight, geometry)}
-  <g>
-    <rect x="35" y="1385" width="410" height="120" rx="8" fill="#fff" stroke="#8493a6"/>
-    <rect x="35" y="1385" width="410" height="30" rx="8" fill="#17263b"/>
-    <text x="240" y="1405" text-anchor="middle" fill="#fff" font-size="13" font-weight="800">SITE DATA</text>
-    <text x="55" y="1440" fill="#26384d" font-size="12">SITE ID: <tspan font-weight="700">${escapeXml(state.siteName || '—')}</tspan></text>
-    <text x="55" y="1465" fill="#26384d" font-size="12">TOWER: <tspan font-weight="700">${escapeXml(String(state.towerType).toUpperCase())}</tspan></text>
-    <text x="55" y="1490" fill="#26384d" font-size="12">HEIGHT: <tspan font-weight="700">${towerHeight.toFixed(1)} m</tspan></text>
-  </g>
-  <g>
-    <rect x="460" y="1385" width="225" height="120" rx="8" fill="#fff" stroke="#8493a6"/>
-    <rect x="460" y="1385" width="225" height="30" rx="8" fill="#17263b"/>
-    <text x="572" y="1405" text-anchor="middle" fill="#fff" font-size="13" font-weight="800">LEGEND</text>
-    <rect x="480" y="1430" width="22" height="22" rx="3" fill="#334155"/><text x="512" y="1446" fill="#26384d" font-size="11">Existing</text>
-    <rect x="480" y="1464" width="22" height="22" rx="3" fill="#1769e0"/><text x="512" y="1480" fill="#26384d" font-size="11">New</text>
-  </g>
-  <rect x="20" y="${footer.y - 5}" width="1150" height="${footer.height + 10}" fill="#ffffff"/>
-  <g data-footer-card="site-data" data-footer-bottom="${footer.y + footer.height}">
-    <rect x="${footer.siteData.x}" y="${footer.y}" width="${footer.siteData.width}" height="${footer.height}" rx="8" fill="#fff" stroke="#8493a6"/>
-    <path d="M${footer.siteData.x + 8} ${footer.y} H${footer.siteData.x + footer.siteData.width - 8} Q${footer.siteData.x + footer.siteData.width} ${footer.y} ${footer.siteData.x + footer.siteData.width} ${footer.y + 8} V${footer.y + 30} H${footer.siteData.x} V${footer.y + 8} Q${footer.siteData.x} ${footer.y} ${footer.siteData.x + 8} ${footer.y}" fill="#17263b"/>
-    <text x="${footer.siteData.x + footer.siteData.width / 2}" y="${footer.y + 20}" text-anchor="middle" fill="#fff" font-size="13" font-weight="800">SITE DATA</text>
-    <text x="${footer.siteData.x + 20}" y="${footer.y + 58}" fill="#26384d" font-size="12">SITE ID: <tspan font-weight="700">${escapeXml(state.siteName || 'SITE NOT SET')}</tspan></text>
-    <text x="${footer.siteData.x + 20}" y="${footer.y + 85}" fill="#26384d" font-size="12">TOWER: <tspan font-weight="700">${escapeXml(String(state.towerType).toUpperCase())}</tspan></text>
-    <text x="${footer.siteData.x + 20}" y="${footer.y + 112}" fill="#26384d" font-size="12">HEIGHT: <tspan font-weight="700">${towerHeight.toFixed(1)} m</tspan></text>
-  </g>
-  <g data-footer-card="legend" data-footer-bottom="${footer.y + footer.height}">
-    <rect x="${footer.legend.x}" y="${footer.y}" width="${footer.legend.width}" height="${footer.height}" rx="8" fill="#fff" stroke="#8493a6"/>
-    <path d="M${footer.legend.x + 8} ${footer.y} H${footer.legend.x + footer.legend.width - 8} Q${footer.legend.x + footer.legend.width} ${footer.y} ${footer.legend.x + footer.legend.width} ${footer.y + 8} V${footer.y + 30} H${footer.legend.x} V${footer.y + 8} Q${footer.legend.x} ${footer.y} ${footer.legend.x + 8} ${footer.y}" fill="#17263b"/>
-    <text x="${footer.legend.x + footer.legend.width / 2}" y="${footer.y + 20}" text-anchor="middle" fill="#fff" font-size="13" font-weight="800">LEGEND</text>
-    <rect x="${footer.legend.x + 20}" y="${footer.y + 52}" width="22" height="22" rx="3" fill="#334155"/><text x="${footer.legend.x + 52}" y="${footer.y + 68}" fill="#26384d" font-size="11">Existing</text>
-    <rect x="${footer.legend.x + 20}" y="${footer.y + 87}" width="22" height="22" rx="3" fill="#1769e0"/><text x="${footer.legend.x + 52}" y="${footer.y + 103}" fill="#26384d" font-size="11">New</text>
-  </g>
+  ${footerPanels(state, towerHeight, layout)}
   ${helicopterView(state, geometry)}
 </svg>`;
 }

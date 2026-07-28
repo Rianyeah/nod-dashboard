@@ -677,7 +677,12 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
       assert.equal(geometry.feet.length, footCount);
       assert.equal(geometry.structureKind, structureKind);
       assert.equal(geometry.helicopterPanel.y, TOWER_DRAWING_LAYOUT.footer.y);
-      assert.equal(geometry.helicopterPanel.height, TOWER_DRAWING_LAYOUT.footer.height);
+      assert.equal(
+        geometry.helicopterPanel.height,
+        TOWER_DRAWING_LAYOUT.footer.legend.y
+          + TOWER_DRAWING_LAYOUT.footer.legend.height
+          - TOWER_DRAWING_LAYOUT.footer.y,
+      );
       assert.ok(
         geometry.helicopterPanel.y > TOWER_DRAWING_LAYOUT.towerBaseY,
         `${towerType} helicopter panel must sit below the tower drawing`,
@@ -761,7 +766,7 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
         azimuth: 300 + (index % 5),
         leg: index % 2 ? 'A' : 'B',
         mechanicalTilt: 1,
-        electricalTilt: 2,
+        cids: index < 2 ? ['11', '14'] : [`${index + 20}`],
       })),
     };
     const svg = renderTowerPlanSvg(plan);
@@ -783,17 +788,34 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
       width: Number(width),
       height: Number(height),
     }));
-    const footerBottoms = [...svg.matchAll(/data-footer-bottom="([\d.]+)"/g)]
-      .map(([, bottom]) => Number(bottom));
+    const footerCards = [...svg.matchAll(
+      /<g data-footer-card="([^"]+)" data-footer-x="([\d.]+)" data-footer-y="([\d.]+)" data-footer-width="([\d.]+)" data-footer-height="([\d.]+)"/g,
+    )].map(([, id, x, y, width, height]) => ({
+      id,
+      x: Number(x),
+      y: Number(y),
+      width: Number(width),
+      height: Number(height),
+    }));
+    const siteData = footerCards.find((card) => card.id === 'site-data');
+    const legend = footerCards.find((card) => card.id === 'legend');
+    const helicopterPanel = getTowerGeometry(plan.towerType).helicopterPanel;
 
     assert.equal(TOWER_DRAWING_LAYOUT.canvasWidth, 1200);
-    assert.match(svg, /id="tower-red-white"/);
-    assert.match(svg, /MT: 1\u00b0 · ET: 2\u00b0/);
+    assert.match(svg, /data-tower-paint-band="0" data-paint-color="red"/);
+    assert.match(svg, /data-tower-paint-band="1" data-paint-color="white"/);
+    assert.match(svg, /MT: 1\u00b0/);
+    assert.doesNotMatch(svg, /ET:/);
+    assert.match(svg, /TOTAL ANTENNA: <tspan font-weight="700">16<\/tspan>/);
+    assert.match(svg, /TOTAL CELL: <tspan font-weight="700">16<\/tspan>/);
     assert.ok((svg.match(/data-callout-title-line=/g) || []).length >= 2);
     assert.equal(cards.length, MAX_ANTENNAS);
     assert.equal(helicopterBoxes.length, plan.antennas.length);
-    assert.ok(footerBottoms.length >= 3);
-    assert.equal(new Set(footerBottoms).size, 1);
+    assert.equal(footerCards.length, 2);
+    assert.equal(legend.x, siteData.x);
+    assert.ok(legend.y >= siteData.y + siteData.height);
+    assert.equal(helicopterPanel.y, siteData.y);
+    assert.equal(helicopterPanel.height, legend.y + legend.height - siteData.y);
 
     cards.forEach((card, index) => {
       assert.ok(card.x >= TOWER_DRAWING_LAYOUT.heightDimensionCorridorRight);
@@ -807,7 +829,6 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
       });
     });
 
-    const helicopterPanel = getTowerGeometry(plan.towerType).helicopterPanel;
     helicopterBoxes.forEach((box, index) => {
       assert.ok(box.x >= helicopterPanel.x && box.y >= helicopterPanel.y);
       assert.ok(box.x + box.width <= helicopterPanel.x + helicopterPanel.width);
