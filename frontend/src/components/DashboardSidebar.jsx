@@ -37,7 +37,7 @@ const NAV_ITEMS = [
 
 const TOOL_ITEMS = [
   { to: '/rf-tilt-analysis', label: 'RF Tilt Analysis', icon: Radio },
-  { to: '/tower-plan-generator', label: 'Tower Plan Generator', icon: TowerControl },
+  { to: '/tower-plan-generator', label: 'Tower Visualizer', icon: TowerControl },
 ];
 
 function SidebarNavItem({ item, collapsed }) {

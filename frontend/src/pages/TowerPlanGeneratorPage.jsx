@@ -135,7 +135,7 @@ function SectionTitle({ icon: Icon, title, description, action }) {
         </div>
         <div className="min-w-0">
           <h2 className="text-sm font-semibold">{title}</h2>
-          <p className="mt-0.5 text-[11px] text-muted-foreground">{description}</p>
+          {description ? <p className="mt-0.5 text-[11px] text-muted-foreground">{description}</p> : null}
         </div>
       </div>
       {action}
@@ -289,15 +289,9 @@ export default function TowerPlanGeneratorPage() {
             </div>
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-base font-semibold">Tower Plan Generator</h1>
+                <h1 className="text-base font-semibold">Tower Visualizer</h1>
                 <Badge variant="outline">Tools</Badge>
-                {plan.source?.provider === 'ransys_gabungan' && (
-                  <Badge variant="secondary"><Database className="size-3" /> Auto-filled</Badge>
-                )}
               </div>
-              <p className="mt-0.5 text-[11px] text-muted-foreground">
-                Multi-type engineering plan · RF grouping · Deterministic export
-              </p>
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -352,16 +346,13 @@ export default function TowerPlanGeneratorPage() {
               <CardHeader className="border-b border-border">
                 <SectionTitle
                   icon={Database}
-                  title="Auto-fill Site ID"
-                  description="Cari Site ID seperti RF Tilt Analysis, lalu review grouping antena sebelum diterapkan."
+                  title="Search Site ID"
+                  description="Ketik site id dan Enter"
                   action={autofillLoading ? <LoaderCircle className="size-4 animate-spin text-primary" /> : null}
                 />
               </CardHeader>
               <CardContent>
                 <TowerPlanSitePicker disabled={autofillLoading} onSelect={handleSiteSelection} />
-                <p className="mt-2 text-[10px] text-muted-foreground">
-                  Posisi instalasi dihitung otomatis dari azimuth sesuai tipe tower aktif.
-                </p>
               </CardContent>
             </Card>
 
@@ -369,8 +360,7 @@ export default function TowerPlanGeneratorPage() {
               <CardHeader className="border-b border-border">
                 <SectionTitle
                   icon={TowerControl}
-                  title="Data proyek"
-                  description="Parameter utama tower dan orientasi helicopter view."
+                  title="Project Data"
                 />
               </CardHeader>
               <CardContent className="grid gap-4 sm:grid-cols-2">
@@ -406,21 +396,6 @@ export default function TowerPlanGeneratorPage() {
                     {towerTypeConfig.label} A bearing from North
                   </Label>
                   <Input id="tower-bearing" min="0" max="359.9" step="0.1" type="number" value={plan.legABearingDeg} onChange={(event) => editPlan({ ...plan, legABearingDeg: event.target.value })} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="tower-style">Visual style</Label>
-                  <select
-                    id="tower-style"
-                    className="dashboard-control h-9 w-full rounded-full px-3 text-sm outline-none focus:ring-2 focus:ring-ring/50"
-                    value={plan.visualStyle}
-                    onChange={(event) => editPlan({ ...plan, visualStyle: event.target.value })}
-                  >
-                    {VISUAL_STYLES.map((style) => <option key={style}>{style}</option>)}
-                  </select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="tower-custom-style">Custom style</Label>
-                  <Input id="tower-custom-style" disabled={plan.visualStyle !== 'Custom Style'} placeholder="Contoh: neutral steel technical render" value={plan.customStyle} onChange={(event) => editPlan({ ...plan, customStyle: event.target.value })} />
                 </div>
               </CardContent>
             </Card>
@@ -473,6 +448,23 @@ export default function TowerPlanGeneratorPage() {
                 />
               </CardHeader>
               <CardContent className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="tower-style">Visual style</Label>
+                    <select
+                      id="tower-style"
+                      className="dashboard-control h-9 w-full rounded-full px-3 text-sm outline-none focus:ring-2 focus:ring-ring/50"
+                      value={plan.visualStyle}
+                      onChange={(event) => editPlan({ ...plan, visualStyle: event.target.value })}
+                    >
+                      {VISUAL_STYLES.map((style) => <option key={style}>{style}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="tower-custom-style">Custom style</Label>
+                    <Input id="tower-custom-style" disabled={plan.visualStyle !== 'Custom Style'} placeholder="Contoh: neutral steel technical render" value={plan.customStyle} onChange={(event) => editPlan({ ...plan, customStyle: event.target.value })} />
+                  </div>
+                </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="tower-revision">Revision instruction</Label>
                   <Input

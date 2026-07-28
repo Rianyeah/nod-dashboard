@@ -808,8 +808,9 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
     assert.ok(
       sidebar.indexOf("'/rf-tilt-analysis'") < sidebar.indexOf("'/tower-plan-generator'"),
     );
-    assert.match(sidebar, /Tower Plan Generator/);
-    assert.match(breadcrumb, /'tower-plan-generator': 'Tower Plan Generator'/);
+    assert.match(app, /Memuat Tower Visualizer/);
+    assert.match(sidebar, /Tower Visualizer/);
+    assert.match(breadcrumb, /'tower-plan-generator': 'Tower Visualizer'/);
     assert.match(api, /searchTowerPlanSites/);
     assert.match(api, /fetchTowerPlanConfiguration/);
     assert.doesNotMatch(api, /tower-plan\/ai-capabilities/);
@@ -835,12 +836,27 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
       'utf8',
     );
 
-    assert.match(page, /Auto-fill Site ID/);
+    assert.match(page, /Tower Visualizer/);
+    assert.doesNotMatch(page, /Auto-filled/);
+    assert.doesNotMatch(page, /Multi-type engineering plan/);
+    assert.match(page, /title="Search Site ID"/);
+    assert.match(page, /Ketik site id dan Enter/);
+    assert.doesNotMatch(page, /Posisi instalasi dihitung otomatis/);
+    assert.match(page, /title="Project Data"/);
+    assert.doesNotMatch(page, /Parameter utama tower dan orientasi helicopter view/);
     assert.match(page, /TowerPlanAutofillDialog/);
     assert.match(page, /TowerPlanPreview/);
     assert.match(page, /TOWER_TYPES\.map/);
     assert.match(page, /changeTowerType/);
     assert.match(page, /title="Prompt generator"/);
+    assert.ok(
+      page.indexOf('id="tower-style"') < page.indexOf('id="tower-revision"'),
+      'visual style must be configured before the revision instruction',
+    );
+    assert.ok(
+      page.indexOf('id="tower-custom-style"') < page.indexOf('id="tower-revision"'),
+      'custom style must be configured before the revision instruction',
+    );
     assert.match(page, /Create Prompt/);
     assert.match(page, /Copy/);
     assert.doesNotMatch(page, /Referensi visual/);

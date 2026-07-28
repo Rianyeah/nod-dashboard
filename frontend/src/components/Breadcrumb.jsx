@@ -10,7 +10,7 @@ const ROUTE_LABELS = {
   'transport-quality': 'Transport Quality',
   'ticketing': 'Ticketing',
   'rf-tilt-analysis': 'RF Tilt Analysis',
-  'tower-plan-generator': 'Tower Plan Generator',
+  'tower-plan-generator': 'Tower Visualizer',
 };
 
 export default function Breadcrumb() {

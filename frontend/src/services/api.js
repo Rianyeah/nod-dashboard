@@ -421,7 +421,7 @@ export async function searchAntennaModels(q) {
   return data;
 }
 
-// ===== Tower Plan Generator =====
+// ===== Tower Visualizer =====
 
 export async function searchTowerPlanSites(q, signal) {
   const { data } = await api.get('/tower-plan/sites', {

@@ -51,7 +51,7 @@ function TowerPlanRoute() {
     <Suspense
       fallback={(
         <div className="flex min-h-64 items-center justify-center text-sm text-muted-foreground">
-          Memuat Tower Plan Generator...
+          Memuat Tower Visualizer...
         </div>
       )}
     >
