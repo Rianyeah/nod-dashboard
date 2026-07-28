@@ -788,6 +788,14 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
       width: Number(width),
       height: Number(height),
     }));
+    const braceBands = [...svg.matchAll(
+      /<g data-tower-paint-band="(\d+)" data-paint-color="(red|white)" data-structure-member="brace" data-band-start-height="([\d.]+)" data-band-end-height="([\d.]+)">/g,
+    )].map(([, index, color, start, end]) => ({
+      index: Number(index),
+      color,
+      start: Number(start),
+      end: Number(end),
+    }));
     const footerCards = [...svg.matchAll(
       /<g data-footer-card="([^"]+)" data-footer-x="([\d.]+)" data-footer-y="([\d.]+)" data-footer-width="([\d.]+)" data-footer-height="([\d.]+)"/g,
     )].map(([, id, x, y, width, height]) => ({
@@ -811,6 +819,11 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
     assert.ok((svg.match(/data-callout-title-line=/g) || []).length >= 2);
     assert.equal(cards.length, MAX_ANTENNAS);
     assert.equal(helicopterBoxes.length, plan.antennas.length);
+    assert.ok(braceBands.length > 0);
+    braceBands.forEach((brace) => {
+      assert.equal(Math.floor(brace.start / 10), Math.floor((brace.end - 0.0001) / 10));
+      assert.equal(brace.color, brace.index % 2 === 0 ? 'red' : 'white');
+    });
     assert.equal(footerCards.length, 2);
     assert.equal(legend.x, siteData.x);
     assert.ok(legend.y >= siteData.y + siteData.height);

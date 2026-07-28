@@ -161,11 +161,11 @@ function paintBandSegments(towerHeight) {
   });
 }
 
-function paintedTowerLine(start, end, band, strokeWidth = 12) {
+function paintedTowerLine(start, end, band, strokeWidth = 12, attributes = '') {
   const whiteOutline = band.color === 'white'
     ? `<line x1="${start.x}" y1="${start.y}" x2="${end.x}" y2="${end.y}" stroke="${band.outline}" stroke-width="${strokeWidth + 4}"/>`
     : '';
-  return `<g data-tower-paint-band="${band.index}" data-paint-color="${band.color}">
+  return `<g data-tower-paint-band="${band.index}" data-paint-color="${band.color}"${attributes}>
     ${whiteOutline}
     <line x1="${start.x}" y1="${start.y}" x2="${end.x}" y2="${end.y}" stroke="${band.stroke}" stroke-width="${strokeWidth}"/>
   </g>`;
@@ -179,6 +179,40 @@ function paintedTowerPath(path, band, strokeWidth) {
     ${whiteOutline}
     <path d="${path}" fill="none" stroke="${band.stroke}" stroke-width="${strokeWidth}"/>
   </g>`;
+}
+
+function paintedBraceSegments(
+  first,
+  second,
+  startHeight,
+  endHeight,
+  towerHeight,
+  geometry,
+) {
+  const boundaries = paintBandSegments(towerHeight)
+    .flatMap((band) => [band.start, band.end])
+    .filter((height) => height > startHeight && height < endHeight);
+  const heights = [startHeight, ...new Set(boundaries), endHeight];
+  const firstPoint = installationPoint(geometry, first);
+  const secondPoint = installationPoint(geometry, second);
+  const pointAtHeight = (height) => {
+    const ratio = (height - startHeight) / (endHeight - startHeight);
+    return projectPoint({
+      x: firstPoint.x + (secondPoint.x - firstPoint.x) * ratio,
+      z: firstPoint.z + (secondPoint.z - firstPoint.z) * ratio,
+      height,
+    }, towerHeight, geometry);
+  };
+  return heights.slice(0, -1).map((height, index) => {
+    const nextHeight = heights[index + 1];
+    return paintedTowerLine(
+      pointAtHeight(height),
+      pointAtHeight(nextHeight),
+      towerPaintBand(height),
+      2,
+      ` data-structure-member="brace" data-band-start-height="${height}" data-band-end-height="${nextHeight}"`,
+    );
+  }).join('');
 }
 
 function latticeStructure(towerHeight, geometry) {
@@ -212,15 +246,9 @@ function latticeStructure(towerHeight, geometry) {
   }).join('');
   const braces = levels.slice(0, -1).map((height, levelIndex) => (
     faces.map(([first, second]) => {
-      const a = projected(first, height);
-      const b = projected(second, height);
-      const c = projected(first, levels[levelIndex + 1]);
-      const d = projected(second, levels[levelIndex + 1]);
-      return paintedTowerPath(
-        `M${a.x} ${a.y} L${d.x} ${d.y} M${b.x} ${b.y} L${c.x} ${c.y}`,
-        towerPaintBand((height + levels[levelIndex + 1]) / 2),
-        2,
-      );
+      const nextHeight = levels[levelIndex + 1];
+      return paintedBraceSegments(first, second, height, nextHeight, towerHeight, geometry)
+        + paintedBraceSegments(second, first, height, nextHeight, towerHeight, geometry);
     }).join('')
   )).join('');
   const footPoints = geometry.feet.map((foot) => projectPoint(
