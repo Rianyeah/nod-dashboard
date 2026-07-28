@@ -679,6 +679,7 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
     const svg = renderTowerPlanSvg(plan);
 
     assert.match(svg, /viewBox="0 0 1024 1536"/);
+    assert.match(svg, /font-family="Inter, system-ui, sans-serif"/);
     assert.match(svg, /HELICOPTER VIEW/);
     assert.match(svg, /MODEL-A/);
     assert.match(svg, /LEG A/);
@@ -695,6 +696,25 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
     assert.match(svg, /data-arrow-color="#334155"/);
     assert.match(svg, /data-overlap-index="0"/);
     assert.match(svg, /data-overlap-index="1"/);
+  });
+
+  it('places every lattice leg label outside its physical foot plate', () => {
+    const svg = renderTowerPlanSvg(createBlankTowerPlan());
+    const labels = [...svg.matchAll(
+      /<g data-leg-label="([A-D])" data-leg-label-side="(left|right)" data-foot-x="([\d.]+)" data-label-x="([\d.]+)"/g,
+    )].map(([, leg, side, footX, labelX]) => ({
+      leg,
+      side,
+      footX: Number(footX),
+      labelX: Number(labelX),
+    }));
+
+    assert.equal(labels.length, 4);
+    assert.deepEqual(labels.map(({ leg }) => leg), ['A', 'B', 'C', 'D']);
+    labels.forEach(({ leg, side, footX, labelX }) => {
+      const exterior = side === 'left' ? labelX < footX - 24 : labelX > footX + 24;
+      assert.equal(exterior, true, `LEG ${leg} label must be outside its foot plate`);
+    });
   });
 
   it('renders every antenna in the helicopter view for every tower type', () => {
@@ -880,6 +900,7 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
     assert.match(review, /maksimal 16/i);
     assert.match(review, /sector_base \+ antenna_type \+ antenna_height/);
     assert.match(review, /azimuthConflict/);
-    assert.match(preview, /Sumber engineering deterministik/);
+    assert.doesNotMatch(preview, /Sumber engineering deterministik/);
+    assert.doesNotMatch(preview, /BadgeCheck|validationErrors/);
   });
 });

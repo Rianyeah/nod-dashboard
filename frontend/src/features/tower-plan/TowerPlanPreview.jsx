@@ -1,29 +1,18 @@
 import { useMemo } from 'react';
-import { BadgeCheck, Braces, Maximize2 } from 'lucide-react';
+import { Braces, Maximize2 } from 'lucide-react';
 
-import { Badge } from '../../components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { towerPlanSvgDataUrl } from './towerPlanSvg';
 
-export default function TowerPlanPreview({ plan, validationErrors }) {
+export default function TowerPlanPreview({ plan }) {
   const source = useMemo(() => towerPlanSvgDataUrl(plan), [plan]);
   return (
     <Card className="overflow-visible py-0">
-      <CardHeader className="flex-row items-center justify-between border-b border-border px-4 py-3">
-        <div>
-          <CardTitle className="flex items-center gap-2 text-sm">
-            <Braces className="size-4 text-primary" />
-            Engineering preview
-          </CardTitle>
-          <p className="mt-1 text-[10px] text-muted-foreground">
-            Sumber engineering deterministik · 1024 × 1536
-          </p>
-        </div>
-        <Badge variant={validationErrors.length ? 'destructive' : 'secondary'}>
-          {validationErrors.length ? `${validationErrors.length} issue` : (
-            <span className="flex items-center gap-1"><BadgeCheck className="size-3" /> Valid</span>
-          )}
-        </Badge>
+      <CardHeader className="border-b border-border px-4 py-3">
+        <CardTitle className="flex items-center gap-2 text-sm">
+          <Braces className="size-4 text-primary" />
+          Engineering preview
+        </CardTitle>
       </CardHeader>
       <CardContent className="p-3">
         <div className="group relative overflow-hidden rounded-xl border border-border bg-white shadow-inner">

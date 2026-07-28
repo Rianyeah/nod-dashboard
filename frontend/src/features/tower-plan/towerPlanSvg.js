@@ -100,12 +100,19 @@ function latticeStructure(towerHeight, geometry) {
   ));
   const feet = geometry.feet.map((foot, index) => {
     const point = footPoints[index];
+    const labelSide = point.x < geometry.towerCenterX ? 'left' : 'right';
+    const direction = labelSide === 'left' ? -1 : 1;
+    const badgeX = point.x + direction * 58;
+    const labelX = badgeX + direction * 22;
+    const labelY = point.y + 2;
+    const textAnchor = labelSide === 'left' ? 'end' : 'start';
     return `
-      <g>
+      <g data-leg-label="${foot.id}" data-leg-label-side="${labelSide}" data-foot-x="${point.x}" data-label-x="${labelX}">
         <rect data-foot-plate="${foot.id}" x="${point.x - 24}" y="${point.y - 7}" width="48" height="17" rx="3" fill="#cbd5e1" stroke="#475569"/>
-        <circle cx="${point.x}" cy="${point.y + 48}" r="20" fill="#17263b"/>
-        <text data-installation-label="${foot.id}" x="${point.x}" y="${point.y + 54}" text-anchor="middle" fill="#fff" font-size="19" font-weight="800">${foot.id}</text>
-        <text x="${point.x}" y="${point.y + 77}" text-anchor="middle" fill="#17263b" font-size="11" font-weight="700">LEG ${foot.id}</text>
+        <line x1="${point.x + direction * 24}" y1="${labelY}" x2="${badgeX - direction * 15}" y2="${labelY}" stroke="#64748b" stroke-width="2"/>
+        <circle cx="${badgeX}" cy="${labelY}" r="15" fill="#17263b"/>
+        <text data-installation-label="${foot.id}" x="${badgeX}" y="${labelY + 5}" text-anchor="middle" fill="#fff" font-size="14" font-weight="800">${foot.id}</text>
+        <text x="${labelX}" y="${labelY + 4}" text-anchor="${textAnchor}" fill="#17263b" font-size="11" font-weight="800">LEG ${foot.id}</text>
       </g>`;
   }).join('');
   return `${groundPad(footPoints)}${legs}${rings}${braces}${feet}`;
@@ -288,7 +295,7 @@ export function renderTowerPlanSvg(state) {
       <line x1="118" y1="${point.y}" x2="325" y2="${point.y}" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="6 6"/>`;
   }).join('');
   return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1536" viewBox="0 0 1024 1536" role="img" aria-label="${escapeXml(state.towerType)} plan">
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1536" viewBox="0 0 1024 1536" role="img" aria-label="${escapeXml(state.towerType)} plan" font-family="Inter, system-ui, sans-serif">
   <defs>
     <linearGradient id="steel" x1="0" x2="1"><stop offset="0" stop-color="#354454"/><stop offset=".46" stop-color="#d8dde2"/><stop offset="1" stop-color="#48586a"/></linearGradient>
     <filter id="towerShadow" x="-25%" y="-10%" width="150%" height="135%"><feDropShadow dx="3" dy="4" stdDeviation="3" flood-color="#1d2939" flood-opacity=".18"/></filter>

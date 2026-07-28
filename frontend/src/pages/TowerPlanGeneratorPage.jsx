@@ -489,7 +489,7 @@ export default function TowerPlanGeneratorPage() {
           </div>
 
           <aside className="min-w-0 space-y-4 xl:sticky xl:top-4">
-            <TowerPlanPreview plan={plan} validationErrors={validationErrors} />
+            <TowerPlanPreview plan={plan} />
 
             <Card>
               <CardHeader className="border-b border-border">
