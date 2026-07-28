@@ -124,6 +124,48 @@ def test_grouping_merges_cells_that_share_physical_antenna_dimensions():
     assert groups[0].azimuth_conflict is False
 
 
+def test_grouping_resolves_unanimous_tilt_and_flags_only_conflicting_tilt():
+    base = {
+        "site_id": "SITE001",
+        "sector": "1",
+        "band": "L1800",
+        "teknologi": "4G",
+        "azimuth": 30,
+        "antenna_height": 42,
+        "antenna_type": "MODEL-A",
+    }
+    groups, warnings = group_antenna_rows([
+        {
+            **base,
+            "cell_name": "CELL-1",
+            "enodeb_ci": "88001_11",
+            "mechanical_tilt": 1,
+            "electrical_tilt": 2,
+        },
+        {
+            **base,
+            "cell_name": "CELL-2",
+            "enodeb_ci": "88001_12",
+            "mechanical_tilt": 1,
+            "electrical_tilt": 3,
+        },
+        {
+            **base,
+            "cell_name": "CELL-3",
+            "enodeb_ci": "88001_13",
+            "mechanical_tilt": None,
+            "electrical_tilt": None,
+        },
+    ])
+
+    assert len(groups) == 1
+    assert groups[0].mechanical_tilt_deg == 1
+    assert groups[0].mechanical_tilt_conflict is False
+    assert groups[0].electrical_tilt_deg is None
+    assert groups[0].electrical_tilt_conflict is True
+    assert any("electrical tilt" in warning.lower() for warning in warnings)
+
+
 def test_grouping_uses_sector_model_and_height_as_the_physical_key():
     base = {
         "site_id": "SITE001",
