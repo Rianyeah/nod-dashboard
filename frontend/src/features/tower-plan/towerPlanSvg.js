@@ -57,56 +57,6 @@ function wrapSvgText(value, maxCharacters = 30, maxLines = 3) {
   ));
 }
 
-function rectanglesOverlap(left, right) {
-  return left.x < right.x + right.width
-    && left.x + left.width > right.x
-    && left.y < right.y + right.height
-    && left.y + left.height > right.y;
-}
-
-function labelBoxCandidates(panel, anchor, width, height) {
-  const radial = [
-    { x: anchor.x - width / 2, y: anchor.y - height - 5 },
-    { x: anchor.x - width / 2, y: anchor.y + 5 },
-    { x: anchor.x - width - 7, y: anchor.y - height / 2 },
-    { x: anchor.x + 7, y: anchor.y - height / 2 },
-  ];
-  const columnWidth = width + 6;
-  const rowHeight = height + 4;
-  const columns = Math.max(1, Math.floor((panel.width - 20) / columnWidth));
-  const rows = Math.max(1, Math.ceil(24 / columns));
-  const gridStartY = panel.y + panel.height - rows * rowHeight - 8;
-  const grid = Array.from({ length: 24 }, (_, index) => {
-    const column = index % columns;
-    const row = Math.floor(index / columns);
-    return {
-      x: panel.x + 10 + column * columnWidth,
-      y: gridStartY + row * rowHeight,
-    };
-  });
-  return [...radial, ...grid];
-}
-
-function placeHelicopterLabelBox(panel, anchor, boxes, width = 76, height = 13) {
-  const candidates = labelBoxCandidates(panel, anchor, width, height);
-  const withinPanel = (box) => (
-    box.x >= panel.x + 6
-    && box.y >= panel.y + 30
-    && box.x + box.width <= panel.x + panel.width - 6
-    && box.y + box.height <= panel.y + panel.height - 6
-  );
-  const candidate = candidates
-    .map((position) => ({ ...position, width, height }))
-    .find((box) => withinPanel(box) && boxes.every((placed) => !rectanglesOverlap(box, placed)));
-  if (candidate) return candidate;
-  return {
-    x: panel.x + 10,
-    y: panel.y + panel.height - height - 6,
-    width,
-    height,
-  };
-}
-
 function projectPoint(point, towerHeight, geometry) {
   const height = Math.max(0, Math.min(towerHeight, Number(point.height) || 0));
   const taper = 0.18 + 0.82 * (1 - height / towerHeight);
@@ -524,37 +474,38 @@ function helicopterView(state, geometry) {
   const {
     x, y, width, height,
   } = geometry.helicopterPanel;
-  const panel = { x, y, width, height };
-  const cx = x + width / 2;
-  const cy = y + 90;
+  const radar = { x: x + 30, y: y + 80, width: 210, height: 230 };
+  const readout = { x: x + 270, y: y + 54, width: width - 294, height: height - 76 };
+  const cx = radar.x + radar.width / 2;
+  const cy = radar.y + radar.height / 2;
   const bearing = Number(state.legABearingDeg) || 0;
   const positionPoints = Object.fromEntries(geometry.positions.map((position, index) => [
     position,
-    polar(cx, cy, 24, bearing + index * geometry.interval),
+    polar(cx, cy, 30, bearing + index * geometry.interval),
   ]));
   const rings = buildElevationRings(state.antennas).map((ring) => ({
     ...ring,
-    displayRadius: Math.max(12, Math.min(34, ring.radius * 0.42)),
+    displayRadius: Math.max(34, Math.min(72, ring.radius)),
   }));
-  const ringMarkup = rings.map(({ height: ringHeight, displayRadius }) => (
-    `<circle data-elevation-ring="${escapeXml(ringHeight)}" cx="${cx}" cy="${cy}" r="${displayRadius}" fill="none" stroke="#f3b5bc" stroke-width="1.2"/>`
+  const ringMarkup = rings.map(({ height: ringHeight, displayRadius }, index) => (
+    `<circle data-elevation-ring="${escapeXml(ringHeight)}" cx="${cx}" cy="${cy}" r="${displayRadius}" fill="none" stroke="#f3b5bc" stroke-width="1.6"/>
+    <text x="${cx + displayRadius + 6}" y="${cy + (index % 2 ? 12 : -6)}" fill="#7f1d1d" font-size="10" font-weight="700">${escapeXml(ringHeight)} m</text>`
   )).join('');
   const footprint = geometry.structureKind === 'monopole'
-    ? `<circle cx="${cx}" cy="${cy}" r="14" fill="#fee2e2" stroke="#b42318" stroke-width="2"/>`
+    ? `<circle cx="${cx}" cy="${cy}" r="16" fill="#fee2e2" stroke="#b42318" stroke-width="2.5"/>`
     : `<path d="M${geometry.positions.map((position) => {
       const point = positionPoints[position];
       return `${point.x} ${point.y}`;
-    }).join(' L')} Z" fill="#fee2e2" stroke="#b42318" stroke-width="2"/>`;
+    }).join(' L')} Z" fill="#fee2e2" stroke="#b42318" stroke-width="2.5"/>`;
   const labels = geometry.positions.map((position) => {
     const point = positionPoints[position];
     return `<g data-installation-label="${position}">
-      <circle cx="${point.x}" cy="${point.y}" r="9" fill="#17263b"/>
-      <text x="${point.x}" y="${point.y + 3.5}" text-anchor="middle" fill="#fff" font-size="9" font-weight="800">${position}</text>
+      <circle cx="${point.x}" cy="${point.y}" r="10" fill="#17263b"/>
+      <text x="${point.x}" y="${point.y + 4}" text-anchor="middle" fill="#fff" font-size="10" font-weight="800">${position}</text>
     </g>`;
   }).join('');
   const overlapCounts = new Map();
-  const placedBoxes = [];
-  const antennas = (state.antennas || []).map((antenna) => {
+  const antennaItems = (state.antennas || []).map((antenna, index) => {
     const positionIndex = Math.max(0, geometry.positions.indexOf(antenna.leg));
     const positionPoint = positionPoints[antenna.leg] || positionPoints[geometry.positions[0]];
     const positionBearing = bearing + positionIndex * geometry.interval;
@@ -563,30 +514,49 @@ function helicopterView(state, geometry) {
     overlapCounts.set(overlapKey, occurrence + 1);
     const tangent = polar(0, 0, occurrence * 3, positionBearing + 90);
     const ring = rings.find((candidate) => candidate.height === Number(antenna.height));
-    const startBase = polar(cx, cy, ring?.displayRadius || 12, positionBearing);
+    const startBase = polar(cx, cy, ring?.displayRadius || 34, positionBearing);
     const start = { x: startBase.x + tangent.x, y: startBase.y + tangent.y };
     const azimuth = Number(antenna.azimuth);
     const azimuthBearing = Number.isFinite(azimuth) ? azimuth : 0;
-    const end = polar(start.x, start.y, 28, azimuthBearing);
+    const end = polar(start.x, start.y, 34, azimuthBearing);
     const shiftedPosition = {
       x: positionPoint.x + tangent.x,
       y: positionPoint.y + tangent.y,
     };
-    const labelBox = placeHelicopterLabelBox(panel, end, placedBoxes);
-    placedBoxes.push(labelBox);
-    const labelText = `SEC ${antenna.sector} | ${displayNumber(antenna.azimuth) || 'N/A'}\u00b0`;
-    const labelCenterX = labelBox.x + labelBox.width / 2;
-    const labelCenterY = labelBox.y + labelBox.height / 2;
+    return {
+      antenna,
+      index,
+      occurrence,
+      shiftedPosition,
+      start,
+      end,
+      azimuthBearing,
+    };
+  });
+  const antennas = antennaItems.map(({
+    antenna, index, occurrence, shiftedPosition, start, end, azimuthBearing,
+  }) => {
     const color = escapeXml(antenna.color);
     return `<g data-top-antenna="${escapeXml(antenna.id)}" data-overlap-index="${occurrence}">
       <line x1="${shiftedPosition.x}" y1="${shiftedPosition.y}" x2="${start.x}" y2="${start.y}" stroke="${color}" stroke-dasharray="2 2"/>
-      <line x1="${start.x}" y1="${start.y}" x2="${end.x}" y2="${end.y}" stroke="${color}" stroke-width="2"/>
+      <line x1="${start.x}" y1="${start.y}" x2="${end.x}" y2="${end.y}" stroke="${color}" stroke-width="2.5"/>
       ${coloredArrowHead(end.x, end.y, azimuthBearing, antenna.color)}
-      <line x1="${end.x}" y1="${end.y}" x2="${labelCenterX}" y2="${labelCenterY}" stroke="${color}" stroke-width="0.8" stroke-dasharray="2 2" opacity=".72"/>
-      <g data-helicopter-label-box="${escapeXml(antenna.id)}" data-box-x="${labelBox.x}" data-box-y="${labelBox.y}" data-box-width="${labelBox.width}" data-box-height="${labelBox.height}">
-        <rect x="${labelBox.x}" y="${labelBox.y}" width="${labelBox.width}" height="${labelBox.height}" rx="3" fill="#fff" stroke="${color}" stroke-width=".8"/>
-        <text x="${labelCenterX}" y="${labelBox.y + 9.5}" text-anchor="middle" fill="#24364a" font-size="7" font-weight="800">${escapeXml(labelText)}</text>
-      </g>
+      <circle cx="${end.x}" cy="${end.y}" r="10" fill="#fff" stroke="${color}" stroke-width="2"/>
+      <text x="${end.x}" y="${end.y + 3.5}" text-anchor="middle" fill="#17263b" font-size="10" font-weight="800">${index + 1}</text>
+    </g>`;
+  }).join('');
+  const rowHeight = Math.max(18, Math.floor(readout.height / Math.max(1, antennaItems.length)));
+  const rowGap = 2;
+  const rowBoxHeight = rowHeight - rowGap;
+  const rowFontSize = Math.max(11, Math.min(16, rowBoxHeight - 4));
+  const readoutRows = antennaItems.map(({ antenna, index }) => {
+    const rowY = readout.y + index * rowHeight;
+    const color = escapeXml(antenna.color);
+    const labelText = `SEC ${antenna.sector} | ${displayNumber(antenna.azimuth) || 'N/A'}\u00b0`;
+    return `<g data-helicopter-readout-row="${escapeXml(antenna.id)}" data-readout-x="${readout.x}" data-readout-y="${rowY}" data-readout-width="${readout.width}" data-readout-height="${rowBoxHeight}">
+      <rect x="${readout.x}" y="${rowY}" width="${readout.width}" height="${rowBoxHeight}" rx="5" fill="#fff" stroke="${color}" stroke-width="1.2"/>
+      <rect x="${readout.x}" y="${rowY}" width="6" height="${rowBoxHeight}" rx="3" fill="${color}"/>
+      <text x="${readout.x + 15}" y="${rowY + rowBoxHeight / 2 + rowFontSize * 0.34}" fill="#17263b" font-size="${rowFontSize}" font-weight="800">${index + 1}. ${escapeXml(labelText)}</text>
     </g>`;
   }).join('');
   const footerLabel = state.towerType === MONOPOLE_TOWER
@@ -595,10 +565,11 @@ function helicopterView(state, geometry) {
   return `<g data-helicopter-panel="true" data-footer-bottom="${y + height}">
     <rect x="${x}" y="${y}" width="${width}" height="${height}" rx="8" fill="#fff" stroke="#7f8fa2" stroke-width="1.5"/>
     <path d="M${x + 8} ${y} H${x + width - 8} Q${x + width} ${y} ${x + width} ${y + 8} V${y + 26} H${x} V${y + 8} Q${x} ${y} ${x + 8} ${y}" fill="#17263b"/>
-    <text x="${cx}" y="${y + 18}" text-anchor="middle" fill="#fff" font-size="11" font-weight="800">HELICOPTER VIEW</text>
+    <text x="${x + width / 2}" y="${y + 18}" text-anchor="middle" fill="#fff" font-size="13" font-weight="800">HELICOPTER VIEW</text>
     <text x="${cx}" y="${y + 44}" text-anchor="middle" fill="#17263b" font-size="9" font-weight="800">N · 0°</text>
-    <line x1="${cx}" y1="${y + 48}" x2="${cx}" y2="${y + 68}" stroke="#17263b" stroke-width="1.5" marker-end="url(#arrowDark)"/>
-    ${ringMarkup}${footprint}${labels}${antennas}
+    <line x1="${cx}" y1="${y + 48}" x2="${cx}" y2="${y + 68}" stroke="#17263b" stroke-width="2" marker-end="url(#arrowDark)"/>
+    <text x="${readout.x}" y="${y + 44}" fill="#17263b" font-size="11" font-weight="800">SECTOR | AZIMUTH</text>
+    ${ringMarkup}${footprint}${labels}${antennas}${readoutRows}
     <text x="${x + 12}" y="${y + height - 10}" fill="#5e6f84" font-size="8">${footerLabel}: ${displayNumber(state.legABearingDeg) || 'N/A'}° · North fixed</text>
   </g>`;
 }

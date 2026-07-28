@@ -742,7 +742,7 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
     assert.equal((svg.match(/data-elevation-ring=/g) || []).length, 2);
     assert.match(svg, /data-elevation-ring="46"/);
     assert.match(svg, /data-elevation-ring="40"/);
-    assert.match(svg, />SEC 3 \| 310(?:\.0)?°</);
+    assert.match(svg, />\d+\. SEC 3 \| 310(?:\.0)?°</);
     assert.match(svg, /data-arrow-color="#334155"/);
     assert.match(svg, /data-overlap-index="0"/);
     assert.match(svg, /data-overlap-index="1"/);
@@ -777,8 +777,8 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
       width: Number(width),
       height: Number(height),
     }));
-    const helicopterBoxes = [...svg.matchAll(
-      /<g data-helicopter-label-box="([^"]+)" data-box-x="([\d.]+)" data-box-y="([\d.]+)" data-box-width="([\d.]+)" data-box-height="([\d.]+)"/g,
+    const helicopterReadouts = [...svg.matchAll(
+      /<g data-helicopter-readout-row="([^"]+)" data-readout-x="([\d.]+)" data-readout-y="([\d.]+)" data-readout-width="([\d.]+)" data-readout-height="([\d.]+)"/g,
     )].map(([, id, x, y, width, height]) => ({
       id,
       x: Number(x),
@@ -817,7 +817,9 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
     assert.match(svg, /TOTAL CELL: <tspan font-weight="700">16<\/tspan>/);
     assert.ok((svg.match(/data-callout-title-line=/g) || []).length >= 2);
     assert.equal(cards.length, MAX_ANTENNAS);
-    assert.equal(helicopterBoxes.length, plan.antennas.length);
+    assert.equal(helicopterReadouts.length, plan.antennas.length);
+    assert.match(svg, /SEC 1 \| 300(?:\.0)?°/);
+    assert.doesNotMatch(svg, /data-helicopter-label-box=/);
     assert.ok(braceBands.length > 0);
     braceBands.forEach((brace) => {
       assert.equal(Math.floor(brace.start / 10), Math.floor((brace.end - 0.0001) / 10));
@@ -844,17 +846,14 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
       });
     });
 
-    helicopterBoxes.forEach((box, index) => {
-      assert.ok(box.x >= helicopterPanel.x && box.y >= helicopterPanel.y);
-      assert.ok(box.x + box.width <= helicopterPanel.x + helicopterPanel.width);
-      assert.ok(box.y + box.height <= helicopterPanel.y + helicopterPanel.height);
-      helicopterBoxes.slice(index + 1).forEach((other) => {
-        const separated = box.x + box.width <= other.x
-          || other.x + other.width <= box.x
-          || box.y + box.height <= other.y
-          || other.y + other.height <= box.y;
-        assert.equal(separated, true, `helicopter labels ${box.id} and ${other.id} overlap`);
-      });
+    helicopterReadouts.forEach((row, index) => {
+      assert.ok(row.x >= helicopterPanel.x && row.y >= helicopterPanel.y);
+      assert.ok(row.x + row.width <= helicopterPanel.x + helicopterPanel.width);
+      assert.ok(row.y + row.height <= helicopterPanel.y + helicopterPanel.height);
+      const next = helicopterReadouts[index + 1];
+      if (next) {
+        assert.ok(row.y + row.height <= next.y, `helicopter readout ${row.id} overlaps ${next.id}`);
+      }
     });
   });
 
