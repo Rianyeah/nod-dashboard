@@ -1075,5 +1075,8 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
     assert.match(review, /azimuthConflict/);
     assert.doesNotMatch(preview, /Sumber engineering deterministik/);
     assert.doesNotMatch(preview, /BadgeCheck|validationErrors/);
+    assert.match(preview, /aspect-\[19\/12\]/);
+    assert.doesNotMatch(preview, /aspect-\[25\/32\]/);
+    assert.match(preview, /Preview 19:12/);
   });
 });

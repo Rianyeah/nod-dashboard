@@ -18,12 +18,12 @@ export default function TowerPlanPreview({ plan }) {
         <div className="group relative overflow-hidden rounded-xl border border-border bg-white shadow-inner">
           <img
             alt={`Tower plan ${plan.siteName || 'tanpa Site ID'}`}
-            className="block aspect-[25/32] w-full object-contain"
+            className="block aspect-[19/12] w-full object-contain"
             src={source}
           />
           <div className="pointer-events-none absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-slate-950/75 px-2 py-1 text-[9px] text-white opacity-0 transition-opacity group-hover:opacity-100">
             <Maximize2 className="size-3" />
-            Preview 25:32
+            Preview 19:12
           </div>
         </div>
       </CardContent>
