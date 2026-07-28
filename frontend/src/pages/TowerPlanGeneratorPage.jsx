@@ -47,6 +47,7 @@ import {
   validateTowerPlan,
 } from '../features/tower-plan/towerPlanState';
 import { renderTowerPlanSvg } from '../features/tower-plan/towerPlanSvg';
+import { TOWER_DRAWING_LAYOUT } from '../features/tower-plan/towerPlanGeometry';
 import {
   loadTowerPlanDraft,
   saveTowerPlanDraft,
@@ -107,8 +108,8 @@ async function svgToPng(svg) {
       element.src = url;
     });
     const canvas = document.createElement('canvas');
-    canvas.width = 1024;
-    canvas.height = 1536;
+    canvas.width = TOWER_DRAWING_LAYOUT.canvasWidth;
+    canvas.height = TOWER_DRAWING_LAYOUT.canvasHeight;
     const context = canvas.getContext('2d');
     context.fillStyle = '#ffffff';
     context.fillRect(0, 0, canvas.width, canvas.height);

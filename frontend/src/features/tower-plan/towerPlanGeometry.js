@@ -5,17 +5,28 @@ import {
 } from './towerPlanState.js';
 
 export const TOWER_DRAWING_LAYOUT = {
-  canvasWidth: 1024,
+  canvasWidth: 1200,
   canvasHeight: 1536,
-  towerCenterX: 480,
+  towerCenterX: 600,
   towerBaseY: 1190,
   towerVerticalSpan: 1015,
-  towerEnvelopeRight: 660,
+  heightDimensionCorridorRight: 170,
+  towerEnvelopeRight: 770,
+  calloutColumns: {
+    left: { x: 180, width: 260, elbowX: 460 },
+    right: { x: 820, width: 330, elbowX: 800 },
+  },
+  footer: {
+    y: 1360,
+    height: 145,
+    siteData: { x: 40, width: 420 },
+    legend: { x: 480, width: 215 },
+  },
   helicopterPanel: {
-    x: 730,
-    y: 1030,
-    width: 260,
-    height: 350,
+    x: 715,
+    y: 1360,
+    width: 445,
+    height: 145,
   },
 };
 

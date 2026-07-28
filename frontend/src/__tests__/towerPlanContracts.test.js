@@ -23,7 +23,10 @@ import {
   canSelectCurrentSiteResult,
   selectSiteFromResults,
 } from '../features/tower-plan/towerPlanSiteSelection.js';
-import { getTowerGeometry } from '../features/tower-plan/towerPlanGeometry.js';
+import {
+  TOWER_DRAWING_LAYOUT,
+  getTowerGeometry,
+} from '../features/tower-plan/towerPlanGeometry.js';
 import {
   buildElevationRings,
   radiusForHeight,
@@ -647,7 +650,7 @@ describe('Tower Plan state contracts', () => {
 
 
 describe('Tower Plan deterministic output and dashboard wiring', () => {
-  it('provides aligned feet and safe helicopter spacing for every tower type', () => {
+  it('provides aligned feet and a footer-aligned helicopter panel for every tower type', () => {
     const expected = [
       ['Four-leg lattice tower', 4, 'lattice-four'],
       ['Three-leg lattice tower', 3, 'lattice-three'],
@@ -658,9 +661,11 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
       const geometry = getTowerGeometry(towerType);
       assert.equal(geometry.feet.length, footCount);
       assert.equal(geometry.structureKind, structureKind);
+      assert.equal(geometry.helicopterPanel.y, TOWER_DRAWING_LAYOUT.footer.y);
+      assert.equal(geometry.helicopterPanel.height, TOWER_DRAWING_LAYOUT.footer.height);
       assert.ok(
-        geometry.helicopterPanel.x - geometry.towerEnvelopeRight >= 50,
-        `${towerType} must keep at least 50 px of clear space`,
+        geometry.helicopterPanel.y > TOWER_DRAWING_LAYOUT.towerBaseY,
+        `${towerType} helicopter panel must sit below the tower drawing`,
       );
     });
   });
@@ -705,7 +710,7 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
     };
     const svg = renderTowerPlanSvg(plan);
 
-    assert.match(svg, /viewBox="0 0 1024 1536"/);
+    assert.match(svg, /viewBox="0 0 1200 1536"/);
     assert.match(svg, /font-family="Inter, system-ui, sans-serif"/);
     assert.match(svg, /HELICOPTER VIEW/);
     assert.match(svg, /MODEL-A/);
@@ -717,12 +722,89 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
     assert.match(svg, /&lt;SITE&amp;001&gt;/);
     assert.doesNotMatch(svg, /<SITE&001>/);
     assert.equal((svg.match(/data-elevation-ring=/g) || []).length, 2);
-    assert.match(svg, /data-elevation-ring="46"[^>]*r="72"/);
-    assert.match(svg, /data-elevation-ring="40"[^>]*r="42"/);
+    assert.match(svg, /data-elevation-ring="46"/);
+    assert.match(svg, /data-elevation-ring="40"/);
     assert.match(svg, />SEC 3 \| 310(?:\.0)?°</);
     assert.match(svg, /data-arrow-color="#334155"/);
     assert.match(svg, /data-overlap-index="0"/);
     assert.match(svg, /data-overlap-index="1"/);
+  });
+
+  it('keeps the red-white SVG drawing legible with wrapped callouts and collision-safe helicopter labels', () => {
+    const state = applyAutofillDraft(
+      createBlankTowerPlan(),
+      buildAutofillDraft(groupedConfiguration),
+    );
+    const plan = {
+      ...state,
+      antennas: Array.from({ length: MAX_ANTENNAS }, (_, index) => ({
+        ...state.antennas[0],
+        id: `dense-${index + 1}`,
+        name: `Antenna Sectoral Super Long Engineering Name ${index + 1} MB4B MobI`,
+        sector: String((index % 3) + 1),
+        height: 46 - (index % 4) * 0.2,
+        azimuth: 300 + (index % 5),
+        leg: index % 2 ? 'A' : 'B',
+        mechanicalTilt: 1,
+        electricalTilt: 2,
+      })),
+    };
+    const svg = renderTowerPlanSvg(plan);
+    const cards = [...svg.matchAll(
+      /<rect data-callout-card="(\d+)" x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)"/g,
+    )].map(([, id, x, y, width, height]) => ({
+      id: Number(id),
+      x: Number(x),
+      y: Number(y),
+      width: Number(width),
+      height: Number(height),
+    }));
+    const helicopterBoxes = [...svg.matchAll(
+      /<g data-helicopter-label-box="([^"]+)" data-box-x="([\d.]+)" data-box-y="([\d.]+)" data-box-width="([\d.]+)" data-box-height="([\d.]+)"/g,
+    )].map(([, id, x, y, width, height]) => ({
+      id,
+      x: Number(x),
+      y: Number(y),
+      width: Number(width),
+      height: Number(height),
+    }));
+    const footerBottoms = [...svg.matchAll(/data-footer-bottom="([\d.]+)"/g)]
+      .map(([, bottom]) => Number(bottom));
+
+    assert.equal(TOWER_DRAWING_LAYOUT.canvasWidth, 1200);
+    assert.match(svg, /id="tower-red-white"/);
+    assert.match(svg, /MT: 1\u00b0 · ET: 2\u00b0/);
+    assert.ok((svg.match(/data-callout-title-line=/g) || []).length >= 2);
+    assert.equal(cards.length, MAX_ANTENNAS);
+    assert.equal(helicopterBoxes.length, plan.antennas.length);
+    assert.ok(footerBottoms.length >= 3);
+    assert.equal(new Set(footerBottoms).size, 1);
+
+    cards.forEach((card, index) => {
+      assert.ok(card.x >= TOWER_DRAWING_LAYOUT.heightDimensionCorridorRight);
+      assert.ok(card.x + card.width <= TOWER_DRAWING_LAYOUT.canvasWidth);
+      cards.slice(index + 1).forEach((other) => {
+        const separated = card.x + card.width <= other.x
+          || other.x + other.width <= card.x
+          || card.y + card.height <= other.y
+          || other.y + other.height <= card.y;
+        assert.equal(separated, true, `callout cards ${card.id} and ${other.id} overlap`);
+      });
+    });
+
+    const helicopterPanel = getTowerGeometry(plan.towerType).helicopterPanel;
+    helicopterBoxes.forEach((box, index) => {
+      assert.ok(box.x >= helicopterPanel.x && box.y >= helicopterPanel.y);
+      assert.ok(box.x + box.width <= helicopterPanel.x + helicopterPanel.width);
+      assert.ok(box.y + box.height <= helicopterPanel.y + helicopterPanel.height);
+      helicopterBoxes.slice(index + 1).forEach((other) => {
+        const separated = box.x + box.width <= other.x
+          || other.x + other.width <= box.x
+          || box.y + box.height <= other.y
+          || other.y + other.height <= box.y;
+        assert.equal(separated, true, `helicopter labels ${box.id} and ${other.id} overlap`);
+      });
+    });
   });
 
   it('places every lattice leg label outside its physical foot plate', () => {
