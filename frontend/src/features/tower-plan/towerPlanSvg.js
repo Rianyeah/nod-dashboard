@@ -317,7 +317,10 @@ function antennaCallouts(state, towerHeight, geometry) {
     .sort((a, b) => Number(b.antenna.height) - Number(a.antenna.height)
       || a.sourceIndex - b.sourceIndex);
   const cardsPerColumn = 8;
-  const cardStartY = 172;
+  const cardStartY = 146;
+  const cardGap = 6;
+  const titleLineHeight = 13;
+  const detailLineHeight = 14;
   const columns = { left: 0, right: 0 };
   const cursors = { left: cardStartY, right: cardStartY };
   const arranged = antennas.map(({ antenna }, index) => {
@@ -327,7 +330,7 @@ function antennaCallouts(state, towerHeight, geometry) {
       ? preferredColumn
       : (preferredColumn === 'left' ? 'right' : 'left');
     columns[column] += 1;
-    const titleLines = wrapSvgText(String(antenna.name || '').toUpperCase());
+    const titleLines = wrapSvgText(String(antenna.name || '').toUpperCase(), 36, 2);
     const mechanicalTilt = displayNumber(antenna.mechanicalTilt);
     const tiltText = [
       mechanicalTilt === null ? null : `MT: ${mechanicalTilt}\u00b0`,
@@ -340,10 +343,10 @@ function antennaCallouts(state, towerHeight, geometry) {
       `CID(S): ${cids.length ? cids.join(', ') : 'N/A'}`,
       ...(tiltText ? [tiltText] : []),
     ];
-    const headerHeight = 12 + titleLines.length * 14;
-    const cardHeight = headerHeight + 11 + details.length * 16 + 11;
+    const headerHeight = 10 + titleLines.length * titleLineHeight;
+    const cardHeight = headerHeight + 9 + details.length * detailLineHeight + 9;
     const cardY = cursors[column];
-    cursors[column] += cardHeight + 8;
+    cursors[column] += cardHeight + cardGap;
     return {
       antenna,
       index,
@@ -372,10 +375,10 @@ function antennaCallouts(state, towerHeight, geometry) {
     const edgeX = left ? cardX + cardWidth : cardX;
     const color = escapeXml(antenna.color);
     const titleMarkup = titleLines.map((line, lineIndex) => (
-      `<text data-callout-title-line="${index + 1}-${lineIndex + 1}" x="${cardX + 12}" y="${cardY + 16 + lineIndex * 14}" fill="#fff" font-size="11" font-weight="800">${escapeXml(line)}</text>`
+      `<text data-callout-title-line="${index + 1}-${lineIndex + 1}" x="${cardX + 12}" y="${cardY + 15 + lineIndex * titleLineHeight}" fill="#fff" font-size="11" font-weight="800">${escapeXml(line)}</text>`
     )).join('');
     const detailMarkup = details.map((detail, detailIndex) => (
-      `<text x="${cardX + 13}" y="${cardY + headerHeight + 13 + detailIndex * 16}" fill="#26384d" font-size="11">${escapeXml(detail)}</text>`
+      `<text x="${cardX + 13}" y="${cardY + headerHeight + 12 + detailIndex * detailLineHeight}" fill="#26384d" font-size="11">${escapeXml(detail)}</text>`
     )).join('');
     return `<g>
       <line x1="${anchor.x}" y1="${anchor.y}" x2="${mastX}" y2="${mastY + 30}" stroke="#64748b" stroke-width="5"/>

@@ -837,6 +837,11 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
     cards.forEach((card, index) => {
       assert.ok(card.x >= TOWER_DRAWING_LAYOUT.heightDimensionCorridorRight);
       assert.ok(card.x + card.width <= TOWER_DRAWING_LAYOUT.canvasWidth);
+      assert.ok(card.y >= 0);
+      assert.ok(
+        card.y + card.height <= TOWER_DRAWING_LAYOUT.canvasHeight,
+        `callout card ${card.id} must stay inside the SVG canvas`,
+      );
       cards.slice(index + 1).forEach((other) => {
         const separated = card.x + card.width <= other.x
           || other.x + other.width <= card.x
