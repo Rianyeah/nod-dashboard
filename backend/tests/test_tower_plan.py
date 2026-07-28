@@ -124,7 +124,7 @@ def test_grouping_merges_cells_that_share_physical_antenna_dimensions():
     assert groups[0].azimuth_conflict is False
 
 
-def test_grouping_resolves_unanimous_tilt_and_flags_only_conflicting_tilt():
+def test_grouping_uses_modal_mechanical_tilt_and_omits_electrical_tilt():
     base = {
         "site_id": "SITE001",
         "sector": "1",
@@ -139,31 +139,59 @@ def test_grouping_resolves_unanimous_tilt_and_flags_only_conflicting_tilt():
             **base,
             "cell_name": "CELL-1",
             "enodeb_ci": "88001_11",
-            "mechanical_tilt": 1,
+            "mechanical_tilt": 2,
             "electrical_tilt": 2,
         },
         {
             **base,
             "cell_name": "CELL-2",
             "enodeb_ci": "88001_12",
-            "mechanical_tilt": 1,
+            "mechanical_tilt": 2,
             "electrical_tilt": 3,
         },
         {
             **base,
             "cell_name": "CELL-3",
             "enodeb_ci": "88001_13",
-            "mechanical_tilt": None,
+            "mechanical_tilt": 1,
             "electrical_tilt": None,
         },
     ])
 
     assert len(groups) == 1
-    assert groups[0].mechanical_tilt_deg == 1
+    assert groups[0].mechanical_tilt_deg == 2
     assert groups[0].mechanical_tilt_conflict is False
-    assert groups[0].electrical_tilt_deg is None
-    assert groups[0].electrical_tilt_conflict is True
-    assert any("electrical tilt" in warning.lower() for warning in warnings)
+    assert "electrical_tilt_deg" not in groups[0].model_dump()
+    assert "electrical_tilt_conflict" not in groups[0].model_dump()
+    assert not any("tilt" in warning.lower() for warning in warnings)
+
+
+def test_grouping_preserves_modal_zero_mechanical_tilt_and_warns_on_a_tie():
+    base = {
+        "site_id": "SITE001",
+        "sector": "1",
+        "band": "L1800",
+        "teknologi": "4G",
+        "azimuth": 30,
+        "antenna_height": 42,
+        "antenna_type": "MODEL-A",
+    }
+    zero_groups, zero_warnings = group_antenna_rows([
+        {**base, "cell_name": "CELL-1", "enodeb_ci": "88001_11", "mechanical_tilt": 0},
+        {**base, "cell_name": "CELL-2", "enodeb_ci": "88001_12", "mechanical_tilt": 0},
+        {**base, "cell_name": "CELL-3", "enodeb_ci": "88001_13", "mechanical_tilt": 1},
+    ])
+    tie_groups, tie_warnings = group_antenna_rows([
+        {**base, "cell_name": "CELL-4", "enodeb_ci": "88001_14", "mechanical_tilt": 1},
+        {**base, "cell_name": "CELL-5", "enodeb_ci": "88001_15", "mechanical_tilt": 2},
+    ])
+
+    assert zero_groups[0].mechanical_tilt_deg == 0
+    assert zero_groups[0].mechanical_tilt_conflict is False
+    assert not any("mechanical tilt" in warning.lower() for warning in zero_warnings)
+    assert tie_groups[0].mechanical_tilt_deg is None
+    assert tie_groups[0].mechanical_tilt_conflict is True
+    assert any("mechanical tilt" in warning.lower() for warning in tie_warnings)
 
 
 def test_grouping_uses_sector_model_and_height_as_the_physical_key():

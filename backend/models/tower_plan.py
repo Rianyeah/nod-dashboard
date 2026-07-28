@@ -43,8 +43,6 @@ class TowerPlanAntennaGroup(BaseModel):
     leg: TowerPlanLeg | None = None
     azimuth_values_deg: list[float] = Field(default_factory=list)
     azimuth_conflict: bool = False
-    electrical_tilt_deg: float | None = None
-    electrical_tilt_conflict: bool = False
     mechanical_tilt_deg: float | None = None
     mechanical_tilt_conflict: bool = False
     cids: list[str] = Field(default_factory=list)

@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections import Counter
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any, Iterable
 
@@ -131,22 +132,25 @@ def resolve_tower_height(rows: Iterable[dict[str, Any]]) -> TowerPlanTowerHeight
     )
 
 
-def _resolve_group_tilt(
+def _resolve_group_mechanical_tilt(
     cells: Iterable[TowerPlanSourceCell],
-    field: str,
 ) -> tuple[float | None, bool]:
-    values: set[Decimal] = set()
+    frequencies: Counter[Decimal] = Counter()
     for cell in cells:
-        value = getattr(cell, field)
+        value = cell.mechanical_tilt
         if value is None:
             continue
         try:
-            values.add(_one_decimal(value))
+            frequencies[_one_decimal(value)] += 1
         except ValueError:
             continue
-    if len(values) == 1:
-        return _display_number(next(iter(values))), False
-    return None, len(values) > 1
+    if not frequencies:
+        return None, False
+    highest_count = max(frequencies.values())
+    winners = [value for value, count in frequencies.items() if count == highest_count]
+    if len(winners) != 1:
+        return None, True
+    return _display_number(winners[0]), False
 
 
 def group_antenna_rows(
@@ -232,29 +236,17 @@ def group_antenna_rows(
         azimuths: list[Decimal] = sorted(bucket["azimuths"])
         azimuth_conflict = len(azimuths) > 1
         azimuth = azimuths[0] if len(azimuths) == 1 else None
-        electrical_tilt_deg, electrical_tilt_conflict = _resolve_group_tilt(
-            cells,
-            "electrical_tilt",
-        )
-        mechanical_tilt_deg, mechanical_tilt_conflict = _resolve_group_tilt(
-            cells,
-            "mechanical_tilt",
-        )
+        mechanical_tilt_deg, mechanical_tilt_conflict = _resolve_group_mechanical_tilt(cells)
         if azimuth_conflict:
             azimuth_labels = ", ".join(f"{value:.1f}°" for value in azimuths)
             warnings.append(
                 f"Antenna {bucket['model']} · SEC {bucket['sector']} memiliki "
                 f"azimuth berbeda ({azimuth_labels}) dan perlu diperiksa manual."
             )
-        if electrical_tilt_conflict:
-            warnings.append(
-                f"Antenna {bucket['model']} · SEC {bucket['sector']} memiliki "
-                "electrical tilt berbeda dan perlu diperiksa manual."
-            )
         if mechanical_tilt_conflict:
             warnings.append(
                 f"Antenna {bucket['model']} · SEC {bucket['sector']} memiliki "
-                "mechanical tilt berbeda dan perlu diperiksa manual."
+                "mechanical tilt dengan frekuensi tertinggi yang imbang dan perlu diperiksa manual."
             )
         group_key = hashlib.sha256(
             json.dumps(
@@ -275,8 +267,6 @@ def group_antenna_rows(
                     _display_number(value) for value in azimuths
                 ],
                 azimuth_conflict=azimuth_conflict,
-                electrical_tilt_deg=electrical_tilt_deg,
-                electrical_tilt_conflict=electrical_tilt_conflict,
                 mechanical_tilt_deg=mechanical_tilt_deg,
                 mechanical_tilt_conflict=mechanical_tilt_conflict,
                 cids=sorted(bucket["cids"], key=_natural_text_key),
