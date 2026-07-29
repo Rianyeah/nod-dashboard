@@ -1211,6 +1211,14 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
     assert.match(documentEditor, /Background/);
     assert.match(documentEditor, /MAX_NOTE_CHARACTERS/);
     assert.match(documentEditor, /BACKGROUND_PRESETS/);
+    assert.match(documentEditor, /Detail font size/);
+    assert.match(documentEditor, /DETAIL_FONT_PRESETS/);
+    assert.match(documentEditor, /detailFontPreset/);
+    assert.match(documentEditor, /detailFontSize/);
+    assert.match(documentEditor, /min=\{10\}/);
+    assert.match(documentEditor, /max=\{16\}/);
+    assert.match(documentEditor, /Skenario Pekerjaan/);
+    assert.doesNotMatch(documentEditor, /WORKFLOW NOTE/);
     assert.match(documentEditor, /aria-invalid/);
   });
 });

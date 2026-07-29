@@ -230,6 +230,42 @@ describe('Tower Visualizer document settings', () => {
     assert.match(buildEngineeringPrompt(dark), /Blueprint Navy background/);
   });
 
+  it('describes the current exported layout and optional work note in the prompt', () => {
+    const plan = {
+      ...createBlankTowerPlan(),
+      siteName: 'PSN005',
+      planTitle: 'TOWER PLAN PSN005',
+      towerHeight: 72,
+      legABearingDeg: 45,
+      detailFontPreset: 'large',
+      detailFontSize: 15,
+      documentNote: {
+        title: 'Skenario Pekerjaan',
+        text: 'Add RRUS then install antenna APE.',
+        headerColor: '#8b2f23',
+      },
+    };
+    const prompt = buildEngineeringPrompt(plan);
+    const blankNotePrompt = buildEngineeringPrompt({
+      ...plan,
+      documentNote: {
+        ...plan.documentNote,
+        text: '',
+      },
+    });
+
+    assert.match(prompt, /1900 × 1200 landscape/);
+    assert.match(prompt, /alternating red-and-white 10-metre paint blocks/);
+    assert.match(prompt, /vertical divider/);
+    assert.match(prompt, /Site Data, Legend, Helicopter View/);
+    assert.match(prompt, /15 px detail text/);
+    assert.match(prompt, /Skenario Pekerjaan/);
+    assert.match(prompt, /Add RRUS then install antenna APE\./);
+    assert.doesNotMatch(prompt, /template|deterministic|schema/i);
+    assert.doesNotMatch(blankNotePrompt, /Work note/);
+    assert.doesNotMatch(blankNotePrompt, /Skenario Pekerjaan/);
+  });
+
   it('adds one tower-plan validation error when wrapped note exceeds the limit', () => {
     const plan = {
       ...createBlankTowerPlan(),

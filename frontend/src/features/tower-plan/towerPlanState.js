@@ -1,6 +1,7 @@
 import {
   documentBackgroundPrompt,
   normalizeDocumentSettings,
+  resolveDetailTypography,
   validateDocumentNote,
 } from './towerPlanDocument.js';
 
@@ -496,6 +497,9 @@ export function buildEngineeringPrompt(state, revisionInstruction = '') {
       + `${installationName} ${antenna.leg}.`;
   });
   const revision = revisionInstruction.trim();
+  const documentSettings = normalizeDocumentSettings(state);
+  const typography = resolveDetailTypography(state);
+  const workNote = documentSettings.documentNote.text.trim();
   const towerHeight = formatMeasurement(state.towerHeight);
   const legABearing = formatMeasurement(state.legABearingDeg);
   const revisionSentence = revision && !/[.!?]$/.test(revision)
@@ -513,8 +517,16 @@ export function buildEngineeringPrompt(state, revisionInstruction = '') {
     antennaLines.length
       ? ['Install the following antennas exactly:', ...antennaLines].join('\n')
       : 'No antennas are currently defined for this plan.',
-    `Use a ${visualStyle} visual style with a landscape engineering composition `
-      + `on a ${documentBackgroundPrompt(state)} background.`,
+    `Use a ${visualStyle} visual style for a 1900 × 1200 landscape engineering `
+      + `composition on a ${documentBackgroundPrompt(state)} background.`,
+    'Paint the tower in alternating red-and-white 10-metre paint blocks. '
+      + 'Arrange the antenna callout cards on the left and right of the tower.',
+    'Place a clean vertical divider before the right-side information stack. '
+      + 'Order that stack as Site Data, Legend, Helicopter View, then the optional work note. '
+      + `Use ${typography.size} px detail text throughout the callouts and information panels.`,
+    ...(workNote
+      ? [`Work note "${documentSettings.documentNote.title}": ${workNote}`]
+      : []),
     ...(revisionSentence ? [`Revision request: ${revisionSentence}`] : []),
     'Do not add, remove, merge, or change any supplied antenna or measurement.',
   ].join('\n\n');
