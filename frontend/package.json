@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "audit:production": "node scripts/audit-production.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },
@@ -23,7 +24,7 @@
     "react": "^19.2.6",
     "react-day-picker": "^10.0.1",
     "react-dom": "^19.2.6",
-    "react-router-dom": "^7.15.1",
+    "react-router-dom": "7.18.2",
     "recharts": "^3.8.1",
     "shadcn": "^4.11.0",
     "tailwind-merge": "^3.6.0",

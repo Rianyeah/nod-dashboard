@@ -457,6 +457,10 @@ async def get_tower_plan_site_configuration(
     )
 
 
-@router.post("/{unmatched_path:path}", include_in_schema=False)
-async def reject_unmatched_tower_plan_post(unmatched_path: str):
+@router.api_route(
+    "/{unmatched_path:path}",
+    methods=["GET", "POST"],
+    include_in_schema=False,
+)
+async def reject_unmatched_tower_plan_request(unmatched_path: str):
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)

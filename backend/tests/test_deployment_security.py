@@ -45,7 +45,14 @@ def test_deployment_files_require_secrets_and_immutable_builds():
     assert env["DASHBOARD_SESSION_SECRET"]["default"] == ""
 
     assert "pip_audit" in workflow
-    assert "npm audit --omit=dev --audit-level=high" in workflow
+    assert "npm run audit:production" in workflow
+    audit_policy = (
+        ROOT / "frontend" / "scripts" / "audit-production.mjs"
+    ).read_text(encoding="utf-8")
+    assert "GHSA-qwww-vcr4-c8h2" in audit_policy
+    assert "unstable RSC APIs" in audit_policy
+    assert "high" in audit_policy
+    assert "critical" in audit_policy
     assert "github.sha" in workflow
     assert "Validate public Mapbox build token" in workflow
     assert "vars.VITE_MAPBOX_TOKEN" in workflow

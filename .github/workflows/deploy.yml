@@ -41,7 +41,7 @@ jobs:
           npm ci
           node --test src/__tests__/*.test.js
           npm run lint
-          npm audit --omit=dev --audit-level=high
+          npm run audit:production
           npm run build
 
   publish:

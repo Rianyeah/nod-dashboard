@@ -3,6 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 import pytest
+from fastapi.testclient import TestClient
 
 from models.tower_plan import TowerPlanSourceColumns
 from routers.tower_plan import (
@@ -468,11 +469,38 @@ async def test_configuration_fallback_never_references_missing_schema_columns():
         ("post", "/api/v1/tower-plan/ai-visualizations"),
     ],
 )
+@pytest.mark.parametrize("frontend_dist_exists", [False, True])
 def test_retired_tower_plan_ai_routes_are_not_registered(
-    authenticated_client,
+    frontend_dist_exists,
     method,
     path,
+    credentials,
+    monkeypatch,
+    security_settings,
+    tmp_path,
 ):
+    from main import create_app
+
+    frontend_dist = tmp_path / "frontend-dist"
+    if frontend_dist_exists:
+        (frontend_dist / "assets").mkdir(parents=True)
+        (frontend_dist / "index.html").write_text(
+            "<!doctype html><title>NOD test</title>",
+            encoding="utf-8",
+        )
+    monkeypatch.setattr("main.FRONTEND_DIST", frontend_dist)
+
+    authenticated_client = TestClient(
+        create_app(security_settings),
+        base_url=TEST_ORIGIN,
+    )
+    login_response = authenticated_client.post(
+        "/api/v1/auth/login",
+        json=credentials,
+        headers={"Origin": TEST_ORIGIN},
+    )
+    assert login_response.status_code == 200
+
     headers = {"Origin": TEST_ORIGIN} if method == "post" else {}
     response = getattr(authenticated_client, method)(path, headers=headers)
     assert response.status_code == 404

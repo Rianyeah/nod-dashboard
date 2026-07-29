@@ -31,5 +31,16 @@ describe('frontend production audit contract', () => {
         `${path} must be at least ${minimumVersion}; received ${installedVersion}`,
       );
     }
+
+    for (const path of [
+      'node_modules/react-router',
+      'node_modules/react-router-dom',
+    ]) {
+      assert.equal(
+        lockfile.packages[path]?.version,
+        '7.18.2',
+        `${path} must stay on the reviewed declarative-router version`,
+      );
+    }
   });
 });
