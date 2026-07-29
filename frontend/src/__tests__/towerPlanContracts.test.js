@@ -681,6 +681,11 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
       assert.ok(TOWER_DRAWING_LAYOUT.sidebar);
       assert.equal(geometry.helicopterPanel.x, TOWER_DRAWING_LAYOUT.sidebar.siteData.x);
       assert.ok(geometry.helicopterPanel.y > TOWER_DRAWING_LAYOUT.sidebar.legend.y);
+      assert.equal(geometry.notePanel.x, geometry.helicopterPanel.x);
+      assert.equal(geometry.notePanel.width, geometry.helicopterPanel.width);
+      assert.ok(
+        geometry.notePanel.y >= geometry.helicopterPanel.y + geometry.helicopterPanel.height + 24,
+      );
       assert.ok(
         geometry.helicopterPanel.x > TOWER_DRAWING_LAYOUT.towerEnvelopeRight,
         `${towerType} helicopter panel must sit in the right sidebar`,
@@ -748,6 +753,54 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
     assert.match(svg, /data-overlap-index="1"/);
   });
 
+  it('renders a contained optional workflow note with escaped content', () => {
+    const plan = {
+      ...createBlankTowerPlan(),
+      planTitle: 'TOWER PLAN SITE001',
+      siteName: 'SITE001',
+      documentNote: {
+        title: 'INSTALLATION <FLOW>',
+        text: 'Verify mounting bracket.\nConfirm feeder & label.',
+        headerColor: '#7c3aed',
+      },
+    };
+    const svg = renderTowerPlanSvg(plan);
+    const match = svg.match(
+      /data-document-note="true" data-note-x="([\d.]+)" data-note-y="([\d.]+)" data-note-width="([\d.]+)" data-note-height="([\d.]+)" data-note-line-count="(\d+)"/,
+    );
+
+    assert.ok(match);
+    const x = Number(match[1]);
+    const y = Number(match[2]);
+    const width = Number(match[3]);
+    const height = Number(match[4]);
+    const lineCount = Number(match[5]);
+    const geometry = getTowerGeometry(plan.towerType);
+    assert.equal(x, geometry.helicopterPanel.x);
+    assert.equal(width, geometry.helicopterPanel.width);
+    assert.ok(y >= geometry.helicopterPanel.y + geometry.helicopterPanel.height + 24);
+    assert.ok(y + height <= TOWER_DRAWING_LAYOUT.canvasHeight);
+    assert.ok(lineCount >= 1 && lineCount <= 16);
+    assert.match(svg, /INSTALLATION &lt;FLOW&gt;/);
+    assert.match(svg, /Confirm feeder &amp; label\./);
+    assert.match(svg, /data-note-header-color="#7c3aed"/);
+    assert.ok(svg.indexOf('data-document-note=') > svg.indexOf('data-helicopter-panel='));
+  });
+
+  it('omits blank notes and resolves a contrast-safe dark canvas palette', () => {
+    const blank = renderTowerPlanSvg(createBlankTowerPlan());
+    const dark = renderTowerPlanSvg({
+      ...createBlankTowerPlan(),
+      backgroundPreset: 'blueprint-navy',
+      backgroundColor: '#102337',
+    });
+
+    assert.doesNotMatch(blank, /data-document-note=/);
+    assert.match(dark, /data-document-background="#102337"/);
+    assert.match(dark, /data-canvas-ink="#f8fafc"/);
+    assert.match(dark, /<rect data-document-canvas="true"[^>]+fill="#102337"/);
+  });
+
   it('keeps the red-white SVG drawing legible with wrapped callouts and collision-safe helicopter labels', () => {
     const state = applyAutofillDraft(
       createBlankTowerPlan(),
@@ -755,6 +808,11 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
     );
     const plan = {
       ...state,
+      documentNote: {
+        title: 'DENSE WORKFLOW',
+        text: Array.from({ length: 16 }, (_, index) => `Step ${index + 1}`).join('\n'),
+        headerColor: '#17263b',
+      },
       antennas: Array.from({ length: MAX_ANTENNAS }, (_, index) => ({
         ...state.antennas[0],
         id: `dense-${index + 1}`,
@@ -806,6 +864,9 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
     const siteData = footerCards.find((card) => card.id === 'site-data');
     const legend = footerCards.find((card) => card.id === 'legend');
     const helicopterPanel = getTowerGeometry(plan.towerType).helicopterPanel;
+    const notePanelMatch = svg.match(
+      /data-document-note="true" data-note-x="([\d.]+)" data-note-y="([\d.]+)" data-note-width="([\d.]+)" data-note-height="([\d.]+)" data-note-line-count="(\d+)"/,
+    );
 
     assert.equal(TOWER_DRAWING_LAYOUT.canvasWidth, 1900);
     assert.equal(TOWER_DRAWING_LAYOUT.canvasHeight, 1200);
@@ -833,6 +894,17 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
     assert.ok(helicopterPanel.y >= legend.y + legend.height);
     assert.ok(siteData.x > Math.max(...cards.map((card) => card.x + card.width)));
     assert.ok(helicopterPanel.x + helicopterPanel.width <= TOWER_DRAWING_LAYOUT.canvasWidth);
+    assert.ok(notePanelMatch);
+    const notePanel = {
+      x: Number(notePanelMatch[1]),
+      y: Number(notePanelMatch[2]),
+      width: Number(notePanelMatch[3]),
+      height: Number(notePanelMatch[4]),
+      lineCount: Number(notePanelMatch[5]),
+    };
+    assert.equal(notePanel.lineCount, 16);
+    assert.ok(notePanel.y >= helicopterPanel.y + helicopterPanel.height + 24);
+    assert.ok(notePanel.y + notePanel.height <= TOWER_DRAWING_LAYOUT.canvasHeight);
 
     cards.forEach((card, index) => {
       assert.ok(card.x >= TOWER_DRAWING_LAYOUT.heightDimensionCorridorRight);

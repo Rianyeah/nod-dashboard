@@ -27,6 +27,15 @@ export const TOWER_DRAWING_LAYOUT = {
     width: 520,
     height: 420,
   },
+  notePanel: {
+    x: 1330,
+    y: 842,
+    width: 520,
+    minHeight: 92,
+    maxHeight: 330,
+    headerHeight: 32,
+    lineHeight: 14,
+  },
 };
 
 const FOUR_LEG_FEET = [
@@ -87,5 +96,6 @@ export function getTowerGeometry(towerType) {
       legend: { ...TOWER_DRAWING_LAYOUT.sidebar.legend },
     },
     helicopterPanel: { ...TOWER_DRAWING_LAYOUT.helicopterPanel },
+    notePanel: { ...TOWER_DRAWING_LAYOUT.notePanel },
   };
 }

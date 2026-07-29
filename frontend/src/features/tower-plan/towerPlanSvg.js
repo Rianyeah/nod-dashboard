@@ -7,6 +7,12 @@ import {
   buildElevationRings,
   radiusForHeight,
 } from './towerPlanHelicopter.js';
+import {
+  contrastTextColor,
+  normalizeDocumentSettings,
+  resolveDocumentPalette,
+  wrapDocumentNote,
+} from './towerPlanDocument.js';
 
 const escapeXml = (value) => String(value ?? '')
   .replaceAll('&', '&amp;')
@@ -165,7 +171,7 @@ function paintedBraceSegments(
   }).join('');
 }
 
-function latticeStructure(towerHeight, geometry) {
+function latticeStructure(towerHeight, geometry, palette) {
   const positions = geometry.positions;
   const levels = Array.from({ length: 13 }, (_, index) => (
     index === 12 ? towerHeight : index * towerHeight / 12
@@ -217,16 +223,16 @@ function latticeStructure(towerHeight, geometry) {
     return `
       <g data-leg-label="${foot.id}" data-leg-label-side="${labelSide}" data-foot-x="${point.x}" data-label-x="${labelX}">
         <rect data-foot-plate="${foot.id}" x="${point.x - 24}" y="${point.y - 7}" width="48" height="17" rx="3" fill="#cbd5e1" stroke="#475569"/>
-        <line x1="${point.x + direction * 24}" y1="${labelY}" x2="${badgeX - direction * 15}" y2="${labelY}" stroke="#64748b" stroke-width="2"/>
+        <line x1="${point.x + direction * 24}" y1="${labelY}" x2="${badgeX - direction * 15}" y2="${labelY}" stroke="${palette.guide}" stroke-width="2"/>
         <circle cx="${badgeX}" cy="${labelY}" r="15" fill="#17263b"/>
         <text data-installation-label="${foot.id}" x="${badgeX}" y="${labelY + 5}" text-anchor="middle" fill="#fff" font-size="14" font-weight="800">${foot.id}</text>
-        <text x="${labelX}" y="${labelY + 4}" text-anchor="${textAnchor}" fill="#17263b" font-size="11" font-weight="800">LEG ${foot.id}</text>
+        <text x="${labelX}" y="${labelY + 4}" text-anchor="${textAnchor}" fill="${palette.canvasInk}" font-size="11" font-weight="800">LEG ${foot.id}</text>
       </g>`;
   }).join('');
   return `${groundPad(footPoints)}${legs}${rings}${braces}${feet}`;
 }
 
-function monopoleStructure(towerHeight, geometry) {
+function monopoleStructure(towerHeight, geometry, palette) {
   const base = projectPoint({ x: 0, z: 0, height: 0 }, towerHeight, geometry);
   const paintSegments = paintBandSegments(towerHeight);
   const anchorBolts = Array.from({ length: 6 }, (_, index) => {
@@ -247,13 +253,13 @@ function monopoleStructure(towerHeight, geometry) {
     ${shaftSegments}
     <ellipse data-foot-plate="BASE" cx="${base.x}" cy="${base.y + 6}" rx="48" ry="15" fill="#cbd5e1" stroke="#475569" stroke-width="2"/>
     ${anchorBolts}
-    <text x="${base.x}" y="${base.y + 58}" text-anchor="middle" fill="#17263b" font-size="11" font-weight="800">MONOPOLE BASE</text>`;
+    <text x="${base.x}" y="${base.y + 58}" text-anchor="middle" fill="${palette.canvasInk}" font-size="11" font-weight="800">MONOPOLE BASE</text>`;
 }
 
-function towerStructure(towerHeight, geometry) {
+function towerStructure(towerHeight, geometry, palette) {
   const structure = geometry.structureKind === 'monopole'
-    ? monopoleStructure(towerHeight, geometry)
-    : latticeStructure(towerHeight, geometry);
+    ? monopoleStructure(towerHeight, geometry, palette)
+    : latticeStructure(towerHeight, geometry, palette);
   return `<g data-structure-kind="${geometry.structureKind}" filter="url(#towerShadow)">${structure}</g>`;
 }
 
@@ -610,9 +616,37 @@ function footerPanels(state, towerHeight, layout) {
   </g>`;
 }
 
+function documentNoteCard(state, geometry) {
+  const settings = normalizeDocumentSettings(state);
+  const text = settings.documentNote.text.trim();
+  if (!text) return '';
+
+  const card = geometry.notePanel;
+  const lines = wrapDocumentNote(text);
+  const bodyPadding = 16;
+  const contentHeight = bodyPadding * 2 + lines.length * card.lineHeight;
+  const height = Math.min(
+    card.maxHeight,
+    Math.max(card.minHeight, card.headerHeight + contentHeight),
+  );
+  const headerColor = settings.documentNote.headerColor;
+  const headerInk = contrastTextColor(headerColor);
+  const lineMarkup = lines.map((line, index) => (
+    `<text data-note-line="${index + 1}" x="${card.x + 18}" y="${card.y + card.headerHeight + 24 + index * card.lineHeight}" fill="#26384d" font-size="11">${escapeXml(line)}</text>`
+  )).join('');
+
+  return `<g data-document-note="true" data-note-x="${card.x}" data-note-y="${card.y}" data-note-width="${card.width}" data-note-height="${height}" data-note-line-count="${lines.length}" data-note-header-color="${headerColor}">
+    <rect x="${card.x}" y="${card.y}" width="${card.width}" height="${height}" rx="8" fill="#ffffff" stroke="#8493a6"/>
+    <path d="M${card.x + 8} ${card.y} H${card.x + card.width - 8} Q${card.x + card.width} ${card.y} ${card.x + card.width} ${card.y + 8} V${card.y + card.headerHeight} H${card.x} V${card.y + 8} Q${card.x} ${card.y} ${card.x + 8} ${card.y}" fill="${headerColor}"/>
+    <text x="${card.x + 16}" y="${card.y + 21}" fill="${headerInk}" font-size="12" font-weight="800">${escapeXml(settings.documentNote.title)}</text>
+    ${lineMarkup}
+  </g>`;
+}
+
 export function renderTowerPlanSvg(state) {
   const geometry = getTowerGeometry(state.towerType);
   const layout = TOWER_DRAWING_LAYOUT;
+  const palette = resolveDocumentPalette(state);
   const towerHeight = Math.max(Number(state.towerHeight) || 1, 1);
   const guideHeights = [...new Set((state.antennas || []).map(
     (antenna) => Number(antenna.height),
@@ -621,31 +655,32 @@ export function renderTowerPlanSvg(state) {
     .sort((a, b) => b - a);
   const guides = guideHeights.map((height) => {
     const point = projectPoint({ x: 0, z: 0, height }, towerHeight, geometry);
-    return `<text x="126" y="${point.y + 5}" text-anchor="end" fill="#17263b" font-size="17" font-weight="800">${height.toFixed(1)} m</text>
-      <line x1="142" y1="${point.y}" x2="${layout.heightDimensionCorridorRight - 7}" y2="${point.y}" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="6 6"/>`;
+    return `<text x="126" y="${point.y + 5}" text-anchor="end" fill="${palette.canvasInk}" font-size="17" font-weight="800">${height.toFixed(1)} m</text>
+      <line x1="142" y1="${point.y}" x2="${layout.heightDimensionCorridorRight - 7}" y2="${point.y}" stroke="${palette.guide}" stroke-width="1.5" stroke-dasharray="6 6"/>`;
   }).join('');
   return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="${layout.canvasWidth}" height="${layout.canvasHeight}" viewBox="0 0 ${layout.canvasWidth} ${layout.canvasHeight}" role="img" aria-label="${escapeXml(state.towerType)} plan" font-family="Inter, system-ui, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" width="${layout.canvasWidth}" height="${layout.canvasHeight}" viewBox="0 0 ${layout.canvasWidth} ${layout.canvasHeight}" role="img" aria-label="${escapeXml(state.towerType)} plan" font-family="Inter, system-ui, sans-serif" data-document-background="${palette.background}" data-canvas-ink="${palette.canvasInk}">
   <defs>
     <filter id="towerShadow" x="-25%" y="-10%" width="150%" height="135%"><feDropShadow dx="3" dy="4" stdDeviation="3" flood-color="#1d2939" flood-opacity=".18"/></filter>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#1769e0"/></marker>
     <marker id="arrowDark" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#17263b"/></marker>
   </defs>
-  <rect width="${layout.canvasWidth}" height="${layout.canvasHeight}" fill="#ffffff"/>
-  <text x="${layout.drawingCenterX}" y="55" text-anchor="middle" fill="#111827" font-size="34" font-weight="900">${escapeXml(state.planTitle || 'UNTITLED PLAN')}</text>
-  <rect x="210" y="66" width="980" height="32" fill="#fff"/>
-  <text x="${layout.drawingCenterX}" y="90" text-anchor="middle" fill="#111827" font-size="21" font-weight="800">SITE: <tspan fill="#1769e0">${escapeXml(state.siteName || 'SITE NOT SET')}</tspan></text>
+  <rect data-document-canvas="true" width="${layout.canvasWidth}" height="${layout.canvasHeight}" fill="${palette.background}"/>
+  <text x="${layout.drawingCenterX}" y="55" text-anchor="middle" fill="${palette.canvasInk}" font-size="34" font-weight="900">${escapeXml(state.planTitle || 'UNTITLED PLAN')}</text>
+  <rect x="210" y="66" width="980" height="32" fill="${palette.background}"/>
+  <text x="${layout.drawingCenterX}" y="90" text-anchor="middle" fill="${palette.canvasInk}" font-size="21" font-weight="800">SITE: <tspan fill="${palette.canvasInk}">${escapeXml(state.siteName || 'SITE NOT SET')}</tspan></text>
   <g data-tower-height-dimension="true" data-corridor-right="${layout.heightDimensionCorridorRight}">
     <rect x="18" y="118" width="145" height="31" rx="6" fill="#17263b"/>
     <text x="90" y="139" text-anchor="middle" fill="#fff" font-size="13" font-weight="800">TOWER HEIGHT</text>
-    <line x1="42" y1="165" x2="42" y2="${layout.towerBaseY}" stroke="#17263b" stroke-width="1.5" stroke-dasharray="6 5"/>
-    <text x="23" y="${(165 + layout.towerBaseY) / 2}" transform="rotate(-90 23 ${(165 + layout.towerBaseY) / 2})" text-anchor="middle" fill="#17263b" font-size="14" font-weight="800">${towerHeight.toFixed(1)} m OVERALL TOWER HEIGHT</text>
+    <line x1="42" y1="165" x2="42" y2="${layout.towerBaseY}" stroke="${palette.canvasInk}" stroke-width="1.5" stroke-dasharray="6 5"/>
+    <text x="23" y="${(165 + layout.towerBaseY) / 2}" transform="rotate(-90 23 ${(165 + layout.towerBaseY) / 2})" text-anchor="middle" fill="${palette.canvasInk}" font-size="14" font-weight="800">${towerHeight.toFixed(1)} m OVERALL TOWER HEIGHT</text>
     ${guides}
   </g>
-  ${towerStructure(towerHeight, geometry)}
+  ${towerStructure(towerHeight, geometry, palette)}
   ${antennaCallouts(state, towerHeight, geometry)}
   ${footerPanels(state, towerHeight, layout)}
   ${helicopterView(state, geometry)}
+  ${documentNoteCard(state, geometry)}
 </svg>`;
 }
 
