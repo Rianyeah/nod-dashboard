@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 
 import {
@@ -1102,6 +1102,13 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
       new URL('../features/tower-plan/TowerPlanAntennaEditor.jsx', import.meta.url),
       'utf8',
     );
+    const documentEditorUrl = new URL(
+      '../features/tower-plan/TowerPlanDocumentEditor.jsx',
+      import.meta.url,
+    );
+    const documentEditor = existsSync(documentEditorUrl)
+      ? readFileSync(documentEditorUrl, 'utf8')
+      : '';
 
     assert.match(page, /Tower Visualizer/);
     assert.doesNotMatch(page, /Auto-filled/);
@@ -1110,6 +1117,12 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
     assert.match(page, /Ketik site id dan Enter/);
     assert.doesNotMatch(page, /Posisi instalasi dihitung otomatis/);
     assert.match(page, /title="Project Data"/);
+    assert.match(page, /TowerPlanDocumentEditor/);
+    assert.match(page, /title="Note & Appearance"/);
+    assert.ok(
+      page.indexOf('title="Project Data"') < page.indexOf('title="Note & Appearance"'),
+      'Note & Appearance must follow Project Data',
+    );
     assert.doesNotMatch(page, /Parameter utama tower dan orientasi helicopter view/);
     assert.match(page, /TowerPlanAutofillDialog/);
     assert.match(page, /TowerPlanPreview/);
@@ -1141,6 +1154,8 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
     assert.match(page, /title="Download"/);
     assert.match(page, /PNG file/);
     assert.match(page, /SVG file/);
+    assert.match(page, /resolveDocumentPalette\(plan\)\.background/);
+    assert.doesNotMatch(page, /context\.fillStyle = '#ffffff'/);
     assert.doesNotMatch(page, /Export JSON|Import JSON|jsonInputRef/);
     assert.doesNotMatch(page, /title="Validation"/);
     assert.match(page, /Konfigurasi valid/);
@@ -1157,5 +1172,12 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
     assert.match(preview, /aspect-\[19\/12\]/);
     assert.doesNotMatch(preview, /aspect-\[25\/32\]/);
     assert.match(preview, /Preview 19:12/);
+    assert.match(documentEditor, /Note header/);
+    assert.match(documentEditor, /Header colour/);
+    assert.match(documentEditor, /Workflow note/);
+    assert.match(documentEditor, /Background/);
+    assert.match(documentEditor, /MAX_NOTE_CHARACTERS/);
+    assert.match(documentEditor, /BACKGROUND_PRESETS/);
+    assert.match(documentEditor, /aria-invalid/);
   });
 });

@@ -7,6 +7,7 @@ import {
   Database,
   Download,
   LoaderCircle,
+  Palette,
   Plus,
   RadioTower,
   RotateCcw,
@@ -26,6 +27,7 @@ import { Textarea } from '../components/ui/textarea';
 import { fetchTowerPlanConfiguration } from '../services/api';
 import TowerPlanAntennaEditor from '../features/tower-plan/TowerPlanAntennaEditor';
 import TowerPlanAutofillDialog from '../features/tower-plan/TowerPlanAutofillDialog';
+import TowerPlanDocumentEditor from '../features/tower-plan/TowerPlanDocumentEditor';
 import TowerPlanPreview from '../features/tower-plan/TowerPlanPreview';
 import TowerPlanSitePicker from '../features/tower-plan/TowerPlanSitePicker';
 import {
@@ -48,6 +50,7 @@ import {
 } from '../features/tower-plan/towerPlanState';
 import { renderTowerPlanSvg } from '../features/tower-plan/towerPlanSvg';
 import { TOWER_DRAWING_LAYOUT } from '../features/tower-plan/towerPlanGeometry';
+import { resolveDocumentPalette } from '../features/tower-plan/towerPlanDocument';
 import {
   loadTowerPlanDraft,
   saveTowerPlanDraft,
@@ -97,7 +100,7 @@ function downloadBlob(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
-async function svgToPng(svg) {
+async function svgToPng(svg, backgroundColor) {
   const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
   const url = URL.createObjectURL(svgBlob);
   try {
@@ -111,7 +114,7 @@ async function svgToPng(svg) {
     canvas.width = TOWER_DRAWING_LAYOUT.canvasWidth;
     canvas.height = TOWER_DRAWING_LAYOUT.canvasHeight;
     const context = canvas.getContext('2d');
-    context.fillStyle = '#ffffff';
+    context.fillStyle = backgroundColor;
     context.fillRect(0, 0, canvas.width, canvas.height);
     context.drawImage(image, 0, 0, canvas.width, canvas.height);
     return await new Promise((resolve, reject) => {
@@ -243,7 +246,10 @@ export default function TowerPlanGeneratorPage() {
   const exportPng = async () => {
     if (!requireValidPlan()) return;
     try {
-      const png = await svgToPng(renderTowerPlanSvg(plan));
+      const png = await svgToPng(
+        renderTowerPlanSvg(plan),
+        resolveDocumentPalette(plan).background,
+      );
       downloadBlob(png, `${safeFilename(plan)}-tower-plan.png`);
     } catch (error) {
       notify('error', error.message);
@@ -375,6 +381,18 @@ export default function TowerPlanGeneratorPage() {
                   </Label>
                   <Input id="tower-bearing" min="0" max="359.9" step="0.1" type="number" value={plan.legABearingDeg} onChange={(event) => editPlan({ ...plan, legABearingDeg: event.target.value })} />
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="border-b border-border">
+                <SectionTitle
+                  icon={Palette}
+                  title="Note & Appearance"
+                />
+              </CardHeader>
+              <CardContent>
+                <TowerPlanDocumentEditor plan={plan} onChange={editPlan} />
               </CardContent>
             </Card>
 
