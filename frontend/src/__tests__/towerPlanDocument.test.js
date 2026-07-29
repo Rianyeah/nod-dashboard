@@ -2,10 +2,13 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import {
+  DETAIL_FONT_PRESETS,
   MAX_NOTE_CHARACTERS,
   MAX_NOTE_LINES,
   documentBackgroundPrompt,
+  normalizeDetailTypography,
   normalizeDocumentSettings,
+  resolveDetailTypography,
   resolveDocumentPalette,
   validateDocumentNote,
   wrapDocumentNote,
@@ -47,14 +50,16 @@ describe('Tower Visualizer document settings', () => {
   it('adds versioned note and white background defaults', () => {
     const plan = createBlankTowerPlan();
 
-    assert.equal(TOWER_PLAN_SCHEMA_VERSION, 7);
+    assert.equal(TOWER_PLAN_SCHEMA_VERSION, 8);
     assert.deepEqual(plan.documentNote, {
-      title: 'WORKFLOW NOTE',
+      title: 'Skenario Pekerjaan',
       text: '',
       headerColor: '#17263b',
     });
     assert.equal(plan.backgroundPreset, 'white');
     assert.equal(plan.backgroundColor, '#ffffff');
+    assert.equal(plan.detailFontPreset, 'standard');
+    assert.equal(plan.detailFontSize, 13);
   });
 
   it('migrates malformed legacy appearance without losing plan data', () => {
@@ -74,12 +79,14 @@ describe('Tower Visualizer document settings', () => {
 
     assert.equal(plan.siteName, 'SITE001');
     assert.deepEqual(plan.documentNote, {
-      title: 'WORKFLOW NOTE',
+      title: 'Skenario Pekerjaan',
       text: 'Check feeder',
       headerColor: '#17263b',
     });
     assert.equal(plan.backgroundPreset, 'white');
     assert.equal(plan.backgroundColor, '#ffffff');
+    assert.equal(plan.detailFontPreset, 'standard');
+    assert.equal(plan.detailFontSize, 13);
   });
 
   it('normalizes valid custom colours without changing curated presets', () => {
@@ -101,6 +108,8 @@ describe('Tower Visualizer document settings', () => {
         },
         backgroundPreset: 'custom',
         backgroundColor: '#aa33cc',
+        detailFontPreset: 'standard',
+        detailFontSize: 13,
       },
     );
     assert.equal(
@@ -110,6 +119,64 @@ describe('Tower Visualizer document settings', () => {
       }).backgroundColor,
       '#eef2f6',
     );
+  });
+
+  it('normalizes curated and custom detail typography deterministically', () => {
+    assert.deepEqual(
+      DETAIL_FONT_PRESETS.map(({ id, size }) => [id, size]),
+      [
+        ['small', 11],
+        ['standard', 13],
+        ['large', 15],
+        ['custom', null],
+      ],
+    );
+    assert.deepEqual(
+      normalizeDetailTypography({ detailFontPreset: 'large', detailFontSize: 10 }),
+      { detailFontPreset: 'large', detailFontSize: 15 },
+    );
+    assert.deepEqual(
+      normalizeDetailTypography({ detailFontPreset: 'custom', detailFontSize: 99 }),
+      { detailFontPreset: 'custom', detailFontSize: 16 },
+    );
+    assert.deepEqual(
+      normalizeDetailTypography({ detailFontPreset: 'custom', detailFontSize: 2 }),
+      { detailFontPreset: 'custom', detailFontSize: 10 },
+    );
+    assert.deepEqual(
+      resolveDetailTypography({ detailFontPreset: 'custom', detailFontSize: 16 }),
+      {
+        size: 16,
+        titleSize: 16,
+        lineHeight: 20,
+        noteLineHeight: 21,
+        wrapCharacters: 33,
+      },
+    );
+  });
+
+  it('migrates only the former default workflow title', () => {
+    const formerDefault = migrateTowerPlan({
+      schemaVersion: 7,
+      documentNote: {
+        title: 'WORKFLOW NOTE',
+        text: '',
+        headerColor: '#17263b',
+      },
+      antennas: [],
+    });
+    const customTitle = migrateTowerPlan({
+      schemaVersion: 7,
+      documentNote: {
+        title: 'INSTALL FLOW',
+        text: '',
+        headerColor: '#17263b',
+      },
+      antennas: [],
+    });
+
+    assert.equal(formerDefault.documentNote.title, 'Skenario Pekerjaan');
+    assert.equal(customTitle.documentNote.title, 'INSTALL FLOW');
   });
 
   it('wraps explicit paragraphs and long tokens deterministically', () => {

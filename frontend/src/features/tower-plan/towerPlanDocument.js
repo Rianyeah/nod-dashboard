@@ -3,10 +3,17 @@ export const MAX_NOTE_LINES = 16;
 export const NOTE_WRAP_CHARACTERS = 86;
 
 export const DEFAULT_DOCUMENT_NOTE = Object.freeze({
-  title: 'WORKFLOW NOTE',
+  title: 'Skenario Pekerjaan',
   text: '',
   headerColor: '#17263b',
 });
+
+export const DETAIL_FONT_PRESETS = Object.freeze([
+  { id: 'small', label: 'Small', size: 11 },
+  { id: 'standard', label: 'Standard', size: 13 },
+  { id: 'large', label: 'Large', size: 15 },
+  { id: 'custom', label: 'Custom', size: null },
+]);
 
 export const BACKGROUND_PRESETS = Object.freeze([
   { id: 'white', label: 'White', color: '#ffffff' },
@@ -24,6 +31,21 @@ function presetById(id) {
   return BACKGROUND_PRESETS.find((preset) => preset.id === id);
 }
 
+export function normalizeDetailTypography(raw = {}) {
+  const preset = DETAIL_FONT_PRESETS.find(
+    (candidate) => candidate.id === raw.detailFontPreset,
+  ) || DETAIL_FONT_PRESETS[1];
+  const numericSize = Number(raw.detailFontSize);
+  const customSize = Math.min(
+    16,
+    Math.max(10, Number.isFinite(numericSize) ? numericSize : 13),
+  );
+  return {
+    detailFontPreset: preset.id,
+    detailFontSize: preset.size ?? customSize,
+  };
+}
+
 export function normalizeDocumentSettings(raw = {}) {
   const requestedPreset = presetById(raw.backgroundPreset);
   const backgroundPreset = requestedPreset?.id || 'white';
@@ -34,10 +56,13 @@ export function normalizeDocumentSettings(raw = {}) {
   const sourceNote = raw.documentNote && typeof raw.documentNote === 'object'
     ? raw.documentNote
     : {};
+  const sourceTitle = String(sourceNote.title || '').trim();
 
   return {
     documentNote: {
-      title: String(sourceNote.title || '').trim() || DEFAULT_DOCUMENT_NOTE.title,
+      title: !sourceTitle || sourceTitle === 'WORKFLOW NOTE'
+        ? DEFAULT_DOCUMENT_NOTE.title
+        : sourceTitle,
       text: String(sourceNote.text || '').slice(0, MAX_NOTE_CHARACTERS),
       headerColor: isHexColor(sourceNote.headerColor)
         ? String(sourceNote.headerColor).toLowerCase()
@@ -45,6 +70,18 @@ export function normalizeDocumentSettings(raw = {}) {
     },
     backgroundPreset,
     backgroundColor,
+    ...normalizeDetailTypography(raw),
+  };
+}
+
+export function resolveDetailTypography(plan = {}) {
+  const { detailFontSize: size } = normalizeDetailTypography(plan);
+  return {
+    size,
+    titleSize: Math.min(16, size + 1),
+    lineHeight: size + 4,
+    noteLineHeight: size + 5,
+    wrapCharacters: Math.max(26, Math.round(40 * 13 / size)),
   };
 }
 

@@ -5,7 +5,7 @@ import {
 } from './towerPlanDocument.js';
 
 export const MAX_ANTENNAS = 16;
-export const TOWER_PLAN_SCHEMA_VERSION = 7;
+export const TOWER_PLAN_SCHEMA_VERSION = 8;
 export const TOWER_PLAN_TEMPLATE_VERSION = 'tower-plan-multi-type-v2';
 export const FOUR_LEG_TOWER = 'Four-leg lattice tower';
 export const THREE_LEG_TOWER = 'Three-leg lattice tower';
