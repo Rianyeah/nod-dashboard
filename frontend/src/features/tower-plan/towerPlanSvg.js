@@ -10,6 +10,7 @@ import {
 import {
   contrastTextColor,
   normalizeDocumentSettings,
+  resolveDetailTypography,
   resolveDocumentPalette,
   wrapDocumentNote,
 } from './towerPlanDocument.js';
@@ -318,15 +319,16 @@ export function legacyAntennaCallouts(state, towerHeight, geometry) {
 }
 
 function antennaCallouts(state, towerHeight, geometry) {
+  const typography = resolveDetailTypography(state);
   const antennas = [...(state.antennas || [])]
     .map((antenna, sourceIndex) => ({ antenna, sourceIndex }))
     .sort((a, b) => Number(b.antenna.height) - Number(a.antenna.height)
       || a.sourceIndex - b.sourceIndex);
   const cardsPerColumn = 8;
   const cardStartY = 146;
-  const cardGap = 6;
-  const titleLineHeight = 13;
-  const detailLineHeight = 14;
+  const cardGap = 4;
+  const titleLineHeight = typography.titleSize + 2;
+  const detailLineHeight = typography.lineHeight;
   const columns = { left: 0, right: 0 };
   const cursors = { left: cardStartY, right: cardStartY };
   const arranged = antennas.map(({ antenna }, index) => {
@@ -336,7 +338,11 @@ function antennaCallouts(state, towerHeight, geometry) {
       ? preferredColumn
       : (preferredColumn === 'left' ? 'right' : 'left');
     columns[column] += 1;
-    const titleLines = wrapSvgText(String(antenna.name || '').toUpperCase(), 36, 2);
+    const titleLines = wrapSvgText(
+      String(antenna.name || '').toUpperCase(),
+      typography.wrapCharacters,
+      2,
+    );
     const mechanicalTilt = displayNumber(antenna.mechanicalTilt);
     const tiltText = [
       mechanicalTilt === null ? null : `MT: ${mechanicalTilt}\u00b0`,
@@ -349,8 +355,8 @@ function antennaCallouts(state, towerHeight, geometry) {
       `CID(S): ${cids.length ? cids.join(', ') : 'N/A'}`,
       ...(tiltText ? [tiltText] : []),
     ];
-    const headerHeight = 10 + titleLines.length * titleLineHeight;
-    const cardHeight = headerHeight + 9 + details.length * detailLineHeight + 9;
+    const headerHeight = 8 + titleLines.length * titleLineHeight;
+    const cardHeight = headerHeight + 6 + details.length * detailLineHeight + 6;
     const cardY = cursors[column];
     cursors[column] += cardHeight + cardGap;
     return {
@@ -381,12 +387,12 @@ function antennaCallouts(state, towerHeight, geometry) {
     const edgeX = left ? cardX + cardWidth : cardX;
     const color = escapeXml(antenna.color);
     const titleMarkup = titleLines.map((line, lineIndex) => (
-      `<text data-callout-title-line="${index + 1}-${lineIndex + 1}" x="${cardX + 12}" y="${cardY + 15 + lineIndex * titleLineHeight}" fill="#fff" font-size="11" font-weight="800">${escapeXml(line)}</text>`
+      `<text data-callout-title-line="${index + 1}-${lineIndex + 1}" x="${cardX + 12}" y="${cardY + typography.titleSize + 3 + lineIndex * titleLineHeight}" fill="#fff" font-size="${typography.titleSize}" font-weight="800">${escapeXml(line)}</text>`
     )).join('');
     const detailMarkup = details.map((detail, detailIndex) => (
-      `<text x="${cardX + 13}" y="${cardY + headerHeight + 12 + detailIndex * detailLineHeight}" fill="#26384d" font-size="11">${escapeXml(detail)}</text>`
+      `<text x="${cardX + 13}" y="${cardY + headerHeight + typography.size + 2 + detailIndex * detailLineHeight}" fill="#26384d" font-size="${typography.size}">${escapeXml(detail)}</text>`
     )).join('');
-    return `<g>
+    return `<g data-callout-font-size="${typography.size}">
       <line x1="${anchor.x}" y1="${anchor.y}" x2="${mastX}" y2="${mastY + 30}" stroke="#64748b" stroke-width="5"/>
       <rect x="${mastX - 13}" y="${mastY - 42}" width="26" height="84" rx="5" fill="${color}" stroke="#fff" stroke-width="3"/>
       <path d="M${mastX} ${mastY} L${column.elbowX} ${cardY + cardHeight / 2} L${edgeX} ${cardY + cardHeight / 2}" fill="none" stroke="${color}" stroke-width="2.5"/>
@@ -480,6 +486,7 @@ export function legacyHelicopterView(state, geometry) {
 }
 
 function helicopterView(state, geometry) {
+  const typography = resolveDetailTypography(state);
   const {
     x, y, width, height,
   } = geometry.helicopterPanel;
@@ -498,7 +505,7 @@ function helicopterView(state, geometry) {
   }));
   const ringMarkup = rings.map(({ height: ringHeight, displayRadius }, index) => (
     `<circle data-elevation-ring="${escapeXml(ringHeight)}" cx="${cx}" cy="${cy}" r="${displayRadius}" fill="none" stroke="#f3b5bc" stroke-width="1.6"/>
-    <text x="${cx + displayRadius + 6}" y="${cy + (index % 2 ? 12 : -6)}" fill="#7f1d1d" font-size="10" font-weight="700">${escapeXml(ringHeight)} m</text>`
+    <text x="${cx + displayRadius + 6}" y="${cy + (index % 2 ? 12 : -6)}" fill="#7f1d1d" font-size="${Math.max(10, typography.size - 2)}" font-weight="700">${escapeXml(ringHeight)} m</text>`
   )).join('');
   const footprint = geometry.structureKind === 'monopole'
     ? `<circle cx="${cx}" cy="${cy}" r="16" fill="#fee2e2" stroke="#b42318" stroke-width="2.5"/>`
@@ -510,7 +517,7 @@ function helicopterView(state, geometry) {
     const point = positionPoints[position];
     return `<g data-installation-label="${position}">
       <circle cx="${point.x}" cy="${point.y}" r="10" fill="#17263b"/>
-      <text x="${point.x}" y="${point.y + 4}" text-anchor="middle" fill="#fff" font-size="10" font-weight="800">${position}</text>
+      <text x="${point.x}" y="${point.y + 4}" text-anchor="middle" fill="#fff" font-size="${Math.max(10, typography.size - 2)}" font-weight="800">${position}</text>
     </g>`;
   }).join('');
   const overlapCounts = new Map();
@@ -551,13 +558,13 @@ function helicopterView(state, geometry) {
       <line x1="${start.x}" y1="${start.y}" x2="${end.x}" y2="${end.y}" stroke="${color}" stroke-width="2.5"/>
       ${coloredArrowHead(end.x, end.y, azimuthBearing, antenna.color)}
       <circle cx="${end.x}" cy="${end.y}" r="10" fill="#fff" stroke="${color}" stroke-width="2"/>
-      <text x="${end.x}" y="${end.y + 3.5}" text-anchor="middle" fill="#17263b" font-size="10" font-weight="800">${index + 1}</text>
+      <text x="${end.x}" y="${end.y + 3.5}" text-anchor="middle" fill="#17263b" font-size="${Math.max(10, typography.size - 2)}" font-weight="800">${index + 1}</text>
     </g>`;
   }).join('');
   const rowHeight = Math.max(18, Math.floor(readout.height / Math.max(1, antennaItems.length)));
   const rowGap = 2;
   const rowBoxHeight = rowHeight - rowGap;
-  const rowFontSize = Math.max(11, Math.min(16, rowBoxHeight - 4));
+  const rowFontSize = Math.max(10, Math.min(typography.size, rowBoxHeight - 4));
   const readoutRows = antennaItems.map(({ antenna, index }) => {
     const rowY = readout.y + index * rowHeight;
     const color = escapeXml(antenna.color);
@@ -574,21 +581,22 @@ function helicopterView(state, geometry) {
   return `<g data-helicopter-panel="true" data-footer-bottom="${y + height}">
     <rect x="${x}" y="${y}" width="${width}" height="${height}" rx="8" fill="#fff" stroke="#7f8fa2" stroke-width="1.5"/>
     <path d="M${x + 8} ${y} H${x + width - 8} Q${x + width} ${y} ${x + width} ${y + 8} V${y + 26} H${x} V${y + 8} Q${x} ${y} ${x + 8} ${y}" fill="#17263b"/>
-    <text x="${x + width / 2}" y="${y + 18}" text-anchor="middle" fill="#fff" font-size="13" font-weight="800">HELICOPTER VIEW</text>
-    <text x="${cx}" y="${y + 44}" text-anchor="middle" fill="#17263b" font-size="9" font-weight="800">N · 0°</text>
+    <text x="${x + width / 2}" y="${y + 18}" text-anchor="middle" fill="#fff" font-size="${typography.titleSize}" font-weight="800">HELICOPTER VIEW</text>
+    <text x="${cx}" y="${y + 44}" text-anchor="middle" fill="#17263b" font-size="${Math.max(10, typography.size - 2)}" font-weight="800">N · 0°</text>
     <line x1="${cx}" y1="${y + 48}" x2="${cx}" y2="${y + 68}" stroke="#17263b" stroke-width="2" marker-end="url(#arrowDark)"/>
-    <text x="${readout.x}" y="${y + 44}" fill="#17263b" font-size="11" font-weight="800">SECTOR | AZIMUTH</text>
+    <text x="${readout.x}" y="${y + 44}" fill="#17263b" font-size="${typography.size}" font-weight="800">SECTOR | AZIMUTH</text>
     ${ringMarkup}${footprint}${labels}${antennas}${readoutRows}
-    <text x="${x + 12}" y="${y + height - 10}" fill="#5e6f84" font-size="8">${footerLabel}: ${displayNumber(state.legABearingDeg) || 'N/A'}° · North fixed</text>
+    <text x="${x + 12}" y="${y + height - 10}" fill="#5e6f84" font-size="${Math.max(9, typography.size - 4)}">${footerLabel}: ${displayNumber(state.legABearingDeg) || 'N/A'}° · North fixed</text>
   </g>`;
 }
 
-function footerHeader(card, title) {
+function footerHeader(card, title, typography) {
   return `<path d="M${card.x + 8} ${card.y} H${card.x + card.width - 8} Q${card.x + card.width} ${card.y} ${card.x + card.width} ${card.y + 8} V${card.y + 26} H${card.x} V${card.y + 8} Q${card.x} ${card.y} ${card.x + 8} ${card.y}" fill="#17263b"/>
-    <text x="${card.x + card.width / 2}" y="${card.y + 18}" text-anchor="middle" fill="#fff" font-size="11" font-weight="800">${title}</text>`;
+    <text x="${card.x + card.width / 2}" y="${card.y + 18}" text-anchor="middle" fill="#fff" font-size="${typography.titleSize}" font-weight="800">${title}</text>`;
 }
 
 function footerPanels(state, towerHeight, layout) {
+  const typography = resolveDetailTypography(state);
   const { sidebar } = layout;
   const siteData = sidebar.siteData;
   const legend = sidebar.legend;
@@ -599,32 +607,34 @@ function footerPanels(state, towerHeight, layout) {
   const cardAttributes = (id, card) => (
     `data-footer-card="${id}" data-footer-x="${card.x}" data-footer-y="${card.y}" data-footer-width="${card.width}" data-footer-height="${card.height}"`
   );
+  const detailY = (index) => siteData.y + 46 + index * typography.lineHeight;
   return `<g ${cardAttributes('site-data', siteData)}>
     <rect x="${siteData.x}" y="${siteData.y}" width="${siteData.width}" height="${siteData.height}" rx="8" fill="#fff" stroke="#8493a6"/>
-    ${footerHeader(siteData, 'SITE DATA')}
-    <text x="${siteData.x + 18}" y="${siteData.y + 46}" fill="#26384d" font-size="10">SITE ID: <tspan font-weight="700">${escapeXml(state.siteName || 'SITE NOT SET')}</tspan></text>
-    <text x="${siteData.x + 18}" y="${siteData.y + 64}" fill="#26384d" font-size="10">TOWER: <tspan font-weight="700">${escapeXml(String(state.towerType).toUpperCase())}</tspan></text>
-    <text x="${siteData.x + 18}" y="${siteData.y + 82}" fill="#26384d" font-size="10">HEIGHT: <tspan font-weight="700">${towerHeight.toFixed(1)} m</tspan></text>
-    <text x="${siteData.x + 18}" y="${siteData.y + 100}" fill="#26384d" font-size="10">TOTAL ANTENNA: <tspan font-weight="700">${antennaCount}</tspan></text>
-    <text x="${siteData.x + 18}" y="${siteData.y + 118}" fill="#26384d" font-size="10">TOTAL CELL: <tspan font-weight="700">${totalCells}</tspan></text>
+    ${footerHeader(siteData, 'SITE DATA', typography)}
+    <text x="${siteData.x + 18}" y="${detailY(0)}" fill="#26384d" font-size="${typography.size}">SITE ID: <tspan font-weight="700">${escapeXml(state.siteName || 'SITE NOT SET')}</tspan></text>
+    <text x="${siteData.x + 18}" y="${detailY(1)}" fill="#26384d" font-size="${typography.size}">TOWER: <tspan font-weight="700">${escapeXml(String(state.towerType).toUpperCase())}</tspan></text>
+    <text x="${siteData.x + 18}" y="${detailY(2)}" fill="#26384d" font-size="${typography.size}">HEIGHT: <tspan font-weight="700">${towerHeight.toFixed(1)} m</tspan></text>
+    <text x="${siteData.x + 18}" y="${detailY(3)}" fill="#26384d" font-size="${typography.size}">TOTAL ANTENNA: <tspan font-weight="700">${antennaCount}</tspan></text>
+    <text x="${siteData.x + 18}" y="${detailY(4)}" fill="#26384d" font-size="${typography.size}">TOTAL CELL: <tspan font-weight="700">${totalCells}</tspan></text>
   </g>
   <g ${cardAttributes('legend', legend)}>
     <rect x="${legend.x}" y="${legend.y}" width="${legend.width}" height="${legend.height}" rx="8" fill="#fff" stroke="#8493a6"/>
-    ${footerHeader(legend, 'LEGEND')}
-    <rect x="${legend.x + 18}" y="${legend.y + 35}" width="13" height="13" rx="2" fill="#334155"/><text x="${legend.x + 40}" y="${legend.y + 45}" fill="#26384d" font-size="10">Existing</text>
-    <rect x="${legend.x + 150}" y="${legend.y + 35}" width="13" height="13" rx="2" fill="#1769e0"/><text x="${legend.x + 172}" y="${legend.y + 45}" fill="#26384d" font-size="10">New</text>
+    ${footerHeader(legend, 'LEGEND', typography)}
+    <rect x="${legend.x + 18}" y="${legend.y + 35}" width="13" height="13" rx="2" fill="#334155"/><text x="${legend.x + 40}" y="${legend.y + 35 + typography.size}" fill="#26384d" font-size="${typography.size}">Existing</text>
+    <rect x="${legend.x + 150}" y="${legend.y + 35}" width="13" height="13" rx="2" fill="#1769e0"/><text x="${legend.x + 172}" y="${legend.y + 35 + typography.size}" fill="#26384d" font-size="${typography.size}">New</text>
   </g>`;
 }
 
 function documentNoteCard(state, geometry) {
   const settings = normalizeDocumentSettings(state);
+  const typography = resolveDetailTypography(state);
   const text = settings.documentNote.text.trim();
   if (!text) return '';
 
   const card = geometry.notePanel;
-  const lines = wrapDocumentNote(text);
-  const bodyPadding = 16;
-  const contentHeight = bodyPadding * 2 + lines.length * card.lineHeight;
+  const lines = wrapDocumentNote(text, typography.noteWrapCharacters);
+  const bodyPadding = 11;
+  const contentHeight = bodyPadding * 2 + lines.length * typography.noteLineHeight;
   const height = Math.min(
     card.maxHeight,
     Math.max(card.minHeight, card.headerHeight + contentHeight),
@@ -632,13 +642,13 @@ function documentNoteCard(state, geometry) {
   const headerColor = settings.documentNote.headerColor;
   const headerInk = contrastTextColor(headerColor);
   const lineMarkup = lines.map((line, index) => (
-    `<text data-note-line="${index + 1}" x="${card.x + 18}" y="${card.y + card.headerHeight + 24 + index * card.lineHeight}" fill="#26384d" font-size="11">${escapeXml(line)}</text>`
+    `<text data-note-line="${index + 1}" x="${card.x + 18}" y="${card.y + card.headerHeight + typography.size + 3 + index * typography.noteLineHeight}" fill="#26384d" font-size="${typography.size}">${escapeXml(line)}</text>`
   )).join('');
 
-  return `<g data-document-note="true" data-note-x="${card.x}" data-note-y="${card.y}" data-note-width="${card.width}" data-note-height="${height}" data-note-line-count="${lines.length}" data-note-header-color="${headerColor}">
+  return `<g data-document-note="true" data-note-x="${card.x}" data-note-y="${card.y}" data-note-width="${card.width}" data-note-height="${height}" data-note-line-count="${lines.length}" data-note-header-color="${headerColor}" data-note-title="${escapeXml(settings.documentNote.title)}">
     <rect x="${card.x}" y="${card.y}" width="${card.width}" height="${height}" rx="8" fill="#ffffff" stroke="#8493a6"/>
     <path d="M${card.x + 8} ${card.y} H${card.x + card.width - 8} Q${card.x + card.width} ${card.y} ${card.x + card.width} ${card.y + 8} V${card.y + card.headerHeight} H${card.x} V${card.y + 8} Q${card.x} ${card.y} ${card.x + 8} ${card.y}" fill="${headerColor}"/>
-    <text x="${card.x + 16}" y="${card.y + 21}" fill="${headerInk}" font-size="12" font-weight="800">${escapeXml(settings.documentNote.title)}</text>
+    <text x="${card.x + 16}" y="${card.y + 21}" fill="${headerInk}" font-size="${typography.titleSize}" font-weight="800">${escapeXml(settings.documentNote.title)}</text>
     ${lineMarkup}
   </g>`;
 }
@@ -647,6 +657,7 @@ export function renderTowerPlanSvg(state) {
   const geometry = getTowerGeometry(state.towerType);
   const layout = TOWER_DRAWING_LAYOUT;
   const palette = resolveDocumentPalette(state);
+  const typography = resolveDetailTypography(state);
   const towerHeight = Math.max(Number(state.towerHeight) || 1, 1);
   const guideHeights = [...new Set((state.antennas || []).map(
     (antenna) => Number(antenna.height),
@@ -659,7 +670,7 @@ export function renderTowerPlanSvg(state) {
       <line x1="142" y1="${point.y}" x2="${layout.heightDimensionCorridorRight - 7}" y2="${point.y}" stroke="${palette.guide}" stroke-width="1.5" stroke-dasharray="6 6"/>`;
   }).join('');
   return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="${layout.canvasWidth}" height="${layout.canvasHeight}" viewBox="0 0 ${layout.canvasWidth} ${layout.canvasHeight}" role="img" aria-label="${escapeXml(state.towerType)} plan" font-family="Inter, system-ui, sans-serif" data-document-background="${palette.background}" data-canvas-ink="${palette.canvasInk}">
+<svg xmlns="http://www.w3.org/2000/svg" width="${layout.canvasWidth}" height="${layout.canvasHeight}" viewBox="0 0 ${layout.canvasWidth} ${layout.canvasHeight}" role="img" aria-label="${escapeXml(state.towerType)} plan" font-family="Inter, system-ui, sans-serif" data-document-background="${palette.background}" data-canvas-ink="${palette.canvasInk}" data-detail-font-size="${typography.size}">
   <defs>
     <filter id="towerShadow" x="-25%" y="-10%" width="150%" height="135%"><feDropShadow dx="3" dy="4" stdDeviation="3" flood-color="#1d2939" flood-opacity=".18"/></filter>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#1769e0"/></marker>
@@ -678,6 +689,11 @@ export function renderTowerPlanSvg(state) {
   </g>
   ${towerStructure(towerHeight, geometry, palette)}
   ${antennaCallouts(state, towerHeight, geometry)}
+  <g data-layout-divider="true" data-divider-x="${layout.sidebarDividerX}">
+    <line x1="${layout.sidebarDividerX}" y1="122" x2="${layout.sidebarDividerX}" y2="1092" stroke="${palette.guide}" stroke-width="2"/>
+    <line x1="${layout.sidebarDividerX}" y1="122" x2="${layout.sidebarDividerX}" y2="174" stroke="${palette.canvasInk === '#f8fafc' ? '#f8fafc' : '#17263b'}" stroke-width="6"/>
+    <line x1="${layout.sidebarDividerX}" y1="1040" x2="${layout.sidebarDividerX}" y2="1092" stroke="${palette.canvasInk === '#f8fafc' ? '#f8fafc' : '#17263b'}" stroke-width="6"/>
+  </g>
   ${footerPanels(state, towerHeight, layout)}
   ${helicopterView(state, geometry)}
   ${documentNoteCard(state, geometry)}

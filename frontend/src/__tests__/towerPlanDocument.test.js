@@ -148,9 +148,10 @@ describe('Tower Visualizer document settings', () => {
       {
         size: 16,
         titleSize: 16,
-        lineHeight: 20,
-        noteLineHeight: 21,
+        lineHeight: 18,
+        noteLineHeight: 19,
         wrapCharacters: 33,
+        noteWrapCharacters: 62,
       },
     );
   });

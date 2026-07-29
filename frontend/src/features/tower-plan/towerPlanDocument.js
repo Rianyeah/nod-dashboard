@@ -79,9 +79,10 @@ export function resolveDetailTypography(plan = {}) {
   return {
     size,
     titleSize: Math.min(16, size + 1),
-    lineHeight: size + 4,
-    noteLineHeight: size + 5,
+    lineHeight: size + 2,
+    noteLineHeight: size + 3,
     wrapCharacters: Math.max(26, Math.round(40 * 13 / size)),
+    noteWrapCharacters: Math.max(58, Math.round(76 * 13 / size)),
   };
 }
 

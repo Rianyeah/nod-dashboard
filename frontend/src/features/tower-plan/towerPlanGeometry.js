@@ -13,6 +13,7 @@ export const TOWER_DRAWING_LAYOUT = {
   towerVerticalSpan: 880,
   heightDimensionCorridorRight: 175,
   towerEnvelopeRight: 880,
+  sidebarDividerX: 1285,
   calloutColumns: {
     left: { x: 190, width: 280, elbowX: 490 },
     right: { x: 920, width: 320, elbowX: 895 },
@@ -32,7 +33,7 @@ export const TOWER_DRAWING_LAYOUT = {
     y: 842,
     width: 520,
     minHeight: 92,
-    maxHeight: 330,
+    maxHeight: 358,
     headerHeight: 32,
     lineHeight: 14,
   },

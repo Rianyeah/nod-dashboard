@@ -808,6 +808,8 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
     );
     const plan = {
       ...state,
+      detailFontPreset: 'large',
+      detailFontSize: 15,
       documentNote: {
         title: 'DENSE WORKFLOW',
         text: Array.from({ length: 16 }, (_, index) => `Step ${index + 1}`).join('\n'),
@@ -870,6 +872,11 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
 
     assert.equal(TOWER_DRAWING_LAYOUT.canvasWidth, 1900);
     assert.equal(TOWER_DRAWING_LAYOUT.canvasHeight, 1200);
+    assert.match(svg, /data-detail-font-size="15"/);
+    assert.match(svg, /data-layout-divider="true"/);
+    assert.match(svg, /data-divider-x="1285"/);
+    assert.match(svg, /data-callout-font-size="15"/);
+    assert.match(svg, /data-note-title="DENSE WORKFLOW"/);
     assert.match(svg, /data-tower-paint-band="0" data-paint-color="red"/);
     assert.match(svg, /data-tower-paint-band="1" data-paint-color="white"/);
     assert.match(svg, /MT: 1\u00b0/);
@@ -892,6 +899,13 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
     assert.equal(legend.x, TOWER_DRAWING_LAYOUT.sidebar.legend.x);
     assert.ok(legend.y >= siteData.y + siteData.height);
     assert.ok(helicopterPanel.y >= legend.y + legend.height);
+    assert.ok(
+      Math.max(...cards.map((card) => card.x + card.width))
+        < TOWER_DRAWING_LAYOUT.sidebarDividerX,
+    );
+    assert.ok(
+      TOWER_DRAWING_LAYOUT.sidebarDividerX < TOWER_DRAWING_LAYOUT.sidebar.siteData.x,
+    );
     assert.ok(siteData.x > Math.max(...cards.map((card) => card.x + card.width)));
     assert.ok(helicopterPanel.x + helicopterPanel.width <= TOWER_DRAWING_LAYOUT.canvasWidth);
     assert.ok(notePanelMatch);
