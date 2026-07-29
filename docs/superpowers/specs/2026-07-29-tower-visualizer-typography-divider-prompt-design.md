@@ -1,7 +1,7 @@
 # Tower Visualizer Typography, Divider, and Prompt Design
 
-**Date:** 2026-07-29  
-**Status:** Approved  
+**Date:** 2026-07-29
+**Status:** Approved
 **Scope:** Incremental enhancement of the existing Tower Visualizer landscape
 document and workbench.
 
