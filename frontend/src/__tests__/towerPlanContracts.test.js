@@ -94,7 +94,7 @@ describe('Tower Plan state contracts', () => {
   it('starts from a blank four-leg tower rather than the legacy preset', () => {
     const state = createBlankTowerPlan();
 
-    assert.equal(state.schemaVersion, 6);
+    assert.equal(state.schemaVersion, 7);
     assert.equal(state.schemaVersion, TOWER_PLAN_SCHEMA_VERSION);
     assert.equal(state.towerType, 'Four-leg lattice tower');
     assert.equal(state.towerHeight, 50);
@@ -350,7 +350,7 @@ describe('Tower Plan state contracts', () => {
       antennas: [{ id: 'a', name: 'Legacy', height: '40', azimuth: '90', leg: 'A' }],
     });
 
-    assert.equal(migrated.schemaVersion, 6);
+    assert.equal(migrated.schemaVersion, 7);
     assert.equal(migrated.towerHeight, 60);
     assert.equal(migrated.antennas[0].name, 'Legacy');
     assert.equal(migrated.antennas[0].status, 'Existing');
@@ -394,7 +394,7 @@ describe('Tower Plan state contracts', () => {
       }],
     });
 
-    assert.equal(migrated.schemaVersion, 6);
+    assert.equal(migrated.schemaVersion, 7);
     assert.deepEqual(migrated.antennas[0].cids, ['11', '14']);
     assert.equal(migrated.antennas[0].leg, 'C');
   });
@@ -1009,6 +1009,8 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
     assert.doesNotMatch(storageSource, /export async function loadTowerPlanAsset/);
     assert.doesNotMatch(storageSource, /export async function saveTowerPlanAsset/);
     assert.match(storageSource, /createObjectStore\(ASSET_STORE\)/);
+    assert.match(storageSource, /nod_tower_plan_draft_v7/);
+    assert.match(storageSource, /nod_tower_plan_draft_v6/);
   });
 
   it('renders the complete professional workbench and review flow', () => {

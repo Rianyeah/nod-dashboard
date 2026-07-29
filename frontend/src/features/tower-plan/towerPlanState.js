@@ -1,5 +1,11 @@
+import {
+  documentBackgroundPrompt,
+  normalizeDocumentSettings,
+  validateDocumentNote,
+} from './towerPlanDocument.js';
+
 export const MAX_ANTENNAS = 16;
-export const TOWER_PLAN_SCHEMA_VERSION = 6;
+export const TOWER_PLAN_SCHEMA_VERSION = 7;
 export const TOWER_PLAN_TEMPLATE_VERSION = 'tower-plan-multi-type-v2';
 export const FOUR_LEG_TOWER = 'Four-leg lattice tower';
 export const THREE_LEG_TOWER = 'Three-leg lattice tower';
@@ -89,6 +95,7 @@ export function createBlankTowerPlan() {
     legABearingDeg: 45,
     visualStyle: 'Clean Engineering Infographic',
     customStyle: '',
+    ...normalizeDocumentSettings(),
     antennas: [],
     source: null,
   };
@@ -136,6 +143,7 @@ export function migrateTowerPlan(raw) {
   return {
     ...base,
     ...raw,
+    ...normalizeDocumentSettings(raw),
     schemaVersion: TOWER_PLAN_SCHEMA_VERSION,
     promptTemplateVersion: TOWER_PLAN_TEMPLATE_VERSION,
     planTitle: String(raw.planTitle || ''),
@@ -425,6 +433,7 @@ export function validateTowerPlan(state) {
   if (state.antennas.length > MAX_ANTENNAS) {
     errors.push(`Maksimal ${MAX_ANTENNAS} antena.`);
   }
+  errors.push(...validateDocumentNote(state.documentNote));
 
   const cids = new Set();
   const validPositions = TOWER_TYPE_CONFIG[state.towerType]?.positions || [];
@@ -504,7 +513,8 @@ export function buildEngineeringPrompt(state, revisionInstruction = '') {
     antennaLines.length
       ? ['Install the following antennas exactly:', ...antennaLines].join('\n')
       : 'No antennas are currently defined for this plan.',
-    `Use a ${visualStyle} visual style with a portrait engineering composition on a white background.`,
+    `Use a ${visualStyle} visual style with a landscape engineering composition `
+      + `on a ${documentBackgroundPrompt(state)} background.`,
     ...(revisionSentence ? [`Revision request: ${revisionSentence}`] : []),
     'Do not add, remove, merge, or change any supplied antenna or measurement.',
   ].join('\n\n');

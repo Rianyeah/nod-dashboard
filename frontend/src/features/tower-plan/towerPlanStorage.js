@@ -5,8 +5,12 @@ const DB_VERSION = 1;
 const DOCUMENT_STORE = 'documents';
 const ASSET_STORE = 'assets';
 const DRAFT_KEY = 'active-draft';
-const FALLBACK_KEY = 'nod_tower_plan_draft_v6';
-const LEGACY_FALLBACK_KEYS = ['nod_tower_plan_draft_v5', 'nod_tower_plan_draft_v4'];
+const FALLBACK_KEY = 'nod_tower_plan_draft_v7';
+const LEGACY_FALLBACK_KEYS = [
+  'nod_tower_plan_draft_v6',
+  'nod_tower_plan_draft_v5',
+  'nod_tower_plan_draft_v4',
+];
 
 function openDatabase() {
   if (!globalThis.indexedDB) return Promise.resolve(null);
