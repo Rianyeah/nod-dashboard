@@ -1109,6 +1109,13 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
     const documentEditor = existsSync(documentEditorUrl)
       ? readFileSync(documentEditorUrl, 'utf8')
       : '';
+    const previewDialogUrl = new URL(
+      '../features/tower-plan/TowerPlanPreviewDialog.jsx',
+      import.meta.url,
+    );
+    const previewDialog = existsSync(previewDialogUrl)
+      ? readFileSync(previewDialogUrl, 'utf8')
+      : '';
 
     assert.match(page, /Tower Visualizer/);
     assert.doesNotMatch(page, /Auto-filled/);
@@ -1172,6 +1179,17 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
     assert.match(preview, /aspect-\[19\/12\]/);
     assert.doesNotMatch(preview, /aspect-\[25\/32\]/);
     assert.match(preview, /Preview 19:12/);
+    assert.match(preview, /TowerPlanPreviewDialog/);
+    assert.match(preview, /onClick=.*setOpen\(true\)/s);
+    assert.match(previewDialog, /Zoom In/);
+    assert.match(previewDialog, /Zoom Out/);
+    assert.match(previewDialog, />Fit</);
+    assert.match(previewDialog, />Reset</);
+    assert.match(previewDialog, /onWheel/);
+    assert.match(previewDialog, /onPointerDown/);
+    assert.match(previewDialog, /onPointerMove/);
+    assert.match(previewDialog, /onPointerUp/);
+    assert.match(previewDialog, /aria-live="polite"/);
     assert.match(documentEditor, /Note header/);
     assert.match(documentEditor, /Header colour/);
     assert.match(documentEditor, /Workflow note/);

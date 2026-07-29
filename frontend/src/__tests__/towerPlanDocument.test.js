@@ -17,8 +17,33 @@ import {
   migrateTowerPlan,
   validateTowerPlan,
 } from '../features/tower-plan/towerPlanState.js';
+import {
+  clampPan,
+  clampZoom,
+  zoomAroundPoint,
+} from '../features/tower-plan/towerPlanPreviewTransform.js';
 
 describe('Tower Visualizer document settings', () => {
+  it('clamps preview zoom and keeps the pointer anchored', () => {
+    assert.equal(clampZoom(0.2), 0.5);
+    assert.equal(clampZoom(3), 2.5);
+    assert.deepEqual(
+      zoomAroundPoint({ zoom: 1, x: 0, y: 0 }, 2, { x: 100, y: 80 }),
+      { zoom: 2, x: -100, y: -80 },
+    );
+  });
+
+  it('clamps panning while keeping part of the document visible', () => {
+    assert.deepEqual(
+      clampPan(
+        { zoom: 1, x: -5000, y: 5000 },
+        { width: 1000, height: 700 },
+        { width: 1900, height: 1200 },
+      ),
+      { zoom: 1, x: -1800, y: 600 },
+    );
+  });
+
   it('adds versioned note and white background defaults', () => {
     const plan = createBlankTowerPlan();
 
