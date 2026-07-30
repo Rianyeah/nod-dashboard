@@ -181,7 +181,7 @@ export default function TowerPlanPreviewDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="h-[min(92vh,940px)] max-w-[min(96vw,1580px)] grid-rows-[auto_minmax(0,1fr)] gap-3 overflow-hidden rounded-2xl p-3 sm:max-w-[min(96vw,1580px)]"
+        className="h-[min(92vh,940px)] max-w-[min(96vw,1580px)] grid-rows-[auto_minmax(0,1fr)] gap-3 overflow-hidden rounded-[var(--noc-radius-lg)] border-[var(--border-strong)] p-3 sm:max-w-[min(96vw,1580px)]"
         onOpenAutoFocus={() => {
           requestAnimationFrame(() => fitDocument());
         }}
@@ -255,7 +255,7 @@ export default function TowerPlanPreviewDialog({
           ref={setViewportNode}
           aria-label="Zoomable tower plan preview"
           className={[
-            'relative min-h-0 touch-none overflow-hidden rounded-xl border border-border bg-slate-900',
+            'relative min-h-0 touch-none overflow-hidden rounded-xl border border-[var(--border-strong)] bg-slate-900',
             isDragging ? 'cursor-grabbing' : 'cursor-grab',
           ].join(' ')}
           role="region"
@@ -274,7 +274,7 @@ export default function TowerPlanPreviewDialog({
         >
           <img
             alt={alt}
-            className="pointer-events-none absolute left-0 top-0 max-w-none select-none shadow-2xl"
+            className="pointer-events-none absolute left-0 top-0 max-w-none select-none shadow-[var(--shadow-lg)]"
             draggable="false"
             height={DOCUMENT_SIZE.height}
             src={source}

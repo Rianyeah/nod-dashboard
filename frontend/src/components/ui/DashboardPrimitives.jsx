@@ -54,24 +54,19 @@ export function DashboardKpiCard({
   icon: Icon,
   tone = 'info',
   accent,
-  glow,
   children,
   className = '',
   style,
 }) {
   const colors = getTone(tone);
   const iconColor = accent || colors.varColor;
-  const iconBg = glow || colors.varBg;
 
   return (
     <article className={`glass-card min-w-0 p-5 ${className}`} style={style}>
       <div className="flex items-start gap-3.5">
         {Icon && (
-          <span
-            className="flex size-10 shrink-0 items-center justify-center rounded-full border border-[var(--border-light)]"
-            style={{ backgroundColor: iconBg, boxShadow: `0 0 18px ${iconBg}` }}
-          >
-            <Icon className="size-5" style={{ color: iconColor }} />
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface-soft)]">
+            <Icon className="size-[18px]" strokeWidth={1.8} style={{ color: iconColor }} />
           </span>
         )}
         <div className="min-w-0 flex-1">
@@ -90,16 +85,61 @@ export function DashboardKpiCard({
   );
 }
 
-export function DashboardChartPanel({ title, icon: Icon, children, action, className = '', style }) {
+export function DashboardPanelHeader({
+  title,
+  description,
+  icon: Icon,
+  action,
+  className = '',
+}) {
+  return (
+    <div
+      data-density={description ? 'normal' : 'compact'}
+      className={[
+        'flex min-w-0 flex-wrap items-start justify-between gap-3',
+        description ? 'pb-4' : 'pb-3',
+        className,
+      ].join(' ')}
+    >
+      <div className="flex min-w-0 items-start gap-2.5">
+        {Icon && (
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface-soft)] text-[var(--text-secondary)]">
+            <Icon className="size-4" strokeWidth={1.8} />
+          </span>
+        )}
+        <div className="min-w-0">
+          <h2 className="truncate text-sm font-semibold tracking-[0.01em] text-[var(--text-primary)]">
+            {title}
+          </h2>
+          {description && (
+            <p className="mt-1 text-xs leading-relaxed text-[var(--text-muted)]">
+              {description}
+            </p>
+          )}
+        </div>
+      </div>
+      {action}
+    </div>
+  );
+}
+
+export function DashboardChartPanel({
+  title,
+  description,
+  icon,
+  children,
+  action,
+  className = '',
+  style,
+}) {
   return (
     <section className={`glass-card min-w-0 p-5 ${className}`} style={style}>
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2">
-          {Icon && <Icon className="size-4 shrink-0 text-[var(--primary-light)]" />}
-          <h2 className="truncate text-sm font-semibold tracking-wide text-[var(--text-primary)]">{title}</h2>
-        </div>
-        {action}
-      </div>
+      <DashboardPanelHeader
+        title={title}
+        description={description}
+        icon={icon}
+        action={action}
+      />
       {children}
     </section>
   );
@@ -120,7 +160,13 @@ export function DashboardStatusBadge({ children, tone = 'neutral', pulse = false
 
 export function DashboardPageHeader({ title, subtitle, icon: Icon, action, backButton, meta }) {
   return (
-    <header className="border-b border-[var(--border)] bg-[var(--bg-header)] px-6 py-4 backdrop-blur-xl">
+    <header
+      data-density={subtitle ? 'normal' : 'compact'}
+      className={[
+        'border-b border-[var(--border)] bg-[var(--bg-header)] px-4 backdrop-blur-lg sm:px-6',
+        subtitle ? 'py-4' : 'py-3',
+      ].join(' ')}
+    >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           {backButton}
@@ -138,21 +184,36 @@ export function DashboardPageHeader({ title, subtitle, icon: Icon, action, backB
   );
 }
 
-export function DashboardTableShell({ title, icon: Icon, count, action, children, className = '' }) {
+export function DashboardTableShell({
+  title,
+  description,
+  icon,
+  count,
+  action,
+  children,
+  className = '',
+}) {
+  const countAction = (
+    <div className="flex items-center gap-2">
+      {count != null && (
+        <span className="rounded-md border border-[var(--border)] bg-[var(--surface-soft)] px-2 py-0.5 font-mono text-[10px] text-[var(--text-muted)]">
+          {count}
+        </span>
+      )}
+      {action}
+    </div>
+  );
+
   return (
     <section className={`glass-card overflow-hidden ${className}`}>
       {(title || action || count != null) && (
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
-          <div className="flex min-w-0 items-center gap-2">
-            {Icon && <Icon className="size-4 shrink-0 text-[var(--primary-light)]" />}
-            {title && <h2 className="truncate text-sm font-semibold tracking-wide text-[var(--text-primary)]">{title}</h2>}
-            {count != null && (
-              <span className="rounded-full bg-[var(--surface-soft)] px-2 py-0.5 text-[10px] font-mono text-[var(--text-muted)]">
-                {count}
-              </span>
-            )}
-          </div>
-          {action}
+        <div className="border-b border-[var(--border)] px-5 pt-4">
+          <DashboardPanelHeader
+            title={title}
+            description={description}
+            icon={icon}
+            action={countAction}
+          />
         </div>
       )}
       {children}

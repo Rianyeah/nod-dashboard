@@ -101,4 +101,13 @@ describe('Data Potensi dashboard contracts', () => {
     assert.match(page, /tableError/);
     assert.doesNotMatch(page, /useDashboardThemeTokens/);
   });
+
+  it('uses the graphite Data Potensi chart language', () => {
+    const page = src('pages', 'DataPotensiPage.jsx');
+
+    assert.doesNotMatch(page, /text-cyan-|bg-cyan-|border-cyan-|#22D3EE|#0EA5E9|#38BDF8/i);
+    assert.doesNotMatch(page, /shadow-\[0_0_|blur-sm/);
+    assert.match(page, /DashboardChartPanel|DashboardTableShell/);
+    assert.match(page, /dataPotensiChartConfig/);
+  });
 });

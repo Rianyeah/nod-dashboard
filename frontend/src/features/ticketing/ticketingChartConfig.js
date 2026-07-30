@@ -1,16 +1,18 @@
+import { DASHBOARD_CHART_COLORS } from '../../components/dashboard-charts/dashboardChartUtils.js';
+
 export const TICKETING_CHART_COLORS = {
-  bps: 'var(--chart-1)',
-  ts: 'var(--chart-3)',
-  total: 'var(--chart-4)',
-  tickets: 'var(--chart-1)',
-  cumulative: 'var(--chart-4)',
-  danger: 'var(--chart-2)',
-  warning: 'var(--chart-4)',
-  success: 'var(--chart-3)',
-  violet: 'var(--chart-5)',
-  incident: 'var(--chart-1)',
-  event: 'var(--chart-4)',
-  fallback: 'var(--chart-5)',
+  bps: DASHBOARD_CHART_COLORS.accent,
+  ts: DASHBOARD_CHART_COLORS.neutral,
+  total: DASHBOARD_CHART_COLORS.neutralMuted,
+  tickets: DASHBOARD_CHART_COLORS.neutral,
+  cumulative: DASHBOARD_CHART_COLORS.accent,
+  danger: DASHBOARD_CHART_COLORS.danger,
+  warning: DASHBOARD_CHART_COLORS.warning,
+  success: DASHBOARD_CHART_COLORS.success,
+  violet: DASHBOARD_CHART_COLORS.neutralMuted,
+  incident: DASHBOARD_CHART_COLORS.accent,
+  event: DASHBOARD_CHART_COLORS.neutral,
+  fallback: DASHBOARD_CHART_COLORS.neutralMuted,
 };
 
 export const ticketingChartConfig = {

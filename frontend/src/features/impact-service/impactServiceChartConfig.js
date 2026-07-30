@@ -1,43 +1,44 @@
+import { DASHBOARD_CHART_COLORS } from '../../components/dashboard-charts/dashboardChartUtils.js';
+
 export const STATUS_COLORS = {
-  total: 'var(--chart-1)',
-  open: 'var(--chart-2)',
-  clear: 'var(--chart-3)',
-  warning: 'var(--chart-4)',
-  impacted: 'var(--chart-5)',
+  total: DASHBOARD_CHART_COLORS.neutral,
+  open: DASHBOARD_CHART_COLORS.danger,
+  clear: DASHBOARD_CHART_COLORS.success,
+  warning: DASHBOARD_CHART_COLORS.warning,
+  impacted: DASHBOARD_CHART_COLORS.accent,
 };
 
 export const impactServiceChartConfig = {
   total: {
     label: 'Total',
-    color: 'var(--chart-1)',
+    color: STATUS_COLORS.total,
   },
   open: {
     label: 'OPEN',
-    color: 'var(--chart-2)',
+    color: STATUS_COLORS.open,
   },
   clear: {
     label: 'CLEAR',
-    color: 'var(--chart-3)',
+    color: STATUS_COLORS.clear,
   },
 };
 
 const AGING_COLORS = [
-  'var(--chart-3)',
-  'var(--chart-1)',
-  'var(--chart-4)',
-  '#F97316',
-  'var(--chart-2)',
+  DASHBOARD_CHART_COLORS.success,
+  DASHBOARD_CHART_COLORS.info,
+  DASHBOARD_CHART_COLORS.warning,
+  DASHBOARD_CHART_COLORS.accent,
+  DASHBOARD_CHART_COLORS.danger,
 ];
 
 export const CATEGORY_COLORS = [
-  'var(--chart-1)',
-  'var(--chart-5)',
-  'var(--chart-4)',
-  'var(--chart-3)',
-  '#F97316',
-  '#E879F9',
-  '#22D3EE',
-  '#94A3B8',
+  DASHBOARD_CHART_COLORS.accent,
+  DASHBOARD_CHART_COLORS.neutral,
+  DASHBOARD_CHART_COLORS.warning,
+  DASHBOARD_CHART_COLORS.success,
+  DASHBOARD_CHART_COLORS.info,
+  DASHBOARD_CHART_COLORS.danger,
+  DASHBOARD_CHART_COLORS.neutralMuted,
 ];
 
 export function getAgingColor(index) {

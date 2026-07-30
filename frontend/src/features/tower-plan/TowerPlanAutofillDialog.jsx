@@ -41,8 +41,8 @@ export default function TowerPlanAutofillDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92vh] gap-0 overflow-hidden p-0 sm:max-w-5xl">
-        <DialogHeader className="border-b border-border px-6 py-5">
+      <DialogContent className="max-h-[92vh] gap-0 overflow-hidden border-[var(--border-strong)] p-0 sm:max-w-5xl">
+        <DialogHeader className="border-b border-[var(--border-strong)] px-6 py-5">
           <div className="flex items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
               <Database className="size-5" />
@@ -58,17 +58,17 @@ export default function TowerPlanAutofillDialog({
 
         <div className="max-h-[calc(92vh-148px)] space-y-5 overflow-y-auto px-6 py-5">
           <div className="grid gap-3 md:grid-cols-3">
-            <div className="rounded-xl border border-border bg-muted/30 p-3">
+            <div className="rounded-xl border border-[var(--border-strong)] bg-muted/30 p-3">
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Cell sumber</p>
               <p className="mt-1 text-xl font-semibold">
                 {draft.antennas.reduce((total, antenna) => total + antenna.source.cellCount, 0)}
               </p>
             </div>
-            <div className="rounded-xl border border-border bg-muted/30 p-3">
+            <div className="rounded-xl border border-[var(--border-strong)] bg-muted/30 p-3">
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Antena fisik</p>
               <p className="mt-1 text-xl font-semibold">{draft.antennas.length}</p>
             </div>
-            <div className="rounded-xl border border-border bg-muted/30 p-3">
+            <div className="rounded-xl border border-[var(--border-strong)] bg-muted/30 p-3">
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Dipilih</p>
               <p className="mt-1 text-xl font-semibold">{selectedCount} / maksimal 16</p>
             </div>
@@ -127,7 +127,7 @@ export default function TowerPlanAutofillDialog({
                   key={antenna.id}
                   className={[
                     'rounded-xl border p-4 transition-colors',
-                    antenna.selected ? 'border-primary/30 bg-primary/5' : 'border-border opacity-65',
+                    antenna.selected ? 'border-primary/30 bg-primary/5' : 'border-[var(--border-strong)] opacity-65',
                   ].join(' ')}
                 >
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
@@ -224,7 +224,7 @@ export default function TowerPlanAutofillDialog({
           )}
         </div>
 
-        <DialogFooter className="border-t border-border px-6 py-4">
+        <DialogFooter className="border-t border-[var(--border-strong)] px-6 py-4">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Batal</Button>
           <Button disabled={errors.length > 0} onClick={onApply}>
             Terapkan konfigurasi

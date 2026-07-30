@@ -1,4 +1,4 @@
-import { BellRingingIcon } from '@phosphor-icons/react';
+import { BellRing as BellRingingIcon } from 'lucide-react';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -19,7 +19,7 @@ export default function ImpactServiceTopAlarms({ rows }) {
       <CardHeader className="border-b border-border pb-3">
         <div className="flex items-start gap-2">
           <div className="flex size-8 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
-            <BellRingingIcon weight="duotone" />
+            <BellRingingIcon />
           </div>
           <div>
             <CardTitle className="text-sm font-semibold">Top Alarm Names</CardTitle>

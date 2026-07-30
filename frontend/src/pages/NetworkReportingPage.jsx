@@ -12,7 +12,6 @@ import {
   ChevronRight,
   ArrowLeft,
   TrendingUp,
-  Battery,
   Layers,
   FileDown,
 } from 'lucide-react';
@@ -39,13 +38,19 @@ import {
   getPeriodComparisonLabel,
 } from '../components/dashboard-filters/periodRange';
 import { useDashboardThemeTokens } from '../hooks/useDashboardThemeTokens';
-import { DashboardChartPanel, DashboardChartTooltip, DashboardKpiCard } from '../components/ui/DashboardPrimitives';
+import {
+  DashboardChartPanel,
+  DashboardChartTooltip,
+  DashboardKpiCard,
+  DashboardTableShell,
+} from '../components/ui/DashboardPrimitives';
+import { reportingChartConfig } from '../features/reporting/reportingChartConfig';
+import { buildRevenueTotals } from '../features/reporting/reportingPerformanceMetrics';
 import {
   fetchReportingAvailableMonths,
   fetchReportingScorecards,
   fetchRevenueByKabupaten,
   fetchSiteClassByKabupaten,
-  fetchBatteryByKabupaten,
   fetchRevenueTrend,
   fetchFilterOptions,
 } from '../services/api';
@@ -125,49 +130,17 @@ function DeltaValue({ delta, formatter }) {
   );
 }
 
-function buildRevenueTotals(rows) {
-  if (!rows.length) return null;
-  const totals = rows.reduce(
-    (acc, row) => {
-      acc.total_sites += row.total_sites;
-      acc.rev += row.rev;
-      acc.rev_voice += row.rev_voice;
-      acc.rev_bb += row.rev_bb;
-      acc.rev_dig += row.rev_dig;
-      acc.rev_sms += row.rev_sms;
-      acc.rev_ir += row.rev_ir;
-      acc.payload += row.payload;
-      acc.traffic += row.traffic;
-      acc.ticket_swfm_bps += row.ticket_swfm_bps || 0;
-      acc.ticket_swfm_ts += row.ticket_swfm_ts || 0;
-      acc.proker_open += row.proker_open || 0;
-      acc.proker_closed += row.proker_closed || 0;
-      if (row.avg_availability != null) {
-        acc._avail_sum += row.avg_availability * row.total_sites;
-        acc._avail_count += row.total_sites;
-      }
-      return acc;
-    },
-    {
-      total_sites: 0,
-      rev: 0,
-      rev_voice: 0,
-      rev_bb: 0,
-      rev_dig: 0,
-      rev_sms: 0,
-      rev_ir: 0,
-      payload: 0,
-      traffic: 0,
-      ticket_swfm_bps: 0,
-      ticket_swfm_ts: 0,
-      proker_open: 0,
-      proker_closed: 0,
-      _avail_sum: 0,
-      _avail_count: 0,
-    },
+function BackupSuksesCell({ count, rate, strong = false }) {
+  return (
+    <div className={strong ? 'font-bold' : ''}>
+      <span className="font-mono tabular-nums text-[var(--text-primary)]">
+        {formatNumber(count)}
+      </span>
+      <span className="ml-1.5 text-[11px] text-[var(--text-muted)]">
+        {formatPercent(rate)}
+      </span>
+    </div>
   );
-  totals.avg_availability = totals._avail_count > 0 ? totals._avail_sum / totals._avail_count : null;
-  return totals;
 }
 
 function getRevenueContributorInsight(currentTotals, previousTotals) {
@@ -305,11 +278,11 @@ function Scorecard({
 
 /* ─── Site Class Badge ─────────────────────────────────── */
 const CLASS_COLORS = {
-  diamond: { bg: 'rgba(96, 165, 250, 0.15)', text: '#60A5FA' },
-  platinum: { bg: 'rgba(168, 162, 158, 0.15)', text: '#A8A29E' },
-  gold: { bg: 'rgba(251, 191, 36, 0.15)', text: '#FBBF24' },
-  silver: { bg: 'rgba(148, 163, 184, 0.15)', text: '#94A3B8' },
-  bronze: { bg: 'rgba(217, 119, 6, 0.15)', text: '#D97706' },
+  diamond: { bg: 'var(--badge-info-bg)', text: 'var(--chart-info)' },
+  platinum: { bg: 'var(--surface-muted)', text: 'var(--chart-neutral-1)' },
+  gold: { bg: 'var(--badge-warning-bg)', text: 'var(--chart-warning)' },
+  silver: { bg: 'var(--surface-soft)', text: 'var(--chart-neutral-2)' },
+  bronze: { bg: 'var(--badge-critical-bg)', text: 'var(--chart-danger)' },
 };
 
 function ClassBadge({ value, type }) {
@@ -325,32 +298,14 @@ function ClassBadge({ value, type }) {
 }
 
 /* ─── Battery Badge ────────────────────────────────────── */
-const BATTERY_COLORS = {
-  lithium: { bg: 'rgba(16, 185, 129, 0.15)', text: '#10B981' },
-  vrla: { bg: 'rgba(245, 158, 11, 0.15)', text: '#F59E0B' },
-  tidak_ada: { bg: 'rgba(239, 68, 68, 0.12)', text: '#EF4444' },
-};
-
-function BatteryBadge({ value, type }) {
-  const colors = BATTERY_COLORS[type] || { bg: 'rgba(255,255,255,0.06)', text: 'var(--text-secondary)' };
-  return (
-    <span
-      className="inline-flex items-center justify-center min-w-[40px] px-2 py-0.5 rounded-md text-xs font-semibold font-mono tabular-nums"
-      style={{ backgroundColor: colors.bg, color: colors.text }}
-    >
-      {value}
-    </span>
-  );
-}
-
 /* ─── Availability Badge ───────────────────────────────── */
 function AvailabilityBadge({ value }) {
   if (value == null) return <span className="text-[var(--text-muted)]">—</span>;
   const v = Number(value);
   let bg, text;
-  if (v >= 99.5) { bg = 'rgba(16, 185, 129, 0.15)'; text = '#10B981'; }
-  else if (v >= 95) { bg = 'rgba(245, 158, 11, 0.15)'; text = '#F59E0B'; }
-  else { bg = 'rgba(239, 68, 68, 0.12)'; text = '#EF4444'; }
+  if (v >= 99.5) { bg = 'var(--badge-success-bg)'; text = 'var(--chart-success)'; }
+  else if (v >= 95) { bg = 'var(--badge-warning-bg)'; text = 'var(--chart-warning)'; }
+  else { bg = 'var(--badge-critical-bg)'; text = 'var(--chart-danger)'; }
   return (
     <span
       className="inline-flex items-center justify-center min-w-[52px] px-2 py-0.5 rounded-md text-xs font-semibold font-mono tabular-nums"
@@ -364,18 +319,12 @@ function AvailabilityBadge({ value }) {
 /* ─── Table Section Wrapper ────────────────────────────── */
 function TableSection({ title, icon: Icon, action, children, delay = 0 }) {
   return (
-    <div
-      className="glass-card overflow-hidden animate-fade-in"
-      style={{ animationDelay: `${delay}ms` }}
-    >
-      <div className="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Icon className="size-4 text-[var(--primary-light)]" />
-          <h2 className="text-sm font-semibold text-[var(--text-primary)] tracking-wide">{title}</h2>
+    <div className="animate-fade-in" style={{ animationDelay: `${delay}ms` }}>
+      <DashboardTableShell title={title} icon={Icon} action={action}>
+        <div className="max-w-full overflow-x-auto overscroll-x-contain">
+          {children}
         </div>
-        {action}
-      </div>
-      <div className="overflow-x-auto">{children}</div>
+      </DashboardTableShell>
     </div>
   );
 }
@@ -391,9 +340,9 @@ function TrendTooltip({ active, payload, label }) {
       active={active}
       label={label}
       payload={[
-        rev && { ...rev, name: 'Revenue', value: formatRevenue(rev.value), color: 'var(--primary-light)' },
-        pld && { ...pld, name: 'Payload', value: formatPayload(pld.value), color: 'var(--success)' },
-        avail && avail.value != null && { ...avail, name: 'Availability', value: `${Number(avail.value).toFixed(2)}%`, color: 'var(--warning)' },
+        rev && { ...rev, name: 'Revenue', value: formatRevenue(rev.value), color: reportingChartConfig.total_revenue.color },
+        pld && { ...pld, name: 'Payload', value: formatPayload(pld.value), color: reportingChartConfig.total_payload.color },
+        avail && avail.value != null && { ...avail, name: 'Availability', value: `${Number(avail.value).toFixed(2)}%`, color: reportingChartConfig.avg_availability.color },
       ].filter(Boolean)}
     />
   );
@@ -515,7 +464,6 @@ export default function NetworkReportingPage() {
   const [revenueData, setRevenueData] = useState([]);
   const [previousRevenueData, setPreviousRevenueData] = useState([]);
   const [siteClassData, setSiteClassData] = useState([]);
-  const [batteryData, setBatteryData] = useState([]);
   const [trendData, setTrendData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTable, setActiveTable] = useState('revenue');
@@ -583,17 +531,15 @@ export default function NetworkReportingPage() {
       fetchReportingScorecards(selectedPeriod, selectedNop),
       fetchRevenueByKabupaten(selectedPeriod, selectedNop),
       fetchSiteClassByKabupaten(selectedPeriod, selectedNop),
-      fetchBatteryByKabupaten(selectedPeriod, selectedNop),
       fetchRevenueTrend(selectedPeriod, selectedNop),
       previousPeriod ? fetchReportingScorecards(previousPeriod, selectedNop) : Promise.resolve(null),
       previousPeriod ? fetchRevenueByKabupaten(previousPeriod, selectedNop) : Promise.resolve([]),
     ])
-      .then(([sc, rev, cls, battery, trend, prevSc, prevRev]) => {
+      .then(([sc, rev, cls, trend, prevSc, prevRev]) => {
         if (cancelled) return;
         setScorecards(sc);
         setRevenueData(rev);
         setSiteClassData(cls);
-        setBatteryData(battery);
         setTrendData(trend);
         setPreviousScorecards(prevSc);
         setPreviousRevenueData(prevRev || []);
@@ -635,21 +581,6 @@ export default function NetworkReportingPage() {
       { diamond: 0, platinum: 0, gold: 0, silver: 0, bronze: 0, total: 0 },
     );
   }, [siteClassData]);
-
-  // Compute totals for battery table
-  const batteryTotals = useMemo(() => {
-    if (!batteryData.length) return null;
-    return batteryData.reduce(
-      (acc, row) => {
-        acc.lithium += row.lithium;
-        acc.vrla += row.vrla;
-        acc.tidak_ada += row.tidak_ada;
-        acc.total += row.total;
-        return acc;
-      },
-      { lithium: 0, vrla: 0, tidak_ada: 0, total: 0 },
-    );
-  }, [batteryData]);
 
   const coverageWarning = useMemo(() => {
     const missing = scorecards?.period_meta?.missing_months_by_source || {};
@@ -789,7 +720,7 @@ export default function NetworkReportingPage() {
             backgroundSize: '40px 40px',
           }}
         />
-        <div className="absolute top-0 left-1/4 w-96 h-1 bg-gradient-to-r from-transparent via-[var(--primary)]/30 to-transparent blur-sm" />
+        <div className="absolute left-1/4 top-0 h-px w-96 bg-gradient-to-r from-transparent via-[var(--primary)]/35 to-transparent" />
 
         <div className="relative z-10 px-3 py-3 flex flex-col gap-3 xl:px-6 xl:flex-row xl:items-center xl:justify-between">
           {/* Left — Logo & Title */}
@@ -897,7 +828,7 @@ export default function NetworkReportingPage() {
                   { label: 'YTD', value: formatRevenue(scorecards?.revenue_ytd) },
                 ]}
                 icon={Banknote}
-                accent="#10B981"
+                accent="var(--chart-success)"
                 glow="rgba(16, 185, 129, 0.15)"
                 delay={80}
               />
@@ -954,13 +885,13 @@ export default function NetworkReportingPage() {
             action={(
               <div className="flex items-center gap-3 text-[10px] text-[var(--text-muted)]">
                 <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-[var(--primary)]" /> Revenue
+                  <span className="h-1.5 w-3 rounded-sm" style={{ backgroundColor: reportingChartConfig.total_revenue.color }} /> Revenue
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400" /> Payload
+                  <span className="h-1.5 w-3 rounded-sm" style={{ backgroundColor: reportingChartConfig.total_payload.color }} /> Payload
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="w-4 h-0.5 rounded-full" style={{ backgroundColor: '#D97706' }} /> Availability
+                  <span className="h-0.5 w-4 rounded-sm" style={{ backgroundColor: reportingChartConfig.avg_availability.color }} /> Availability
                 </span>
               </div>
             )}
@@ -971,12 +902,12 @@ export default function NetworkReportingPage() {
                 <ComposedChart data={trendData} margin={{ top: 5, right: 60, left: 10, bottom: 0 }}>
                   <defs>
                     <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
+                      <stop offset="5%" stopColor={reportingChartConfig.total_revenue.color} stopOpacity={0.14} />
+                      <stop offset="95%" stopColor={reportingChartConfig.total_revenue.color} stopOpacity={0} />
                     </linearGradient>
                     <linearGradient id="pldGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#34D399" stopOpacity={0.2} />
-                      <stop offset="95%" stopColor="#34D399" stopOpacity={0} />
+                      <stop offset="5%" stopColor={reportingChartConfig.total_payload.color} stopOpacity={0.12} />
+                      <stop offset="95%" stopColor={reportingChartConfig.total_payload.color} stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke={themeTokens.chartGrid} vertical={false} />
@@ -1028,7 +959,7 @@ export default function NetworkReportingPage() {
                     yAxisId="rev"
                     type="monotone"
                     dataKey="total_revenue"
-                    stroke="#3B82F6"
+                    stroke={reportingChartConfig.total_revenue.color}
                     strokeWidth={2}
                     fill="url(#revGrad)"
                   />
@@ -1036,7 +967,7 @@ export default function NetworkReportingPage() {
                     yAxisId="pld"
                     type="monotone"
                     dataKey="total_payload"
-                    stroke="#34D399"
+                    stroke={reportingChartConfig.total_payload.color}
                     strokeWidth={2}
                     fill="url(#pldGrad)"
                   />
@@ -1044,11 +975,11 @@ export default function NetworkReportingPage() {
                     yAxisId="avail"
                     type="monotone"
                     dataKey="avg_availability"
-                    stroke="#D97706"
+                    stroke={reportingChartConfig.avg_availability.color}
                     strokeWidth={4}
                     strokeLinecap="round"
-                    dot={{ fill: '#D97706', r: 3, strokeWidth: 0 }}
-                    activeDot={{ fill: '#D97706', r: 5, strokeWidth: 2, stroke: 'var(--bg-surface)' }}
+                    dot={{ fill: reportingChartConfig.avg_availability.color, r: 3, strokeWidth: 0 }}
+                    activeDot={{ fill: reportingChartConfig.avg_availability.color, r: 5, strokeWidth: 2, stroke: 'var(--bg-surface)' }}
                     connectNulls
                     isAnimationActive={false}
                   />
@@ -1063,7 +994,6 @@ export default function NetworkReportingPage() {
           {[
             { key: 'revenue', label: 'Performance Table', icon: Banknote },
             { key: 'siteclass', label: 'Site Class', icon: Layers },
-            { key: 'battery', label: 'Battery Type', icon: Battery },
           ].map((tab) => (
             <button
               key={tab.key}
@@ -1102,7 +1032,7 @@ export default function NetworkReportingPage() {
                 {[1, 2, 3, 4, 5, 6].map((i) => <div key={i} className="skeleton h-10 rounded-lg" />)}
               </div>
             ) : (
-              <table className="w-full text-left">
+              <table className="min-w-[1180px] w-full text-left">
                 <thead>
                   <tr>
                     <th className={thClass}>Kabupaten/Kota</th>
@@ -1112,6 +1042,7 @@ export default function NetworkReportingPage() {
                     <th className={`${thClass} text-right`}>Traffic</th>
                     <th className={`${thClass} text-center`}>Availability</th>
                     <th className={`${thClass} text-right`}>Ticket SWFM</th>
+                    <th className={`${thClass} text-right`}>Backup Sukses</th>
                     <th className={`${thClass} text-right`}>Proker Activity</th>
                     {showRevenueDetails && (
                       <>
@@ -1135,7 +1066,7 @@ export default function NetworkReportingPage() {
                           {formatRevenueShort(row.rev)}
                           <DeltaValue delta={getDelta(row.rev, previousRow?.rev)} formatter={formatRevenueShort} />
                         </td>
-                        <td className={`${tdClass} text-right text-cyan-400`}>
+                        <td className={`${tdClass} text-right text-[var(--chart-info)]`}>
                           {formatPayload(row.payload)}
                           <DeltaValue delta={getDelta(row.payload, previousRow?.payload)} formatter={formatPayload} />
                         </td>
@@ -1148,7 +1079,14 @@ export default function NetworkReportingPage() {
                           BPS: {formatNumber(row.ticket_swfm_bps)} TS: {formatNumber(row.ticket_swfm_ts)}
                         </td>
                         <td className={`${tdClass} text-right`}>
-                          Open: {formatNumber(row.proker_open)} Closed: {formatNumber(row.proker_closed)}
+                          <BackupSuksesCell
+                            count={row.backup_sukses_bps}
+                            rate={row.backup_sukses_rate}
+                          />
+                        </td>
+                        <td className={`${tdClass} text-right`}>
+                          <span className="text-[var(--text-primary)]">Open: {formatNumber(row.proker_open)}</span>
+                          <span className="ml-2 text-[var(--text-muted)]">Close: {formatNumber(row.proker_closed)}</span>
                         </td>
                         {showRevenueDetails && (
                           <>
@@ -1172,7 +1110,7 @@ export default function NetworkReportingPage() {
                         {formatRevenueShort(revenueTotals.rev)}
                         <DeltaValue delta={getDelta(revenueTotals.rev, previousRevenueTotals?.rev)} formatter={formatRevenueShort} />
                       </td>
-                      <td className={`${tdClass} text-right font-bold text-cyan-400`}>
+                      <td className={`${tdClass} text-right font-bold text-[var(--chart-info)]`}>
                         {formatPayload(revenueTotals.payload)}
                         <DeltaValue delta={getDelta(revenueTotals.payload, previousRevenueTotals?.payload)} formatter={formatPayload} />
                       </td>
@@ -1185,7 +1123,15 @@ export default function NetworkReportingPage() {
                         BPS: {formatNumber(revenueTotals.ticket_swfm_bps)} TS: {formatNumber(revenueTotals.ticket_swfm_ts)}
                       </td>
                       <td className={`${tdClass} text-right font-bold`}>
-                        Open: {formatNumber(revenueTotals.proker_open)} Closed: {formatNumber(revenueTotals.proker_closed)}
+                        <BackupSuksesCell
+                          count={revenueTotals.backup_sukses_bps}
+                          rate={revenueTotals.backup_sukses_rate}
+                          strong
+                        />
+                      </td>
+                      <td className={`${tdClass} text-right font-bold`}>
+                        <span className="text-[var(--text-primary)]">Open: {formatNumber(revenueTotals.proker_open)}</span>
+                        <span className="ml-2 text-[var(--text-muted)]">Close: {formatNumber(revenueTotals.proker_closed)}</span>
                       </td>
                       {showRevenueDetails && (
                         <>
@@ -1252,45 +1198,6 @@ export default function NetworkReportingPage() {
                 )}
               </table>
             )}
-          </TableSection>
-        )}
-
-        {/* Battery Type Table */}
-        {activeTable === 'battery' && (
-          <TableSection title="Battery Type Distribution by Kabupaten/Kota" icon={Battery} delay={400}>
-            <table className="w-full text-left">
-              <thead>
-                <tr>
-                  <th className={thClass}>Kabupaten/Kota</th>
-                  <th className={`${thClass} text-center`}>Lithium</th>
-                  <th className={`${thClass} text-center`}>VRLA</th>
-                  <th className={`${thClass} text-center`}>Tidak Ada</th>
-                  <th className={`${thClass} text-right`}>Total</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--border)]">
-                {batteryData.map((row) => (
-                  <tr key={row.kabupaten} className={trHoverClass}>
-                    <td className={`${tdClass} text-[var(--text-primary)] font-semibold font-sans`}>{row.kabupaten}</td>
-                    <td className={`${tdClass} text-center`}><BatteryBadge value={row.lithium} type="lithium" /></td>
-                    <td className={`${tdClass} text-center`}><BatteryBadge value={row.vrla} type="vrla" /></td>
-                    <td className={`${tdClass} text-center`}><BatteryBadge value={row.tidak_ada} type="tidak_ada" /></td>
-                    <td className={`${tdClass} text-right font-bold text-[var(--text-primary)]`}>{row.total}</td>
-                  </tr>
-                ))}
-              </tbody>
-              {batteryTotals && (
-                <tfoot>
-                  <tr className="bg-[var(--bg-elevated)] border-t-2 border-[var(--primary)]/20">
-                    <td className={`${tdClass} text-[var(--text-primary)] font-bold font-sans`}>TOTAL</td>
-                    <td className={`${tdClass} text-center`}><BatteryBadge value={batteryTotals.lithium} type="lithium" /></td>
-                    <td className={`${tdClass} text-center`}><BatteryBadge value={batteryTotals.vrla} type="vrla" /></td>
-                    <td className={`${tdClass} text-center`}><BatteryBadge value={batteryTotals.tidak_ada} type="tidak_ada" /></td>
-                    <td className={`${tdClass} text-right font-bold text-[var(--text-primary)]`}>{batteryTotals.total}</td>
-                  </tr>
-                </tfoot>
-              )}
-            </table>
           </TableSection>
         )}
 

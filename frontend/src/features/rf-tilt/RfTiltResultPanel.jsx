@@ -1,6 +1,7 @@
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { ChartNoAxesCombined, Network } from 'lucide-react';
 import { RF_COLORS } from './rfTiltChartConfig';
 
 const COLORS = {
@@ -32,13 +33,10 @@ export default function RfTiltResultPanel({ result, clutterCount, selectedSiteId
 
   return (
     <>
-      <Card size="sm">
+      <Card size="sm" className="border border-[var(--border-strong)]">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold text-[var(--primary-light)] flex items-center gap-2">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <rect x="1" y="1" width="12" height="12" rx="3" stroke="currentColor" strokeWidth="1.2" fill="none"/>
-              <path d="M4 9L6 5L8 7L10 4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" fill="none"/>
-            </svg>
+          <CardTitle className="flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
+            <ChartNoAxesCombined className="size-3.5 text-[var(--text-secondary)]" />
             Result Summary
           </CardTitle>
         </CardHeader>
@@ -141,7 +139,7 @@ export default function RfTiltResultPanel({ result, clutterCount, selectedSiteId
                     href={result.antenna_reference.source_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-[10px] text-blue-500 hover:underline"
+                    className="text-[10px] text-[var(--primary)] hover:underline"
                   >
                     Source ↗
                   </a>
@@ -158,14 +156,10 @@ export default function RfTiltResultPanel({ result, clutterCount, selectedSiteId
       </Card>
 
       {result.link && (
-        <Card size="sm" className="border-[#a78bfa]/20">
+        <Card size="sm" className="border border-[var(--border-strong)]">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold text-[#a78bfa] flex items-center gap-2">
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="3" cy="7" r="2" stroke="currentColor" strokeWidth="1.2" fill="none"/>
-                <circle cx="11" cy="7" r="2" stroke="currentColor" strokeWidth="1.2" fill="none"/>
-                <line x1="5" y1="7" x2="9" y2="7" stroke="currentColor" strokeWidth="1.2" strokeDasharray="2 1"/>
-              </svg>
+            <CardTitle className="flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
+              <Network className="size-3.5 text-[var(--text-secondary)]" />
               Point-to-Point Link
             </CardTitle>
           </CardHeader>

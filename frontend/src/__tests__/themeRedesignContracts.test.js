@@ -8,24 +8,27 @@ const src = (...parts) => readFileSync(resolve(process.cwd(), 'src', ...parts), 
 const srcPath = (...parts) => resolve(process.cwd(), 'src', ...parts);
 
 describe('global dashboard theme redesign contracts', () => {
-  it('keeps the UI/UX guideline colors as the global token source of truth', () => {
+  it('uses Matte Graphite and Telkomsel Red Edge as the global token source', () => {
     const css = src('index.css');
 
     for (const token of [
-      '--bg-base: #12141C',
-      '--bg-surface: #1A1D26',
-      '--text-primary: #F8FAFC',
-      '--text-secondary: #94A3B8',
-      '--primary: #0EA5E9',
-      '--success: #10B981',
-      '--warning: #F59E0B',
-      '--danger: #EF4444',
+      '--brand-red: #E60012',
+      '--bg-base: #0D1015',
+      '--bg-surface: #171B23',
+      '--bg-elevated: #1D222B',
+      '--text-primary: #EEF2F7',
+      '--border-strong: rgba(255, 255, 255, 0.10)',
+      '--chart-accent: var(--brand-red)',
+      '--chart-neutral-1',
+      '--chart-neutral-2',
+      '--sidebar-active',
+      '--canvas-background',
       '[data-theme="light"]',
-      '--bg-base: #F8FAFC',
-      '--bg-surface: #FFFFFF',
-      '--text-primary: #0F172A',
-      '--text-secondary: #64748B',
-      '--primary: #0284C7',
+      '--bg-base: #D9DEE5',
+      '--bg-sidebar: #CBD1D9',
+      '--bg-surface: #F8FAFC',
+      '--border: #C2C9D2',
+      '--border-strong: #AEB7C3',
       '--chart-grid',
       '--chart-tooltip-bg',
       '--table-row-hover',
@@ -35,6 +38,9 @@ describe('global dashboard theme redesign contracts', () => {
     ]) {
       assert.match(css, new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     }
+
+    assert.doesNotMatch(css, /--primary:\s*#0EA5E9/i);
+    assert.doesNotMatch(css, /--shadow-glow:\s*0 0 24px rgba\(14,\s*165,\s*233/);
   });
 
   it('exposes dashboard theme tokens and shared dashboard UI primitives', () => {
@@ -47,7 +53,18 @@ describe('global dashboard theme redesign contracts', () => {
     const hook = readFileSync(hookPath, 'utf8');
     const primitives = readFileSync(primitivePath, 'utf8');
 
-    for (const name of ['useDashboardThemeTokens', 'chartGrid', 'axisTick', 'tooltipBg', 'tableRowHover']) {
+    for (const name of [
+      'useDashboardThemeTokens',
+      'chartGrid',
+      'axisTick',
+      'tooltipBg',
+      'tableRowHover',
+      'chartAccent',
+      'chartNeutral1',
+      'chartNeutral2',
+      'borderStrong',
+      'surfaceElevated',
+    ]) {
       assert.match(hook, new RegExp(name));
     }
 
@@ -63,16 +80,84 @@ describe('global dashboard theme redesign contracts', () => {
     }
   });
 
+  it('uses compact shared headers and restrained operational icon chrome', () => {
+    const primitives = src('components', 'ui', 'DashboardPrimitives.jsx');
+    const sidebar = src('components', 'DashboardSidebar.jsx');
+
+    assert.match(primitives, /export function DashboardPanelHeader/);
+    assert.match(primitives, /data-density=\{description \? 'normal' : 'compact'\}/);
+    assert.match(primitives, /rounded-lg border border-\[var\(--border\)\] bg-\[var\(--surface-soft\)\]/);
+    assert.doesNotMatch(primitives, /boxShadow:\s*`0 0 18px/);
+    assert.doesNotMatch(primitives, /rounded-full border border-\[var\(--border-light\)\]/);
+
+    assert.match(sidebar, /dashboard-canvas/);
+    assert.match(sidebar, /border-l-\[3px\]/);
+    assert.match(sidebar, /var\(--sidebar-active\)/);
+    assert.doesNotMatch(sidebar, /hover:bg-\[var\(--primary\)\]\/10/);
+  });
+
+  it('uses Lucide as the single dashboard icon family', () => {
+    const sourceFiles = [
+      'components/Header.jsx',
+      'components/dashboard-filters/DashboardFilters.jsx',
+      'components/ui/calendar.jsx',
+      'components/ui/checkbox.jsx',
+      'components/ui/command.jsx',
+      'components/ui/dialog.jsx',
+      'components/ui/pagination.jsx',
+      'components/ui/select.jsx',
+      'components/ui/sheet.jsx',
+      'features/data-potensi/DataPotensiSiteTable.jsx',
+      'features/impact-service/ImpactServiceAlarmDialog.jsx',
+      'features/impact-service/ImpactServiceAlarmTable.jsx',
+      'features/impact-service/ImpactServiceCharts.jsx',
+      'features/impact-service/ImpactServiceFilters.jsx',
+      'features/impact-service/ImpactServiceHeader.jsx',
+      'features/impact-service/ImpactServiceKpiGrid.jsx',
+      'features/impact-service/ImpactServiceStates.jsx',
+      'features/impact-service/ImpactServiceTopAlarms.jsx',
+      'features/rf-tilt/RfTiltAntennaSpecPanel.jsx',
+      'features/rf-tilt/RfTiltExportButton.jsx',
+      'features/rf-tilt/RfTiltParamForm.jsx',
+      'pages/ActivityEnomPage.jsx',
+      'pages/TicketingPage.jsx',
+      'pages/TransportQualityPage.jsx',
+    ];
+
+    for (const file of sourceFiles) {
+      const source = src(...file.split('/'));
+      assert.doesNotMatch(source, /@phosphor-icons\/react/, file);
+    }
+
+    const componentsConfig = JSON.parse(
+      readFileSync(resolve(process.cwd(), 'components.json'), 'utf8'),
+    );
+    assert.equal(componentsConfig.iconLibrary, 'lucide');
+
+    const packageJson = JSON.parse(
+      readFileSync(resolve(process.cwd(), 'package.json'), 'utf8'),
+    );
+    const legacyIconPackage = ['@phosphor-icons', 'react'].join('/');
+    assert.equal(legacyIconPackage in packageJson.dependencies, false);
+  });
+
   it('migrates authenticated dashboard surfaces to shared primitives and theme-aware charts', () => {
-    for (const pageName of [
-      'HomePage.jsx',
-      'NetworkReportingPage.jsx',
-    ]) {
-      const page = src('pages', pageName);
-      assert.match(page, /DashboardKpiCard|DashboardChartPanel|DashboardStatusBadge|DashboardChartTooltip/, pageName);
-      assert.match(page, /useDashboardThemeTokens/, pageName);
-      assert.doesNotMatch(page, /stroke="rgba\(148,163,184,0\.16\)"/, pageName);
-      assert.doesNotMatch(page, /tick=\{\{\s*fontSize:\s*10,\s*fill:\s*'#94A3B8'\s*\}\}/, pageName);
+    const homePage = src('pages', 'HomePage.jsx');
+    const homeTrend = src('features', 'home', 'HomePerformanceTrend.jsx');
+    assert.match(homePage, /DashboardKpiCard|DashboardChartPanel|DashboardStatusBadge|DashboardChartTooltip/);
+    assert.match(homePage, /HomePerformanceTrend/);
+    assert.match(homeTrend, /ChartContainer/);
+    assert.match(homeTrend, /DashboardChartTooltipContent/);
+    assert.match(homeTrend, /var\(--chart-/);
+    assert.doesNotMatch(homeTrend, /ResponsiveContainer|useDashboardThemeTokens/);
+
+    const reportingPage = src('pages', 'NetworkReportingPage.jsx');
+    assert.match(reportingPage, /DashboardKpiCard|DashboardChartPanel|DashboardStatusBadge|DashboardChartTooltip/);
+    assert.match(reportingPage, /useDashboardThemeTokens/);
+
+    for (const surface of [homePage + homeTrend, reportingPage]) {
+      assert.doesNotMatch(surface, /stroke="rgba\(148,163,184,0\.16\)"/);
+      assert.doesNotMatch(surface, /tick=\{\{\s*fontSize:\s*10,\s*fill:\s*'#94A3B8'\s*\}\}/);
     }
 
     for (const [pageName, featureDirectory, chartModule] of [
@@ -121,5 +206,48 @@ describe('global dashboard theme redesign contracts', () => {
       const component = src('components', componentName);
       assert.doesNotMatch(component, /border-white\/\[|bg-white\/\[|hover:bg-white\/\[|bg-\[#0F172A\]/, componentName);
     }
+  });
+
+  it('keeps Site Map chrome graphite while preserving the Mapbox core', () => {
+    const mapPages = [
+      src('pages', 'SiteMapPage.jsx'),
+      src('pages', 'DashboardPage.jsx'),
+    ].join('\n');
+
+    assert.match(mapPages, /dashboard-canvas/);
+    assert.match(mapPages, /border-\[var\(--border-strong\)\]/);
+    assert.match(mapPages, /nod-map-toggle/);
+
+    for (const componentName of [
+      'Header.jsx',
+      'Breadcrumb.jsx',
+      'AvailabilityChart.jsx',
+      'SiteDetailModal.jsx',
+      'SiteTable.jsx',
+      'SummaryCards.jsx',
+      'WorstSitesPanel.jsx',
+      'FilterPanel.jsx',
+    ]) {
+      const component = src('components', componentName);
+      assert.doesNotMatch(
+        component,
+        /#22D3EE|#0EA5E9|#38BDF8|rgba\(125,\s*211,\s*252|rgba\(94,\s*234,\s*212|shadow-\[0_0_/i,
+        componentName,
+      );
+    }
+
+    const header = src('components', 'Header.jsx');
+    const breadcrumb = src('components', 'Breadcrumb.jsx');
+    assert.match(header, /var\(--border-strong\)/);
+    assert.doesNotMatch(header + breadcrumb, /backdrop-blur|blur-sm/);
+
+    const availabilityChart = src('components', 'AvailabilityChart.jsx');
+    assert.match(availabilityChart, /DashboardChartPanel/);
+    assert.match(availabilityChart, /ChartContainer/);
+    assert.match(availabilityChart, /DashboardChartTooltipContent/);
+    assert.doesNotMatch(availabilityChart, /ResponsiveContainer|useDashboardThemeTokens/);
+
+    const summary = src('components', 'SummaryCards.jsx');
+    assert.doesNotMatch(summary, /glow:|glow=\{/);
   });
 });

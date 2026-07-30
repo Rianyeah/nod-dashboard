@@ -42,15 +42,17 @@ const TOOL_ITEMS = [
 
 function SidebarNavItem({ item, collapsed }) {
   const Icon = item.icon;
+  const baseClass = 'group relative flex min-h-10 items-center gap-3 rounded-lg border px-3 py-2 text-sm font-medium transition-colors';
+
   return (
     <NavLink
       to={item.to}
       title={collapsed ? item.label : undefined}
       className={({ isActive }) => [
-        'group flex min-h-10 items-center gap-3 rounded-lg border px-3 py-2 text-sm font-medium transition-colors',
+        baseClass,
         isActive
-          ? 'border-[var(--primary)]/30 bg-[var(--primary)]/15 text-[var(--primary-light)]'
-          : 'border-transparent text-[var(--text-muted)] hover:border-[var(--primary)]/20 hover:bg-[var(--primary)]/10 hover:text-[var(--primary-light)]',
+          ? 'border-y-[var(--border)] border-r-[var(--border)] border-l-[3px] border-l-[var(--primary)] bg-[var(--sidebar-active)] text-[var(--text-primary)]'
+          : 'border-transparent text-[var(--text-muted)] hover:border-[var(--border)] hover:bg-[var(--surface-soft)] hover:text-[var(--text-primary)]',
         collapsed ? 'justify-center px-2' : '',
       ].join(' ')}
     >
@@ -122,7 +124,7 @@ export default function DashboardSidebar({ collapsed, onToggle, lastUpdates }) {
           aria-label="Collapse sidebar"
           onClick={onToggle}
           className={[
-            'ml-auto flex size-8 items-center justify-center rounded-lg border border-[var(--border-light)] text-[var(--text-muted)] transition-colors hover:border-[var(--primary)]/30 hover:text-[var(--primary-light)]',
+            'ml-auto flex size-8 items-center justify-center rounded-lg border border-[var(--border)] text-[var(--text-muted)] transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-soft)] hover:text-[var(--text-primary)]',
             collapsed ? 'mx-auto' : '',
           ].join(' ')}
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -164,7 +166,7 @@ export default function DashboardSidebar({ collapsed, onToggle, lastUpdates }) {
           type="button"
           onClick={toggleTheme}
           className={[
-            'flex min-h-10 w-full items-center gap-3 rounded-lg border border-transparent px-3 py-2 text-sm font-medium text-[var(--text-muted)] transition-colors hover:border-[var(--primary)]/20 hover:bg-[var(--primary)]/10 hover:text-[var(--primary-light)]',
+            'flex min-h-10 w-full items-center gap-3 rounded-lg border border-transparent px-3 py-2 text-sm font-medium text-[var(--text-muted)] transition-colors hover:border-[var(--border)] hover:bg-[var(--surface-soft)] hover:text-[var(--text-primary)]',
             collapsed ? 'justify-center px-2' : '',
           ].join(' ')}
           title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
@@ -218,7 +220,7 @@ export function AppShell({ children }) {
 
   return (
     <DashboardSidebarContext.Provider value={contextValue}>
-      <div className="min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)]">
+      <div className="dashboard-canvas min-h-screen text-[var(--text-primary)]">
         <DashboardSidebar collapsed={effectiveCollapsed} onToggle={handleToggle} lastUpdates={lastUpdates} />
         <div className={`dashboard-shell-content min-h-screen transition-[padding] duration-200 ${effectiveCollapsed ? 'pl-[68px]' : 'pl-[260px]'}`}>
           {children}

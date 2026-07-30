@@ -16,7 +16,7 @@ describe('Impact Service shadcn migration contracts', () => {
     assert.equal(config.rsc, false);
     assert.equal(config.tsx, false);
     assert.equal(config.tailwind.css, 'src/index.css');
-    assert.equal(config.iconLibrary, 'phosphor');
+    assert.equal(config.iconLibrary, 'lucide');
     assert.deepEqual(jsconfig.compilerOptions.paths['@/*'], ['./src/*']);
     assert.match(vite, /alias:\s*\{[\s\S]*'@':\s*path\.resolve/);
   });
@@ -51,10 +51,10 @@ describe('Impact Service shadcn migration contracts', () => {
       '--noc-radius-lg',
       '--background: var(--bg-base)',
       '--card: var(--bg-surface)',
-      '--chart-1: var(--primary-light)',
-      '--chart-2: var(--danger)',
-      '--chart-3: var(--success)',
-      '--chart-4: var(--warning)',
+      '--chart-1: var(--chart-accent)',
+      '--chart-2: var(--chart-danger)',
+      '--chart-3: var(--chart-success)',
+      '--chart-4: var(--chart-warning)',
     ]) {
       assert.match(css, new RegExp(contract.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     }
@@ -83,9 +83,8 @@ describe('Impact Service shadcn migration contracts', () => {
     for (const contract of [
       'ChartContainer',
       'ChartTooltip',
-      'ChartTooltipContent',
-      'ChartLegend',
-      'ChartLegendContent',
+      'DashboardChartTooltipContent',
+      'DashboardChartLegend',
       'accessibilityLayer',
       'Last 7 Days Trend',
       'NOP Contribution',
@@ -216,5 +215,19 @@ describe('Impact Service shadcn migration contracts', () => {
     assert.match(css, /\.impact-service-no-print/);
     assert.match(css, /\.impact-service-print-only/);
     assert.match(css, /\.impact-service-report-root/);
+  });
+
+  it('uses shared operational chart panels and states', () => {
+    const page = src('pages', 'ImpactServicePage.jsx');
+    const charts = src('features', 'impact-service', 'ImpactServiceCharts.jsx');
+    const surface = `${page}\n${charts}`;
+
+    assert.doesNotMatch(surface, /#22D3EE|#0EA5E9|#38BDF8|text-cyan-|bg-cyan-/i);
+    assert.match(surface, /DashboardChartPanel/);
+    assert.match(surface, /DashboardChartTooltipContent/);
+    assert.match(surface, /DashboardChartEmpty|ChartEmptyState/);
+    assert.doesNotMatch(charts, /strokeDasharray="3 3"/);
+    assert.match(charts, /var\(--chart-axis\)/);
+    assert.doesNotMatch(surface, /box-shadow:\s*0 0|shadow-\[0_0_/i);
   });
 });

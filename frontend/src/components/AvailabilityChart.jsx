@@ -1,35 +1,28 @@
 import { useState, useEffect, useMemo } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Cell, ReferenceLine } from 'recharts';
 import { fetchTrend } from '../services/api';
 import { BarChart2 } from 'lucide-react';
-import { useDashboardThemeTokens } from '../hooks/useDashboardThemeTokens';
-import { DashboardChartTooltip } from './ui/DashboardPrimitives';
+import { DashboardChartEmpty } from './dashboard-charts/DashboardChartEmpty';
+import { DashboardChartTooltipContent } from './dashboard-charts/DashboardChartTooltipContent';
+import { DashboardChartPanel } from './ui/DashboardPrimitives';
+import { ChartContainer, ChartTooltip } from './ui/chart';
 
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
-
-function getBarColor(val) {
-  if (val == null) return '#374151';
-  if (val >= 99.5) return '#10B981';
-  if (val >= 95) return '#F59E0B';
-  return '#EF4444';
-}
-
-const CustomTooltip = ({ active, payload, label }) => {
-  if (!active || !payload?.length) return null;
-  const val = payload[0]?.value;
-  const tooltipLabel = payload[0]?.payload?.tooltipLabel || label;
-  return (
-    <DashboardChartTooltip
-      active={active}
-      payload={[{ ...payload[0], name: 'Availability', value: val, color: getBarColor(val) }]}
-      label={tooltipLabel}
-      valueFormatter={(value) => (value != null ? `${value}%` : 'N/A')}
-    />
-  );
+const availabilityChartConfig = {
+  value: {
+    label: 'Availability',
+    color: 'var(--chart-accent)',
+  },
 };
 
+function getBarColor(val) {
+  if (val == null) return 'var(--chart-neutral-2)';
+  if (val >= 99.5) return 'var(--chart-success)';
+  if (val >= 95) return 'var(--chart-warning)';
+  return 'var(--chart-danger)';
+}
+
 export default function AvailabilityChart({ siteId, bulan, tahun }) {
-  const themeTokens = useDashboardThemeTokens();
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -72,61 +65,63 @@ export default function AvailabilityChart({ siteId, bulan, tahun }) {
 
   if (!siteId) {
     return (
-      <div className="glass-card p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <BarChart2 className="w-4 h-4 text-[var(--text-muted)]" />
-          <h3 className="text-xs font-semibold text-[var(--text-secondary)]">Trend Availability</h3>
-        </div>
-        <p className="text-[11px] text-[var(--text-muted)] text-center py-6">Klik site pada peta untuk melihat trend</p>
-      </div>
+      <DashboardChartPanel title="Trend Availability" icon={BarChart2} className="p-4">
+        <DashboardChartEmpty
+          label="Klik site pada peta untuk melihat trend."
+          className="h-36"
+        />
+      </DashboardChartPanel>
     );
   }
 
   return (
-    <div className="glass-card p-4 animate-fade-in">
-      <div className="flex items-center gap-2 mb-1">
-        <BarChart2 className="w-4 h-4 text-[var(--primary-light)]" />
-        <h3 className="text-xs font-semibold text-[var(--text-primary)]">Trend Availability</h3>
-      </div>
-      <p className="text-[10px] text-[var(--text-muted)] mb-3 font-mono">{siteId}</p>
+    <DashboardChartPanel
+      title="Trend Availability"
+      icon={BarChart2}
+      action={<span className="font-mono text-[10px] text-[var(--text-muted)]">{siteId}</span>}
+      className="animate-fade-in p-4"
+    >
       {loading ? (
         <div className="skeleton h-36 rounded-lg" />
       ) : chartData.length === 0 ? (
-        <p className="text-[11px] text-[var(--text-muted)] text-center py-6">Tidak ada data trend</p>
+        <DashboardChartEmpty label="Tidak ada data trend." className="h-36" />
       ) : (
-        <ResponsiveContainer width="100%" height={150}>
+        <ChartContainer config={availabilityChartConfig} className="h-[150px] w-full aspect-auto">
           <BarChart data={chartData} margin={{ top: 5, right: 12, left: -22, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke={themeTokens.chartGrid} vertical={false} />
+            <CartesianGrid strokeDasharray="3 5" stroke="var(--chart-grid)" vertical={false} />
             <XAxis
               dataKey="name"
-              tick={{ fontSize: 9, fill: themeTokens.axisTick }}
-              axisLine={{ stroke: themeTokens.chartGridStrong }}
+              tick={{ fontSize: 9, fill: 'var(--chart-axis)' }}
+              axisLine={{ stroke: 'var(--chart-grid-strong)' }}
               tickLine={false}
             />
             <YAxis
-              tick={{ fontSize: 9, fill: themeTokens.axisTick }}
+              tick={{ fontSize: 9, fill: 'var(--chart-axis)' }}
               domain={[(dataMin) => Math.min(90, Math.max(0, Math.floor(dataMin) - 2)), 100]}
               unit="%"
               axisLine={false}
               tickLine={false}
             />
-            <Tooltip
-              content={<CustomTooltip />}
-              allowEscapeViewBox={{ x: true, y: true }}
-              wrapperStyle={{ outline: 'none', zIndex: 20 }}
-              offset={12}
-              cursor={{ fill: themeTokens.cursorFill }}
+            <ChartTooltip
+              cursor={{ fill: 'var(--chart-cursor)' }}
+              content={(
+                <DashboardChartTooltipContent
+                  config={availabilityChartConfig}
+                  labelFormatter={(_label, payload) => payload?.[0]?.payload?.tooltipLabel}
+                  valueFormatter={(value) => (value != null ? `${value}%` : 'N/A')}
+                />
+              )}
             />
-            <ReferenceLine y={99.5} stroke="rgba(16, 185, 129, 0.3)" strokeDasharray="3 3" />
-            <ReferenceLine y={95} stroke="rgba(245, 158, 11, 0.3)" strokeDasharray="3 3" />
+            <ReferenceLine y={99.5} stroke="var(--chart-success)" strokeOpacity={0.3} strokeDasharray="3 5" />
+            <ReferenceLine y={95} stroke="var(--chart-warning)" strokeOpacity={0.3} strokeDasharray="3 5" />
             <Bar dataKey="value" radius={[3, 3, 0, 0]} maxBarSize={24}>
               {chartData.map((entry, i) => (
                 <Cell key={i} fill={getBarColor(entry.raw)} opacity={0.85} />
               ))}
             </Bar>
           </BarChart>
-        </ResponsiveContainer>
+        </ChartContainer>
       )}
-    </div>
+    </DashboardChartPanel>
   );
 }

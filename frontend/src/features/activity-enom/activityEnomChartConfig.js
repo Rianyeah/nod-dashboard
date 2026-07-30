@@ -1,9 +1,11 @@
+import { DASHBOARD_CHART_COLORS } from '../../components/dashboard-charts/dashboardChartUtils.js';
+
 export const ACTIVITY_CHART_COLORS = {
-  total: 'var(--chart-1)',
-  open: 'var(--chart-2)',
-  close: 'var(--chart-3)',
-  sites: 'var(--chart-5)',
-  category: 'var(--chart-4)',
+  total: DASHBOARD_CHART_COLORS.neutral,
+  open: DASHBOARD_CHART_COLORS.danger,
+  close: DASHBOARD_CHART_COLORS.success,
+  sites: DASHBOARD_CHART_COLORS.neutralMuted,
+  category: DASHBOARD_CHART_COLORS.accent,
 };
 
 export const activityEnomChartConfig = {

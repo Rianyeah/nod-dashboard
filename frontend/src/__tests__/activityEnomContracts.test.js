@@ -227,4 +227,18 @@ describe('Activity ENOM dashboard contracts', () => {
     assert.match(scorecardSection, /Closed: \$\{formatNumber\(summary\?\.annual_close_activity/);
     assert.doesNotMatch(scorecardSection, /DashboardKpiCard title="Total Activity"[\s\S]{0,180}subtitle=/);
   });
+
+  it('uses shared operational chart panels and states', () => {
+    const page = src('pages', 'ActivityEnomPage.jsx');
+    const charts = src('features', 'activity-enom', 'ActivityEnomCharts.jsx');
+    const surface = `${page}\n${charts}`;
+
+    assert.doesNotMatch(surface, /#22D3EE|#0EA5E9|#38BDF8|text-cyan-|bg-cyan-/i);
+    assert.match(surface, /DashboardChartPanel/);
+    assert.match(surface, /DashboardChartTooltipContent/);
+    assert.match(surface, /DashboardChartEmpty|ChartEmptyState/);
+    assert.doesNotMatch(charts, /strokeDasharray="3 3"/);
+    assert.match(charts, /var\(--chart-axis\)/);
+    assert.doesNotMatch(surface, /box-shadow:\s*0 0|shadow-\[0_0_/i);
+  });
 });

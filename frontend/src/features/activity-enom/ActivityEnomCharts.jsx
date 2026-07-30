@@ -122,10 +122,10 @@ export function ActivityEnomCharts({
           {trend.length ? (
             <ChartContainer config={activityEnomChartConfig} className="h-[260px] w-full aspect-auto" data-testid="activity-monthly-trend-chart">
               <ComposedChart accessibilityLayer data={trend} margin={DASHBOARD_CHART_MARGIN}>
-                <ReferenceArea x1={`${activePeriod?.start}-01`} x2={`${activePeriod?.end}-01`} fill="#0EA5E9" fillOpacity={0.08} strokeOpacity={0} />
-                <CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 3" />
-                <XAxis dataKey="create_date" tickFormatter={formatMonthLabel} tickLine={false} axisLine={false} minTickGap={24} />
-                <YAxis tickLine={false} axisLine={false} width={44} />
+                <ReferenceArea x1={`${activePeriod?.start}-01`} x2={`${activePeriod?.end}-01`} fill={ACTIVITY_CHART_COLORS.category} fillOpacity={0.06} strokeOpacity={0} />
+                <CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 5" />
+                <XAxis dataKey="create_date" tickFormatter={formatMonthLabel} tickLine={false} axisLine={false} minTickGap={24} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
+                <YAxis tickLine={false} axisLine={false} width={44} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
                 <ActivityChartTooltip formatMonthLabel={formatMonthLabel} />
                 <DashboardChartLegend />
                 <Bar dataKey="open" stackId="status" fill="var(--color-open)" radius={DASHBOARD_BAR_RADIUS} isAnimationActive={false}>
@@ -153,9 +153,9 @@ export function ActivityEnomCharts({
           {contribution.length ? (
             <ChartContainer config={activityEnomChartConfig} className="h-[260px] w-full aspect-auto" data-testid="activity-contribution-chart">
               <BarChart accessibilityLayer data={contribution} layout="vertical" margin={{ top: 6, right: 28, left: 76, bottom: 0 }}>
-                <CartesianGrid horizontal={false} stroke="var(--chart-grid)" strokeDasharray="3 3" />
-                <XAxis type="number" tickLine={false} axisLine={false} />
-                <YAxis type="category" dataKey="label" width={112} interval={0} tickLine={false} axisLine={false} />
+                <CartesianGrid horizontal={false} stroke="var(--chart-grid)" strokeDasharray="3 5" />
+                <XAxis type="number" tickLine={false} axisLine={false} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
+                <YAxis type="category" dataKey="label" width={112} interval={0} tickLine={false} axisLine={false} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
                 <ActivityChartTooltip formatMonthLabel={formatMonthLabel} />
                 <DashboardChartLegend />
                 <Bar dataKey="open" stackId="status" fill="var(--color-open)" radius={DASHBOARD_BAR_RADIUS} isAnimationActive={false}>
@@ -175,9 +175,9 @@ export function ActivityEnomCharts({
           {(breakdowns.by_category || []).length ? (
             <ChartContainer config={activityEnomChartConfig} className="h-[260px] w-full aspect-auto" data-testid="activity-category-chart">
               <BarChart accessibilityLayer data={breakdowns.by_category} layout="vertical" margin={{ top: 6, right: 52, left: 50, bottom: 0 }}>
-                <CartesianGrid horizontal={false} stroke="var(--chart-grid)" strokeDasharray="3 3" />
-                <XAxis type="number" tickLine={false} axisLine={false} />
-                <YAxis type="category" dataKey="label" width={82} interval={0} tickLine={false} axisLine={false} />
+                <CartesianGrid horizontal={false} stroke="var(--chart-grid)" strokeDasharray="3 5" />
+                <XAxis type="number" tickLine={false} axisLine={false} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
+                <YAxis type="category" dataKey="label" width={82} interval={0} tickLine={false} axisLine={false} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
                 <ActivityChartTooltip formatMonthLabel={formatMonthLabel} />
                 <Bar dataKey="total" fill={ACTIVITY_CHART_COLORS.category} radius={DASHBOARD_BAR_RADIUS} isAnimationActive={false}>
                   <LabelList dataKey="total" content={<EndBarValueLabel />} />
@@ -224,9 +224,9 @@ export function ActivityEnomCharts({
           {(breakdowns.by_week_done || []).length ? (
             <ChartContainer config={activityEnomChartConfig} className="h-[260px] w-full aspect-auto" data-testid="activity-week-done-chart">
               <BarChart accessibilityLayer data={breakdowns.by_week_done} margin={DASHBOARD_CHART_MARGIN}>
-                <CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 3" />
-                <XAxis dataKey="label" tickLine={false} axisLine={false} />
-                <YAxis tickLine={false} axisLine={false} width={44} />
+                <CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 5" />
+                <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
+                <YAxis tickLine={false} axisLine={false} width={44} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
                 <ActivityChartTooltip formatMonthLabel={formatMonthLabel} />
                 <Bar dataKey="close" fill="var(--color-close)" radius={DASHBOARD_BAR_RADIUS} isAnimationActive={false}>
                   <LabelList dataKey="close" content={<TopBarValueLabel />} />

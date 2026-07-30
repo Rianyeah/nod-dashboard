@@ -1,3 +1,4 @@
+import ast
 import unittest
 from pathlib import Path
 
@@ -9,6 +10,22 @@ class ReportingNopContractTest(unittest.TestCase):
     def setUp(self):
         self.source = REPORTING_ROUTER.read_text(encoding="utf-8")
         self.normalized = " ".join(self.source.split()).lower()
+        module = ast.parse(self.source)
+        build_nop_filter_node = next(
+            node
+            for node in module.body
+            if isinstance(node, ast.FunctionDef) and node.name == "build_nop_filter"
+        )
+        namespace = {}
+        exec(
+            compile(
+                ast.Module(body=[build_nop_filter_node], type_ignores=[]),
+                filename=str(REPORTING_ROUTER),
+                mode="exec",
+            ),
+            namespace,
+        )
+        self.build_nop_filter = namespace["build_nop_filter"]
 
     def test_reporting_endpoints_accept_optional_nop_filter(self):
         for endpoint in [
@@ -38,8 +55,24 @@ class ReportingNopContractTest(unittest.TestCase):
                 f"{query_name} must include the shared NOP filter placeholder",
             )
 
-        self.assertIn('d."nop" = :nop', self.normalized)
-        self.assertIn('d2."nop" = :nop', self.normalized)
+    def test_reporting_nop_filter_normalizes_optional_nop_prefix(self):
+        for source_column in [
+            'd."NOP"',
+            'd2."NOP"',
+            "tfc.nop",
+            "p.nop",
+        ]:
+            with self.subTest(source_column=source_column):
+                alias = source_column.split(".", 1)[0]
+                nop_filter = self.build_nop_filter("SIDOARJO", alias)
+                self.assertIn(
+                    f"REGEXP_REPLACE(UPPER(TRIM({source_column})), '^NOP[[:space:]]+', '')",
+                    nop_filter,
+                )
+                self.assertIn(
+                    "REGEXP_REPLACE(UPPER(TRIM(:nop)), '^NOP[[:space:]]+', '')",
+                    nop_filter,
+                )
 
     def test_reporting_trend_availability_uses_monthly_cache_with_log_fallback(self):
         self.assertIn("site_month_metrics", self.normalized)
@@ -77,6 +110,8 @@ class ReportingNopContractTest(unittest.TestCase):
         for model_contract in [
             "ticket_swfm_bps: int = 0",
             "ticket_swfm_ts: int = 0",
+            "backup_sukses_bps: int = 0",
+            "backup_sukses_rate: float = 0.0",
             "proker_open: int = 0",
             "proker_closed: int = 0",
         ]:
@@ -90,6 +125,12 @@ class ReportingNopContractTest(unittest.TestCase):
             "public.proker_enom_jatim_2026",
             "ticket_swfm_bps",
             "ticket_swfm_ts",
+            "backup_sukses_bps",
+            "backup_sukses_rate",
+            "TRIM(tfc.backup_sukses) = 'BU Genset'",
+            "UPPER(TRIM(tfc.kabupaten_kota)) AS kabupaten_key",
+            "UPPER(TRIM(p.kabupaten)) AS kabupaten_key",
+            'UPPER(TRIM(d."Kabupaten/KOTA"))',
             "proker_open",
             "proker_closed",
         ]:

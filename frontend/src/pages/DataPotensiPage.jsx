@@ -54,20 +54,27 @@ import {
 import { formatNumber } from '../utils/formatters';
 import SiteDetailModal from '../components/SiteDetailModal';
 import DataPotensiSiteTable from '../features/data-potensi/DataPotensiSiteTable';
+import { dataPotensiChartConfig } from '../features/data-potensi/dataPotensiChartConfig';
 import { DATA_POTENSI_ADVANCED_FILTERS } from '../features/data-potensi/dataPotensiFilters';
 
 /* ─── Constants ────────────────────────────────────────── */
 
 const DONUT_COLORS = [
-  '#6366F1', '#22D3EE', '#F59E0B', '#10B981', '#EF4444',
-  '#8B5CF6', '#EC4899', '#14B8A6', '#F97316', '#06B6D4',
-  '#A855F7', '#84CC16',
+  dataPotensiChartConfig.total.color,
+  dataPotensiChartConfig.percentage.color,
+  dataPotensiChartConfig.lithium.color,
+  dataPotensiChartConfig.vrla.color,
+  'var(--chart-warning)',
+  'var(--chart-danger)',
+  'var(--chart-info)',
 ];
 
 const STACKED_COLORS = [
-  '#6366F1', '#22D3EE', '#10B981', '#F59E0B', '#EF4444',
-  '#8B5CF6', '#EC4899', '#14B8A6', '#F97316', '#06B6D4',
-  '#A855F7', '#84CC16', '#64748B', '#FB923C',
+  ...DONUT_COLORS,
+  'var(--chart-neutral-2)',
+  'var(--chart-warning)',
+  'var(--chart-success)',
+  'var(--chart-info)',
 ];
 
 const BADGE_OPTIONS = [
@@ -273,10 +280,7 @@ function StackedBarSection({ data, activeBadge, onBadgeChange }) {
                 dataKey={cat}
                 content={(
                   <InsideBarValueLabel
-                    color={['#22D3EE', '#10B981', '#F59E0B', '#84CC16', '#FB923C']
-                      .includes(STACKED_COLORS[i % STACKED_COLORS.length])
-                      ? '#052E24'
-                      : '#FFFFFF'}
+                    color="#FFFFFF"
                   />
                 )}
               />
@@ -576,7 +580,7 @@ export default function DataPotensiPage() {
             backgroundSize: '40px 40px',
           }}
         />
-        <div className="absolute top-0 left-1/4 w-96 h-1 bg-gradient-to-r from-transparent via-[var(--primary)]/30 to-transparent blur-sm" />
+        <div className="absolute left-1/4 top-0 h-px w-96 bg-gradient-to-r from-transparent via-[var(--primary)]/35 to-transparent" />
 
         <div className="relative z-10 px-3 py-3 flex flex-col gap-3 xl:px-6 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex min-w-0 items-center gap-3">
@@ -667,12 +671,12 @@ export default function DataPotensiPage() {
           <DashboardKpiCard
             title="Site Lithium"
             icon={Battery}
-            accent="#10B981"
+            accent={dataPotensiChartConfig.lithium.color}
             glow="rgba(16, 185, 129, 0.15)"
             className="animate-fade-in"
             style={{ animationDelay: '50ms' }}
           >
-            <p className="mt-2 font-mono text-[28px] font-bold leading-none tabular-nums tracking-tight" style={{ color: '#10B981' }}>
+            <p className="mt-2 font-mono text-[28px] font-bold leading-none tabular-nums tracking-tight" style={{ color: dataPotensiChartConfig.lithium.color }}>
               {formatNumber(sc.site_lithium)}
             </p>
             <p className="mt-2 text-[10px] text-[var(--text-secondary)]">
@@ -683,12 +687,12 @@ export default function DataPotensiPage() {
           <DashboardKpiCard
             title="Site VRLA"
             icon={BatteryWarning}
-            accent="#F59E0B"
+            accent="var(--chart-warning)"
             glow="rgba(245, 158, 11, 0.15)"
             className="animate-fade-in"
             style={{ animationDelay: '100ms' }}
           >
-            <p className="mt-2 font-mono text-[28px] font-bold leading-none tabular-nums tracking-tight" style={{ color: '#F59E0B' }}>
+            <p className="mt-2 font-mono text-[28px] font-bold leading-none tabular-nums tracking-tight" style={{ color: 'var(--chart-warning)' }}>
               {formatNumber(sc.site_vrla)}
             </p>
             <p className="mt-2 text-[10px] text-[var(--text-secondary)]">
@@ -699,12 +703,12 @@ export default function DataPotensiPage() {
           <DashboardKpiCard
             title="ENVA Validated"
             icon={CheckCircle2}
-            accent="#10B981"
+            accent="var(--chart-success)"
             glow="rgba(16, 185, 129, 0.15)"
             className="animate-fade-in"
             style={{ animationDelay: '150ms' }}
           >
-            <p className="mt-2 font-mono text-[28px] font-bold leading-none tabular-nums tracking-tight" style={{ color: '#10B981' }}>
+            <p className="mt-2 font-mono text-[28px] font-bold leading-none tabular-nums tracking-tight" style={{ color: 'var(--chart-success)' }}>
               {formatNumber(sc.enva_validated)}
             </p>
             <p className="mt-2 text-[10px] text-[var(--text-secondary)]">
@@ -715,12 +719,12 @@ export default function DataPotensiPage() {
           <DashboardKpiCard
             title="Radio IP Transport"
             icon={Radio}
-            accent="#3B82F6"
+            accent="var(--chart-info)"
             glow="rgba(59, 130, 246, 0.15)"
             className="animate-fade-in"
             style={{ animationDelay: '200ms' }}
           >
-            <p className="mt-2 font-mono text-[28px] font-bold leading-none tabular-nums tracking-tight" style={{ color: '#3B82F6' }}>
+            <p className="mt-2 font-mono text-[28px] font-bold leading-none tabular-nums tracking-tight" style={{ color: 'var(--chart-info)' }}>
               {formatNumber(sc.radio_ip)}
             </p>
             <p className="mt-2 text-[10px] text-[var(--text-secondary)]">
@@ -731,12 +735,12 @@ export default function DataPotensiPage() {
           <DashboardKpiCard
             title="BBLTI Software"
             icon={Monitor}
-            accent="#A855F7"
+            accent={dataPotensiChartConfig.vrla.color}
             glow="rgba(168, 85, 247, 0.15)"
             className="animate-fade-in"
             style={{ animationDelay: '250ms' }}
           >
-            <p className="mt-2 font-mono text-[28px] font-bold leading-none tabular-nums tracking-tight" style={{ color: '#A855F7' }}>
+            <p className="mt-2 font-mono text-[28px] font-bold leading-none tabular-nums tracking-tight" style={{ color: dataPotensiChartConfig.vrla.color }}>
               {formatNumber(sc.bblti_software)}
             </p>
             <p className="mt-2 text-[10px] text-[var(--text-secondary)]">

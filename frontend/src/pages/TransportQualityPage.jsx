@@ -1,6 +1,5 @@
 import { Component, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowCounterClockwiseIcon } from '@phosphor-icons/react';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -8,6 +7,7 @@ import {
   Gauge,
   Network,
   Radio,
+  RotateCcw as ArrowCounterClockwiseIcon,
   Route,
   ShieldAlert,
   Signal,

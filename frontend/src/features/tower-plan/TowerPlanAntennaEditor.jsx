@@ -47,7 +47,7 @@ export default function TowerPlanAntennaEditor({
 
   return (
     <article
-      className="rounded-xl border border-border bg-muted/20 p-4"
+      className="rounded-xl border border-[var(--border-strong)] bg-muted/20 p-4"
       style={{ borderLeft: `4px solid ${antenna.color}` }}
     >
       <div className="mb-4 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -201,7 +201,7 @@ export default function TowerPlanAntennaEditor({
       </div>
 
       {antenna.source && (
-        <details className="mt-4 rounded-lg border border-border bg-background/40 px-3 py-2 text-xs text-muted-foreground">
+        <details className="mt-4 rounded-lg border border-[var(--border-strong)] bg-background/40 px-3 py-2 text-xs text-muted-foreground">
           <summary className="cursor-pointer font-medium text-foreground">Metadata sumber RF</summary>
           <div className="mt-2 grid gap-1 sm:grid-cols-2">
             <span>Model: {antenna.source.antennaModel || 'n/a'}</span>

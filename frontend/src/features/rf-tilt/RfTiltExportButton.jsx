@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { FileImageIcon, CircleNotchIcon } from '@phosphor-icons/react';
+import {
+  FileImage as FileImageIcon,
+  LoaderCircle as CircleNotchIcon,
+} from 'lucide-react';
 
 export default function RfTiltExportButton({ targetRef, disabled }) {
   const [exporting, setExporting] = useState(false);

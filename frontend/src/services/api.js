@@ -210,13 +210,6 @@ export async function fetchSiteClassByKabupaten(period, nop) {
   return data;
 }
 
-export async function fetchBatteryByKabupaten(period, nop) {
-  const { data } = await api.get('/reporting/battery-by-kabupaten', {
-    params: { ...monthPeriodParams(period), nop: nop || undefined },
-  });
-  return data;
-}
-
 export async function fetchRevenueTrend(period, nop) {
   const { data } = await api.get('/reporting/trend', {
     params: { ...monthPeriodParams(period), nop: nop || undefined },

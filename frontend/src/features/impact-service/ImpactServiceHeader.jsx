@@ -1,9 +1,9 @@
 import {
-  ArrowLeftIcon,
-  BellRingingIcon,
-  CircleNotchIcon,
-  PrinterIcon,
-} from '@phosphor-icons/react';
+  ArrowLeft as ArrowLeftIcon,
+  BellRing as BellRingingIcon,
+  LoaderCircle as CircleNotchIcon,
+  Printer as PrinterIcon,
+} from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { formatDateLabel } from './impactServiceDateRange';
@@ -39,7 +39,7 @@ export default function ImpactServiceHeader({
             <ArrowLeftIcon />
           </Button>
           <div className="impact-service-no-print flex size-9 items-center justify-center rounded-xl border border-destructive/20 bg-destructive/10 text-destructive">
-            <BellRingingIcon weight="duotone" />
+            <BellRingingIcon />
           </div>
           <div>
             <h1 className="font-heading text-lg font-semibold tracking-tight">Impact Service</h1>

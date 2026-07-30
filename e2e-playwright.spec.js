@@ -68,6 +68,60 @@ async function expectSeriesTooltipColors(page, chartTestId, shapeSelector = 'pat
   expect(nameColor).toBe(valueColor);
 }
 
+test('graphite visual system separates panels in both themes and mobile', async ({ browser }) => {
+  test.setTimeout(120000);
+
+  const routes = [
+    '/home',
+    '/site-map',
+    '/reporting',
+    '/impact-service',
+    '/activity-enom',
+    '/transport-quality',
+    '/ticketing',
+    '/data-potensi',
+    '/rf-tilt-analysis',
+    '/tower-plan-generator',
+  ];
+
+  for (const theme of ['dark', 'light']) {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await context.newPage();
+    await authenticate(page, theme);
+
+    for (const route of routes) {
+      await page.goto(`${E2E_BASE_URL}${route}`);
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+      await expect(page.getByTestId('dashboard-sidebar')).toBeVisible();
+
+      const tokenSnapshot = await page.evaluate(() => {
+        const root = getComputedStyle(document.documentElement);
+        return {
+          canvas: root.getPropertyValue('--bg-base').trim(),
+          panel: root.getPropertyValue('--bg-surface').trim(),
+          border: root.getPropertyValue('--border-strong').trim(),
+          accent: root.getPropertyValue('--brand-red').trim(),
+        };
+      });
+
+      expect(tokenSnapshot.canvas).not.toBe(tokenSnapshot.panel);
+      expect(tokenSnapshot.border).not.toBe('');
+      expect(tokenSnapshot.accent.toUpperCase()).toBe('#E60012');
+    }
+
+    await context.close();
+  }
+
+  const mobileContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const mobilePage = await mobileContext.newPage();
+  await authenticate(mobilePage, 'dark');
+  await mobilePage.goto(`${E2E_BASE_URL}/home`);
+  await expect.poll(() => mobilePage.evaluate(() => (
+    document.documentElement.scrollWidth <= window.innerWidth
+  ))).toBeTruthy();
+  await mobileContext.close();
+});
+
 test('Dashboard loads and performs basic validations', async ({ page }) => {
   await authenticate(page);
   await page.goto(`${E2E_BASE_URL}/site-map`);
@@ -183,12 +237,125 @@ test('Reporting NOP filter is sent to scorecards chart and tables', async ({ pag
   await expect(page.locator('#reporting-nop')).toContainText(nopLabel.trim());
 
   await expect.poll(() => Array.from(filteredRequests).sort()).toEqual([
-    'battery-by-kabupaten',
     'revenue-by-kabupaten',
     'scorecards',
     'site-class-by-kabupaten',
     'trend',
   ]);
+});
+
+test('Command Center renders reporting trend and removes redundant badges', async ({ page }) => {
+  await authenticate(page, 'light');
+  await page.goto(`${E2E_BASE_URL}/home`);
+
+  await expect(page.getByRole('heading', { name: 'Command Center' })).toBeVisible({ timeout: 20000 });
+  const chart = page.getByTestId('home-performance-trend');
+  await expect(chart).toBeVisible({ timeout: 20000 });
+  await expect(chart.locator('path.recharts-area-curve').first()).toHaveAttribute('d', /[LC]/);
+  await expect(page.getByText(/Latest\s*\/\s*live/i)).toHaveCount(0);
+  await expect(page.getByText(/Snapshot master/i)).toHaveCount(0);
+});
+
+test('Reporting shows Proker and weighted BPS Backup Sukses values', async ({ page }) => {
+  test.setTimeout(90000);
+
+  await authenticate(page, 'light');
+  await page.goto(`${E2E_BASE_URL}/reporting`);
+
+  await expect(page.getByRole('button', { name: /Performance Table/i })).toBeVisible({ timeout: 20000 });
+  await expect(page.getByRole('columnheader', { name: 'Proker Activity' })).toBeVisible({ timeout: 30000 });
+  await expect(page.getByRole('columnheader', { name: 'Backup Sukses' })).toBeVisible({ timeout: 30000 });
+  await expect(page.getByRole('button', { name: /Battery Type/i })).toHaveCount(0);
+
+  const response = await page.request.get(`${E2E_BASE_URL}/api/v1/reporting/revenue-by-kabupaten`, {
+    params: {
+      period_start: '2026-06',
+      period_end: '2026-06',
+      nop: 'SIDOARJO',
+    },
+  });
+  expect(response.ok()).toBeTruthy();
+  const rows = await response.json();
+  const expectedTotalBps = rows.reduce((sum, row) => sum + row.ticket_swfm_bps, 0);
+  const expectedTotalSuccess = rows.reduce((sum, row) => sum + row.backup_sukses_bps, 0);
+  const expectedRate = expectedTotalBps
+    ? Math.round((10000 * expectedTotalSuccess) / expectedTotalBps) / 100
+    : 0;
+  const expectedRateLabel = `${expectedRate.toFixed(2).replace('.', ',')}%`;
+
+  const totalRow = page.getByRole('row', { name: /^TOTAL\s/ });
+  await expect(totalRow).toContainText(expectedTotalSuccess.toLocaleString('id-ID'));
+  await expect(totalRow).toContainText(expectedRateLabel);
+  expect(rows.some((row) => row.proker_open > 0 || row.proker_closed > 0)).toBeTruthy();
+});
+
+test('Tower Visualizer confirms a mobile Site ID submitted while search is loading', async ({ page }) => {
+  test.setTimeout(60000);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await authenticate(page, 'light');
+  await page.route('**/api/v1/tower-plan/sites?**', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    await fulfillJson(route, {
+      items: [{
+        site_id: 'PSN003',
+        cell_count: 18,
+        estimated_antenna_count: 4,
+      }],
+    });
+  });
+  await page.goto(`${E2E_BASE_URL}/tower-plan-generator`);
+
+  const siteSearch = page.getByRole('combobox', { name: 'Cari Site ID untuk auto-fill' });
+  await siteSearch.fill('PSN003');
+  await expect(siteSearch).toHaveAttribute('aria-busy', 'true');
+  await siteSearch.press('Enter');
+
+  await expect(
+    page.getByRole('dialog', { name: /Review Auto-fill · PSN003/i }),
+  ).toBeVisible({ timeout: 20000 });
+});
+
+test('Tower Visualizer opens mobile auto-fill review from a tapped Site ID result', async ({ page }) => {
+  test.setTimeout(60000);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await authenticate(page, 'light');
+  await page.route('**/api/v1/tower-plan/sites?**', async (route) => {
+    await fulfillJson(route, {
+      items: [{
+        site_id: 'PSN003',
+        cell_count: 18,
+        estimated_antenna_count: 4,
+      }],
+    });
+  });
+  await page.goto(`${E2E_BASE_URL}/tower-plan-generator`);
+
+  const siteSearch = page.getByRole('combobox', { name: 'Cari Site ID untuk auto-fill' });
+  await siteSearch.fill('PSN003');
+  const result = page.getByRole('option', { name: /PSN003/i });
+  await expect(result).toBeVisible({ timeout: 10000 });
+  await result.click();
+
+  await expect(
+    page.getByRole('dialog', { name: /Review Auto-fill · PSN003/i }),
+  ).toBeVisible({ timeout: 20000 });
+});
+
+test('Tower Visualizer keeps its subtitle-free page header compact on mobile', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await authenticate(page, 'light');
+  await page.goto(`${E2E_BASE_URL}/tower-plan-generator`);
+
+  const compactHeader = page.locator('header[data-density="compact"]');
+  await expect(compactHeader).toBeVisible();
+  const headerBox = await compactHeader.boundingBox();
+
+  expect(headerBox?.height).toBeLessThanOrEqual(72);
+  await expect.poll(() => page.evaluate(() => (
+    document.documentElement.scrollWidth <= window.innerWidth
+  ))).toBeTruthy();
 });
 
 test('Transport Quality charts preserve adaptive Popover behavior and responsive tooltips', async ({ page }) => {
@@ -544,6 +711,8 @@ test('Ticketing charts render donut, true Pareto, colored tooltips, and mobile l
 });
 
 test('Impact Service shadcn flow keeps dashboard and table requests isolated', async ({ page }) => {
+  test.setTimeout(90000);
+
   const requests = [];
 
   page.on('request', (request) => {

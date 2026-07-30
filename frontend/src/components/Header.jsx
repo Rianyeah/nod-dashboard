@@ -1,4 +1,4 @@
-import { MapPinIcon } from '@phosphor-icons/react';
+import { MapPin as MapPinIcon } from 'lucide-react';
 
 import {
   DashboardCombobox,
@@ -39,20 +39,10 @@ export default function Header({
   onNopChange,
 }) {
   return (
-    <header className="relative border-b border-[var(--border)] bg-[var(--bg-header)] backdrop-blur-xl">
-      <div
-        className="absolute inset-0 opacity-[0.03]"
-        style={{
-          backgroundImage: `linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px),
-                           linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)`,
-          backgroundSize: '40px 40px',
-        }}
-      />
-      <div className="absolute left-1/4 top-0 h-1 w-1/2 max-w-96 bg-gradient-to-r from-transparent via-[var(--primary)]/30 to-transparent blur-sm" />
-
+    <header className="relative border-b border-[var(--border-strong)] bg-[var(--bg-header)]">
       <div className="relative z-10 flex flex-wrap items-center justify-between gap-3 px-5 py-3">
         <div className="flex min-w-0 items-center gap-2">
-          <div className="flex size-9 items-center justify-center overflow-hidden rounded-xl border border-[var(--primary)]/20 bg-[var(--bg-surface)] shadow-sm">
+          <div className="flex size-9 items-center justify-center overflow-hidden rounded-lg border border-[var(--border-strong)] bg-[var(--bg-surface)] shadow-[var(--shadow-sm)]">
             <img
               src="/brand/telkomsel-seeklogo.png"
               alt="Telkomsel"

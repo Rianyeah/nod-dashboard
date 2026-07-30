@@ -10,14 +10,14 @@ import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
-  CaretUpDownIcon,
-  CheckIcon,
-  CircleNotchIcon,
-  InfoIcon,
-  MagnifyingGlassIcon,
-  MapPinIcon,
-  WarningCircleIcon,
-} from '@phosphor-icons/react';
+  Check as CheckIcon,
+  ChevronsUpDown as CaretUpDownIcon,
+  CircleAlert as WarningCircleIcon,
+  Info as InfoIcon,
+  LoaderCircle as CircleNotchIcon,
+  MapPin as MapPinIcon,
+  Search as MagnifyingGlassIcon,
+} from 'lucide-react';
 import { FREQUENCY_OPTIONS } from './rfTiltChartConfig';
 
 function FieldLabel({ label, help, source, htmlFor }) {
@@ -27,7 +27,7 @@ function FieldLabel({ label, help, source, htmlFor }) {
       <Tooltip>
         <TooltipTrigger asChild>
           <button type="button" aria-label={`Bantuan: ${label}`} className="rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
-            <InfoIcon className="size-3" weight="fill" />
+            <InfoIcon className="size-3" />
           </button>
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={6} className="max-w-64 leading-relaxed">{help}</TooltipContent>
@@ -77,7 +77,7 @@ function AntennaModelPreview({ model }) {
   ].filter(([, value]) => value != null && value !== '');
 
   return (
-    <div className="h-full border-l border-border bg-muted/20 p-3" aria-live="polite">
+    <div className="h-full border-l border-[var(--border-strong)] bg-muted/20 p-3" aria-live="polite">
       <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Specification preview</p>
       <p className="mt-2 break-words text-xs font-semibold text-foreground">{model.antenna_model}</p>
       <dl className="mt-3 space-y-2">
@@ -164,7 +164,7 @@ export default function RfTiltParamForm({
 
   return (
     <TooltipProvider>
-      <Card size="sm">
+      <Card size="sm" className="border border-[var(--border-strong)]">
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <FieldLabel
@@ -263,7 +263,7 @@ export default function RfTiltParamForm({
                       <div id="antenna-model-listbox" role="listbox" aria-label="Antenna models" className="space-y-0.5 p-1">
                         {!antennaModelLoading && !antennaModelError && antennaModelResults.map((model) => {
                           const selected = model.antenna_model === selectedAntennaModelLabel;
-                          return <button key={model.antenna_model} type="button" role="option" aria-selected={selected} onMouseEnter={() => setPreviewedAntennaModelId(model.antenna_model)} onFocus={() => setPreviewedAntennaModelId(model.antenna_model)} onClick={() => { selectAntennaModel(model); setModelSearchOpen(false); setModelQuery(''); setPreviewedAntennaModelId(model.antenna_model); }} className="flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left text-xs transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"><span className="min-w-0 flex-1"><span className="block truncate font-semibold text-foreground">{model.antenna_model}</span><span className="block truncate text-[10px] text-muted-foreground">{[model.vendor, model.series, model.frequency_bands].filter(Boolean).join(' • ') || 'Specification available'}</span></span>{selected && <CheckIcon className="mt-0.5 size-3.5 shrink-0 text-primary" weight="bold" />}</button>;
+                          return <button key={model.antenna_model} type="button" role="option" aria-selected={selected} onMouseEnter={() => setPreviewedAntennaModelId(model.antenna_model)} onFocus={() => setPreviewedAntennaModelId(model.antenna_model)} onClick={() => { selectAntennaModel(model); setModelSearchOpen(false); setModelQuery(''); setPreviewedAntennaModelId(model.antenna_model); }} className="flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left text-xs transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"><span className="min-w-0 flex-1"><span className="block truncate font-semibold text-foreground">{model.antenna_model}</span><span className="block truncate text-[10px] text-muted-foreground">{[model.vendor, model.series, model.frequency_bands].filter(Boolean).join(' • ') || 'Specification available'}</span></span>{selected && <CheckIcon className="mt-0.5 size-3.5 shrink-0 text-primary" />}</button>;
                         })}
                       </div>
                     </ScrollArea>

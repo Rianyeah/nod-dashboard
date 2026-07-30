@@ -1,10 +1,10 @@
 import {
-  BroadcastIcon,
-  CheckCircleIcon,
-  ShieldWarningIcon,
-  SirenIcon,
-  WarningIcon,
-} from '@phosphor-icons/react';
+  CircleCheck as CheckCircleIcon,
+  RadioTower as BroadcastIcon,
+  ShieldAlert as ShieldWarningIcon,
+  Siren as SirenIcon,
+  TriangleAlert as WarningIcon,
+} from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -40,7 +40,7 @@ function KpiCard({ title, value, previous, comparisonLabel, icon: Icon, tone }) 
       <CardHeader>
         <div className="flex items-center gap-2">
           <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-muted" style={{ color: tone }}>
-            <Icon className="size-4" weight="duotone" />
+            <Icon className="size-4" />
           </div>
           <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {title}

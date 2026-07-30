@@ -1,5 +1,15 @@
-export const DASHBOARD_CHART_MARGIN = { top: 20, right: 28, left: 0, bottom: 0 };
-export const DASHBOARD_BAR_RADIUS = [8, 8, 8, 8];
+export const DASHBOARD_CHART_COLORS = Object.freeze({
+  accent: 'var(--chart-accent)',
+  neutral: 'var(--chart-neutral-1)',
+  neutralMuted: 'var(--chart-neutral-2)',
+  success: 'var(--chart-success)',
+  warning: 'var(--chart-warning)',
+  danger: 'var(--chart-danger)',
+  info: 'var(--chart-info)',
+});
+
+export const DASHBOARD_CHART_MARGIN = { top: 16, right: 24, left: 0, bottom: 0 };
+export const DASHBOARD_BAR_RADIUS = [6, 6, 6, 6];
 
 export function resolveSeriesColor(item = {}, config = {}) {
   const key = String(item.dataKey ?? item.name ?? '');

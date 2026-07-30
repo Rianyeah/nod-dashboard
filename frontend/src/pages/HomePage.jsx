@@ -16,12 +16,9 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import {
-  Area,
   Bar,
-  CartesianGrid,
   ComposedChart,
   Line,
-  ReferenceArea,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -30,7 +27,6 @@ import {
 import Breadcrumb from '../components/Breadcrumb';
 import Header from '../components/Header';
 import { useDashboardSidebar } from '../hooks/useDashboardSidebar';
-import { useDashboardThemeTokens } from '../hooks/useDashboardThemeTokens';
 import {
   DashboardChartPanel,
   DashboardChartTooltip,
@@ -54,8 +50,9 @@ import {
   formatPayload,
   formatPercent,
   formatRevenue,
-  formatRevenueShort,
 } from '../utils/formatters';
+import { HomePerformanceTrend } from '../features/home/HomePerformanceTrend';
+import { homeChartConfig } from '../features/home/homeChartConfig';
 
 const MONTH_LABELS = {
   1: 'Januari',
@@ -74,28 +71,28 @@ const MONTH_LABELS = {
 
 const TONES = {
   success: {
-    text: 'text-emerald-300',
-    border: 'border-emerald-500/25',
-    bg: 'bg-emerald-500/10',
-    fill: '#10B981',
+    text: 'text-[var(--success)]',
+    border: 'border-[var(--success)]/25',
+    bg: 'bg-[var(--badge-success-bg)]',
+    fill: 'var(--chart-success)',
   },
   warning: {
-    text: 'text-amber-300',
-    border: 'border-amber-500/25',
-    bg: 'bg-amber-500/10',
-    fill: '#F59E0B',
+    text: 'text-[var(--warning)]',
+    border: 'border-[var(--warning)]/25',
+    bg: 'bg-[var(--badge-warning-bg)]',
+    fill: 'var(--chart-warning)',
   },
   danger: {
-    text: 'text-red-300',
-    border: 'border-red-500/25',
-    bg: 'bg-red-500/10',
-    fill: '#EF4444',
+    text: 'text-[var(--danger)]',
+    border: 'border-[var(--danger)]/25',
+    bg: 'bg-[var(--badge-critical-bg)]',
+    fill: 'var(--chart-danger)',
   },
   info: {
-    text: 'text-sky-300',
-    border: 'border-sky-500/25',
-    bg: 'bg-sky-500/10',
-    fill: '#60A5FA',
+    text: 'text-[var(--info)]',
+    border: 'border-[var(--info)]/25',
+    bg: 'bg-[var(--badge-info-bg)]',
+    fill: 'var(--chart-info)',
   },
 };
 
@@ -157,14 +154,6 @@ function mergeNopOptions(...groups) {
     if (normalized && normalized !== 'UNKNOWN') unique.set(normalized, normalized);
   });
   return Array.from(unique.values()).sort((a, b) => a.localeCompare(b));
-}
-
-function formatPayloadAxisTick(value) {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return '';
-  const gb = number / 1_048_576;
-  if (gb >= 1_000) return `${(gb / 1_000).toFixed(1)}TB`;
-  return `${Math.round(gb)}GB`;
 }
 
 function getAvailabilityTone(value) {
@@ -264,29 +253,10 @@ function buildLastUpdateRows(overview, bulan, tahun) {
   ];
 }
 
-function TrendTooltip({ active, payload, label }) {
-  if (!active || !payload?.length) return null;
-  const revenue = payload.find((item) => item.dataKey === 'total_revenue');
-  const payloadData = payload.find((item) => item.dataKey === 'total_payload');
-  const availability = payload.find((item) => item.dataKey === 'avg_availability');
-  return (
-    <DashboardChartTooltip
-      active={active}
-      label={label}
-      labelFormatter={formatMonthLabel}
-      payload={[
-        revenue && { ...revenue, name: 'Revenue', value: formatRevenue(revenue.value), color: 'var(--primary-light)' },
-        payloadData && { ...payloadData, name: 'Payload', value: formatPayload(payloadData.value), color: 'var(--success)' },
-        availability && { ...availability, name: 'Availability', value: formatPercent(availability.value), color: 'var(--warning)' },
-      ].filter(Boolean)}
-    />
-  );
-}
-
 function MetricCard({ title, value, subtitle, icon: Icon, tone = 'info', badge }) {
   return (
     <div className="relative">
-      {badge ? <span className="absolute right-2 top-2 z-10 rounded-full border border-sky-400/30 bg-sky-400/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-sky-300">{badge}</span> : null}
+      {badge ? <span className="absolute right-2 top-2 z-10 rounded-full border border-[var(--border)] bg-[var(--surface-soft)] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[var(--text-secondary)]">{badge}</span> : null}
       <DashboardKpiCard title={title} value={value} subtitle={subtitle} icon={Icon} tone={tone} />
     </div>
   );
@@ -315,7 +285,14 @@ function PotentialItem({ label, metric, tone = 'info' }) {
 }
 
 function ClassBreakdownLegend({ rows = [] }) {
-  const palette = ['#0EA5E9', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#64748B'];
+  const palette = [
+    'var(--chart-neutral-1)',
+    'var(--chart-accent)',
+    'var(--chart-warning)',
+    'var(--chart-success)',
+    'var(--chart-info)',
+    'var(--chart-neutral-2)',
+  ];
   const visibleRows = rows.slice(0, 6);
   return (
     <div className="min-h-[82px] rounded-lg border border-[var(--border)] bg-[var(--surface-soft)] px-4 py-3">
@@ -332,14 +309,6 @@ function ClassBreakdownLegend({ rows = [] }) {
           <p className="col-span-2 text-[10px] text-[var(--text-muted)]">Class site belum tersedia.</p>
         )}
       </div>
-    </div>
-  );
-}
-
-function ChartEmpty({ label }) {
-  return (
-    <div className="flex h-[260px] items-center justify-center rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg-elevated)]/35">
-      <p className="text-xs text-[var(--text-muted)]">{label}</p>
     </div>
   );
 }
@@ -399,13 +368,13 @@ function ReportingMiniChart({ rows }) {
               />
             )}
           />
-          <Bar yAxisId="revenue" dataKey="total_revenue" name="Revenue" fill="#60A5FA" radius={[3, 3, 0, 0]} opacity={0.78} />
-          <Line yAxisId="payload" type="monotone" dataKey="total_payload" name="Payload" stroke="#10B981" strokeWidth={2} dot={false} connectNulls />
+          <Bar yAxisId="revenue" dataKey="total_revenue" name="Revenue" fill={homeChartConfig.total_revenue.color} radius={[3, 3, 0, 0]} opacity={0.78} />
+          <Line yAxisId="payload" type="monotone" dataKey="total_payload" name="Payload" stroke={homeChartConfig.total_payload.color} strokeWidth={2} dot={false} connectNulls />
         </ComposedChart>
       </ResponsiveContainer>
       <MiniLegend items={[
-        { label: 'Revenue', color: '#60A5FA' },
-        { label: 'Payload', color: '#10B981' },
+        { label: 'Revenue', color: homeChartConfig.total_revenue.color },
+        { label: 'Payload', color: homeChartConfig.total_payload.color },
       ]} />
     </div>
   );
@@ -422,15 +391,15 @@ function ImpactServiceDailyChart({ rows }) {
           <XAxis dataKey="tanggal" tickFormatter={formatShortDateLabel} interval="preserveStartEnd" tick={{ fontSize: 9, fill: 'var(--text-muted)' }} tickLine={false} axisLine={false} />
           <YAxis hide />
           <Tooltip content={<ModuleMiniTooltip labelFormatter={formatShortDateLabel} />} />
-          <Bar dataKey="open" name="OPEN" stackId="impact" fill="#EF4444" radius={[3, 3, 0, 0]} />
-          <Bar dataKey="clear" name="CLEAR" stackId="impact" fill="#10B981" radius={[3, 3, 0, 0]} />
-          <Line type="monotone" dataKey="total" name="Total" stroke="#F59E0B" strokeWidth={2} dot={false} connectNulls />
+          <Bar dataKey="open" name="OPEN" stackId="impact" fill="var(--chart-danger)" radius={[3, 3, 0, 0]} />
+          <Bar dataKey="clear" name="CLEAR" stackId="impact" fill="var(--chart-success)" radius={[3, 3, 0, 0]} />
+          <Line type="monotone" dataKey="total" name="Total" stroke="var(--chart-neutral-1)" strokeWidth={2} dot={false} connectNulls />
         </ComposedChart>
       </ResponsiveContainer>
       <MiniLegend items={[
-        { label: 'OPEN', color: '#EF4444' },
-        { label: 'CLEAR', color: '#10B981' },
-        { label: 'Total', color: '#F59E0B' },
+        { label: 'OPEN', color: 'var(--chart-danger)' },
+        { label: 'CLEAR', color: 'var(--chart-success)' },
+        { label: 'Total', color: 'var(--chart-neutral-1)' },
       ]} />
     </div>
   );
@@ -448,15 +417,15 @@ function TransportQualityMiniChart({ rows }) {
           <YAxis yAxisId="count" hide />
           <YAxis yAxisId="latency" hide />
           <Tooltip content={<ModuleMiniTooltip labelFormatter={formatShortDateLabel} />} />
-          <Bar yAxisId="count" dataKey="p1_sites" name="P1 Sites" fill="#EF4444" radius={[3, 3, 0, 0]} opacity={0.82} />
-          <Line yAxisId="count" type="monotone" dataKey="pl_over_1_sites" name="PL > 1%" stroke="#F59E0B" strokeWidth={2} dot={false} connectNulls />
-          <Line yAxisId="latency" type="monotone" dataKey="latency_over_5_sites" name="Latency > 5ms" stroke="#60A5FA" strokeWidth={2} dot={false} connectNulls />
+          <Bar yAxisId="count" dataKey="p1_sites" name="P1 Sites" fill="var(--chart-danger)" radius={[3, 3, 0, 0]} opacity={0.82} />
+          <Line yAxisId="count" type="monotone" dataKey="pl_over_1_sites" name="PL > 1%" stroke="var(--chart-warning)" strokeWidth={2} dot={false} connectNulls />
+          <Line yAxisId="latency" type="monotone" dataKey="latency_over_5_sites" name="Latency > 5ms" stroke="var(--chart-info)" strokeWidth={2} dot={false} connectNulls />
         </ComposedChart>
       </ResponsiveContainer>
       <MiniLegend items={[
-        { label: 'P1', color: '#EF4444' },
-        { label: 'PL > 1%', color: '#F59E0B' },
-        { label: 'Latency', color: '#60A5FA' },
+        { label: 'P1', color: 'var(--chart-danger)' },
+        { label: 'PL > 1%', color: 'var(--chart-warning)' },
+        { label: 'Latency', color: 'var(--chart-info)' },
       ]} />
     </div>
   );
@@ -473,15 +442,15 @@ function TicketFaultCenterMiniChart({ rows }) {
           <XAxis dataKey="label" interval="preserveStartEnd" tick={{ fontSize: 9, fill: 'var(--text-muted)' }} tickLine={false} axisLine={false} />
           <YAxis hide />
           <Tooltip content={<ModuleMiniTooltip />} />
-          <Bar dataKey="bps" name="BPS" stackId="ticket" fill="#10B981" radius={[3, 3, 0, 0]} />
-          <Bar dataKey="ts" name="TS" stackId="ticket" fill="#60A5FA" radius={[3, 3, 0, 0]} />
-          <Line type="monotone" dataKey="total" name="Total" stroke="#F59E0B" strokeWidth={2} dot={false} connectNulls />
+          <Bar dataKey="bps" name="BPS" stackId="ticket" fill="var(--chart-accent)" radius={[3, 3, 0, 0]} />
+          <Bar dataKey="ts" name="TS" stackId="ticket" fill="var(--chart-neutral-1)" radius={[3, 3, 0, 0]} />
+          <Line type="monotone" dataKey="total" name="Total" stroke="var(--chart-neutral-2)" strokeWidth={2} dot={false} connectNulls />
         </ComposedChart>
       </ResponsiveContainer>
       <MiniLegend items={[
-        { label: 'BPS', color: '#10B981' },
-        { label: 'TS', color: '#60A5FA' },
-        { label: 'Total', color: '#F59E0B' },
+        { label: 'BPS', color: 'var(--chart-accent)' },
+        { label: 'TS', color: 'var(--chart-neutral-1)' },
+        { label: 'Total', color: 'var(--chart-neutral-2)' },
       ]} />
     </div>
   );
@@ -640,7 +609,6 @@ function buildPrioritySignals(overview, latestImpactDaily) {
 
 export default function HomePage() {
   const { setLastUpdates } = useDashboardSidebar();
-  const themeTokens = useDashboardThemeTokens();
   const [selectedPeriod, setSelectedPeriod] = useState({ start: '', end: '' });
   const [defaultPeriod, setDefaultPeriod] = useState({ start: '', end: '' });
   const [availableMonths, setAvailableMonths] = useState([]);
@@ -818,7 +786,6 @@ export default function HomePage() {
       subtitle: `Open: ${formatNumber(latestImpactDaily?.open ?? impact.open_alarms)} Clear: ${formatNumber(latestImpactDaily?.clear ?? impact.clear_alarms)}`,
       icon: BellRing,
       tone: getCountTone(latestImpactDaily?.open ?? impact.open_alarms, 1, 50),
-      badge: 'Latest / live',
     },
     {
       title: 'Transport Quality',
@@ -880,7 +847,6 @@ export default function HomePage() {
           <div className="mb-2 flex items-center gap-2">
             <Gauge className="size-4 text-[var(--primary-light)]" />
             <h2 className="text-sm font-semibold text-[var(--text-primary)]">Data Potensi Site</h2>
-            <span className="rounded-full border border-violet-400/30 bg-violet-400/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-violet-300">Snapshot master · tidak dipengaruhi periode</span>
           </div>
           <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-5">
             <PotentialItem label="Site Lithium" metric={sitePotential.site_lithium} tone="success" />
@@ -903,34 +869,14 @@ export default function HomePage() {
               </div>
             )}
           >
-            {trendRows.length ? (
-              <ResponsiveContainer width="100%" height={260}>
-                <ComposedChart data={trendRows} margin={{ top: 8, right: 60, left: 4, bottom: 0 }}>
-                  <ReferenceArea x1={selectedPeriod.start} x2={selectedPeriod.end} fill="#0EA5E9" fillOpacity={0.08} strokeOpacity={0} />
-                  <defs>
-                    <linearGradient id="homeRevenueGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#60A5FA" stopOpacity={0.28} />
-                      <stop offset="95%" stopColor="#60A5FA" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="homePayloadGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10B981" stopOpacity={0.18} />
-                      <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke={themeTokens.chartGrid} vertical={false} />
-                  <XAxis dataKey="trx_month" tickFormatter={formatMonthLabel} tick={{ fontSize: 10, fill: themeTokens.axisTick }} tickLine={false} axisLine={false} />
-                  <YAxis yAxisId="revenue" domain={homeRevenueDomain} tickFormatter={formatRevenueShort} tick={{ fontSize: 10, fill: themeTokens.axisTick }} tickLine={false} axisLine={false} width={54} />
-                  <YAxis yAxisId="payload" orientation="right" domain={homePayloadDomain} tickFormatter={formatPayloadAxisTick} tick={{ fontSize: 10, fill: themeTokens.axisTick }} tickLine={false} axisLine={false} width={42} />
-                  <YAxis yAxisId="availability" orientation="right" domain={homeAvailabilityDomain} tickCount={5} allowDataOverflow tickFormatter={(value) => `${value}%`} tick={{ fontSize: 10, fill: themeTokens.warning }} tickLine={false} axisLine={false} width={42} />
-                  <Tooltip content={<TrendTooltip />} />
-                  <Area yAxisId="revenue" type="monotone" dataKey="total_revenue" stroke="#60A5FA" strokeWidth={2} fill="url(#homeRevenueGradient)" />
-                  <Area yAxisId="payload" type="monotone" dataKey="total_payload" stroke="#10B981" strokeWidth={2} fill="url(#homePayloadGradient)" />
-                  <Line yAxisId="availability" type="monotone" dataKey="avg_availability" stroke="#F59E0B" strokeWidth={3} dot={false} connectNulls />
-                </ComposedChart>
-              </ResponsiveContainer>
-            ) : (
-              <ChartEmpty label="Performance trend belum tersedia." />
-            )}
+            <HomePerformanceTrend
+              rows={trendRows}
+              moduleError={overview?.errors?.reporting || ''}
+              selectedPeriod={selectedPeriod}
+              revenueDomain={homeRevenueDomain}
+              payloadDomain={homePayloadDomain}
+              availabilityDomain={homeAvailabilityDomain}
+            />
           </DashboardChartPanel>
 
           <ExecutiveInsightPanel

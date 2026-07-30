@@ -13,6 +13,7 @@ export default function TowerPlanSitePicker({ disabled, onSelect }) {
   const [error, setError] = useState('');
   const [open, setOpen] = useState(false);
   const firstResultRef = useRef(null);
+  const pendingSelectionRef = useRef(false);
   const requestIdRef = useRef(0);
 
   useEffect(() => {
@@ -28,11 +29,22 @@ export default function TowerPlanSitePicker({ disabled, onSelect }) {
       try {
         const response = await searchTowerPlanSites(normalized, controller.signal);
         if (requestId !== requestIdRef.current) return;
-        setItems(response.items || []);
+        const nextItems = response.items || [];
+        setItems(nextItems);
         setResultsQuery(normalized);
         setOpen(true);
+        if (pendingSelectionRef.current) {
+          pendingSelectionRef.current = false;
+          const selected = selectSiteFromResults(nextItems, normalized);
+          if (selected) {
+            setQuery(selected.site_id);
+            setOpen(false);
+            onSelect(selected.site_id);
+          }
+        }
       } catch (requestError) {
         if (requestId !== requestIdRef.current) return;
+        pendingSelectionRef.current = false;
         if (requestError.name !== 'CanceledError' && requestError.name !== 'AbortError') {
           setItems([]);
           setError('Pencarian Site ID gagal. Mode manual tetap dapat digunakan.');
@@ -46,7 +58,7 @@ export default function TowerPlanSitePicker({ disabled, onSelect }) {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [query]);
+  }, [onSelect, query]);
 
   const chooseSite = (siteId) => {
     setQuery(siteId);
@@ -70,9 +82,12 @@ export default function TowerPlanSitePicker({ disabled, onSelect }) {
           autoComplete="off"
           className="pl-9 pr-9"
           disabled={disabled}
+          enterKeyHint="go"
+          inputMode="search"
           onChange={(event) => {
             const nextQuery = event.target.value;
             requestIdRef.current += 1;
+            pendingSelectionRef.current = false;
             setQuery(nextQuery);
             setItems([]);
             setResultsQuery('');
@@ -82,11 +97,13 @@ export default function TowerPlanSitePicker({ disabled, onSelect }) {
           }}
           onFocus={() => query.trim().length >= 2 && setOpen(true)}
           onKeyDown={(event) => {
-            if (event.key === 'Enter' && open && hasCurrentResults) {
-              const selected = selectSiteFromResults(items, query);
-              if (selected) {
-                event.preventDefault();
-                chooseSite(selected.site_id);
+            if (event.key === 'Enter' && open) {
+              event.preventDefault();
+              if (hasCurrentResults) {
+                const selected = selectSiteFromResults(items, query);
+                if (selected) chooseSite(selected.site_id);
+              } else if (loading && query.trim().length >= 2) {
+                pendingSelectionRef.current = true;
               }
             }
             if (event.key === 'ArrowDown' && open) {

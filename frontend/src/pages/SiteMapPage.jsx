@@ -241,7 +241,7 @@ export default function SiteMapPage() {
   }, [isDraggingTable, isTableCollapsed, bumpLayoutResizeKey]);
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-[var(--bg-base)]">
+    <div className="dashboard-canvas h-screen flex flex-col overflow-hidden">
       <Header
         bulan={bulan}
         tahun={tahun}
@@ -256,7 +256,7 @@ export default function SiteMapPage() {
       <main className="flex-1 flex overflow-hidden p-2 gap-1.5 min-h-0">
         {/* Left Sidebar */}
         <aside
-          className="shrink-0 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)]/50 flex flex-col overflow-hidden"
+          className="shrink-0 rounded-[var(--noc-radius-lg)] border border-[var(--border-strong)] bg-[var(--bg-glass)] shadow-[var(--shadow-sm)] flex flex-col overflow-hidden"
           style={{ width: sidebarWidth }}
         >
           <div className="p-2.5 overflow-y-auto flex-1 flex flex-col gap-2.5">
@@ -302,7 +302,7 @@ export default function SiteMapPage() {
                 setIsTableCollapsed(value => !value);
                 bumpLayoutResizeKey();
               }}
-              className="inline-flex h-4 items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--bg-surface)]/95 px-2 text-[9px] font-semibold uppercase tracking-wider text-[var(--text-muted)] shadow-lg transition-colors hover:border-[var(--primary)]/30 hover:text-[var(--primary-light)]"
+              className={`nod-map-toggle nod-map-toggle--compact ${isTableCollapsed ? 'nod-map-toggle--active' : ''}`}
               aria-label={isTableCollapsed ? 'Expand daftar site table' : 'Collapse daftar site table'}
             >
               <GripHorizontal className="h-3 w-3" />
@@ -313,7 +313,7 @@ export default function SiteMapPage() {
 
           {/* Bottom Table */}
           <div
-            className={`overflow-hidden flex flex-col rounded-xl border border-[var(--border)] bg-[var(--bg-surface)]/30 transition-[height,min-height] duration-300 ${isTableCollapsed ? 'min-h-[42px] p-1.5' : 'min-h-[228px] p-2'}`}
+            className={`overflow-hidden flex flex-col rounded-[var(--noc-radius-lg)] border border-[var(--border-strong)] bg-[var(--bg-glass)] shadow-[var(--shadow-sm)] transition-[height,min-height] duration-300 ${isTableCollapsed ? 'min-h-[42px] p-1.5' : 'min-h-[228px] p-2'}`}
             style={{ height: isTableCollapsed ? '42px' : `${tableHeight}%` }}
             onTransitionEnd={(event) => {
               if (event.propertyName === 'height' || event.propertyName === 'min-height') {

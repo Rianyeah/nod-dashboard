@@ -270,4 +270,19 @@ describe('RF Tilt site selection contracts', () => {
     const map = src('features', 'rf-tilt', 'RfTiltMap.jsx');
     assert.match(map, /mapInstance\.remove\(\);[\s\S]*mapRef\.current = null;/);
   });
+
+  it('uses graphite chrome without changing RF engineering output', () => {
+    const page = src('pages', 'RfTiltAnalysisPage.jsx');
+    const chrome = [
+      page,
+      src('features', 'rf-tilt', 'RfTiltAntennaSpecPanel.jsx'),
+      src('features', 'rf-tilt', 'RfTiltExportButton.jsx'),
+      src('features', 'rf-tilt', 'RfTiltParamForm.jsx'),
+      src('features', 'rf-tilt', 'RfTiltResultPanel.jsx'),
+    ].join('\n');
+
+    assert.doesNotMatch(chrome, /#22D3EE|#0EA5E9|#38BDF8|shadow-\[0_0_|backdrop-blur/i);
+    assert.match(page, /dashboard-canvas/);
+    assert.match(chrome, /var\(--border-strong\)|DashboardPanelHeader|DashboardPageHeader/);
+  });
 });

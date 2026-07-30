@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   ArrowDownUp,
@@ -24,6 +24,10 @@ import { Card, CardContent, CardHeader } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
+import {
+  DashboardPageHeader,
+  DashboardPanelHeader,
+} from '../components/ui/DashboardPrimitives';
 import { fetchTowerPlanConfiguration } from '../services/api';
 import TowerPlanAntennaEditor from '../features/tower-plan/TowerPlanAntennaEditor';
 import TowerPlanAutofillDialog from '../features/tower-plan/TowerPlanAutofillDialog';
@@ -130,18 +134,13 @@ async function svgToPng(svg, backgroundColor) {
 
 function SectionTitle({ icon: Icon, title, description, action }) {
   return (
-    <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-      <div className="flex min-w-0 items-start gap-3">
-        <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <Icon className="size-4" />
-        </div>
-        <div className="min-w-0">
-          <h2 className="text-sm font-semibold">{title}</h2>
-          {description ? <p className="mt-0.5 text-[11px] text-muted-foreground">{description}</p> : null}
-        </div>
-      </div>
-      {action}
-    </div>
+    <DashboardPanelHeader
+      title={title}
+      description={description}
+      icon={Icon}
+      action={action}
+      className="pb-0"
+    />
   );
 }
 
@@ -187,7 +186,7 @@ export default function TowerPlanGeneratorPage() {
     ));
   };
 
-  const handleSiteSelection = async (siteId) => {
+  const handleSiteSelection = useCallback(async (siteId) => {
     configRequestRef.current?.abort();
     const controller = new AbortController();
     configRequestRef.current = controller;
@@ -199,12 +198,15 @@ export default function TowerPlanGeneratorPage() {
       setAutofillOpen(true);
     } catch (error) {
       if (error.name !== 'CanceledError' && error.name !== 'AbortError') {
-        notify('error', error.response?.data?.detail || 'Konfigurasi Site ID gagal dimuat.');
+        setNotice({
+          type: 'error',
+          message: error.response?.data?.detail || 'Konfigurasi Site ID gagal dimuat.',
+        });
       }
     } finally {
       if (!controller.signal.aborted) setAutofillLoading(false);
     }
-  };
+  }, [plan.towerType]);
 
   const applyAutofill = () => {
     const errors = validateAutofillDraft(autofillDraft);
@@ -262,28 +264,31 @@ export default function TowerPlanGeneratorPage() {
   };
 
   return (
-    <div className="min-h-screen">
+    <div className="dashboard-canvas min-h-screen">
       <Breadcrumb />
 
-      <header className="border-b border-border bg-[var(--bg-header)] px-4 py-4 sm:px-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
-              <TowerControl className="size-5" />
-            </div>
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-base font-semibold">Tower Visualizer</h1>
-                <Badge variant="outline">Tools</Badge>
-              </div>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" onClick={() => editPlan(migrateTowerPlan(PSN003_PRESET))}>
-              <RadioTower /> Preset PSN003
+      <DashboardPageHeader
+        title="Tower Visualizer"
+        icon={TowerControl}
+        action={(
+          <div className="flex flex-nowrap items-center gap-1.5 sm:gap-2">
+            <Badge className="hidden sm:inline-flex" variant="outline">Tools</Badge>
+            <Button
+              aria-label="Muat preset PSN003"
+              className="sm:w-auto sm:px-3"
+              size="icon-sm"
+              title="Preset PSN003"
+              variant="outline"
+              onClick={() => editPlan(migrateTowerPlan(PSN003_PRESET))}
+            >
+              <RadioTower />
+              <span className="hidden sm:inline">Preset PSN003</span>
             </Button>
             <Button
-              size="sm"
+              aria-label="Reset konfigurasi"
+              className="sm:w-auto sm:px-3"
+              size="icon-sm"
+              title="Reset"
               variant="outline"
               onClick={() => {
                 if (window.confirm('Reset seluruh konfigurasi ke template kosong?')) {
@@ -292,11 +297,12 @@ export default function TowerPlanGeneratorPage() {
                 }
               }}
             >
-              <RotateCcw /> Reset
+              <RotateCcw />
+              <span className="hidden sm:inline">Reset</span>
             </Button>
           </div>
-        </div>
-      </header>
+        )}
+      />
 
       <main className="p-4 sm:p-5">
         {notice && (
@@ -326,8 +332,8 @@ export default function TowerPlanGeneratorPage() {
 
         <div className="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(420px,2fr)]">
           <div className="min-w-0 space-y-4">
-            <Card>
-              <CardHeader className="border-b border-border">
+            <Card className="border border-[var(--border-strong)]">
+              <CardHeader className="border-b border-[var(--border-strong)]">
                 <SectionTitle
                   icon={Database}
                   title="Search Site ID"
@@ -340,8 +346,8 @@ export default function TowerPlanGeneratorPage() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="border-b border-border">
+            <Card className="border border-[var(--border-strong)]">
+              <CardHeader className="border-b border-[var(--border-strong)]">
                 <SectionTitle
                   icon={TowerControl}
                   title="Project Data"
@@ -384,8 +390,8 @@ export default function TowerPlanGeneratorPage() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="border-b border-border">
+            <Card className="border border-[var(--border-strong)]">
+              <CardHeader className="border-b border-[var(--border-strong)]">
                 <SectionTitle
                   icon={Palette}
                   title="Note & Appearance"
@@ -396,8 +402,8 @@ export default function TowerPlanGeneratorPage() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="border-b border-border">
+            <Card className="border border-[var(--border-strong)]">
+              <CardHeader className="border-b border-[var(--border-strong)]">
                 <SectionTitle
                   icon={RadioTower}
                   title={`Antennas · ${plan.antennas.length}/${MAX_ANTENNAS}`}
@@ -435,8 +441,8 @@ export default function TowerPlanGeneratorPage() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="border-b border-border">
+            <Card className="border border-[var(--border-strong)]">
+              <CardHeader className="border-b border-[var(--border-strong)]">
                 <SectionTitle
                   icon={WandSparkles}
                   title="Prompt generator"
@@ -487,8 +493,8 @@ export default function TowerPlanGeneratorPage() {
           <aside className="min-w-0 space-y-4 xl:sticky xl:top-4">
             <TowerPlanPreview plan={plan} />
 
-            <Card>
-              <CardHeader className="border-b border-border">
+            <Card className="border border-[var(--border-strong)]">
+              <CardHeader className="border-b border-[var(--border-strong)]">
                 <SectionTitle
                   action={validationErrors.length === 0 ? (
                     <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-300">

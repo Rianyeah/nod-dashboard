@@ -54,7 +54,6 @@ describe('dashboard and reporting visual/data contracts', () => {
     assert.match(page, /fetchReportingScorecards\(selectedPeriod,\s*selectedNop\)/);
     assert.match(page, /fetchRevenueByKabupaten\(selectedPeriod,\s*selectedNop\)/);
     assert.match(page, /fetchSiteClassByKabupaten\(selectedPeriod,\s*selectedNop\)/);
-    assert.match(page, /fetchBatteryByKabupaten\(selectedPeriod,\s*selectedNop\)/);
     assert.match(page, /fetchRevenueTrend\(selectedPeriod,\s*selectedNop\)/);
     assert.match(api, /fetchReportingScorecards\(period,\s*nop/);
     assert.match(api, /fetchRevenueTrend\(period,\s*nop/);
@@ -133,18 +132,31 @@ describe('dashboard and reporting visual/data contracts', () => {
     assert.match(page, /Availability[\s\S]*showRevenueDetails\s*&&[\s\S]*Rev Voice/);
   });
 
-  it('renames reporting revenue table to Performance Table and adds ticket/proker columns', () => {
+  it('renders ticket, Proker, and BPS backup metrics without the Battery Type surface', () => {
     const page = src('pages', 'NetworkReportingPage.jsx');
     const api = src('services', 'api.js');
 
     assert.match(page, /Performance Table/);
     assert.doesNotMatch(page, /Revenue & Payload by Kabupaten\/Kota/);
-    assert.match(page, /Ticket SWFM/);
-    assert.match(page, /Proker Activity/);
-    assert.match(page, /ticket_swfm_bps/);
-    assert.match(page, /ticket_swfm_ts/);
-    assert.match(page, /proker_open/);
-    assert.match(page, /proker_closed/);
+    for (const contract of [
+      'Ticket SWFM',
+      'ticket_swfm_bps',
+      'ticket_swfm_ts',
+      'Proker Activity',
+      'proker_open',
+      'proker_closed',
+      'Backup Sukses',
+      'backup_sukses_bps',
+      'backup_sukses_rate',
+      'formatPercent',
+    ]) {
+      assert.match(page, new RegExp(contract));
+    }
+
+    assert.doesNotMatch(page, /Battery Type/);
+    assert.doesNotMatch(page, /batteryData|batteryTotals|fetchBatteryByKabupaten/);
+    assert.doesNotMatch(api, /export async function fetchBatteryByKabupaten/);
+    assert.match(page, /min-w-\[.*\].*text-left/);
     assert.match(api, /fetchRevenueByKabupaten/);
   });
 
@@ -348,5 +360,14 @@ describe('dashboard and reporting visual/data contracts', () => {
     ]) {
       assert.doesNotMatch(feature, new RegExp(oldSubtitle));
     }
+  });
+
+  it('uses the graphite reporting chart language', () => {
+    const page = src('pages', 'NetworkReportingPage.jsx');
+
+    assert.doesNotMatch(page, /text-cyan-|bg-cyan-|border-cyan-|#22D3EE|#0EA5E9|#38BDF8/i);
+    assert.doesNotMatch(page, /shadow-\[0_0_|blur-sm/);
+    assert.match(page, /DashboardChartPanel|DashboardTableShell/);
+    assert.match(page, /reportingChartConfig/);
   });
 });

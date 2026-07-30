@@ -240,4 +240,18 @@ describe('Ticketing dashboard contracts', () => {
     const dashboardRequestBlock = page.split('fetchTicketingDashboard(dashboardParams)', 2)[0];
     assert.doesNotMatch(dashboardRequestBlock.slice(-500), /fetchTicketingTickets/);
   });
+
+  it('uses shared operational chart panels and states', () => {
+    const page = src('pages', 'TicketingPage.jsx');
+    const charts = src('features', 'ticketing', 'TicketingCharts.jsx');
+    const surface = `${page}\n${charts}`;
+
+    assert.doesNotMatch(surface, /#22D3EE|#0EA5E9|#38BDF8|text-cyan-|bg-cyan-/i);
+    assert.match(surface, /DashboardChartPanel/);
+    assert.match(surface, /DashboardChartTooltipContent/);
+    assert.match(surface, /DashboardChartEmpty|ChartEmptyState/);
+    assert.doesNotMatch(charts, /strokeDasharray="3 3"/);
+    assert.match(charts, /var\(--chart-axis\)/);
+    assert.doesNotMatch(surface, /box-shadow:\s*0 0|shadow-\[0_0_/i);
+  });
 });

@@ -2,7 +2,11 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { CaretLeftIcon, CaretRightIcon, DotsThreeIcon } from "@phosphor-icons/react"
+import {
+  ChevronLeft as CaretLeftIcon,
+  ChevronRight as CaretRightIcon,
+  MoreHorizontal as DotsThreeIcon,
+} from "lucide-react"
 
 function Pagination({
   className,

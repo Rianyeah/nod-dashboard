@@ -30,14 +30,29 @@ router = APIRouter(prefix="/reporting", tags=["Reporting"])
 
 # ---------- SQL Queries ----------
 
+REPORTING_PERFORMANCE_CACHE_RESOURCE = "revenue-by-kabupaten-v2"
+
+
 def build_nop_filter(nop: str | None, alias: str = "d") -> str:
     if not nop:
         return ""
     filters = {
-        "d": ' AND d."NOP" = :nop',
-        "d2": ' AND d2."NOP" = :nop',
-        "tfc": " AND tfc.nop = :nop",
-        "p": " AND p.nop = :nop",
+        "d": (
+            " AND REGEXP_REPLACE(UPPER(TRIM(d.\"NOP\")), '^NOP[[:space:]]+', '')"
+            " = REGEXP_REPLACE(UPPER(TRIM(:nop)), '^NOP[[:space:]]+', '')"
+        ),
+        "d2": (
+            " AND REGEXP_REPLACE(UPPER(TRIM(d2.\"NOP\")), '^NOP[[:space:]]+', '')"
+            " = REGEXP_REPLACE(UPPER(TRIM(:nop)), '^NOP[[:space:]]+', '')"
+        ),
+        "tfc": (
+            " AND REGEXP_REPLACE(UPPER(TRIM(tfc.nop)), '^NOP[[:space:]]+', '')"
+            " = REGEXP_REPLACE(UPPER(TRIM(:nop)), '^NOP[[:space:]]+', '')"
+        ),
+        "p": (
+            " AND REGEXP_REPLACE(UPPER(TRIM(p.nop)), '^NOP[[:space:]]+', '')"
+            " = REGEXP_REPLACE(UPPER(TRIM(:nop)), '^NOP[[:space:]]+', '')"
+        ),
     }
     return filters[alias]
 
@@ -178,9 +193,13 @@ availability AS (
 ),
 ticket_aggregate AS (
     SELECT
-        COALESCE(NULLIF(TRIM(tfc.kabupaten_kota), ''), 'Unknown') AS kabupaten,
+        UPPER(TRIM(tfc.kabupaten_kota)) AS kabupaten_key,
         COUNT(*) FILTER (WHERE UPPER(TRIM(tfc.kategori_tt)) = 'BPS') AS ticket_swfm_bps,
-        COUNT(*) FILTER (WHERE UPPER(TRIM(tfc.kategori_tt)) LIKE 'TS%') AS ticket_swfm_ts
+        COUNT(*) FILTER (WHERE UPPER(TRIM(tfc.kategori_tt)) LIKE 'TS%') AS ticket_swfm_ts,
+        COUNT(*) FILTER (
+            WHERE UPPER(TRIM(tfc.kategori_tt)) = 'BPS'
+              AND TRIM(tfc.backup_sukses) = 'BU Genset'
+        ) AS backup_sukses_bps
     FROM public.ticketing_fault_center tfc
     WHERE tfc.created_at >= CAST(:start_date AS date)
       AND tfc.created_at < CAST(:end_date_exclusive AS date)
@@ -190,7 +209,7 @@ ticket_aggregate AS (
 ),
 proker_aggregate AS (
     SELECT
-        COALESCE(NULLIF(TRIM(p.kabupaten), ''), 'Unknown') AS kabupaten,
+        UPPER(TRIM(p.kabupaten)) AS kabupaten_key,
         COUNT(*) FILTER (WHERE UPPER(TRIM(p.status)) = 'OPEN') AS proker_open,
         COUNT(*) FILTER (WHERE UPPER(TRIM(p.status)) = 'CLOSE') AS proker_closed
     FROM public.proker_enom_jatim_2026 p
@@ -221,13 +240,24 @@ SELECT
     avail.avg_availability,
     COALESCE(MAX(tickets.ticket_swfm_bps), 0) AS ticket_swfm_bps,
     COALESCE(MAX(tickets.ticket_swfm_ts), 0) AS ticket_swfm_ts,
+    COALESCE(MAX(tickets.backup_sukses_bps), 0) AS backup_sukses_bps,
+    COALESCE(
+        ROUND(
+            100.0 * MAX(tickets.backup_sukses_bps)
+            / NULLIF(MAX(tickets.ticket_swfm_bps), 0),
+            2
+        ),
+        0
+    )::float AS backup_sukses_rate,
     COALESCE(MAX(proker.proker_open), 0) AS proker_open,
     COALESCE(MAX(proker.proker_closed), 0) AS proker_closed
 FROM traktor_data t
 JOIN data_site_master d ON t.site_id = d."Siteid"
 LEFT JOIN availability avail ON avail.kabupaten = d."Kabupaten/KOTA"
-LEFT JOIN ticket_aggregate tickets ON tickets.kabupaten = d."Kabupaten/KOTA"
-LEFT JOIN proker_aggregate proker ON proker.kabupaten = d."Kabupaten/KOTA"
+LEFT JOIN ticket_aggregate tickets
+  ON tickets.kabupaten_key = UPPER(TRIM(d."Kabupaten/KOTA"))
+LEFT JOIN proker_aggregate proker
+  ON proker.kabupaten_key = UPPER(TRIM(d."Kabupaten/KOTA"))
 WHERE t.trx_month BETWEEN :period_start AND :period_end
   AND d."Kabupaten/KOTA" IS NOT NULL
   {nop_filter}
@@ -466,7 +496,7 @@ async def get_revenue_by_kabupaten(
     period = resolve_reporting_period(trx_month, period_start, period_end)
     cache_key = redis_cache.make_key(
         "reporting",
-        "revenue-by-kabupaten",
+        REPORTING_PERFORMANCE_CACHE_RESOURCE,
         period_start=period.period_start,
         period_end=period.period_end,
         nop=nop or "",
@@ -510,6 +540,8 @@ async def get_revenue_by_kabupaten(
             avg_availability=float(row["avg_availability"]) if row.get("avg_availability") is not None else None,
             ticket_swfm_bps=int(row.get("ticket_swfm_bps") or 0),
             ticket_swfm_ts=int(row.get("ticket_swfm_ts") or 0),
+            backup_sukses_bps=int(row.get("backup_sukses_bps") or 0),
+            backup_sukses_rate=float(row.get("backup_sukses_rate") or 0.0),
             proker_open=int(row.get("proker_open") or 0),
             proker_closed=int(row.get("proker_closed") or 0),
         )

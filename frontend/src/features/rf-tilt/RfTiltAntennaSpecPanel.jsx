@@ -1,11 +1,15 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { InfoIcon, LinkIcon, RadioIcon } from '@phosphor-icons/react';
+import {
+  Info as InfoIcon,
+  Link as LinkIcon,
+  Radio as RadioIcon,
+} from 'lucide-react';
 
 export default function RfTiltAntennaSpecPanel({ antennaSpec, loading }) {
   if (loading) {
     return (
-      <Card size="sm" className="w-full border-dashed animate-pulse">
+      <Card size="sm" className="w-full border border-dashed border-[var(--border-strong)] animate-pulse">
         <CardContent className="flex items-center justify-center py-8 text-sm text-muted-foreground">
           Loading antenna specifications...
         </CardContent>
@@ -15,7 +19,7 @@ export default function RfTiltAntennaSpecPanel({ antennaSpec, loading }) {
 
   if (!antennaSpec) {
     return (
-      <Card size="sm" className="w-full border-dashed bg-muted/10">
+      <Card size="sm" className="w-full border border-dashed border-[var(--border-strong)] bg-muted/10">
         <CardContent className="flex flex-col items-center justify-center py-10 text-center space-y-2">
           <InfoIcon className="size-8 text-muted-foreground/40" />
           <p className="text-sm font-medium text-muted-foreground">No Antenna Selected</p>
@@ -53,7 +57,7 @@ export default function RfTiltAntennaSpecPanel({ antennaSpec, loading }) {
   const hasVbw = vertical_beamwidth_by_band && Object.keys(vertical_beamwidth_by_band).length > 0;
 
   return (
-    <Card size="sm" className="w-full overflow-hidden transition-all hover:shadow-md border-border bg-card/60 backdrop-blur-sm">
+    <Card size="sm" className="w-full overflow-hidden border border-[var(--border-strong)] bg-card transition-colors hover:border-[var(--primary)]/25">
       <CardContent className="p-4 space-y-4">
         <div className="flex items-center gap-2 text-xs font-semibold text-[var(--primary-light)]">
           <RadioIcon className="size-4" />

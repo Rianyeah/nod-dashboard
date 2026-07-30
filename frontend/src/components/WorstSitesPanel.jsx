@@ -4,37 +4,37 @@ import { fetchWorstSites } from '../services/api';
 
 const CLASS_STYLES = {
   diamond: {
-    color: '#7DD3FC',
-    background: 'rgba(30, 64, 175, 0.22)',
-    border: 'rgba(125, 211, 252, 0.35)',
+    color: 'var(--text-primary)',
+    background: 'var(--surface-muted)',
+    border: 'var(--border-strong)',
   },
   platinum: {
-    color: '#5EEAD4',
-    background: 'rgba(20, 184, 166, 0.16)',
-    border: 'rgba(94, 234, 212, 0.32)',
+    color: 'var(--text-secondary)',
+    background: 'var(--surface-soft)',
+    border: 'var(--border-strong)',
   },
   gold: {
-    color: '#FBBF24',
-    background: 'rgba(251, 191, 36, 0.15)',
-    border: 'rgba(251, 191, 36, 0.34)',
+    color: 'var(--warning)',
+    background: 'var(--badge-warning-bg)',
+    border: 'color-mix(in srgb, var(--warning) 34%, var(--border-strong))',
   },
   silver: {
-    color: '#CBD5E1',
-    background: 'rgba(148, 163, 184, 0.14)',
-    border: 'rgba(203, 213, 225, 0.28)',
+    color: 'var(--chart-neutral-1)',
+    background: 'var(--surface-soft)',
+    border: 'var(--border-strong)',
   },
   bronze: {
-    color: '#D6A05D',
-    background: 'rgba(146, 91, 38, 0.18)',
-    border: 'rgba(214, 160, 93, 0.34)',
+    color: 'var(--chart-neutral-2)',
+    background: 'var(--surface-soft)',
+    border: 'var(--border-strong)',
   },
 };
 
 function getClassStyle(siteClass) {
   return CLASS_STYLES[String(siteClass || '').toLowerCase()] || {
     color: 'var(--text-secondary)',
-    background: 'rgba(148, 163, 184, 0.12)',
-    border: 'rgba(148, 163, 184, 0.24)',
+    background: 'var(--surface-soft)',
+    border: 'var(--border-strong)',
   };
 }
 
@@ -97,7 +97,7 @@ export default function WorstSitesPanel({ bulan, tahun, filters = {} }) {
 
   return (
     <section className="glass-card flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div className="flex items-center gap-2 border-b border-[var(--border)] px-4 py-3">
+      <div className="flex items-center gap-2 border-b border-[var(--border-strong)] px-4 py-3">
         <AlertTriangle className="w-3.5 h-3.5 text-[var(--danger)]" />
         <h3 className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-widest">
           Top 10 Worst Sites
@@ -121,10 +121,10 @@ export default function WorstSitesPanel({ bulan, tahun, filters = {} }) {
             return (
               <article
                 key={site.site_id}
-                className="rounded-lg border bg-[var(--surface-soft)] p-3 shadow-sm"
+                className="rounded-lg border border-l-[3px] bg-[var(--surface-soft)] p-3 shadow-[var(--shadow-sm)]"
                 style={{
                   borderColor: classStyle.border,
-                  boxShadow: `inset 3px 0 0 ${classStyle.color}66`,
+                  borderLeftColor: classStyle.color,
                 }}
               >
                 <div className="flex items-start justify-between gap-3">

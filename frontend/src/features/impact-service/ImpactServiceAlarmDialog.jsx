@@ -1,4 +1,4 @@
-import { BellRingingIcon } from '@phosphor-icons/react';
+import { BellRing as BellRingingIcon } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import {
@@ -61,7 +61,7 @@ export default function ImpactServiceAlarmDialog({
         <DialogHeader className="border-b border-border px-6 py-5 pr-14">
           <div className="flex items-start gap-3">
             <div className="flex size-10 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
-              <BellRingingIcon className="size-5" weight="duotone" />
+              <BellRingingIcon className="size-5" />
             </div>
             <div>
               <DialogTitle>Alarm Detail</DialogTitle>

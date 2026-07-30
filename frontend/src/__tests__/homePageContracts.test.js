@@ -128,7 +128,7 @@ describe('new home page command center contracts', () => {
     assert.ok(transportIndex > impactIndex, 'Transport Quality scorecard must be placed after Today Impact Service');
   });
 
-  it('defaults Home NOP to SIDOARJO and uses equal-period comparison plus latest impact badges', () => {
+  it('defaults Home NOP to SIDOARJO and uses equal-period comparison', () => {
     const page = src('pages', 'HomePage.jsx');
 
     assert.match(page, /HOME_DEFAULT_NOP\s*=\s*'SIDOARJO'/);
@@ -138,10 +138,33 @@ describe('new home page command center contracts', () => {
     assert.match(page, /title: 'Network Availability'[\s\S]*subtitle:\s*`\$\{formatSignedPercent\(availabilityDelta\)\} \$\{comparisonLabel\}`/);
     assert.match(page, /title: 'Payload'[\s\S]*subtitle:\s*`\$\{formatSignedPercent\(payloadDelta\)\} \$\{comparisonLabel\}`/);
     assert.match(page, /title: 'Today Impact Service'[\s\S]*subtitle:\s*`Open: \$\{formatNumber\(latestImpactDaily\?\.open/);
-    assert.match(page, /badge: 'Latest \/ live'/);
-    assert.match(page, /Snapshot master · tidak dipengaruhi periode/);
     assert.doesNotMatch(page, /critical sites`/);
     assert.doesNotMatch(page, /subtitle: 'total data usage'/);
+  });
+
+  it('keeps latest Impact data while removing redundant live and snapshot badges', () => {
+    const page = src('pages', 'HomePage.jsx');
+
+    assert.match(page, /title: 'Today Impact Service'/);
+    assert.match(page, /latestImpactDaily\?\.open/);
+    assert.doesNotMatch(page, /Latest \/ live/i);
+    assert.doesNotMatch(page, /Snapshot master/);
+    assert.doesNotMatch(page, /tidak dipengaruhi periode/);
+  });
+
+  it('isolates Performance Trend and distinguishes module errors from empty data', () => {
+    const page = src('pages', 'HomePage.jsx');
+    const chart = src('features', 'home', 'HomePerformanceTrend.jsx');
+    const state = src('features', 'home', 'homePerformanceTrendState.js');
+
+    assert.match(page, /HomePerformanceTrend/);
+    assert.match(page, /overview\?\.errors\?\.reporting/);
+    assert.match(chart, /data-testid="home-performance-trend"/);
+    assert.match(chart, /DashboardChartError/);
+    assert.match(chart, /DashboardChartEmpty/);
+    assert.match(chart, /ChartContainer/);
+    assert.doesNotMatch(chart, /ResponsiveContainer/);
+    assert.match(state, /resolveHomePerformanceTrendState/);
   });
 
   it('starts latest-period independently and aborts stale overview requests', () => {
@@ -218,16 +241,20 @@ describe('new home page command center contracts', () => {
 
   it('uses dynamic Home performance domains and priority signal ordering', () => {
     const page = src('pages', 'HomePage.jsx');
+    const chart = src('features', 'home', 'HomePerformanceTrend.jsx');
 
     assert.match(page, /homeRevenueDomain/);
     assert.match(page, /homePayloadDomain/);
     assert.match(page, /homeAvailabilityDomain/);
     assert.match(page, /function buildAvailabilityDomain/);
     assert.match(page, /buildAvailabilityDomain\(trendRows\)/);
-    assert.match(page, /domain=\{homeRevenueDomain\}/);
-    assert.match(page, /domain=\{homePayloadDomain\}/);
-    assert.match(page, /domain=\{homeAvailabilityDomain\}/);
-    assert.match(page, /yAxisId="availability"[\s\S]*tickCount=\{5\}/);
+    assert.match(page, /revenueDomain=\{homeRevenueDomain\}/);
+    assert.match(page, /payloadDomain=\{homePayloadDomain\}/);
+    assert.match(page, /availabilityDomain=\{homeAvailabilityDomain\}/);
+    assert.match(chart, /domain=\{revenueDomain\}/);
+    assert.match(chart, /domain=\{payloadDomain\}/);
+    assert.match(chart, /domain=\{availabilityDomain\}/);
+    assert.match(chart, /yAxisId="availability"[\s\S]*tickCount=\{5\}/);
     assert.match(page, /PRIORITY_TONE_RANK/);
     assert.match(page, /\.sort\(\(a,\s*b\) => PRIORITY_TONE_RANK/);
     assert.match(page, /buildPrioritySignals\(overview,\s*latestImpactDaily\)/);
@@ -274,5 +301,14 @@ describe('new home page command center contracts', () => {
     assert.match(page, /Link to="\/impact-service"/);
     assert.match(page, /Link to="\/transport-quality"/);
     assert.match(page, /Link to="\/ticketing"/);
+  });
+
+  it('uses the graphite executive chart language', () => {
+    const page = src('pages', 'HomePage.jsx');
+
+    assert.doesNotMatch(page, /text-cyan-|bg-cyan-|border-cyan-|#22D3EE|#0EA5E9|#38BDF8/i);
+    assert.doesNotMatch(page, /shadow-\[0_0_|blur-sm/);
+    assert.match(page, /DashboardChartPanel|DashboardTableShell/);
+    assert.match(page, /homeChartConfig/);
   });
 });

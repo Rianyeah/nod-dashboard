@@ -6,7 +6,13 @@ export function DashboardChartEmpty({
   className = 'h-[220px]',
 }) {
   return (
-    <Empty className={cn('border border-dashed border-border bg-muted/20 p-6', className)}>
+    <Empty
+      data-chart-state="empty"
+      className={cn(
+        'border border-dashed border-[var(--border)] bg-[var(--surface-soft)] p-6',
+        className,
+      )}
+    >
       <EmptyHeader>
         <EmptyDescription className="text-xs">{label}</EmptyDescription>
       </EmptyHeader>

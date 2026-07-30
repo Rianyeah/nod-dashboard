@@ -32,4 +32,13 @@ describe('cookie session authentication contracts', () => {
     assert.match(auth, /authSession\(\)/);
     assert.match(auth, /setUnauthorizedHandler/);
   });
+
+  it('uses the shared graphite canvas and one strong authentication panel', () => {
+    const login = src('pages', 'LoginPage.jsx');
+
+    assert.match(login, /dashboard-canvas/);
+    assert.match(login, /border-\[var\(--border-strong\)\]/);
+    assert.match(login, /bg-\[var\(--bg-glass\)\]/);
+    assert.doesNotMatch(login, /border-white|bg-white|hover:bg-white|backdrop-blur|shadow-2xl/);
+  });
 });
