@@ -513,4 +513,3 @@ be reported separately with evidence rather than hidden by the redesign.
 - Core map, RF Tilt, tower rendering, and tower exports remain unchanged.
 - Required tests, lint, build, and browser checks pass, or unrelated baseline
   failures are documented with reproducible evidence.
-
