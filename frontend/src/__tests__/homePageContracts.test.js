@@ -128,7 +128,7 @@ describe('new home page command center contracts', () => {
     assert.ok(transportIndex > impactIndex, 'Transport Quality scorecard must be placed after Today Impact Service');
   });
 
-  it('defaults Home NOP to SIDOARJO and uses equal-period comparison plus latest impact badges', () => {
+  it('defaults Home NOP to SIDOARJO and uses equal-period comparison', () => {
     const page = src('pages', 'HomePage.jsx');
 
     assert.match(page, /HOME_DEFAULT_NOP\s*=\s*'SIDOARJO'/);
@@ -138,10 +138,33 @@ describe('new home page command center contracts', () => {
     assert.match(page, /title: 'Network Availability'[\s\S]*subtitle:\s*`\$\{formatSignedPercent\(availabilityDelta\)\} \$\{comparisonLabel\}`/);
     assert.match(page, /title: 'Payload'[\s\S]*subtitle:\s*`\$\{formatSignedPercent\(payloadDelta\)\} \$\{comparisonLabel\}`/);
     assert.match(page, /title: 'Today Impact Service'[\s\S]*subtitle:\s*`Open: \$\{formatNumber\(latestImpactDaily\?\.open/);
-    assert.match(page, /badge: 'Latest \/ live'/);
-    assert.match(page, /Snapshot master · tidak dipengaruhi periode/);
     assert.doesNotMatch(page, /critical sites`/);
     assert.doesNotMatch(page, /subtitle: 'total data usage'/);
+  });
+
+  it('keeps latest Impact data while removing redundant live and snapshot badges', () => {
+    const page = src('pages', 'HomePage.jsx');
+
+    assert.match(page, /title: 'Today Impact Service'/);
+    assert.match(page, /latestImpactDaily\?\.open/);
+    assert.doesNotMatch(page, /Latest \/ live/i);
+    assert.doesNotMatch(page, /Snapshot master/);
+    assert.doesNotMatch(page, /tidak dipengaruhi periode/);
+  });
+
+  it('isolates Performance Trend and distinguishes module errors from empty data', () => {
+    const page = src('pages', 'HomePage.jsx');
+    const chart = src('features', 'home', 'HomePerformanceTrend.jsx');
+    const state = src('features', 'home', 'homePerformanceTrendState.js');
+
+    assert.match(page, /HomePerformanceTrend/);
+    assert.match(page, /overview\?\.errors\?\.reporting/);
+    assert.match(chart, /data-testid="home-performance-trend"/);
+    assert.match(chart, /DashboardChartError/);
+    assert.match(chart, /DashboardChartEmpty/);
+    assert.match(chart, /ChartContainer/);
+    assert.doesNotMatch(chart, /ResponsiveContainer/);
+    assert.match(state, /resolveHomePerformanceTrendState/);
   });
 
   it('starts latest-period independently and aborts stale overview requests', () => {
