@@ -244,6 +244,51 @@ test('Reporting NOP filter is sent to scorecards chart and tables', async ({ pag
   ]);
 });
 
+test('Command Center renders reporting trend and removes redundant badges', async ({ page }) => {
+  await authenticate(page, 'light');
+  await page.goto(`${E2E_BASE_URL}/home`);
+
+  await expect(page.getByRole('heading', { name: 'Command Center' })).toBeVisible({ timeout: 20000 });
+  const chart = page.getByTestId('home-performance-trend');
+  await expect(chart).toBeVisible({ timeout: 20000 });
+  await expect(chart.locator('path.recharts-area-curve').first()).toHaveAttribute('d', /[LC]/);
+  await expect(page.getByText(/Latest\s*\/\s*live/i)).toHaveCount(0);
+  await expect(page.getByText(/Snapshot master/i)).toHaveCount(0);
+});
+
+test('Reporting shows Proker and weighted BPS Backup Sukses values', async ({ page }) => {
+  test.setTimeout(90000);
+
+  await authenticate(page, 'light');
+  await page.goto(`${E2E_BASE_URL}/reporting`);
+
+  await expect(page.getByRole('button', { name: /Performance Table/i })).toBeVisible({ timeout: 20000 });
+  await expect(page.getByRole('columnheader', { name: 'Proker Activity' })).toBeVisible({ timeout: 30000 });
+  await expect(page.getByRole('columnheader', { name: 'Backup Sukses' })).toBeVisible({ timeout: 30000 });
+  await expect(page.getByRole('button', { name: /Battery Type/i })).toHaveCount(0);
+
+  const response = await page.request.get(`${E2E_BASE_URL}/api/v1/reporting/revenue-by-kabupaten`, {
+    params: {
+      period_start: '2026-06',
+      period_end: '2026-06',
+      nop: 'SIDOARJO',
+    },
+  });
+  expect(response.ok()).toBeTruthy();
+  const rows = await response.json();
+  const expectedTotalBps = rows.reduce((sum, row) => sum + row.ticket_swfm_bps, 0);
+  const expectedTotalSuccess = rows.reduce((sum, row) => sum + row.backup_sukses_bps, 0);
+  const expectedRate = expectedTotalBps
+    ? Math.round((10000 * expectedTotalSuccess) / expectedTotalBps) / 100
+    : 0;
+  const expectedRateLabel = `${expectedRate.toFixed(2).replace('.', ',')}%`;
+
+  const totalRow = page.getByRole('row', { name: /^TOTAL\s/ });
+  await expect(totalRow).toContainText(expectedTotalSuccess.toLocaleString('id-ID'));
+  await expect(totalRow).toContainText(expectedRateLabel);
+  expect(rows.some((row) => row.proker_open > 0 || row.proker_closed > 0)).toBeTruthy();
+});
+
 test('Transport Quality charts preserve adaptive Popover behavior and responsive tooltips', async ({ page }) => {
   const requests = [];
 
