@@ -1,6 +1,10 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { InfoIcon, LinkIcon, RadioIcon } from '@phosphor-icons/react';
+import {
+  Info as InfoIcon,
+  Link as LinkIcon,
+  Radio as RadioIcon,
+} from 'lucide-react';
 
 export default function RfTiltAntennaSpecPanel({ antennaSpec, loading }) {
   if (loading) {

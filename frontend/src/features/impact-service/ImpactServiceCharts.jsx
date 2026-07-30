@@ -1,10 +1,10 @@
 import {
-  ActivityIcon,
-  ClockIcon,
-  ListChecksIcon,
-  ShieldWarningIcon,
-  UsersIcon,
-} from '@phosphor-icons/react';
+  Activity as ActivityIcon,
+  Clock3 as ClockIcon,
+  ListChecks as ListChecksIcon,
+  ShieldAlert as ShieldWarningIcon,
+  Users as UsersIcon,
+} from 'lucide-react';
 import {
   Bar,
   BarChart,
@@ -45,7 +45,7 @@ function ChartCard({ title, description, icon: Icon, children, className = '' })
       <CardHeader className="border-b border-border pb-3">
         <div className="flex items-start gap-2">
           <div className="flex size-8 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <Icon weight="duotone" />
+            <Icon />
           </div>
           <div>
             <CardTitle className="text-sm font-semibold">{title}</CardTitle>

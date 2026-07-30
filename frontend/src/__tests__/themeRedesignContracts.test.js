@@ -96,6 +96,51 @@ describe('global dashboard theme redesign contracts', () => {
     assert.doesNotMatch(sidebar, /hover:bg-\[var\(--primary\)\]\/10/);
   });
 
+  it('uses Lucide as the single dashboard icon family', () => {
+    const sourceFiles = [
+      'components/Header.jsx',
+      'components/dashboard-filters/DashboardFilters.jsx',
+      'components/ui/calendar.jsx',
+      'components/ui/checkbox.jsx',
+      'components/ui/command.jsx',
+      'components/ui/dialog.jsx',
+      'components/ui/pagination.jsx',
+      'components/ui/select.jsx',
+      'components/ui/sheet.jsx',
+      'features/data-potensi/DataPotensiSiteTable.jsx',
+      'features/impact-service/ImpactServiceAlarmDialog.jsx',
+      'features/impact-service/ImpactServiceAlarmTable.jsx',
+      'features/impact-service/ImpactServiceCharts.jsx',
+      'features/impact-service/ImpactServiceFilters.jsx',
+      'features/impact-service/ImpactServiceHeader.jsx',
+      'features/impact-service/ImpactServiceKpiGrid.jsx',
+      'features/impact-service/ImpactServiceStates.jsx',
+      'features/impact-service/ImpactServiceTopAlarms.jsx',
+      'features/rf-tilt/RfTiltAntennaSpecPanel.jsx',
+      'features/rf-tilt/RfTiltExportButton.jsx',
+      'features/rf-tilt/RfTiltParamForm.jsx',
+      'pages/ActivityEnomPage.jsx',
+      'pages/TicketingPage.jsx',
+      'pages/TransportQualityPage.jsx',
+    ];
+
+    for (const file of sourceFiles) {
+      const source = src(...file.split('/'));
+      assert.doesNotMatch(source, /@phosphor-icons\/react/, file);
+    }
+
+    const componentsConfig = JSON.parse(
+      readFileSync(resolve(process.cwd(), 'components.json'), 'utf8'),
+    );
+    assert.equal(componentsConfig.iconLibrary, 'lucide');
+
+    const packageJson = JSON.parse(
+      readFileSync(resolve(process.cwd(), 'package.json'), 'utf8'),
+    );
+    const legacyIconPackage = ['@phosphor-icons', 'react'].join('/');
+    assert.equal(legacyIconPackage in packageJson.dependencies, false);
+  });
+
   it('migrates authenticated dashboard surfaces to shared primitives and theme-aware charts', () => {
     for (const pageName of [
       'HomePage.jsx',

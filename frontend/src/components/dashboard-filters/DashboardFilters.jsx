@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  ArrowCounterClockwiseIcon,
-  CalendarBlankIcon,
-  CaretLeftIcon,
-  CaretRightIcon,
-  CaretUpDownIcon,
-  FunnelIcon,
-  MagnifyingGlassIcon,
-  XIcon,
-} from '@phosphor-icons/react';
+  CalendarDays as CalendarBlankIcon,
+  ChevronLeft as CaretLeftIcon,
+  ChevronRight as CaretRightIcon,
+  ChevronsUpDown as CaretUpDownIcon,
+  Funnel as FunnelIcon,
+  RotateCcw as ArrowCounterClockwiseIcon,
+  Search as MagnifyingGlassIcon,
+  X as XIcon,
+} from 'lucide-react';
 import { format } from 'date-fns';
 import { id } from 'date-fns/locale';
 

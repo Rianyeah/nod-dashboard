@@ -1,11 +1,11 @@
 import {
-  ArrowCounterClockwiseIcon,
-  ArrowDownIcon,
-  ArrowUpIcon,
-  CaretUpDownIcon,
-  DatabaseIcon,
-  TrayIcon,
-} from '@phosphor-icons/react';
+  ArrowDown as ArrowDownIcon,
+  ArrowUp as ArrowUpIcon,
+  ChevronsUpDown as CaretUpDownIcon,
+  Database as DatabaseIcon,
+  Inbox as TrayIcon,
+  RotateCcw as ArrowCounterClockwiseIcon,
+} from 'lucide-react';
 
 import {
   DashboardFilterChips,
@@ -147,7 +147,7 @@ export default function DataPotensiSiteTable({
         <DashboardTableToolbar>
           <div className="flex items-center gap-2">
             <div className="flex size-8 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <DatabaseIcon weight="duotone" />
+              <DatabaseIcon />
             </div>
             <div>
               <CardTitle className="text-sm font-semibold">Detail Site</CardTitle>

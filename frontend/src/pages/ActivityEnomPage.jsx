@@ -2,16 +2,14 @@
 import { Component, useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ArrowCounterClockwiseIcon,
-  CaretDownIcon,
-  CaretUpDownIcon,
-  CaretUpIcon,
-} from '@phosphor-icons/react';
-import {
   Activity,
   ArrowLeft,
   CheckCircle2,
+  ChevronDown as CaretDownIcon,
+  ChevronUp as CaretUpIcon,
+  ChevronsUpDown as CaretUpDownIcon,
   ClipboardList,
+  RotateCcw as ArrowCounterClockwiseIcon,
   TrendingUp,
   Users,
   X,

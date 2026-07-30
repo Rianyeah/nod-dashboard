@@ -1,12 +1,12 @@
 import {
-  ArrowCounterClockwiseIcon,
-  ArrowDownIcon,
-  ArrowUpIcon,
-  CaretUpDownIcon,
-  FunnelIcon,
-  SirenIcon,
-  TrayIcon,
-} from '@phosphor-icons/react';
+  ArrowDown as ArrowDownIcon,
+  ArrowUp as ArrowUpIcon,
+  ChevronsUpDown as CaretUpDownIcon,
+  Funnel as FunnelIcon,
+  Inbox as TrayIcon,
+  RotateCcw as ArrowCounterClockwiseIcon,
+  Siren as SirenIcon,
+} from 'lucide-react';
 
 import {
   DashboardFilterSelect,
@@ -118,7 +118,7 @@ export default function ImpactServiceAlarmTable({
         <DashboardTableToolbar>
           <div className="flex items-center gap-2">
             <div className="flex size-8 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <SirenIcon weight="duotone" />
+              <SirenIcon />
             </div>
             <div>
               <CardTitle className="text-sm font-semibold">Alarm Detail Table</CardTitle>

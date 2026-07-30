@@ -1,9 +1,9 @@
 import { Component } from 'react';
 import {
-  ArrowClockwiseIcon,
-  ChartBarIcon,
-  WarningCircleIcon,
-} from '@phosphor-icons/react';
+  BarChart3 as ChartBarIcon,
+  CircleAlert as WarningCircleIcon,
+  RefreshCw as ArrowClockwiseIcon,
+} from 'lucide-react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';

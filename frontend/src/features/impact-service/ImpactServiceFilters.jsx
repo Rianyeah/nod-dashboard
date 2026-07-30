@@ -1,4 +1,4 @@
-import { ArrowCounterClockwiseIcon } from '@phosphor-icons/react';
+import { RotateCcw as ArrowCounterClockwiseIcon } from 'lucide-react';
 
 import {
   DashboardCombobox,

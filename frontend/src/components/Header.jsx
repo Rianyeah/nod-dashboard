@@ -1,4 +1,4 @@
-import { MapPinIcon } from '@phosphor-icons/react';
+import { MapPin as MapPinIcon } from 'lucide-react';
 
 import {
   DashboardCombobox,

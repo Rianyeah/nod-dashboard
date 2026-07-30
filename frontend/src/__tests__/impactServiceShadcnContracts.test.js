@@ -16,7 +16,7 @@ describe('Impact Service shadcn migration contracts', () => {
     assert.equal(config.rsc, false);
     assert.equal(config.tsx, false);
     assert.equal(config.tailwind.css, 'src/index.css');
-    assert.equal(config.iconLibrary, 'phosphor');
+    assert.equal(config.iconLibrary, 'lucide');
     assert.deepEqual(jsconfig.compilerOptions.paths['@/*'], ['./src/*']);
     assert.match(vite, /alias:\s*\{[\s\S]*'@':\s*path\.resolve/);
   });

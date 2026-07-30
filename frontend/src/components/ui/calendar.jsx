@@ -3,7 +3,11 @@ import { DayPicker, getDefaultClassNames } from "react-day-picker";
 
 import { cn } from "@/lib/utils"
 import { Button, buttonVariants } from "@/components/ui/button"
-import { CaretLeftIcon, CaretRightIcon, CaretDownIcon } from "@phosphor-icons/react"
+import {
+  ChevronDown as CaretDownIcon,
+  ChevronLeft as CaretLeftIcon,
+  ChevronRight as CaretRightIcon,
+} from "lucide-react"
 
 function Calendar({
   className,
