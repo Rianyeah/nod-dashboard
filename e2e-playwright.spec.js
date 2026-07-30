@@ -289,6 +289,75 @@ test('Reporting shows Proker and weighted BPS Backup Sukses values', async ({ pa
   expect(rows.some((row) => row.proker_open > 0 || row.proker_closed > 0)).toBeTruthy();
 });
 
+test('Tower Visualizer confirms a mobile Site ID submitted while search is loading', async ({ page }) => {
+  test.setTimeout(60000);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await authenticate(page, 'light');
+  await page.route('**/api/v1/tower-plan/sites?**', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    await fulfillJson(route, {
+      items: [{
+        site_id: 'PSN003',
+        cell_count: 18,
+        estimated_antenna_count: 4,
+      }],
+    });
+  });
+  await page.goto(`${E2E_BASE_URL}/tower-plan-generator`);
+
+  const siteSearch = page.getByRole('combobox', { name: 'Cari Site ID untuk auto-fill' });
+  await siteSearch.fill('PSN003');
+  await expect(siteSearch).toHaveAttribute('aria-busy', 'true');
+  await siteSearch.press('Enter');
+
+  await expect(
+    page.getByRole('dialog', { name: /Review Auto-fill · PSN003/i }),
+  ).toBeVisible({ timeout: 20000 });
+});
+
+test('Tower Visualizer opens mobile auto-fill review from a tapped Site ID result', async ({ page }) => {
+  test.setTimeout(60000);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await authenticate(page, 'light');
+  await page.route('**/api/v1/tower-plan/sites?**', async (route) => {
+    await fulfillJson(route, {
+      items: [{
+        site_id: 'PSN003',
+        cell_count: 18,
+        estimated_antenna_count: 4,
+      }],
+    });
+  });
+  await page.goto(`${E2E_BASE_URL}/tower-plan-generator`);
+
+  const siteSearch = page.getByRole('combobox', { name: 'Cari Site ID untuk auto-fill' });
+  await siteSearch.fill('PSN003');
+  const result = page.getByRole('option', { name: /PSN003/i });
+  await expect(result).toBeVisible({ timeout: 10000 });
+  await result.click();
+
+  await expect(
+    page.getByRole('dialog', { name: /Review Auto-fill · PSN003/i }),
+  ).toBeVisible({ timeout: 20000 });
+});
+
+test('Tower Visualizer keeps its subtitle-free page header compact on mobile', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await authenticate(page, 'light');
+  await page.goto(`${E2E_BASE_URL}/tower-plan-generator`);
+
+  const compactHeader = page.locator('header[data-density="compact"]');
+  await expect(compactHeader).toBeVisible();
+  const headerBox = await compactHeader.boundingBox();
+
+  expect(headerBox?.height).toBeLessThanOrEqual(72);
+  await expect.poll(() => page.evaluate(() => (
+    document.documentElement.scrollWidth <= window.innerWidth
+  ))).toBeTruthy();
+});
+
 test('Transport Quality charts preserve adaptive Popover behavior and responsive tooltips', async ({ page }) => {
   const requests = [];
 

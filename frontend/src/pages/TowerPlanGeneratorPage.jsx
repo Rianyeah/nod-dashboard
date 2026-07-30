@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   ArrowDownUp,
@@ -186,7 +186,7 @@ export default function TowerPlanGeneratorPage() {
     ));
   };
 
-  const handleSiteSelection = async (siteId) => {
+  const handleSiteSelection = useCallback(async (siteId) => {
     configRequestRef.current?.abort();
     const controller = new AbortController();
     configRequestRef.current = controller;
@@ -198,12 +198,15 @@ export default function TowerPlanGeneratorPage() {
       setAutofillOpen(true);
     } catch (error) {
       if (error.name !== 'CanceledError' && error.name !== 'AbortError') {
-        notify('error', error.response?.data?.detail || 'Konfigurasi Site ID gagal dimuat.');
+        setNotice({
+          type: 'error',
+          message: error.response?.data?.detail || 'Konfigurasi Site ID gagal dimuat.',
+        });
       }
     } finally {
       if (!controller.signal.aborted) setAutofillLoading(false);
     }
-  };
+  }, [plan.towerType]);
 
   const applyAutofill = () => {
     const errors = validateAutofillDraft(autofillDraft);
@@ -268,13 +271,24 @@ export default function TowerPlanGeneratorPage() {
         title="Tower Visualizer"
         icon={TowerControl}
         action={(
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="outline">Tools</Badge>
-            <Button size="sm" variant="outline" onClick={() => editPlan(migrateTowerPlan(PSN003_PRESET))}>
-              <RadioTower /> Preset PSN003
+          <div className="flex flex-nowrap items-center gap-1.5 sm:gap-2">
+            <Badge className="hidden sm:inline-flex" variant="outline">Tools</Badge>
+            <Button
+              aria-label="Muat preset PSN003"
+              className="sm:w-auto sm:px-3"
+              size="icon-sm"
+              title="Preset PSN003"
+              variant="outline"
+              onClick={() => editPlan(migrateTowerPlan(PSN003_PRESET))}
+            >
+              <RadioTower />
+              <span className="hidden sm:inline">Preset PSN003</span>
             </Button>
             <Button
-              size="sm"
+              aria-label="Reset konfigurasi"
+              className="sm:w-auto sm:px-3"
+              size="icon-sm"
+              title="Reset"
               variant="outline"
               onClick={() => {
                 if (window.confirm('Reset seluruh konfigurasi ke template kosong?')) {
@@ -283,7 +297,8 @@ export default function TowerPlanGeneratorPage() {
                 }
               }}
             >
-              <RotateCcw /> Reset
+              <RotateCcw />
+              <span className="hidden sm:inline">Reset</span>
             </Button>
           </div>
         )}

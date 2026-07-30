@@ -462,7 +462,7 @@ describe('Tower Plan state contracts', () => {
     assert.equal(selectSiteFromResults([], 'PSN003'), null);
   });
 
-  it('only allows Enter selection for results belonging to the current Site ID query', () => {
+  it('selects current results immediately and queues Enter while mobile search is loading', () => {
     const pickerSource = readFileSync(
       new URL('../features/tower-plan/TowerPlanSitePicker.jsx', import.meta.url),
       'utf8',
@@ -474,7 +474,11 @@ describe('Tower Plan state contracts', () => {
     assert.equal(canSelectCurrentSiteResult('P', 'P', false), false);
     assert.match(pickerSource, /const \[resultsQuery, setResultsQuery\] = useState\(''\)/);
     assert.match(pickerSource, /setResultsQuery\(normalized\)/);
-    assert.match(pickerSource, /event\.key === 'Enter' && open && hasCurrentResults/);
+    assert.match(pickerSource, /const pendingSelectionRef = useRef\(false\)/);
+    assert.match(pickerSource, /if \(pendingSelectionRef\.current\)/);
+    assert.match(pickerSource, /event\.key === 'Enter' && open/);
+    assert.match(pickerSource, /else if \(loading && query\.trim\(\)\.length >= 2\)/);
+    assert.match(pickerSource, /enterKeyHint="go"/);
   });
 
   it('builds a professional Monopole prompt with grouped CIDs and mounting sides', () => {
