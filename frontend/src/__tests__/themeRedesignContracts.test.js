@@ -142,15 +142,22 @@ describe('global dashboard theme redesign contracts', () => {
   });
 
   it('migrates authenticated dashboard surfaces to shared primitives and theme-aware charts', () => {
-    for (const pageName of [
-      'HomePage.jsx',
-      'NetworkReportingPage.jsx',
-    ]) {
-      const page = src('pages', pageName);
-      assert.match(page, /DashboardKpiCard|DashboardChartPanel|DashboardStatusBadge|DashboardChartTooltip/, pageName);
-      assert.match(page, /useDashboardThemeTokens/, pageName);
-      assert.doesNotMatch(page, /stroke="rgba\(148,163,184,0\.16\)"/, pageName);
-      assert.doesNotMatch(page, /tick=\{\{\s*fontSize:\s*10,\s*fill:\s*'#94A3B8'\s*\}\}/, pageName);
+    const homePage = src('pages', 'HomePage.jsx');
+    const homeTrend = src('features', 'home', 'HomePerformanceTrend.jsx');
+    assert.match(homePage, /DashboardKpiCard|DashboardChartPanel|DashboardStatusBadge|DashboardChartTooltip/);
+    assert.match(homePage, /HomePerformanceTrend/);
+    assert.match(homeTrend, /ChartContainer/);
+    assert.match(homeTrend, /DashboardChartTooltipContent/);
+    assert.match(homeTrend, /var\(--chart-/);
+    assert.doesNotMatch(homeTrend, /ResponsiveContainer|useDashboardThemeTokens/);
+
+    const reportingPage = src('pages', 'NetworkReportingPage.jsx');
+    assert.match(reportingPage, /DashboardKpiCard|DashboardChartPanel|DashboardStatusBadge|DashboardChartTooltip/);
+    assert.match(reportingPage, /useDashboardThemeTokens/);
+
+    for (const surface of [homePage + homeTrend, reportingPage]) {
+      assert.doesNotMatch(surface, /stroke="rgba\(148,163,184,0\.16\)"/);
+      assert.doesNotMatch(surface, /tick=\{\{\s*fontSize:\s*10,\s*fill:\s*'#94A3B8'\s*\}\}/);
     }
 
     for (const [pageName, featureDirectory, chartModule] of [
