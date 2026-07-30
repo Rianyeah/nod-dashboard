@@ -46,6 +46,7 @@ import {
   DashboardTableShell,
 } from '../components/ui/DashboardPrimitives';
 import { reportingChartConfig } from '../features/reporting/reportingChartConfig';
+import { buildRevenueTotals } from '../features/reporting/reportingPerformanceMetrics';
 import {
   fetchReportingAvailableMonths,
   fetchReportingScorecards,
@@ -129,51 +130,6 @@ function DeltaValue({ delta, formatter }) {
       {label}
     </span>
   );
-}
-
-function buildRevenueTotals(rows) {
-  if (!rows.length) return null;
-  const totals = rows.reduce(
-    (acc, row) => {
-      acc.total_sites += row.total_sites;
-      acc.rev += row.rev;
-      acc.rev_voice += row.rev_voice;
-      acc.rev_bb += row.rev_bb;
-      acc.rev_dig += row.rev_dig;
-      acc.rev_sms += row.rev_sms;
-      acc.rev_ir += row.rev_ir;
-      acc.payload += row.payload;
-      acc.traffic += row.traffic;
-      acc.ticket_swfm_bps += row.ticket_swfm_bps || 0;
-      acc.ticket_swfm_ts += row.ticket_swfm_ts || 0;
-      acc.proker_open += row.proker_open || 0;
-      acc.proker_closed += row.proker_closed || 0;
-      if (row.avg_availability != null) {
-        acc._avail_sum += row.avg_availability * row.total_sites;
-        acc._avail_count += row.total_sites;
-      }
-      return acc;
-    },
-    {
-      total_sites: 0,
-      rev: 0,
-      rev_voice: 0,
-      rev_bb: 0,
-      rev_dig: 0,
-      rev_sms: 0,
-      rev_ir: 0,
-      payload: 0,
-      traffic: 0,
-      ticket_swfm_bps: 0,
-      ticket_swfm_ts: 0,
-      proker_open: 0,
-      proker_closed: 0,
-      _avail_sum: 0,
-      _avail_count: 0,
-    },
-  );
-  totals.avg_availability = totals._avail_count > 0 ? totals._avail_sum / totals._avail_count : null;
-  return totals;
 }
 
 function getRevenueContributorInsight(currentTotals, previousTotals) {
