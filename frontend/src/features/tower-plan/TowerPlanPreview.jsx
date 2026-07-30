@@ -12,8 +12,8 @@ export default function TowerPlanPreview({ plan }) {
 
   return (
     <>
-      <Card className="overflow-visible py-0">
-        <CardHeader className="border-b border-border px-4 py-3">
+      <Card className="overflow-visible border border-[var(--border-strong)] py-0">
+        <CardHeader className="border-b border-[var(--border-strong)] px-4 py-3">
           <CardTitle className="flex items-center gap-2 text-sm">
             <Braces className="size-4 text-primary" />
             Engineering preview
@@ -22,7 +22,7 @@ export default function TowerPlanPreview({ plan }) {
         <CardContent className="p-3">
           <button
             aria-label="Perbesar engineering preview"
-            className="group relative block w-full overflow-hidden rounded-xl border border-border bg-muted/30 text-left shadow-inner outline-none transition hover:border-primary/50 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30"
+            className="group relative block w-full overflow-hidden rounded-xl border border-[var(--border-strong)] bg-muted/30 text-left shadow-[var(--shadow-sm)] outline-none transition hover:border-primary/50 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30"
             type="button"
             onClick={() => setOpen(true)}
           >
@@ -31,7 +31,7 @@ export default function TowerPlanPreview({ plan }) {
               className="block aspect-[19/12] w-full object-contain"
               src={source}
             />
-            <span className="pointer-events-none absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-slate-950/75 px-2 py-1 text-[9px] text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+            <span className="pointer-events-none absolute bottom-2 right-2 flex items-center gap-1 rounded-full border border-[var(--border-strong)] bg-[var(--bg-glass)] px-2 py-1 text-[9px] text-[var(--text-primary)] opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
               <Maximize2 className="size-3" />
               Preview 19:12
             </span>

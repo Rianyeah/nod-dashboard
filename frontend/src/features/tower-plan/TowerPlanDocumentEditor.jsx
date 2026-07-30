@@ -158,13 +158,13 @@ export default function TowerPlanDocumentEditor({ plan, onChange }) {
                   'flex min-w-0 items-center gap-2 rounded-xl border px-2.5 py-2 text-left text-xs transition',
                   selected
                     ? 'border-primary bg-primary/10 text-foreground ring-2 ring-primary/20'
-                    : 'border-border bg-background/40 text-muted-foreground hover:border-primary/40 hover:text-foreground',
+                    : 'border-[var(--border-strong)] bg-background/40 text-muted-foreground hover:border-primary/40 hover:text-foreground',
                 ].join(' ')}
                 onClick={() => selectPreset(preset)}
               >
                 <span
                   aria-hidden="true"
-                  className="size-5 shrink-0 rounded-md border border-black/15 shadow-inner"
+                  className="size-5 shrink-0 rounded-md border border-[var(--border-strong)]"
                   style={{ backgroundColor: swatchColor }}
                 />
                 <span className="truncate">{preset.label}</span>
@@ -212,7 +212,7 @@ export default function TowerPlanDocumentEditor({ plan, onChange }) {
                   'flex min-w-0 flex-col items-start rounded-xl border px-3 py-2.5 text-left transition',
                   selected
                     ? 'border-primary bg-primary/10 text-foreground ring-2 ring-primary/20'
-                    : 'border-border bg-background/40 text-muted-foreground hover:border-primary/40 hover:text-foreground',
+                    : 'border-[var(--border-strong)] bg-background/40 text-muted-foreground hover:border-primary/40 hover:text-foreground',
                 ].join(' ')}
                 onClick={() => selectDetailFontPreset(preset)}
               >

@@ -1221,4 +1221,20 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
     assert.doesNotMatch(documentEditor, /WORKFLOW NOTE/);
     assert.match(documentEditor, /aria-invalid/);
   });
+
+  it('uses graphite chrome while preserving deterministic tower output', () => {
+    const sources = [
+      '../pages/TowerPlanGeneratorPage.jsx',
+      '../features/tower-plan/TowerPlanAntennaEditor.jsx',
+      '../features/tower-plan/TowerPlanAutofillDialog.jsx',
+      '../features/tower-plan/TowerPlanDocumentEditor.jsx',
+      '../features/tower-plan/TowerPlanPreview.jsx',
+      '../features/tower-plan/TowerPlanPreviewDialog.jsx',
+    ].map((path) => readFileSync(new URL(path, import.meta.url), 'utf8'));
+    const chrome = sources.join('\n');
+
+    assert.doesNotMatch(chrome, /#22D3EE|#0EA5E9|#38BDF8|shadow-\[0_0_|backdrop-blur/i);
+    assert.match(sources[0], /dashboard-canvas/);
+    assert.match(chrome, /var\(--border-strong\)|DashboardPanelHeader|DashboardPageHeader/);
+  });
 });

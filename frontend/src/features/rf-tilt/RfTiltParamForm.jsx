@@ -77,7 +77,7 @@ function AntennaModelPreview({ model }) {
   ].filter(([, value]) => value != null && value !== '');
 
   return (
-    <div className="h-full border-l border-border bg-muted/20 p-3" aria-live="polite">
+    <div className="h-full border-l border-[var(--border-strong)] bg-muted/20 p-3" aria-live="polite">
       <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Specification preview</p>
       <p className="mt-2 break-words text-xs font-semibold text-foreground">{model.antenna_model}</p>
       <dl className="mt-3 space-y-2">
@@ -164,7 +164,7 @@ export default function RfTiltParamForm({
 
   return (
     <TooltipProvider>
-      <Card size="sm">
+      <Card size="sm" className="border border-[var(--border-strong)]">
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <FieldLabel

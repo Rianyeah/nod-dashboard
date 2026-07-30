@@ -1,4 +1,5 @@
 import { useRef, useCallback } from 'react';
+import { RadioTower } from 'lucide-react';
 import Breadcrumb from '../components/Breadcrumb';
 import { useRfTiltAnalysis } from '../features/rf-tilt/useRfTiltAnalysis';
 import RfTiltParamForm from '../features/rf-tilt/RfTiltParamForm';
@@ -55,24 +56,14 @@ export default function RfTiltAnalysisPage() {
   }, [targetMode, setMultiple]);
 
   return (
-    <div ref={exportRef} data-export="rf-tilt-analysis" className="min-h-screen">
+    <div ref={exportRef} data-export="rf-tilt-analysis" className="dashboard-canvas min-h-screen">
       <Breadcrumb />
 
       {/* Page header */}
-      <div className="flex items-center justify-between border-b border-[var(--border)] px-6 py-3">
+      <div className="flex items-center justify-between border-b border-[var(--border-strong)] bg-[var(--bg-header)] px-6 py-3">
         <div className="flex items-center gap-3">
-          {/* Tower icon in header */}
-          <div
-            className="flex items-center justify-center w-8 h-8 rounded-lg"
-            style={{ background: 'linear-gradient(135deg, rgba(34,211,238,0.15), rgba(34,211,238,0.05))' }}
-          >
-            <svg width="18" height="18" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M5 15L8 4L11 15" stroke="#22d3ee" strokeWidth="1.3" fill="none"/>
-              <line x1="6" y1="11" x2="10" y2="11" stroke="#22d3ee" strokeWidth="0.8"/>
-              <line x1="6.5" y1="8" x2="9.5" y2="8" stroke="#22d3ee" strokeWidth="0.8"/>
-              <rect x="6" y="1" width="4" height="4" rx="1" fill="#22d3ee" opacity="0.6"/>
-              <circle cx="8" cy="1" r="1" fill="#ef4444" opacity="0.8"/>
-            </svg>
+          <div className="flex size-8 items-center justify-center rounded-lg border border-[var(--border-strong)] bg-[var(--surface-soft)] text-[var(--text-secondary)]">
+            <RadioTower className="size-4" strokeWidth={1.8} />
           </div>
           <div>
             <h1 className="text-base font-semibold text-[var(--text-primary)]">
@@ -122,8 +113,8 @@ export default function RfTiltAnalysisPage() {
 
             {/* Status messages */}
             {statusMsg && (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground px-2 py-1.5 rounded-md bg-muted/30">
-                <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--primary-light)] animate-pulse" />
+              <div className="flex items-center gap-2 rounded-lg border border-[var(--border-strong)] bg-[var(--surface-soft)] px-3 py-2 text-xs text-muted-foreground">
+                <span className="inline-block size-1.5 rounded-full bg-[var(--primary)]" />
                 {statusMsg}
               </div>
             )}
@@ -143,7 +134,7 @@ export default function RfTiltAnalysisPage() {
 
             {result && (
               <RfTiltResultErrorBoundary resetKey={result}>
-                <div className="space-y-4 bg-[var(--bg-base)] p-3 rounded-lg">
+                <div className="space-y-4">
                   <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(280px,1fr)]">
                     <div className="min-w-0">
                       <RfTiltChart result={result} />
@@ -171,7 +162,7 @@ export default function RfTiltAnalysisPage() {
             )}
 
             {!result && !loading && !antennaSpec && !antennaSpecLoading && (
-              <div className="flex flex-col items-center justify-center h-64 gap-3 text-sm text-muted-foreground border border-dashed border-border rounded-lg">
+              <div className="glass-card flex h-64 flex-col items-center justify-center gap-3 border border-dashed border-[var(--border-strong)] text-sm text-muted-foreground">
                 <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" opacity="0.3">
                   <path d="M12 38L20 10L28 38" stroke="currentColor" strokeWidth="2" fill="none"/>
                   <line x1="14" y1="28" x2="26" y2="28" stroke="currentColor" strokeWidth="1.5"/>
