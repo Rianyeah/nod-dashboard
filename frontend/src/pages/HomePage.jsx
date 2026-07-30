@@ -16,12 +16,9 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import {
-  Area,
   Bar,
-  CartesianGrid,
   ComposedChart,
   Line,
-  ReferenceArea,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -30,7 +27,6 @@ import {
 import Breadcrumb from '../components/Breadcrumb';
 import Header from '../components/Header';
 import { useDashboardSidebar } from '../hooks/useDashboardSidebar';
-import { useDashboardThemeTokens } from '../hooks/useDashboardThemeTokens';
 import {
   DashboardChartPanel,
   DashboardChartTooltip,
@@ -54,8 +50,8 @@ import {
   formatPayload,
   formatPercent,
   formatRevenue,
-  formatRevenueShort,
 } from '../utils/formatters';
+import { HomePerformanceTrend } from '../features/home/HomePerformanceTrend';
 import { homeChartConfig } from '../features/home/homeChartConfig';
 
 const MONTH_LABELS = {
@@ -160,14 +156,6 @@ function mergeNopOptions(...groups) {
   return Array.from(unique.values()).sort((a, b) => a.localeCompare(b));
 }
 
-function formatPayloadAxisTick(value) {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return '';
-  const gb = number / 1_048_576;
-  if (gb >= 1_000) return `${(gb / 1_000).toFixed(1)}TB`;
-  return `${Math.round(gb)}GB`;
-}
-
 function getAvailabilityTone(value) {
   const availability = asNumber(value, null);
   if (availability == null) return 'info';
@@ -265,25 +253,6 @@ function buildLastUpdateRows(overview, bulan, tahun) {
   ];
 }
 
-function TrendTooltip({ active, payload, label }) {
-  if (!active || !payload?.length) return null;
-  const revenue = payload.find((item) => item.dataKey === 'total_revenue');
-  const payloadData = payload.find((item) => item.dataKey === 'total_payload');
-  const availability = payload.find((item) => item.dataKey === 'avg_availability');
-  return (
-    <DashboardChartTooltip
-      active={active}
-      label={label}
-      labelFormatter={formatMonthLabel}
-      payload={[
-        revenue && { ...revenue, name: 'Revenue', value: formatRevenue(revenue.value), color: homeChartConfig.total_revenue.color },
-        payloadData && { ...payloadData, name: 'Payload', value: formatPayload(payloadData.value), color: homeChartConfig.total_payload.color },
-        availability && { ...availability, name: 'Availability', value: formatPercent(availability.value), color: homeChartConfig.avg_availability.color },
-      ].filter(Boolean)}
-    />
-  );
-}
-
 function MetricCard({ title, value, subtitle, icon: Icon, tone = 'info', badge }) {
   return (
     <div className="relative">
@@ -340,14 +309,6 @@ function ClassBreakdownLegend({ rows = [] }) {
           <p className="col-span-2 text-[10px] text-[var(--text-muted)]">Class site belum tersedia.</p>
         )}
       </div>
-    </div>
-  );
-}
-
-function ChartEmpty({ label }) {
-  return (
-    <div className="flex h-[260px] items-center justify-center rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg-elevated)]/35">
-      <p className="text-xs text-[var(--text-muted)]">{label}</p>
     </div>
   );
 }
@@ -648,7 +609,6 @@ function buildPrioritySignals(overview, latestImpactDaily) {
 
 export default function HomePage() {
   const { setLastUpdates } = useDashboardSidebar();
-  const themeTokens = useDashboardThemeTokens();
   const [selectedPeriod, setSelectedPeriod] = useState({ start: '', end: '' });
   const [defaultPeriod, setDefaultPeriod] = useState({ start: '', end: '' });
   const [availableMonths, setAvailableMonths] = useState([]);
@@ -826,7 +786,6 @@ export default function HomePage() {
       subtitle: `Open: ${formatNumber(latestImpactDaily?.open ?? impact.open_alarms)} Clear: ${formatNumber(latestImpactDaily?.clear ?? impact.clear_alarms)}`,
       icon: BellRing,
       tone: getCountTone(latestImpactDaily?.open ?? impact.open_alarms, 1, 50),
-      badge: 'Latest / live',
     },
     {
       title: 'Transport Quality',
@@ -888,7 +847,6 @@ export default function HomePage() {
           <div className="mb-2 flex items-center gap-2">
             <Gauge className="size-4 text-[var(--primary-light)]" />
             <h2 className="text-sm font-semibold text-[var(--text-primary)]">Data Potensi Site</h2>
-            <span className="rounded-full border border-violet-400/30 bg-violet-400/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-violet-300">Snapshot master · tidak dipengaruhi periode</span>
           </div>
           <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-5">
             <PotentialItem label="Site Lithium" metric={sitePotential.site_lithium} tone="success" />
@@ -911,34 +869,14 @@ export default function HomePage() {
               </div>
             )}
           >
-            {trendRows.length ? (
-              <ResponsiveContainer width="100%" height={260}>
-                <ComposedChart data={trendRows} margin={{ top: 8, right: 60, left: 4, bottom: 0 }}>
-                  <ReferenceArea x1={selectedPeriod.start} x2={selectedPeriod.end} fill={homeChartConfig.total_payload.color} fillOpacity={0.06} strokeOpacity={0} />
-                  <defs>
-                    <linearGradient id="homeRevenueGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={homeChartConfig.total_revenue.color} stopOpacity={0.14} />
-                      <stop offset="95%" stopColor={homeChartConfig.total_revenue.color} stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="homePayloadGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={homeChartConfig.total_payload.color} stopOpacity={0.12} />
-                      <stop offset="95%" stopColor={homeChartConfig.total_payload.color} stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke={themeTokens.chartGrid} vertical={false} />
-                  <XAxis dataKey="trx_month" tickFormatter={formatMonthLabel} tick={{ fontSize: 10, fill: themeTokens.axisTick }} tickLine={false} axisLine={false} />
-                  <YAxis yAxisId="revenue" domain={homeRevenueDomain} tickFormatter={formatRevenueShort} tick={{ fontSize: 10, fill: themeTokens.axisTick }} tickLine={false} axisLine={false} width={54} />
-                  <YAxis yAxisId="payload" orientation="right" domain={homePayloadDomain} tickFormatter={formatPayloadAxisTick} tick={{ fontSize: 10, fill: themeTokens.axisTick }} tickLine={false} axisLine={false} width={42} />
-                  <YAxis yAxisId="availability" orientation="right" domain={homeAvailabilityDomain} tickCount={5} allowDataOverflow tickFormatter={(value) => `${value}%`} tick={{ fontSize: 10, fill: themeTokens.warning }} tickLine={false} axisLine={false} width={42} />
-                  <Tooltip content={<TrendTooltip />} />
-                  <Area yAxisId="revenue" type="monotone" dataKey="total_revenue" stroke={homeChartConfig.total_revenue.color} strokeWidth={2} fill="url(#homeRevenueGradient)" />
-                  <Area yAxisId="payload" type="monotone" dataKey="total_payload" stroke={homeChartConfig.total_payload.color} strokeWidth={2} fill="url(#homePayloadGradient)" />
-                  <Line yAxisId="availability" type="monotone" dataKey="avg_availability" stroke={homeChartConfig.avg_availability.color} strokeWidth={3} dot={false} connectNulls />
-                </ComposedChart>
-              </ResponsiveContainer>
-            ) : (
-              <ChartEmpty label="Performance trend belum tersedia." />
-            )}
+            <HomePerformanceTrend
+              rows={trendRows}
+              moduleError={overview?.errors?.reporting || ''}
+              selectedPeriod={selectedPeriod}
+              revenueDomain={homeRevenueDomain}
+              payloadDomain={homePayloadDomain}
+              availabilityDomain={homeAvailabilityDomain}
+            />
           </DashboardChartPanel>
 
           <ExecutiveInsightPanel

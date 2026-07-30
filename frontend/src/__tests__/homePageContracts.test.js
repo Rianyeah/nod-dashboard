@@ -241,16 +241,20 @@ describe('new home page command center contracts', () => {
 
   it('uses dynamic Home performance domains and priority signal ordering', () => {
     const page = src('pages', 'HomePage.jsx');
+    const chart = src('features', 'home', 'HomePerformanceTrend.jsx');
 
     assert.match(page, /homeRevenueDomain/);
     assert.match(page, /homePayloadDomain/);
     assert.match(page, /homeAvailabilityDomain/);
     assert.match(page, /function buildAvailabilityDomain/);
     assert.match(page, /buildAvailabilityDomain\(trendRows\)/);
-    assert.match(page, /domain=\{homeRevenueDomain\}/);
-    assert.match(page, /domain=\{homePayloadDomain\}/);
-    assert.match(page, /domain=\{homeAvailabilityDomain\}/);
-    assert.match(page, /yAxisId="availability"[\s\S]*tickCount=\{5\}/);
+    assert.match(page, /revenueDomain=\{homeRevenueDomain\}/);
+    assert.match(page, /payloadDomain=\{homePayloadDomain\}/);
+    assert.match(page, /availabilityDomain=\{homeAvailabilityDomain\}/);
+    assert.match(chart, /domain=\{revenueDomain\}/);
+    assert.match(chart, /domain=\{payloadDomain\}/);
+    assert.match(chart, /domain=\{availabilityDomain\}/);
+    assert.match(chart, /yAxisId="availability"[\s\S]*tickCount=\{5\}/);
     assert.match(page, /PRIORITY_TONE_RANK/);
     assert.match(page, /\.sort\(\(a,\s*b\) => PRIORITY_TONE_RANK/);
     assert.match(page, /buildPrioritySignals\(overview,\s*latestImpactDaily\)/);
