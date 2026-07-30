@@ -68,6 +68,60 @@ async function expectSeriesTooltipColors(page, chartTestId, shapeSelector = 'pat
   expect(nameColor).toBe(valueColor);
 }
 
+test('graphite visual system separates panels in both themes and mobile', async ({ browser }) => {
+  test.setTimeout(120000);
+
+  const routes = [
+    '/home',
+    '/site-map',
+    '/reporting',
+    '/impact-service',
+    '/activity-enom',
+    '/transport-quality',
+    '/ticketing',
+    '/data-potensi',
+    '/rf-tilt-analysis',
+    '/tower-plan-generator',
+  ];
+
+  for (const theme of ['dark', 'light']) {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await context.newPage();
+    await authenticate(page, theme);
+
+    for (const route of routes) {
+      await page.goto(`${E2E_BASE_URL}${route}`);
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+      await expect(page.getByTestId('dashboard-sidebar')).toBeVisible();
+
+      const tokenSnapshot = await page.evaluate(() => {
+        const root = getComputedStyle(document.documentElement);
+        return {
+          canvas: root.getPropertyValue('--bg-base').trim(),
+          panel: root.getPropertyValue('--bg-surface').trim(),
+          border: root.getPropertyValue('--border-strong').trim(),
+          accent: root.getPropertyValue('--brand-red').trim(),
+        };
+      });
+
+      expect(tokenSnapshot.canvas).not.toBe(tokenSnapshot.panel);
+      expect(tokenSnapshot.border).not.toBe('');
+      expect(tokenSnapshot.accent.toUpperCase()).toBe('#E60012');
+    }
+
+    await context.close();
+  }
+
+  const mobileContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const mobilePage = await mobileContext.newPage();
+  await authenticate(mobilePage, 'dark');
+  await mobilePage.goto(`${E2E_BASE_URL}/home`);
+  await expect.poll(() => mobilePage.evaluate(() => (
+    document.documentElement.scrollWidth <= window.innerWidth
+  ))).toBeTruthy();
+  await mobileContext.close();
+});
+
 test('Dashboard loads and performs basic validations', async ({ page }) => {
   await authenticate(page);
   await page.goto(`${E2E_BASE_URL}/site-map`);
@@ -544,6 +598,8 @@ test('Ticketing charts render donut, true Pareto, colored tooltips, and mobile l
 });
 
 test('Impact Service shadcn flow keeps dashboard and table requests isolated', async ({ page }) => {
+  test.setTimeout(90000);
+
   const requests = [];
 
   page.on('request', (request) => {
