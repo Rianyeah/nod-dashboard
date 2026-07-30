@@ -37,10 +37,22 @@ def build_nop_filter(nop: str | None, alias: str = "d") -> str:
     if not nop:
         return ""
     filters = {
-        "d": ' AND d."NOP" = :nop',
-        "d2": ' AND d2."NOP" = :nop',
-        "tfc": " AND tfc.nop = :nop",
-        "p": " AND p.nop = :nop",
+        "d": (
+            " AND REGEXP_REPLACE(UPPER(TRIM(d.\"NOP\")), '^NOP[[:space:]]+', '')"
+            " = REGEXP_REPLACE(UPPER(TRIM(:nop)), '^NOP[[:space:]]+', '')"
+        ),
+        "d2": (
+            " AND REGEXP_REPLACE(UPPER(TRIM(d2.\"NOP\")), '^NOP[[:space:]]+', '')"
+            " = REGEXP_REPLACE(UPPER(TRIM(:nop)), '^NOP[[:space:]]+', '')"
+        ),
+        "tfc": (
+            " AND REGEXP_REPLACE(UPPER(TRIM(tfc.nop)), '^NOP[[:space:]]+', '')"
+            " = REGEXP_REPLACE(UPPER(TRIM(:nop)), '^NOP[[:space:]]+', '')"
+        ),
+        "p": (
+            " AND REGEXP_REPLACE(UPPER(TRIM(p.nop)), '^NOP[[:space:]]+', '')"
+            " = REGEXP_REPLACE(UPPER(TRIM(:nop)), '^NOP[[:space:]]+', '')"
+        ),
     }
     return filters[alias]
 
