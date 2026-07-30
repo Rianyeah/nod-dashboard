@@ -237,7 +237,6 @@ test('Reporting NOP filter is sent to scorecards chart and tables', async ({ pag
   await expect(page.locator('#reporting-nop')).toContainText(nopLabel.trim());
 
   await expect.poll(() => Array.from(filteredRequests).sort()).toEqual([
-    'battery-by-kabupaten',
     'revenue-by-kabupaten',
     'scorecards',
     'site-class-by-kabupaten',

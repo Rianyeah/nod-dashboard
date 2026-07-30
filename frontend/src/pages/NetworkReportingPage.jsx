@@ -12,7 +12,6 @@ import {
   ChevronRight,
   ArrowLeft,
   TrendingUp,
-  Battery,
   Layers,
   FileDown,
 } from 'lucide-react';
@@ -52,7 +51,6 @@ import {
   fetchReportingScorecards,
   fetchRevenueByKabupaten,
   fetchSiteClassByKabupaten,
-  fetchBatteryByKabupaten,
   fetchRevenueTrend,
   fetchFilterOptions,
 } from '../services/api';
@@ -129,6 +127,19 @@ function DeltaValue({ delta, formatter }) {
     <span className={`block text-[10px] leading-4 font-semibold ${colorClass}`}>
       {label}
     </span>
+  );
+}
+
+function BackupSuksesCell({ count, rate, strong = false }) {
+  return (
+    <div className={strong ? 'font-bold' : ''}>
+      <span className="font-mono tabular-nums text-[var(--text-primary)]">
+        {formatNumber(count)}
+      </span>
+      <span className="ml-1.5 text-[11px] text-[var(--text-muted)]">
+        {formatPercent(rate)}
+      </span>
+    </div>
   );
 }
 
@@ -287,24 +298,6 @@ function ClassBadge({ value, type }) {
 }
 
 /* ─── Battery Badge ────────────────────────────────────── */
-const BATTERY_COLORS = {
-  lithium: { bg: 'var(--badge-success-bg)', text: 'var(--chart-success)' },
-  vrla: { bg: 'var(--badge-warning-bg)', text: 'var(--chart-warning)' },
-  tidak_ada: { bg: 'var(--badge-critical-bg)', text: 'var(--chart-danger)' },
-};
-
-function BatteryBadge({ value, type }) {
-  const colors = BATTERY_COLORS[type] || { bg: 'rgba(255,255,255,0.06)', text: 'var(--text-secondary)' };
-  return (
-    <span
-      className="inline-flex items-center justify-center min-w-[40px] px-2 py-0.5 rounded-md text-xs font-semibold font-mono tabular-nums"
-      style={{ backgroundColor: colors.bg, color: colors.text }}
-    >
-      {value}
-    </span>
-  );
-}
-
 /* ─── Availability Badge ───────────────────────────────── */
 function AvailabilityBadge({ value }) {
   if (value == null) return <span className="text-[var(--text-muted)]">—</span>;
@@ -471,7 +464,6 @@ export default function NetworkReportingPage() {
   const [revenueData, setRevenueData] = useState([]);
   const [previousRevenueData, setPreviousRevenueData] = useState([]);
   const [siteClassData, setSiteClassData] = useState([]);
-  const [batteryData, setBatteryData] = useState([]);
   const [trendData, setTrendData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTable, setActiveTable] = useState('revenue');
@@ -539,17 +531,15 @@ export default function NetworkReportingPage() {
       fetchReportingScorecards(selectedPeriod, selectedNop),
       fetchRevenueByKabupaten(selectedPeriod, selectedNop),
       fetchSiteClassByKabupaten(selectedPeriod, selectedNop),
-      fetchBatteryByKabupaten(selectedPeriod, selectedNop),
       fetchRevenueTrend(selectedPeriod, selectedNop),
       previousPeriod ? fetchReportingScorecards(previousPeriod, selectedNop) : Promise.resolve(null),
       previousPeriod ? fetchRevenueByKabupaten(previousPeriod, selectedNop) : Promise.resolve([]),
     ])
-      .then(([sc, rev, cls, battery, trend, prevSc, prevRev]) => {
+      .then(([sc, rev, cls, trend, prevSc, prevRev]) => {
         if (cancelled) return;
         setScorecards(sc);
         setRevenueData(rev);
         setSiteClassData(cls);
-        setBatteryData(battery);
         setTrendData(trend);
         setPreviousScorecards(prevSc);
         setPreviousRevenueData(prevRev || []);
@@ -591,21 +581,6 @@ export default function NetworkReportingPage() {
       { diamond: 0, platinum: 0, gold: 0, silver: 0, bronze: 0, total: 0 },
     );
   }, [siteClassData]);
-
-  // Compute totals for battery table
-  const batteryTotals = useMemo(() => {
-    if (!batteryData.length) return null;
-    return batteryData.reduce(
-      (acc, row) => {
-        acc.lithium += row.lithium;
-        acc.vrla += row.vrla;
-        acc.tidak_ada += row.tidak_ada;
-        acc.total += row.total;
-        return acc;
-      },
-      { lithium: 0, vrla: 0, tidak_ada: 0, total: 0 },
-    );
-  }, [batteryData]);
 
   const coverageWarning = useMemo(() => {
     const missing = scorecards?.period_meta?.missing_months_by_source || {};
@@ -1019,7 +994,6 @@ export default function NetworkReportingPage() {
           {[
             { key: 'revenue', label: 'Performance Table', icon: Banknote },
             { key: 'siteclass', label: 'Site Class', icon: Layers },
-            { key: 'battery', label: 'Battery Type', icon: Battery },
           ].map((tab) => (
             <button
               key={tab.key}
@@ -1058,7 +1032,7 @@ export default function NetworkReportingPage() {
                 {[1, 2, 3, 4, 5, 6].map((i) => <div key={i} className="skeleton h-10 rounded-lg" />)}
               </div>
             ) : (
-              <table className="w-full text-left">
+              <table className="min-w-[1180px] w-full text-left">
                 <thead>
                   <tr>
                     <th className={thClass}>Kabupaten/Kota</th>
@@ -1068,6 +1042,7 @@ export default function NetworkReportingPage() {
                     <th className={`${thClass} text-right`}>Traffic</th>
                     <th className={`${thClass} text-center`}>Availability</th>
                     <th className={`${thClass} text-right`}>Ticket SWFM</th>
+                    <th className={`${thClass} text-right`}>Backup Sukses</th>
                     <th className={`${thClass} text-right`}>Proker Activity</th>
                     {showRevenueDetails && (
                       <>
@@ -1104,7 +1079,14 @@ export default function NetworkReportingPage() {
                           BPS: {formatNumber(row.ticket_swfm_bps)} TS: {formatNumber(row.ticket_swfm_ts)}
                         </td>
                         <td className={`${tdClass} text-right`}>
-                          Open: {formatNumber(row.proker_open)} Closed: {formatNumber(row.proker_closed)}
+                          <BackupSuksesCell
+                            count={row.backup_sukses_bps}
+                            rate={row.backup_sukses_rate}
+                          />
+                        </td>
+                        <td className={`${tdClass} text-right`}>
+                          <span className="text-[var(--text-primary)]">Open: {formatNumber(row.proker_open)}</span>
+                          <span className="ml-2 text-[var(--text-muted)]">Close: {formatNumber(row.proker_closed)}</span>
                         </td>
                         {showRevenueDetails && (
                           <>
@@ -1141,7 +1123,15 @@ export default function NetworkReportingPage() {
                         BPS: {formatNumber(revenueTotals.ticket_swfm_bps)} TS: {formatNumber(revenueTotals.ticket_swfm_ts)}
                       </td>
                       <td className={`${tdClass} text-right font-bold`}>
-                        Open: {formatNumber(revenueTotals.proker_open)} Closed: {formatNumber(revenueTotals.proker_closed)}
+                        <BackupSuksesCell
+                          count={revenueTotals.backup_sukses_bps}
+                          rate={revenueTotals.backup_sukses_rate}
+                          strong
+                        />
+                      </td>
+                      <td className={`${tdClass} text-right font-bold`}>
+                        <span className="text-[var(--text-primary)]">Open: {formatNumber(revenueTotals.proker_open)}</span>
+                        <span className="ml-2 text-[var(--text-muted)]">Close: {formatNumber(revenueTotals.proker_closed)}</span>
                       </td>
                       {showRevenueDetails && (
                         <>
@@ -1208,45 +1198,6 @@ export default function NetworkReportingPage() {
                 )}
               </table>
             )}
-          </TableSection>
-        )}
-
-        {/* Battery Type Table */}
-        {activeTable === 'battery' && (
-          <TableSection title="Battery Type Distribution by Kabupaten/Kota" icon={Battery} delay={400}>
-            <table className="w-full text-left">
-              <thead>
-                <tr>
-                  <th className={thClass}>Kabupaten/Kota</th>
-                  <th className={`${thClass} text-center`}>Lithium</th>
-                  <th className={`${thClass} text-center`}>VRLA</th>
-                  <th className={`${thClass} text-center`}>Tidak Ada</th>
-                  <th className={`${thClass} text-right`}>Total</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--border)]">
-                {batteryData.map((row) => (
-                  <tr key={row.kabupaten} className={trHoverClass}>
-                    <td className={`${tdClass} text-[var(--text-primary)] font-semibold font-sans`}>{row.kabupaten}</td>
-                    <td className={`${tdClass} text-center`}><BatteryBadge value={row.lithium} type="lithium" /></td>
-                    <td className={`${tdClass} text-center`}><BatteryBadge value={row.vrla} type="vrla" /></td>
-                    <td className={`${tdClass} text-center`}><BatteryBadge value={row.tidak_ada} type="tidak_ada" /></td>
-                    <td className={`${tdClass} text-right font-bold text-[var(--text-primary)]`}>{row.total}</td>
-                  </tr>
-                ))}
-              </tbody>
-              {batteryTotals && (
-                <tfoot>
-                  <tr className="bg-[var(--bg-elevated)] border-t-2 border-[var(--primary)]/20">
-                    <td className={`${tdClass} text-[var(--text-primary)] font-bold font-sans`}>TOTAL</td>
-                    <td className={`${tdClass} text-center`}><BatteryBadge value={batteryTotals.lithium} type="lithium" /></td>
-                    <td className={`${tdClass} text-center`}><BatteryBadge value={batteryTotals.vrla} type="vrla" /></td>
-                    <td className={`${tdClass} text-center`}><BatteryBadge value={batteryTotals.tidak_ada} type="tidak_ada" /></td>
-                    <td className={`${tdClass} text-right font-bold text-[var(--text-primary)]`}>{batteryTotals.total}</td>
-                  </tr>
-                </tfoot>
-              )}
-            </table>
           </TableSection>
         )}
 
