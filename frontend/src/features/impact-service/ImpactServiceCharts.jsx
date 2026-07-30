@@ -20,14 +20,13 @@ import {
   YAxis,
 } from 'recharts';
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   ChartContainer,
-  ChartLegend,
-  ChartLegendContent,
   ChartTooltip,
-  ChartTooltipContent,
 } from '@/components/ui/chart';
+import { DashboardChartLegend } from '@/components/dashboard-charts/DashboardChartLegend';
+import { DashboardChartTooltipContent } from '@/components/dashboard-charts/DashboardChartTooltipContent';
+import { DashboardChartPanel } from '@/components/ui/DashboardPrimitives';
 import { formatNumber } from '@/utils/formatters';
 import { ChartEmptyState } from './ImpactServiceStates';
 import {
@@ -41,20 +40,14 @@ const chartMargin = { top: 20, right: 28, left: 0, bottom: 0 };
 
 function ChartCard({ title, description, icon: Icon, children, className = '' }) {
   return (
-    <Card size="sm" className={`impact-service-chart-card animate-fade-in border border-border bg-card/95 shadow-sm [--card-spacing:--spacing(3)] ${className}`}>
-      <CardHeader className="border-b border-border pb-3">
-        <div className="flex items-start gap-2">
-          <div className="flex size-8 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <Icon />
-          </div>
-          <div>
-            <CardTitle className="text-sm font-semibold">{title}</CardTitle>
-            <CardDescription className="mt-0.5 text-[11px]">{description}</CardDescription>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="pt-3">{children}</CardContent>
-    </Card>
+    <DashboardChartPanel
+      title={title}
+      description={description}
+      icon={Icon}
+      className={`impact-service-chart-card animate-fade-in ${className}`}
+    >
+      {children}
+    </DashboardChartPanel>
   );
 }
 
@@ -63,7 +56,8 @@ function StandardTooltip() {
     <ChartTooltip
       cursor={{ fill: 'var(--chart-cursor)' }}
       content={(
-        <ChartTooltipContent
+        <DashboardChartTooltipContent
+          config={impactServiceChartConfig}
           formatter={(value, name) => (
             <>
               <span className="text-muted-foreground">{impactServiceChartConfig[name]?.label || name}</span>
@@ -179,17 +173,18 @@ export default function ImpactServiceCharts({
           {dailyTrend.length ? (
             <ChartContainer config={impactServiceChartConfig} className="h-[220px] w-full aspect-auto">
               <ComposedChart accessibilityLayer data={dailyTrend} margin={chartMargin}>
-                <CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 3" />
+                <CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 5" />
                 <XAxis
                   dataKey="tanggal"
                   tickFormatter={formatDateLabel}
                   tickLine={false}
                   axisLine={false}
                   minTickGap={24}
+                  tick={{ fill: 'var(--chart-axis)', fontSize: 10 }}
                 />
-                <YAxis tickLine={false} axisLine={false} width={42} />
+                <YAxis tickLine={false} axisLine={false} width={42} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
                 <StandardTooltip />
-                <ChartLegend content={<ChartLegendContent />} />
+                <DashboardChartLegend />
                 <Bar dataKey="open" stackId="status" fill="var(--color-open)" radius={[8, 8, 8, 8]} isAnimationActive={false}>
                   <LabelList dataKey="open" content={<SegmentValueLabel />} fontSize={13} />
                 </Bar>
@@ -222,8 +217,8 @@ export default function ImpactServiceCharts({
                 layout="vertical"
                 margin={{ top: 4, right: 22, left: 8, bottom: 0 }}
               >
-                <CartesianGrid horizontal={false} stroke="var(--chart-grid)" strokeDasharray="3 3" />
-                <XAxis type="number" tickLine={false} axisLine={false} />
+                <CartesianGrid horizontal={false} stroke="var(--chart-grid)" strokeDasharray="3 5" />
+                <XAxis type="number" tickLine={false} axisLine={false} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
                 <YAxis
                   type="category"
                   dataKey="label"
@@ -231,10 +226,10 @@ export default function ImpactServiceCharts({
                   interval={0}
                   tickLine={false}
                   axisLine={false}
-                  tick={{ fill: 'var(--muted-foreground)', fontSize: 12, fontWeight: 700 }}
+                  tick={{ fill: 'var(--chart-axis)', fontSize: 10, fontWeight: 700 }}
                 />
                 <StandardTooltip />
-                <ChartLegend content={<ChartLegendContent />} />
+                <DashboardChartLegend />
                 <Bar dataKey="open" stackId="status" fill="var(--color-open)" radius={[8, 8, 8, 8]} isAnimationActive={false}>
                   <LabelList dataKey="open" content={<SegmentValueLabel />} fontSize={13} />
                 </Bar>
@@ -256,11 +251,11 @@ export default function ImpactServiceCharts({
           {distributions.by_severity.length ? (
             <ChartContainer config={impactServiceChartConfig} className="h-[220px] w-full aspect-auto">
               <BarChart accessibilityLayer data={distributions.by_severity} margin={chartMargin}>
-                <CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 3" />
-                <XAxis dataKey="label" tickLine={false} axisLine={false} />
-                <YAxis tickLine={false} axisLine={false} width={38} />
+                <CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 5" />
+                <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
+                <YAxis tickLine={false} axisLine={false} width={38} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
                 <StandardTooltip />
-                <ChartLegend content={<ChartLegendContent />} />
+                <DashboardChartLegend />
                 <Bar dataKey="open" fill="var(--color-open)" radius={[8, 8, 8, 8]} isAnimationActive={false}>
                   <LabelList dataKey="open" content={<SegmentValueLabel />} fontSize={13} />
                 </Bar>
@@ -286,7 +281,8 @@ export default function ImpactServiceCharts({
                 <PieChart accessibilityLayer>
                   <ChartTooltip
                     content={(
-                      <ChartTooltipContent
+                      <DashboardChartTooltipContent
+                        config={impactServiceChartConfig}
                         hideLabel
                         formatter={(value, name, item) => (
                           <>
@@ -323,7 +319,7 @@ export default function ImpactServiceCharts({
                 {categoryData.map((row, index) => (
                   <div key={row.label} className="flex min-w-0 items-center gap-2 text-xs">
                     <span
-                      className="size-2.5 shrink-0 rounded-full"
+                      className="h-1.5 w-3 shrink-0 rounded-[2px]"
                       style={{ backgroundColor: getCategoryColor(index) }}
                     />
                     <span className="min-w-0 flex-1 truncate text-muted-foreground" title={row.label}>
@@ -347,9 +343,9 @@ export default function ImpactServiceCharts({
           {distributions.by_aging_range.length ? (
             <ChartContainer config={impactServiceChartConfig} className="h-[220px] w-full aspect-auto">
               <BarChart accessibilityLayer data={distributions.by_aging_range} margin={chartMargin}>
-                <CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 3" />
-                <XAxis dataKey="label" tickLine={false} axisLine={false} />
-                <YAxis tickLine={false} axisLine={false} width={38} />
+                <CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 5" />
+                <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
+                <YAxis tickLine={false} axisLine={false} width={38} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
                 <StandardTooltip />
                 <Bar dataKey="total" radius={[8, 8, 8, 8]} isAnimationActive={false}>
                   {distributions.by_aging_range.map((row, index) => (

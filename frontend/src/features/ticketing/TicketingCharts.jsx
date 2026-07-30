@@ -98,7 +98,7 @@ function CompactParetoTick({ x, y, payload }) {
       y={tickY}
       transform={`rotate(-35 ${x} ${tickY})`}
       textAnchor="end"
-      fill="var(--muted-foreground)"
+      fill="var(--chart-axis)"
       fontSize={10}
     >
       <title>{fullLabel}</title>
@@ -149,9 +149,9 @@ export function TicketingCharts({ dashboard }) {
           {dashboard?.trend?.length ? (
             <ChartContainer config={ticketingChartConfig} className="h-[220px] w-full aspect-auto" data-testid="ticketing-daily-trend-chart">
               <LineChart accessibilityLayer data={dashboard.trend} margin={{ top: 12, right: 20, left: 0, bottom: 0 }}>
-                <CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 3" />
-                <XAxis dataKey="label" tickLine={false} axisLine={false} />
-                <YAxis tickLine={false} axisLine={false} width={38} />
+                <CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 5" />
+                <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
+                <YAxis tickLine={false} axisLine={false} width={38} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
                 <StandardTooltip />
                 <DashboardChartLegend />
                 <Line type="monotone" dataKey="bps" stroke="var(--color-bps)" strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
@@ -226,9 +226,9 @@ export function TicketingCharts({ dashboard }) {
           {dashboard?.visiting_backup_distribution?.length ? (
             <ChartContainer config={ticketingChartConfig} className="h-[220px] w-full aspect-auto" data-testid="ticketing-visiting-backup-chart">
               <BarChart accessibilityLayer data={dashboard.visiting_backup_distribution.slice(0, 6)} layout="vertical" margin={{ top: 6, right: 58, left: 12, bottom: 0 }}>
-                <CartesianGrid horizontal={false} stroke="var(--chart-grid)" strokeDasharray="3 3" />
-                <XAxis type="number" tickLine={false} axisLine={false} />
-                <YAxis type="category" dataKey="label" width={92} interval={0} tickLine={false} axisLine={false} />
+                <CartesianGrid horizontal={false} stroke="var(--chart-grid)" strokeDasharray="3 5" />
+                <XAxis type="number" tickLine={false} axisLine={false} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
+                <YAxis type="category" dataKey="label" width={92} interval={0} tickLine={false} axisLine={false} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
                 <StandardTooltip />
                 <DashboardChartLegend />
                 <Bar dataKey="visiting_site" fill="var(--color-visiting_site)" radius={DASHBOARD_BAR_RADIUS} isAnimationActive={false}>
@@ -248,9 +248,9 @@ export function TicketingCharts({ dashboard }) {
           {dashboard?.location_breakdown?.length ? (
             <ChartContainer config={ticketingChartConfig} className="h-[220px] w-full aspect-auto" data-testid="ticketing-location-chart">
               <BarChart accessibilityLayer data={dashboard.location_breakdown} layout="vertical" margin={{ top: 6, right: 58, left: 12, bottom: 0 }}>
-                <CartesianGrid horizontal={false} stroke="var(--chart-grid)" strokeDasharray="3 3" />
-                <XAxis type="number" tickLine={false} axisLine={false} />
-                <YAxis type="category" dataKey="label" width={100} interval={0} tickLine={false} axisLine={false} />
+                <CartesianGrid horizontal={false} stroke="var(--chart-grid)" strokeDasharray="3 5" />
+                <XAxis type="number" tickLine={false} axisLine={false} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
+                <YAxis type="category" dataKey="label" width={100} interval={0} tickLine={false} axisLine={false} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
                 <StandardTooltip />
                 <Bar dataKey="tickets" fill="var(--color-tickets)" radius={DASHBOARD_BAR_RADIUS} isAnimationActive={false}>
                   <LabelList dataKey="tickets" content={<EndBarValueLabel />} />
@@ -268,7 +268,7 @@ export function TicketingCharts({ dashboard }) {
           {dashboard?.rc_category_pareto?.length ? (
             <ChartContainer config={ticketingChartConfig} className="h-[220px] w-full aspect-auto" data-testid="ticketing-pareto-chart">
               <ComposedChart accessibilityLayer data={dashboard.rc_category_pareto} margin={{ top: 18, right: 12, left: 0, bottom: 44 }}>
-                <CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 3" />
+                <CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 5" />
                 <XAxis
                   dataKey="label"
                   tick={<CompactParetoTick />}
@@ -276,8 +276,8 @@ export function TicketingCharts({ dashboard }) {
                   axisLine={false}
                   interval={0}
                 />
-                <YAxis yAxisId="tickets" tickLine={false} axisLine={false} width={38} />
-                <YAxis yAxisId="percentage" orientation="right" domain={[0, 100]} tickFormatter={(value) => `${value}%`} tickLine={false} axisLine={false} width={42} />
+                <YAxis yAxisId="tickets" tickLine={false} axisLine={false} width={38} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
+                <YAxis yAxisId="percentage" orientation="right" domain={[0, 100]} tickFormatter={(value) => `${value}%`} tickLine={false} axisLine={false} width={42} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
                 <StandardTooltip
                   valueFormatter={(value, name) => (
                     name === 'cumulative_rate'

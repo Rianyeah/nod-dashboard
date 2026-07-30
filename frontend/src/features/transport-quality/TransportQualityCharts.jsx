@@ -98,9 +98,9 @@ export function TransportQualityCharts({
               data-testid="transport-weekly-trend-chart"
             >
               <LineChart accessibilityLayer data={trend} margin={DASHBOARD_CHART_MARGIN}>
-                <CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 3" />
-                <XAxis dataKey="date" tickFormatter={formatDateLabel} tickLine={false} axisLine={false} />
-                <YAxis tickLine={false} axisLine={false} width={42} />
+                <CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 5" />
+                <XAxis dataKey="date" tickFormatter={formatDateLabel} tickLine={false} axisLine={false} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
+                <YAxis tickLine={false} axisLine={false} width={42} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
                 <TransportTooltip labelFormatter={formatDateLabel} />
                 <DashboardChartLegend />
                 <Line type="monotone" dataKey="pl_over_1_sites" stroke="var(--color-pl_over_1_sites)" strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
@@ -150,9 +150,9 @@ export function TransportQualityCharts({
                 data-testid="transport-packet-loss-chart"
               >
                 <BarChart accessibilityLayer data={distributions.by_packet_loss} margin={DASHBOARD_CHART_MARGIN}>
-                  <CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 3" />
-                  <XAxis dataKey="label" tickLine={false} axisLine={false} />
-                  <YAxis tickLine={false} axisLine={false} width={42} />
+                  <CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 5" />
+                  <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
+                  <YAxis tickLine={false} axisLine={false} width={42} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
                   <TransportTooltip seriesLabelFormatter={() => 'PL records'} />
                   <Bar dataKey="records" fill={TRANSPORT_CHART_COLORS.total} radius={DASHBOARD_BAR_RADIUS} isAnimationActive={false}>
                     <LabelList dataKey="records" content={<TopBarValueLabel />} />
@@ -168,9 +168,9 @@ export function TransportQualityCharts({
                 data-testid="transport-latency-chart"
               >
                 <BarChart accessibilityLayer data={distributions.by_latency} margin={DASHBOARD_CHART_MARGIN}>
-                  <CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 3" />
-                  <XAxis dataKey="label" tickLine={false} axisLine={false} />
-                  <YAxis tickLine={false} axisLine={false} width={42} />
+                  <CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 5" />
+                  <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
+                  <YAxis tickLine={false} axisLine={false} width={42} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
                   <TransportTooltip seriesLabelFormatter={() => 'Latency records'} />
                   <Bar dataKey="records" fill={TRANSPORT_CHART_COLORS.latency} radius={DASHBOARD_BAR_RADIUS} isAnimationActive={false}>
                     <LabelList dataKey="records" content={<TopBarValueLabel />} />
@@ -190,9 +190,9 @@ export function TransportQualityCharts({
                 data-testid="transport-nop-breakdown-chart"
               >
                 <BarChart accessibilityLayer data={nopBreakdown} layout="vertical" margin={{ top: 6, right: 28, left: 58, bottom: 0 }}>
-                  <CartesianGrid horizontal={false} stroke="var(--chart-grid)" strokeDasharray="3 3" />
-                  <XAxis type="number" tickLine={false} axisLine={false} />
-                  <YAxis type="category" dataKey="label" width={88} interval={0} tickLine={false} axisLine={false} />
+                  <CartesianGrid horizontal={false} stroke="var(--chart-grid)" strokeDasharray="3 5" />
+                  <XAxis type="number" tickLine={false} axisLine={false} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
+                  <YAxis type="category" dataKey="label" width={88} interval={0} tickLine={false} axisLine={false} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
                   <TransportTooltip />
                   <DashboardChartLegend />
                   <Bar dataKey="p1_sites" stackId="issues" fill="var(--color-p1_sites)" radius={DASHBOARD_BAR_RADIUS} isAnimationActive={false}>
@@ -212,9 +212,9 @@ export function TransportQualityCharts({
                 data-testid="transport-kabupaten-breakdown-chart"
               >
                 <BarChart accessibilityLayer data={kabupatenBreakdown} layout="vertical" margin={{ top: 6, right: 58, left: 82, bottom: 0 }}>
-                  <CartesianGrid horizontal={false} stroke="var(--chart-grid)" strokeDasharray="3 3" />
-                  <XAxis type="number" tickLine={false} axisLine={false} />
-                  <YAxis type="category" dataKey="label" width={112} interval={0} tickLine={false} axisLine={false} />
+                  <CartesianGrid horizontal={false} stroke="var(--chart-grid)" strokeDasharray="3 5" />
+                  <XAxis type="number" tickLine={false} axisLine={false} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
+                  <YAxis type="category" dataKey="label" width={112} interval={0} tickLine={false} axisLine={false} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
                   <TransportTooltip />
                   <DashboardChartLegend />
                   <Bar dataKey="pl_over_1_sites" fill="var(--color-pl_over_1_sites)" radius={DASHBOARD_BAR_RADIUS} isAnimationActive={false}>
