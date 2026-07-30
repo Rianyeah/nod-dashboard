@@ -349,4 +349,13 @@ describe('dashboard and reporting visual/data contracts', () => {
       assert.doesNotMatch(feature, new RegExp(oldSubtitle));
     }
   });
+
+  it('uses the graphite reporting chart language', () => {
+    const page = src('pages', 'NetworkReportingPage.jsx');
+
+    assert.doesNotMatch(page, /text-cyan-|bg-cyan-|border-cyan-|#22D3EE|#0EA5E9|#38BDF8/i);
+    assert.doesNotMatch(page, /shadow-\[0_0_|blur-sm/);
+    assert.match(page, /DashboardChartPanel|DashboardTableShell/);
+    assert.match(page, /reportingChartConfig/);
+  });
 });

@@ -275,4 +275,13 @@ describe('new home page command center contracts', () => {
     assert.match(page, /Link to="\/transport-quality"/);
     assert.match(page, /Link to="\/ticketing"/);
   });
+
+  it('uses the graphite executive chart language', () => {
+    const page = src('pages', 'HomePage.jsx');
+
+    assert.doesNotMatch(page, /text-cyan-|bg-cyan-|border-cyan-|#22D3EE|#0EA5E9|#38BDF8/i);
+    assert.doesNotMatch(page, /shadow-\[0_0_|blur-sm/);
+    assert.match(page, /DashboardChartPanel|DashboardTableShell/);
+    assert.match(page, /homeChartConfig/);
+  });
 });

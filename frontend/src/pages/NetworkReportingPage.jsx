@@ -39,7 +39,13 @@ import {
   getPeriodComparisonLabel,
 } from '../components/dashboard-filters/periodRange';
 import { useDashboardThemeTokens } from '../hooks/useDashboardThemeTokens';
-import { DashboardChartPanel, DashboardChartTooltip, DashboardKpiCard } from '../components/ui/DashboardPrimitives';
+import {
+  DashboardChartPanel,
+  DashboardChartTooltip,
+  DashboardKpiCard,
+  DashboardTableShell,
+} from '../components/ui/DashboardPrimitives';
+import { reportingChartConfig } from '../features/reporting/reportingChartConfig';
 import {
   fetchReportingAvailableMonths,
   fetchReportingScorecards,
@@ -305,11 +311,11 @@ function Scorecard({
 
 /* ─── Site Class Badge ─────────────────────────────────── */
 const CLASS_COLORS = {
-  diamond: { bg: 'rgba(96, 165, 250, 0.15)', text: '#60A5FA' },
-  platinum: { bg: 'rgba(168, 162, 158, 0.15)', text: '#A8A29E' },
-  gold: { bg: 'rgba(251, 191, 36, 0.15)', text: '#FBBF24' },
-  silver: { bg: 'rgba(148, 163, 184, 0.15)', text: '#94A3B8' },
-  bronze: { bg: 'rgba(217, 119, 6, 0.15)', text: '#D97706' },
+  diamond: { bg: 'var(--badge-info-bg)', text: 'var(--chart-info)' },
+  platinum: { bg: 'var(--surface-muted)', text: 'var(--chart-neutral-1)' },
+  gold: { bg: 'var(--badge-warning-bg)', text: 'var(--chart-warning)' },
+  silver: { bg: 'var(--surface-soft)', text: 'var(--chart-neutral-2)' },
+  bronze: { bg: 'var(--badge-critical-bg)', text: 'var(--chart-danger)' },
 };
 
 function ClassBadge({ value, type }) {
@@ -326,9 +332,9 @@ function ClassBadge({ value, type }) {
 
 /* ─── Battery Badge ────────────────────────────────────── */
 const BATTERY_COLORS = {
-  lithium: { bg: 'rgba(16, 185, 129, 0.15)', text: '#10B981' },
-  vrla: { bg: 'rgba(245, 158, 11, 0.15)', text: '#F59E0B' },
-  tidak_ada: { bg: 'rgba(239, 68, 68, 0.12)', text: '#EF4444' },
+  lithium: { bg: 'var(--badge-success-bg)', text: 'var(--chart-success)' },
+  vrla: { bg: 'var(--badge-warning-bg)', text: 'var(--chart-warning)' },
+  tidak_ada: { bg: 'var(--badge-critical-bg)', text: 'var(--chart-danger)' },
 };
 
 function BatteryBadge({ value, type }) {
@@ -348,9 +354,9 @@ function AvailabilityBadge({ value }) {
   if (value == null) return <span className="text-[var(--text-muted)]">—</span>;
   const v = Number(value);
   let bg, text;
-  if (v >= 99.5) { bg = 'rgba(16, 185, 129, 0.15)'; text = '#10B981'; }
-  else if (v >= 95) { bg = 'rgba(245, 158, 11, 0.15)'; text = '#F59E0B'; }
-  else { bg = 'rgba(239, 68, 68, 0.12)'; text = '#EF4444'; }
+  if (v >= 99.5) { bg = 'var(--badge-success-bg)'; text = 'var(--chart-success)'; }
+  else if (v >= 95) { bg = 'var(--badge-warning-bg)'; text = 'var(--chart-warning)'; }
+  else { bg = 'var(--badge-critical-bg)'; text = 'var(--chart-danger)'; }
   return (
     <span
       className="inline-flex items-center justify-center min-w-[52px] px-2 py-0.5 rounded-md text-xs font-semibold font-mono tabular-nums"
@@ -364,18 +370,12 @@ function AvailabilityBadge({ value }) {
 /* ─── Table Section Wrapper ────────────────────────────── */
 function TableSection({ title, icon: Icon, action, children, delay = 0 }) {
   return (
-    <div
-      className="glass-card overflow-hidden animate-fade-in"
-      style={{ animationDelay: `${delay}ms` }}
-    >
-      <div className="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Icon className="size-4 text-[var(--primary-light)]" />
-          <h2 className="text-sm font-semibold text-[var(--text-primary)] tracking-wide">{title}</h2>
+    <div className="animate-fade-in" style={{ animationDelay: `${delay}ms` }}>
+      <DashboardTableShell title={title} icon={Icon} action={action}>
+        <div className="max-w-full overflow-x-auto overscroll-x-contain">
+          {children}
         </div>
-        {action}
-      </div>
-      <div className="overflow-x-auto">{children}</div>
+      </DashboardTableShell>
     </div>
   );
 }
@@ -391,9 +391,9 @@ function TrendTooltip({ active, payload, label }) {
       active={active}
       label={label}
       payload={[
-        rev && { ...rev, name: 'Revenue', value: formatRevenue(rev.value), color: 'var(--primary-light)' },
-        pld && { ...pld, name: 'Payload', value: formatPayload(pld.value), color: 'var(--success)' },
-        avail && avail.value != null && { ...avail, name: 'Availability', value: `${Number(avail.value).toFixed(2)}%`, color: 'var(--warning)' },
+        rev && { ...rev, name: 'Revenue', value: formatRevenue(rev.value), color: reportingChartConfig.total_revenue.color },
+        pld && { ...pld, name: 'Payload', value: formatPayload(pld.value), color: reportingChartConfig.total_payload.color },
+        avail && avail.value != null && { ...avail, name: 'Availability', value: `${Number(avail.value).toFixed(2)}%`, color: reportingChartConfig.avg_availability.color },
       ].filter(Boolean)}
     />
   );
@@ -789,7 +789,7 @@ export default function NetworkReportingPage() {
             backgroundSize: '40px 40px',
           }}
         />
-        <div className="absolute top-0 left-1/4 w-96 h-1 bg-gradient-to-r from-transparent via-[var(--primary)]/30 to-transparent blur-sm" />
+        <div className="absolute left-1/4 top-0 h-px w-96 bg-gradient-to-r from-transparent via-[var(--primary)]/35 to-transparent" />
 
         <div className="relative z-10 px-3 py-3 flex flex-col gap-3 xl:px-6 xl:flex-row xl:items-center xl:justify-between">
           {/* Left — Logo & Title */}
@@ -897,7 +897,7 @@ export default function NetworkReportingPage() {
                   { label: 'YTD', value: formatRevenue(scorecards?.revenue_ytd) },
                 ]}
                 icon={Banknote}
-                accent="#10B981"
+                accent="var(--chart-success)"
                 glow="rgba(16, 185, 129, 0.15)"
                 delay={80}
               />
@@ -954,13 +954,13 @@ export default function NetworkReportingPage() {
             action={(
               <div className="flex items-center gap-3 text-[10px] text-[var(--text-muted)]">
                 <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-[var(--primary)]" /> Revenue
+                  <span className="h-1.5 w-3 rounded-sm" style={{ backgroundColor: reportingChartConfig.total_revenue.color }} /> Revenue
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400" /> Payload
+                  <span className="h-1.5 w-3 rounded-sm" style={{ backgroundColor: reportingChartConfig.total_payload.color }} /> Payload
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="w-4 h-0.5 rounded-full" style={{ backgroundColor: '#D97706' }} /> Availability
+                  <span className="h-0.5 w-4 rounded-sm" style={{ backgroundColor: reportingChartConfig.avg_availability.color }} /> Availability
                 </span>
               </div>
             )}
@@ -971,12 +971,12 @@ export default function NetworkReportingPage() {
                 <ComposedChart data={trendData} margin={{ top: 5, right: 60, left: 10, bottom: 0 }}>
                   <defs>
                     <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
+                      <stop offset="5%" stopColor={reportingChartConfig.total_revenue.color} stopOpacity={0.14} />
+                      <stop offset="95%" stopColor={reportingChartConfig.total_revenue.color} stopOpacity={0} />
                     </linearGradient>
                     <linearGradient id="pldGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#34D399" stopOpacity={0.2} />
-                      <stop offset="95%" stopColor="#34D399" stopOpacity={0} />
+                      <stop offset="5%" stopColor={reportingChartConfig.total_payload.color} stopOpacity={0.12} />
+                      <stop offset="95%" stopColor={reportingChartConfig.total_payload.color} stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke={themeTokens.chartGrid} vertical={false} />
@@ -1028,7 +1028,7 @@ export default function NetworkReportingPage() {
                     yAxisId="rev"
                     type="monotone"
                     dataKey="total_revenue"
-                    stroke="#3B82F6"
+                    stroke={reportingChartConfig.total_revenue.color}
                     strokeWidth={2}
                     fill="url(#revGrad)"
                   />
@@ -1036,7 +1036,7 @@ export default function NetworkReportingPage() {
                     yAxisId="pld"
                     type="monotone"
                     dataKey="total_payload"
-                    stroke="#34D399"
+                    stroke={reportingChartConfig.total_payload.color}
                     strokeWidth={2}
                     fill="url(#pldGrad)"
                   />
@@ -1044,11 +1044,11 @@ export default function NetworkReportingPage() {
                     yAxisId="avail"
                     type="monotone"
                     dataKey="avg_availability"
-                    stroke="#D97706"
+                    stroke={reportingChartConfig.avg_availability.color}
                     strokeWidth={4}
                     strokeLinecap="round"
-                    dot={{ fill: '#D97706', r: 3, strokeWidth: 0 }}
-                    activeDot={{ fill: '#D97706', r: 5, strokeWidth: 2, stroke: 'var(--bg-surface)' }}
+                    dot={{ fill: reportingChartConfig.avg_availability.color, r: 3, strokeWidth: 0 }}
+                    activeDot={{ fill: reportingChartConfig.avg_availability.color, r: 5, strokeWidth: 2, stroke: 'var(--bg-surface)' }}
                     connectNulls
                     isAnimationActive={false}
                   />
@@ -1135,7 +1135,7 @@ export default function NetworkReportingPage() {
                           {formatRevenueShort(row.rev)}
                           <DeltaValue delta={getDelta(row.rev, previousRow?.rev)} formatter={formatRevenueShort} />
                         </td>
-                        <td className={`${tdClass} text-right text-cyan-400`}>
+                        <td className={`${tdClass} text-right text-[var(--chart-info)]`}>
                           {formatPayload(row.payload)}
                           <DeltaValue delta={getDelta(row.payload, previousRow?.payload)} formatter={formatPayload} />
                         </td>
@@ -1172,7 +1172,7 @@ export default function NetworkReportingPage() {
                         {formatRevenueShort(revenueTotals.rev)}
                         <DeltaValue delta={getDelta(revenueTotals.rev, previousRevenueTotals?.rev)} formatter={formatRevenueShort} />
                       </td>
-                      <td className={`${tdClass} text-right font-bold text-cyan-400`}>
+                      <td className={`${tdClass} text-right font-bold text-[var(--chart-info)]`}>
                         {formatPayload(revenueTotals.payload)}
                         <DeltaValue delta={getDelta(revenueTotals.payload, previousRevenueTotals?.payload)} formatter={formatPayload} />
                       </td>
