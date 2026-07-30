@@ -80,6 +80,22 @@ describe('global dashboard theme redesign contracts', () => {
     }
   });
 
+  it('uses compact shared headers and restrained operational icon chrome', () => {
+    const primitives = src('components', 'ui', 'DashboardPrimitives.jsx');
+    const sidebar = src('components', 'DashboardSidebar.jsx');
+
+    assert.match(primitives, /export function DashboardPanelHeader/);
+    assert.match(primitives, /data-density=\{description \? 'normal' : 'compact'\}/);
+    assert.match(primitives, /rounded-lg border border-\[var\(--border\)\] bg-\[var\(--surface-soft\)\]/);
+    assert.doesNotMatch(primitives, /boxShadow:\s*`0 0 18px/);
+    assert.doesNotMatch(primitives, /rounded-full border border-\[var\(--border-light\)\]/);
+
+    assert.match(sidebar, /dashboard-canvas/);
+    assert.match(sidebar, /border-l-\[3px\]/);
+    assert.match(sidebar, /var\(--sidebar-active\)/);
+    assert.doesNotMatch(sidebar, /hover:bg-\[var\(--primary\)\]\/10/);
+  });
+
   it('migrates authenticated dashboard surfaces to shared primitives and theme-aware charts', () => {
     for (const pageName of [
       'HomePage.jsx',
