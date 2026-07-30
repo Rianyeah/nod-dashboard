@@ -52,16 +52,14 @@ export default function SummaryCards({ bulan, tahun, filters = {} }) {
       value: data?.total_site_dengan_data?.toLocaleString() ?? '-',
       subtitle: 'site dengan data bulan ini',
       icon: Radio,
-      accent: 'var(--primary)',
-      glow: 'rgba(59, 130, 246, 0.15)',
+      tone: 'neutral',
     },
     {
       title: 'Avg Availability',
       value: avail != null ? `${Number(avail).toFixed(2)}%` : '-',
       subtitle: '',
       icon: isExcellent ? TrendingUp : isDegraded ? Activity : TrendingDown,
-      accent: isExcellent ? 'var(--success)' : isDegraded ? 'var(--warning)' : 'var(--danger)',
-      glow: isExcellent ? 'rgba(16, 185, 129, 0.15)' : isDegraded ? 'rgba(245, 158, 11, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+      tone: isExcellent ? 'success' : isDegraded ? 'warning' : 'danger',
     },
     {
       title: 'Total Outage',
@@ -72,16 +70,14 @@ export default function SummaryCards({ bulan, tahun, filters = {} }) {
         ? `${Math.round(data.total_outage_menit).toLocaleString()} menit`
         : '',
       icon: Zap,
-      accent: 'var(--danger)',
-      glow: 'rgba(239, 68, 68, 0.12)',
+      tone: 'danger',
     },
     {
       title: 'Total Cell',
       value: data?.total_cell?.toLocaleString() ?? '-',
       subtitle: 'cell dengan data',
       icon: Signal,
-      accent: 'var(--primary-light)',
-      glow: 'rgba(96, 165, 250, 0.14)',
+      tone: 'neutral',
     },
   ];
 
@@ -94,8 +90,7 @@ export default function SummaryCards({ bulan, tahun, filters = {} }) {
           value={card.value}
           subtitle={card.subtitle}
           icon={card.icon}
-          accent={card.accent}
-          glow={card.glow}
+          tone={card.tone}
           className="animate-fade-in cursor-default"
           style={{ animationDelay: `${i * 80}ms` }}
         />

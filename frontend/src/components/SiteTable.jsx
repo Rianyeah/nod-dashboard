@@ -85,7 +85,7 @@ export default function SiteTable({ bulan, tahun, filters, onSiteSelect, siteCou
   return (
     <div className="glass-card animate-fade-in flex flex-col h-full overflow-hidden">
       {/* Header */}
-      <div className="flex items-center gap-3 border-b border-[var(--border)] px-4 py-2">
+      <div className="flex items-center gap-3 border-b border-[var(--border-strong)] px-4 py-2">
         <div className="min-w-0 flex items-baseline gap-3">
           <h3 className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-widest shrink-0">Daftar Site</h3>
           <span className="text-[10px] font-mono text-[var(--text-muted)]">
@@ -108,7 +108,7 @@ export default function SiteTable({ bulan, tahun, filters, onSiteSelect, siteCou
       <div className="flex-1 overflow-auto">
         <table className="w-full text-[11px]">
           <thead className="sticky top-0 z-10">
-            <tr className="bg-[var(--bg-surface)]">
+            <tr className="bg-[var(--table-header-bg)]">
               {columns.map(col => (
                 <th
                   key={col.key}
@@ -160,7 +160,7 @@ export default function SiteTable({ bulan, tahun, filters, onSiteSelect, siteCou
         totalPages={data.total_pages || 1}
         onPageChange={setPage}
         disabled={loading}
-        className="border-t border-[var(--border)] px-3 py-1.5"
+        className="border-t border-[var(--border-strong)] px-3 py-1.5"
         testIdPrefix="site"
       />
     </div>

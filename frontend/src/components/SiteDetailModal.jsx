@@ -203,7 +203,7 @@ function ChartTooltip({ active, payload, labelFormatter }) {
 
 /* ── TrendCard (Recharts-based) ─────────────────────── */
 
-function TrendCard({ title, chartData, accent = '#34D399', headlineValue = null, headlinePrefix = '', labelFormatter }) {
+function TrendCard({ title, chartData, accent = 'var(--chart-success)', headlineValue = null, headlinePrefix = '', labelFormatter }) {
   const gradientId = useId();
   const displayValue = headlineValue;
   const hasData = chartData.length >= 2;
@@ -226,7 +226,7 @@ function TrendCard({ title, chartData, accent = '#34D399', headlineValue = null,
                 <stop offset="95%" stopColor={accent} stopOpacity={0} />
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+            <CartesianGrid strokeDasharray="3 5" stroke="var(--chart-grid)" vertical={false} />
             <XAxis
               dataKey="label"
               tick={{ fontSize: 9, fill: 'var(--text-muted)' }}
@@ -450,7 +450,7 @@ export default function SiteDetailModal({ data, trendData = [], dailyData = [], 
       <div className="absolute inset-0 bg-[var(--overlay-scrim)] backdrop-blur-sm" />
 
       <div
-        className="site-detail-modal relative flex max-h-[calc(100vh-48px)] w-full max-w-[1080px] flex-col overflow-hidden rounded-xl border border-[var(--border-light)] bg-[var(--bg-surface)] shadow-2xl animate-fade-in-scale"
+        className="site-detail-modal relative flex max-h-[calc(100vh-48px)] w-full max-w-[1080px] flex-col overflow-hidden rounded-[var(--noc-radius-lg)] border border-[var(--border-strong)] bg-[var(--bg-surface)] shadow-[var(--shadow-lg)] animate-fade-in-scale"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Accent stripe at top */}
@@ -496,14 +496,14 @@ export default function SiteDetailModal({ data, trendData = [], dailyData = [], 
             <TrendCard
               title="Avg Avail 6 Month"
               chartData={sixMonthChartData}
-              accent={avail != null && avail < 95 ? '#EF4444' : '#34D399'}
+              accent={avail != null && avail < 95 ? 'var(--chart-danger)' : 'var(--chart-success)'}
               headlineValue={sixMonthAverage}
               labelFormatter={(d) => `${MONTH_LABELS[(Number(d?.bulan) || 1) - 1]} ${d?.tahun || ''}`}
             />
             <TrendCard
               title="Daily Availability"
               chartData={dailyChartData}
-              accent="#60A5FA"
+              accent="var(--chart-neutral-1)"
               headlineValue={avail}
               headlinePrefix="Month Avg "
               labelFormatter={(d) => `Tgl ${d?.tgl || ''}`}

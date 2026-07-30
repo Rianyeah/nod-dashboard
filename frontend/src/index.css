@@ -377,8 +377,8 @@ html, body, #root {
   color: var(--text-primary) !important;
   border-radius: var(--noc-radius-lg) !important;
   padding: 0 !important;
-  box-shadow: var(--shadow-lg), 0 0 30px rgba(14, 165, 233, 0.1) !important;
-  border: 1px solid var(--border-light) !important;
+  box-shadow: var(--shadow-lg) !important;
+  border: 1px solid var(--border-strong) !important;
   overflow: hidden;
 }
 
@@ -398,13 +398,13 @@ html, body, #root {
 .nod-neighbor-card-shell {
   width: 118px;
   padding: 8px 9px;
-  border: 1px solid rgba(147, 197, 253, 0.34);
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.76);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+  background: var(--bg-glass);
+  box-shadow: var(--shadow-md);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  color: #E2E8F0;
+  color: var(--text-primary);
   font-family: Inter, sans-serif;
   font-size: 10px;
   line-height: 1.25;
@@ -413,28 +413,28 @@ html, body, #root {
 
 .nod-neighbor-card-id {
   font-size: 10px;
-  color: #F8FAFC;
+  color: var(--text-primary);
 }
 
 .nod-neighbor-card-label {
-  color: #94A3B8;
+  color: var(--text-muted);
 }
 
 .nod-sector-legend {
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.85);
+  background: var(--bg-glass);
   box-shadow: var(--shadow-lg);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
 
 .nod-sector-legend-title {
-  color: #94A3B8;
+  color: var(--text-muted);
 }
 
 .nod-sector-legend-item {
-  color: #CBD5E1;
+  color: var(--text-secondary);
 }
 
 /* ===== Map Toggle Controls ===== */
@@ -443,25 +443,25 @@ html, body, #root {
   align-items: center;
   gap: 6px;
   padding: 7px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--border-strong);
   border-radius: 10px;
-  background: rgba(15, 23, 42, 0.78);
+  background: var(--bg-glass);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  color: #CBD5E1;
+  color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-sm);
   font-family: 'Inter', sans-serif;
   line-height: 1;
   white-space: nowrap;
 }
 
 .nod-map-toggle:hover {
-  background: rgba(15, 23, 42, 0.92);
-  border-color: rgba(59, 130, 246, 0.35);
-  color: #F1F5F9;
-  box-shadow: 0 2px 12px rgba(59, 130, 246, 0.18);
+  background: var(--control-bg-hover);
+  border-color: color-mix(in srgb, var(--primary) 30%, var(--border-strong));
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
 }
 
 .nod-map-toggle:active {
@@ -469,43 +469,26 @@ html, body, #root {
 }
 
 .nod-map-toggle--active {
-  border-color: rgba(59, 130, 246, 0.4);
-  background: rgba(59, 130, 246, 0.18);
-  color: #93C5FD;
-  box-shadow: 0 0 12px rgba(59, 130, 246, 0.15);
+  border-color: color-mix(in srgb, var(--primary) 42%, var(--border-strong));
+  background: var(--sidebar-active);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
 }
 
 .nod-map-toggle--active:hover {
-  background: rgba(59, 130, 246, 0.28);
-  border-color: rgba(59, 130, 246, 0.5);
-  color: #BFDBFE;
+  background: color-mix(in srgb, var(--sidebar-active) 70%, var(--control-bg-hover));
+  border-color: color-mix(in srgb, var(--primary) 52%, var(--border-strong));
+  color: var(--text-primary);
 }
 
-/* Light mode map toggles */
-[data-theme="light"] .nod-map-toggle {
-  background: rgba(255, 255, 255, 0.88);
-  border-color: rgba(0, 0, 0, 0.12);
-  color: #475569;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-}
-
-[data-theme="light"] .nod-map-toggle:hover {
-  background: rgba(255, 255, 255, 0.95);
-  border-color: rgba(37, 99, 235, 0.3);
-  color: #1E40AF;
-  box-shadow: 0 2px 12px rgba(37, 99, 235, 0.1);
-}
-
-[data-theme="light"] .nod-map-toggle--active {
-  background: rgba(37, 99, 235, 0.1);
-  border-color: rgba(37, 99, 235, 0.3);
-  color: #2563EB;
-}
-
-[data-theme="light"] .nod-map-toggle--active:hover {
-  background: rgba(37, 99, 235, 0.16);
-  border-color: rgba(37, 99, 235, 0.45);
-  color: #1D4ED8;
+.nod-map-toggle--compact {
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .nod-popup-shell {

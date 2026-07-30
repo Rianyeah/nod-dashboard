@@ -33,7 +33,7 @@ export default function Breadcrumb() {
   return (
     <nav
       aria-label="Breadcrumb"
-      className="flex items-center gap-1.5 border-b border-[var(--border)] bg-[var(--bg-header)] px-6 py-1.5 text-[11px] backdrop-blur-xl"
+      className="flex items-center gap-1.5 border-b border-[var(--border-strong)] bg-[var(--bg-header)] px-6 py-1.5 text-[11px]"
     >
       {/* Home */}
       <Link

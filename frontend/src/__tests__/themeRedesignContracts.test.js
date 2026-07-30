@@ -200,4 +200,47 @@ describe('global dashboard theme redesign contracts', () => {
       assert.doesNotMatch(component, /border-white\/\[|bg-white\/\[|hover:bg-white\/\[|bg-\[#0F172A\]/, componentName);
     }
   });
+
+  it('keeps Site Map chrome graphite while preserving the Mapbox core', () => {
+    const mapPages = [
+      src('pages', 'SiteMapPage.jsx'),
+      src('pages', 'DashboardPage.jsx'),
+    ].join('\n');
+
+    assert.match(mapPages, /dashboard-canvas/);
+    assert.match(mapPages, /border-\[var\(--border-strong\)\]/);
+    assert.match(mapPages, /nod-map-toggle/);
+
+    for (const componentName of [
+      'Header.jsx',
+      'Breadcrumb.jsx',
+      'AvailabilityChart.jsx',
+      'SiteDetailModal.jsx',
+      'SiteTable.jsx',
+      'SummaryCards.jsx',
+      'WorstSitesPanel.jsx',
+      'FilterPanel.jsx',
+    ]) {
+      const component = src('components', componentName);
+      assert.doesNotMatch(
+        component,
+        /#22D3EE|#0EA5E9|#38BDF8|rgba\(125,\s*211,\s*252|rgba\(94,\s*234,\s*212|shadow-\[0_0_/i,
+        componentName,
+      );
+    }
+
+    const header = src('components', 'Header.jsx');
+    const breadcrumb = src('components', 'Breadcrumb.jsx');
+    assert.match(header, /var\(--border-strong\)/);
+    assert.doesNotMatch(header + breadcrumb, /backdrop-blur|blur-sm/);
+
+    const availabilityChart = src('components', 'AvailabilityChart.jsx');
+    assert.match(availabilityChart, /DashboardChartPanel/);
+    assert.match(availabilityChart, /ChartContainer/);
+    assert.match(availabilityChart, /DashboardChartTooltipContent/);
+    assert.doesNotMatch(availabilityChart, /ResponsiveContainer|useDashboardThemeTokens/);
+
+    const summary = src('components', 'SummaryCards.jsx');
+    assert.doesNotMatch(summary, /glow:|glow=\{/);
+  });
 });
