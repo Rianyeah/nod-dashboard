@@ -51,10 +51,10 @@ describe('Impact Service shadcn migration contracts', () => {
       '--noc-radius-lg',
       '--background: var(--bg-base)',
       '--card: var(--bg-surface)',
-      '--chart-1: var(--primary-light)',
-      '--chart-2: var(--danger)',
-      '--chart-3: var(--success)',
-      '--chart-4: var(--warning)',
+      '--chart-1: var(--chart-accent)',
+      '--chart-2: var(--chart-danger)',
+      '--chart-3: var(--chart-success)',
+      '--chart-4: var(--chart-warning)',
     ]) {
       assert.match(css, new RegExp(contract.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     }

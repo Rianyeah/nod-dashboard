@@ -1,4 +1,5 @@
 import { ChartTooltipContent } from '@/components/ui/chart';
+import { cn } from '@/lib/utils';
 import { formatNumber } from '@/utils/formatters';
 
 import { resolveSeriesColor } from './dashboardChartUtils';
@@ -8,11 +9,18 @@ export function DashboardChartTooltipContent({
   valueFormatter = formatNumber,
   seriesLabelFormatter,
   formatter,
+  className,
+  indicator = 'line',
   ...props
 }) {
   return (
     <ChartTooltipContent
       {...props}
+      className={cn(
+        'border-[var(--border-strong)] bg-[var(--chart-tooltip-bg)] text-[var(--text-primary)] shadow-[var(--shadow-md)]',
+        className,
+      )}
+      indicator={indicator}
       formatter={(value, name, item, index, payload) => {
         if (formatter) {
           return formatter(value, name, item, index, payload);

@@ -1,12 +1,14 @@
+import { DASHBOARD_CHART_COLORS } from '../../components/dashboard-charts/dashboardChartUtils.js';
+
 export const TRANSPORT_CHART_COLORS = {
-  packetLoss: 'var(--chart-2)',
-  latency: 'var(--chart-4)',
-  jitter: '#22D3EE',
-  p1: 'var(--chart-2)',
-  p2: 'var(--chart-4)',
-  normal: 'var(--chart-3)',
-  total: 'var(--chart-1)',
-  thi: 'var(--chart-5)',
+  packetLoss: DASHBOARD_CHART_COLORS.danger,
+  latency: DASHBOARD_CHART_COLORS.warning,
+  jitter: DASHBOARD_CHART_COLORS.info,
+  p1: DASHBOARD_CHART_COLORS.danger,
+  p2: DASHBOARD_CHART_COLORS.warning,
+  normal: DASHBOARD_CHART_COLORS.success,
+  total: DASHBOARD_CHART_COLORS.neutral,
+  thi: DASHBOARD_CHART_COLORS.accent,
 };
 
 export const transportQualityChartConfig = {
