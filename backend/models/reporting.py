@@ -42,6 +42,8 @@ class RevenueByKabupaten(BaseModel):
     avg_availability: Optional[float] = None
     ticket_swfm_bps: int = 0
     ticket_swfm_ts: int = 0
+    backup_sukses_bps: int = 0
+    backup_sukses_rate: float = 0.0
     proker_open: int = 0
     proker_closed: int = 0
 

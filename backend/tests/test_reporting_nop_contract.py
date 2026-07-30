@@ -77,6 +77,8 @@ class ReportingNopContractTest(unittest.TestCase):
         for model_contract in [
             "ticket_swfm_bps: int = 0",
             "ticket_swfm_ts: int = 0",
+            "backup_sukses_bps: int = 0",
+            "backup_sukses_rate: float = 0.0",
             "proker_open: int = 0",
             "proker_closed: int = 0",
         ]:
@@ -90,6 +92,12 @@ class ReportingNopContractTest(unittest.TestCase):
             "public.proker_enom_jatim_2026",
             "ticket_swfm_bps",
             "ticket_swfm_ts",
+            "backup_sukses_bps",
+            "backup_sukses_rate",
+            "TRIM(tfc.backup_sukses) = 'BU Genset'",
+            "UPPER(TRIM(tfc.kabupaten_kota)) AS kabupaten_key",
+            "UPPER(TRIM(p.kabupaten)) AS kabupaten_key",
+            'UPPER(TRIM(d."Kabupaten/KOTA"))',
             "proker_open",
             "proker_closed",
         ]:

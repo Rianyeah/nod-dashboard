@@ -97,6 +97,17 @@ class ReportingRedisCacheTest(unittest.IsolatedAsyncioTestCase):
         self.assertGreaterEqual(source.count("redis_cache.set_json("), 6)
         self.assertGreaterEqual(source.count('response.headers["X-Cache"]'), 6)
 
+    def test_performance_table_cache_resource_is_schema_versioned(self):
+        source = REPORTING_ROUTER.read_text(encoding="utf-8")
+        self.assertIn(
+            'REPORTING_PERFORMANCE_CACHE_RESOURCE = "revenue-by-kabupaten-v2"',
+            source,
+        )
+        self.assertIn(
+            'redis_cache.make_key(\n        "reporting",\n        REPORTING_PERFORMANCE_CACHE_RESOURCE,',
+            source,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
