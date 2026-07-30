@@ -8,44 +8,49 @@
 /* ===== NOC Dashboard Design System ===== */
 :root {
   /* Brand palette */
-  --primary: #0EA5E9;
-  --primary-light: #38BDF8;
-  --primary-dark: #0284C7;
-  --accent: #252B3A;
+  --brand-red: #E60012;
+  --brand-red-hover: #FF2638;
+  --brand-red-deep: #B8000E;
+  --primary: var(--brand-red);
+  --primary-light: #FF5261;
+  --primary-dark: var(--brand-red-deep);
+  --accent: #242A33;
 
   /* Status */
-  --success: #10B981;
-  --warning: #F59E0B;
-  --danger: #EF4444;
-  --info: #0EA5E9;
+  --success: #22A06B;
+  --warning: #D99A2B;
+  --danger: #E5484D;
+  --info: #7890A8;
 
   /* Dark backgrounds */
-  --bg-base: #12141C;
-  --bg-surface: #1A1D26;
-  --bg-elevated: #202431;
-  --bg-hover: #252B3A;
-  --bg-glass: rgba(26, 29, 38, 0.82);
-  --bg-header: rgba(26, 29, 38, 0.88);
-  --bg-sidebar: rgba(26, 29, 38, 0.94);
+  --bg-base: #0D1015;
+  --bg-surface: #171B23;
+  --bg-elevated: #1D222B;
+  --bg-hover: #252B35;
+  --bg-glass: rgba(23, 27, 35, 0.96);
+  --bg-header: rgba(18, 22, 29, 0.96);
+  --bg-sidebar: rgba(13, 16, 21, 0.98);
   --surface-soft: rgba(255, 255, 255, 0.035);
-  --surface-muted: rgba(255, 255, 255, 0.055);
+  --surface-muted: rgba(255, 255, 255, 0.06);
+  --sidebar-active: rgba(230, 0, 18, 0.11);
 
   /* Text */
-  --text-primary: #F8FAFC;
-  --text-secondary: #94A3B8;
-  --text-muted: #64748B;
+  --text-primary: #EEF2F7;
+  --text-secondary: #AAB4C2;
+  --text-muted: #8994A3;
 
   /* Borders */
-  --border: rgba(255, 255, 255, 0.05);
-  --border-light: rgba(255, 255, 255, 0.1);
-  --border-focus: rgba(14, 165, 233, 0.42);
+  --border: rgba(255, 255, 255, 0.065);
+  --border-light: rgba(255, 255, 255, 0.085);
+  --border-strong: rgba(255, 255, 255, 0.10);
+  --border-focus: rgba(230, 0, 18, 0.48);
 
   /* Shadows & Glow */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.28);
-  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.24);
-  --shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.32);
-  --shadow-card: 0 14px 36px rgba(0, 0, 0, 0.22);
-  --shadow-glow: 0 0 24px rgba(14, 165, 233, 0.14);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.24);
+  --shadow-md: 0 8px 22px rgba(0, 0, 0, 0.20);
+  --shadow-lg: 0 18px 42px rgba(0, 0, 0, 0.28);
+  --shadow-card: 0 10px 28px rgba(0, 0, 0, 0.18);
+  --shadow-glow: none;
 
   /* Radius */
   --noc-radius-sm: 8px;
@@ -53,27 +58,38 @@
   --noc-radius-lg: 14px;
   --noc-radius-xl: 16px;
 
-  /* Charts */
-  --chart-grid: rgba(255, 255, 255, 0.035);
-  --chart-grid-strong: rgba(255, 255, 255, 0.08);
-  --chart-axis: #94A3B8;
-  --chart-tooltip-bg: #111827;
-  --chart-tooltip-border: rgba(255, 255, 255, 0.1);
-  --chart-cursor: rgba(14, 165, 233, 0.08);
-  --chart-area-primary: rgba(14, 165, 233, 0.20);
+  /* Canvas and charts */
+  --canvas-background:
+    radial-gradient(circle at 2% -6%, rgba(230, 0, 18, 0.10), transparent 27%),
+    radial-gradient(circle at 92% 108%, rgba(100, 116, 139, 0.10), transparent 36%),
+    linear-gradient(145deg, #0D1015 0%, #12161D 58%, #171B23 100%);
+  --chart-accent: var(--brand-red);
+  --chart-neutral-1: #AAB4C2;
+  --chart-neutral-2: #6F7B89;
+  --chart-success: var(--success);
+  --chart-warning: var(--warning);
+  --chart-danger: var(--danger);
+  --chart-info: var(--info);
+  --chart-grid: rgba(255, 255, 255, 0.055);
+  --chart-grid-strong: rgba(255, 255, 255, 0.095);
+  --chart-axis: #8994A3;
+  --chart-tooltip-bg: #12161D;
+  --chart-tooltip-border: var(--border-strong);
+  --chart-cursor: rgba(230, 0, 18, 0.055);
+  --chart-area-primary: rgba(230, 0, 18, 0.10);
 
   /* Tables, controls, overlays, badges */
   --table-header-bg: rgba(255, 255, 255, 0.035);
-  --table-row-hover: rgba(14, 165, 233, 0.08);
-  --table-row-critical: rgba(239, 68, 68, 0.07);
+  --table-row-hover: rgba(255, 255, 255, 0.045);
+  --table-row-critical: rgba(229, 72, 77, 0.07);
   --control-bg: rgba(255, 255, 255, 0.045);
   --control-bg-hover: rgba(255, 255, 255, 0.075);
-  --control-border: rgba(255, 255, 255, 0.08);
+  --control-border: var(--border-strong);
   --overlay-scrim: rgba(2, 6, 23, 0.64);
-  --badge-critical-bg: rgba(239, 68, 68, 0.12);
-  --badge-warning-bg: rgba(245, 158, 11, 0.12);
-  --badge-success-bg: rgba(16, 185, 129, 0.12);
-  --badge-info-bg: rgba(14, 165, 233, 0.12);
+  --badge-critical-bg: rgba(229, 72, 77, 0.12);
+  --badge-warning-bg: rgba(217, 154, 43, 0.12);
+  --badge-success-bg: rgba(34, 160, 107, 0.12);
+  --badge-info-bg: rgba(120, 144, 168, 0.12);
   --background: var(--bg-base);
   --foreground: var(--text-primary);
   --card: var(--bg-surface);
@@ -89,11 +105,11 @@
   --destructive: var(--danger);
   --input: var(--control-border);
   --ring: var(--border-focus);
-  --chart-1: var(--primary-light);
-  --chart-2: var(--danger);
-  --chart-3: var(--success);
-  --chart-4: var(--warning);
-  --chart-5: #A78BFA;
+  --chart-1: var(--chart-accent);
+  --chart-2: var(--chart-danger);
+  --chart-3: var(--chart-success);
+  --chart-4: var(--chart-warning);
+  --chart-5: var(--chart-neutral-1);
   --radius: 0.45rem;
   --sidebar: var(--bg-sidebar);
   --sidebar-foreground: var(--text-primary);
@@ -108,66 +124,73 @@
 /* ===== Light Mode Overrides ===== */
 [data-theme="light"] {
   /* Brand palette */
-  --primary: #0284C7;
-  --primary-light: #0EA5E9;
-  --primary-dark: #0369A1;
-  --accent: #EAF2F8;
+  --primary: #D40012;
+  --primary-light: #B8000E;
+  --primary-dark: #99000C;
+  --accent: #D7DCE3;
 
   /* Status */
-  --success: #10B981;
-  --warning: #F59E0B;
-  --danger: #EF4444;
-  --info: #0284C7;
+  --success: #147D52;
+  --warning: #9A6700;
+  --danger: #C9363E;
+  --info: #526B82;
 
   /* Light backgrounds */
-  --bg-base: #F8FAFC;
-  --bg-surface: #FFFFFF;
-  --bg-elevated: #F8FAFC;
-  --bg-hover: #EAF2F8;
-  --bg-glass: rgba(255, 255, 255, 0.94);
-  --bg-header: rgba(255, 255, 255, 0.96);
-  --bg-sidebar: rgba(255, 255, 255, 0.98);
-  --surface-soft: rgba(15, 23, 42, 0.025);
-  --surface-muted: rgba(15, 23, 42, 0.045);
+  --bg-base: #D9DEE5;
+  --bg-surface: #F8FAFC;
+  --bg-elevated: #EEF1F4;
+  --bg-hover: #E4E8ED;
+  --bg-glass: rgba(248, 250, 252, 0.97);
+  --bg-header: rgba(238, 241, 244, 0.97);
+  --bg-sidebar: #CBD1D9;
+  --surface-soft: rgba(23, 27, 34, 0.045);
+  --surface-muted: rgba(23, 27, 34, 0.075);
+  --sidebar-active: rgba(212, 0, 18, 0.10);
 
   /* Text */
-  --text-primary: #0F172A;
-  --text-secondary: #64748B;
-  --text-muted: #94A3B8;
+  --text-primary: #171B22;
+  --text-secondary: #46515F;
+  --text-muted: #667180;
 
   /* Borders */
-  --border: rgba(15, 23, 42, 0.08);
-  --border-light: rgba(15, 23, 42, 0.12);
-  --border-focus: rgba(2, 132, 199, 0.42);
+  --border: #C2C9D2;
+  --border-light: #B8C1CC;
+  --border-strong: #AEB7C3;
+  --border-focus: rgba(212, 0, 18, 0.46);
 
   /* Shadows & Glow */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.03);
-  --shadow-lg: 0 18px 44px rgba(15, 23, 42, 0.12);
-  --shadow-card: 0 4px 12px rgba(0, 0, 0, 0.03);
-  --shadow-glow: 0 0 20px rgba(2, 132, 199, 0.08);
+  --shadow-sm: 0 1px 2px rgba(31, 41, 55, 0.08);
+  --shadow-md: 0 7px 20px rgba(31, 41, 55, 0.08);
+  --shadow-lg: 0 18px 38px rgba(31, 41, 55, 0.13);
+  --shadow-card: 0 5px 14px rgba(31, 41, 55, 0.07);
+  --shadow-glow: none;
 
-  /* Charts */
-  --chart-grid: rgba(15, 23, 42, 0.06);
-  --chart-grid-strong: rgba(15, 23, 42, 0.12);
-  --chart-axis: #64748B;
-  --chart-tooltip-bg: #FFFFFF;
-  --chart-tooltip-border: rgba(15, 23, 42, 0.12);
-  --chart-cursor: rgba(2, 132, 199, 0.08);
-  --chart-area-primary: rgba(2, 132, 199, 0.16);
+  /* Canvas and charts */
+  --canvas-background:
+    radial-gradient(circle at 2% -6%, rgba(230, 0, 18, 0.065), transparent 25%),
+    linear-gradient(145deg, #D2D8E0 0%, #D9DEE5 100%);
+  --chart-neutral-1: #5E6977;
+  --chart-neutral-2: #8994A3;
+  --chart-grid: rgba(55, 65, 81, 0.11);
+  --chart-grid-strong: rgba(55, 65, 81, 0.16);
+  --chart-axis: #667180;
+  --chart-tooltip-bg: #F8FAFC;
+  --chart-tooltip-border: var(--border-strong);
+  --chart-cursor: rgba(212, 0, 18, 0.05);
+  --chart-area-primary: rgba(212, 0, 18, 0.08);
 
   /* Tables, controls, overlays, badges */
-  --table-header-bg: rgba(15, 23, 42, 0.035);
-  --table-row-hover: rgba(2, 132, 199, 0.07);
-  --table-row-critical: rgba(239, 68, 68, 0.06);
-  --control-bg: rgba(248, 250, 252, 0.92);
+  --table-header-bg: rgba(23, 27, 34, 0.05);
+  --table-row-hover: rgba(23, 27, 34, 0.055);
+  --table-row-critical: rgba(201, 54, 62, 0.06);
+  --control-bg: rgba(248, 250, 252, 0.96);
   --control-bg-hover: #FFFFFF;
-  --control-border: rgba(15, 23, 42, 0.12);
+  --control-border: var(--border-strong);
   --overlay-scrim: rgba(15, 23, 42, 0.44);
-  --badge-critical-bg: rgba(239, 68, 68, 0.10);
-  --badge-warning-bg: rgba(245, 158, 11, 0.12);
-  --badge-success-bg: rgba(16, 185, 129, 0.10);
-  --badge-info-bg: rgba(2, 132, 199, 0.10);
+  --badge-critical-bg: rgba(201, 54, 62, 0.10);
+  --badge-warning-bg: rgba(154, 103, 0, 0.12);
+  --badge-success-bg: rgba(20, 125, 82, 0.10);
+  --badge-info-bg: rgba(82, 107, 130, 0.10);
 
   /* shadcn semantic bridge */
   --background: var(--bg-base);
@@ -196,19 +219,6 @@
 }
 
 /* Glass card — light mode */
-[data-theme="light"] .glass-card {
-  background: var(--bg-glass);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow-sm);
-}
-
-[data-theme="light"] .glass-card:hover {
-  border-color: var(--border-light);
-  box-shadow: var(--shadow-md);
-}
-
 /* Skeleton — light mode */
 [data-theme="light"] .skeleton {
   background: linear-gradient(90deg, rgba(0,0,0,0.04) 25%, rgba(0,0,0,0.08) 50%, rgba(0,0,0,0.04) 75%);
@@ -314,7 +324,8 @@ html, body, #root {
   height: 100%;
   width: 100%;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  background: var(--bg-base);
+  background-color: var(--bg-base);
+  background-image: var(--canvas-background);
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -323,26 +334,26 @@ html, body, #root {
 /* ===== Typography ===== */
 .font-mono { font-family: 'Fira Code', monospace; }
 
-/* ===== Glass Card ===== */
-.glass-card {
-  background: var(--bg-glass);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid var(--border);
-  border-radius: var(--noc-radius-lg);
-  box-shadow: var(--shadow-card);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+/* ===== Matte Dashboard Surfaces ===== */
+.dashboard-canvas {
+  background-color: var(--bg-base);
+  background-image: var(--canvas-background);
+  background-attachment: fixed;
 }
 
-.glass-card:hover {
-  border-color: var(--border-light);
-  box-shadow: var(--shadow-card), var(--shadow-glow);
-}
-
+.glass-card,
 .dashboard-panel {
   background: var(--bg-glass);
   border: 1px solid var(--border);
   border-radius: var(--noc-radius-lg);
+  box-shadow: var(--shadow-card);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+
+.glass-card:hover {
+  border-color: var(--border-strong);
   box-shadow: var(--shadow-card);
 }
 

@@ -8,24 +8,27 @@ const src = (...parts) => readFileSync(resolve(process.cwd(), 'src', ...parts), 
 const srcPath = (...parts) => resolve(process.cwd(), 'src', ...parts);
 
 describe('global dashboard theme redesign contracts', () => {
-  it('keeps the UI/UX guideline colors as the global token source of truth', () => {
+  it('uses Matte Graphite and Telkomsel Red Edge as the global token source', () => {
     const css = src('index.css');
 
     for (const token of [
-      '--bg-base: #12141C',
-      '--bg-surface: #1A1D26',
-      '--text-primary: #F8FAFC',
-      '--text-secondary: #94A3B8',
-      '--primary: #0EA5E9',
-      '--success: #10B981',
-      '--warning: #F59E0B',
-      '--danger: #EF4444',
+      '--brand-red: #E60012',
+      '--bg-base: #0D1015',
+      '--bg-surface: #171B23',
+      '--bg-elevated: #1D222B',
+      '--text-primary: #EEF2F7',
+      '--border-strong: rgba(255, 255, 255, 0.10)',
+      '--chart-accent: var(--brand-red)',
+      '--chart-neutral-1',
+      '--chart-neutral-2',
+      '--sidebar-active',
+      '--canvas-background',
       '[data-theme="light"]',
-      '--bg-base: #F8FAFC',
-      '--bg-surface: #FFFFFF',
-      '--text-primary: #0F172A',
-      '--text-secondary: #64748B',
-      '--primary: #0284C7',
+      '--bg-base: #D9DEE5',
+      '--bg-sidebar: #CBD1D9',
+      '--bg-surface: #F8FAFC',
+      '--border: #C2C9D2',
+      '--border-strong: #AEB7C3',
       '--chart-grid',
       '--chart-tooltip-bg',
       '--table-row-hover',
@@ -35,6 +38,9 @@ describe('global dashboard theme redesign contracts', () => {
     ]) {
       assert.match(css, new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     }
+
+    assert.doesNotMatch(css, /--primary:\s*#0EA5E9/i);
+    assert.doesNotMatch(css, /--shadow-glow:\s*0 0 24px rgba\(14,\s*165,\s*233/);
   });
 
   it('exposes dashboard theme tokens and shared dashboard UI primitives', () => {
@@ -47,7 +53,18 @@ describe('global dashboard theme redesign contracts', () => {
     const hook = readFileSync(hookPath, 'utf8');
     const primitives = readFileSync(primitivePath, 'utf8');
 
-    for (const name of ['useDashboardThemeTokens', 'chartGrid', 'axisTick', 'tooltipBg', 'tableRowHover']) {
+    for (const name of [
+      'useDashboardThemeTokens',
+      'chartGrid',
+      'axisTick',
+      'tooltipBg',
+      'tableRowHover',
+      'chartAccent',
+      'chartNeutral1',
+      'chartNeutral2',
+      'borderStrong',
+      'surfaceElevated',
+    ]) {
       assert.match(hook, new RegExp(name));
     }
 
