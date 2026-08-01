@@ -305,10 +305,17 @@ describe('new home page command center contracts', () => {
 
   it('uses the graphite executive chart language', () => {
     const page = src('pages', 'HomePage.jsx');
+    const chartConfig = src('features', 'home', 'homeChartConfig.js');
+    const performanceTrend = src('features', 'home', 'HomePerformanceTrend.jsx');
 
     assert.doesNotMatch(page, /text-cyan-|bg-cyan-|border-cyan-|#22D3EE|#0EA5E9|#38BDF8/i);
     assert.doesNotMatch(page, /shadow-\[0_0_|blur-sm/);
     assert.match(page, /DashboardChartPanel|DashboardTableShell/);
     assert.match(page, /homeChartConfig/);
+    assert.match(chartConfig, /total_revenue:\s*\{\s*label:\s*'Revenue',\s*color:\s*DASHBOARD_CHART_COLORS\.accent\s*\}/);
+    assert.match(chartConfig, /total_payload:\s*\{\s*label:\s*'Payload',\s*color:\s*DASHBOARD_CHART_COLORS\.info\s*\}/);
+    assert.match(chartConfig, /avg_availability:\s*\{\s*label:\s*'Availability',\s*color:\s*DASHBOARD_CHART_COLORS\.warning\s*\}/);
+    assert.match(performanceTrend, /stroke=\{homeChartConfig\.total_revenue\.color\}/);
+    assert.match(performanceTrend, /stopColor=\{homeChartConfig\.total_revenue\.color\}/);
   });
 });
