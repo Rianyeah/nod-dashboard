@@ -34,7 +34,6 @@ export default function LoginFogBackground({ children }) {
         const THREE = await import('three');
         if (disposed || !backgroundRef.current) return;
 
-        window.THREE = THREE;
         const vantaModule = await import('vanta/dist/vanta.fog.min.js');
         if (disposed || !backgroundRef.current) return;
 
@@ -53,7 +52,7 @@ export default function LoginFogBackground({ children }) {
 
     return () => {
       disposed = true;
-      vantaEffect?.destroy();
+      vantaEffect?.destroy?.();
     };
   }, []);
 
@@ -62,10 +61,17 @@ export default function LoginFogBackground({ children }) {
       ref={backgroundRef}
       data-testid="login-fog-background"
       className="dashboard-canvas relative min-h-[100dvh] overflow-hidden bg-[#090B0F]"
+      style={{
+        backgroundColor: '#090B0F',
+        backgroundImage: 'radial-gradient(circle at 50% 35%, rgba(230, 0, 19, 0.22), transparent 52%)',
+      }}
     >
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(circle_at_50%_35%,rgba(230,0,19,0.22),transparent_52%),radial-gradient(circle_at_50%_115%,rgba(0,0,0,0.92),transparent_58%)]"
+        className="pointer-events-none absolute inset-0 z-[1]"
+        style={{
+          backgroundImage: 'radial-gradient(ellipse at center, rgba(9, 11, 15, 0.06) 0%, rgba(9, 11, 15, 0.18) 50%, rgba(0, 0, 0, 0.78) 100%)',
+        }}
       />
       {children}
     </div>
