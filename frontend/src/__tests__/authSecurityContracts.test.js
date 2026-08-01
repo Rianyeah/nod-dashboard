@@ -1,7 +1,7 @@
 /* global process */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const src = (...parts) => readFileSync(resolve(process.cwd(), 'src', ...parts), 'utf8');
@@ -35,10 +35,53 @@ describe('cookie session authentication contracts', () => {
 
   it('uses the shared graphite canvas and one strong authentication panel', () => {
     const login = src('pages', 'LoginPage.jsx');
+    const fogPath = resolve(process.cwd(), 'src', 'features', 'auth', 'LoginFogBackground.jsx');
 
-    assert.match(login, /dashboard-canvas/);
+    assert.ok(existsSync(fogPath), 'LoginFogBackground should exist');
+    const fog = readFileSync(fogPath, 'utf8');
+
+    assert.match(`${login}\n${fog}`, /dashboard-canvas/);
     assert.match(login, /border-\[var\(--border-strong\)\]/);
     assert.match(login, /bg-\[var\(--bg-glass\)\]/);
     assert.doesNotMatch(login, /border-white|bg-white|hover:bg-white|backdrop-blur|shadow-2xl/);
+  });
+
+  it('delivers the NOD login copy, password visibility control, and resilient fog background', () => {
+    const login = src('pages', 'LoginPage.jsx');
+    const fogPath = resolve(process.cwd(), 'src', 'features', 'auth', 'LoginFogBackground.jsx');
+
+    assert.ok(existsSync(fogPath), 'LoginFogBackground should exist');
+    const fog = readFileSync(fogPath, 'utf8');
+
+    assert.match(login, />\s*NOD\s*</);
+    assert.match(login, /All in one Dashboard ENOM and Tools/);
+    assert.doesNotMatch(login, /NOD Dashboard|Network Operation Dashboard/);
+    assert.match(login, /useState\(false\)/);
+    assert.match(login, /showPassword\s*\?\s*'text'\s*:\s*'password'/);
+    assert.match(login, /pr-11/);
+    assert.match(login, /type="button"/);
+    assert.match(login, /aria-label=\{showPassword \? 'Hide password' : 'Show password'\}/);
+    assert.match(login, /aria-pressed=\{showPassword\}/);
+    assert.match(login, /showPassword \? <EyeOff[^>]*\/> : <Eye[^>]*\/>/);
+    assert.match(login, /focus-visible:ring/);
+    assert.match(fog, /import\('three'\)/);
+    assert.match(fog, /import\('vanta\/dist\/vanta\.fog\.min\.js'\)/);
+    assert.match(fog, /VANTA_FOG_OPTIONS/);
+    assert.match(fog, /midtoneColor:\s*0xe60013/);
+    assert.match(fog, /blurFactor:\s*\.64/);
+    assert.match(fog, /speed:\s*2\.6/);
+    assert.match(fog, /zoom:\s*1\.3/);
+    assert.match(fog, /mouseControls:\s*true/);
+    assert.match(fog, /touchControls:\s*true/);
+    assert.match(fog, /gyroControls:\s*false/);
+    assert.match(fog, /minHeight:\s*200/);
+    assert.match(fog, /minWidth:\s*200/);
+    assert.match(fog, /highlightColor:\s*0x000000/);
+    assert.match(fog, /lowlightColor:\s*0x000000/);
+    assert.match(fog, /baseColor:\s*0x000000/);
+    assert.match(fog, /matchMedia\('\(prefers-reduced-motion: reduce\)'\)/);
+    assert.match(fog, /vantaEffect\?\.destroy\(\)/);
+    assert.match(fog, /min-h-\[100dvh\]/);
+    assert.match(fog, /data-testid="login-fog-background"/);
   });
 });
