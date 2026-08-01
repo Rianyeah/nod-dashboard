@@ -105,7 +105,7 @@ export default function DashboardSidebar({ collapsed, onToggle, lastUpdates }) {
       data-testid="dashboard-sidebar"
       className={[
         'dashboard-sidebar',
-        'fixed inset-y-0 left-0 z-50 flex flex-col border-r border-[var(--border)] bg-[var(--bg-sidebar)] backdrop-blur-xl transition-[width] duration-200',
+        'fixed inset-y-0 left-0 z-50 flex flex-col border-r border-[var(--border)] backdrop-blur-xl transition-[width] duration-200',
         collapsed ? 'w-[68px]' : 'w-[260px]',
       ].join(' ')}
     >
