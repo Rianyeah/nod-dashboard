@@ -757,6 +757,40 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
     assert.match(svg, /data-overlap-index="1"/);
   });
 
+  it('renders bounded escaped antenna notes and expands only their callout cards', () => {
+    const baseAntenna = {
+      id: 'antenna-note',
+      name: 'Sectoral Alpha',
+      status: 'Existing',
+      sector: '1',
+      height: 42,
+      azimuth: 30,
+      leg: 'A',
+      color: '#334155',
+      cids: ['11', '14'],
+    };
+    const withNote = renderTowerPlanSvg({
+      ...createBlankTowerPlan(),
+      antennas: [{
+        ...baseAntenna,
+        note: 'Verify <bracket> & feeder labels before installation with this deliberately long sentence.',
+      }],
+    });
+    const withoutNote = renderTowerPlanSvg({
+      ...createBlankTowerPlan(),
+      antennas: [{ ...baseAntenna, note: '   ' }],
+    });
+    const noteCardHeight = Number(withNote.match(/data-callout-card="1"[^>]+height="([\d.]+)"/)[1]);
+    const blankCardHeight = Number(withoutNote.match(/data-callout-card="1"[^>]+height="([\d.]+)"/)[1]);
+
+    assert.match(withNote, /data-callout-note-line="1"/);
+    assert.match(withNote, /NOTE: Verify &lt;bracket&gt; &amp;/);
+    assert.doesNotMatch(withNote, /<bracket>/);
+    assert.ok((withNote.match(/data-callout-note-line=/g) || []).length <= 3);
+    assert.doesNotMatch(withoutNote, /data-callout-note-line=/);
+    assert.ok(noteCardHeight > blankCardHeight);
+  });
+
   it('renders a contained optional workflow note with escaped content', () => {
     const plan = {
       ...createBlankTowerPlan(),

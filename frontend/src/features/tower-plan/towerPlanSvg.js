@@ -349,14 +349,20 @@ function antennaCallouts(state, towerHeight, geometry) {
     ].filter(Boolean).join(' \u00b7 ');
     const positionLabel = state.towerType === MONOPOLE_TOWER ? 'SIDE' : 'LEG';
     const cids = normalizeCids(antenna.cids ?? antenna.cid);
+    const note = String(antenna.note || '').trim();
+    const noteLines = note
+      ? wrapSvgText(`NOTE: ${note}`, typography.wrapCharacters, 3)
+      : [];
     const details = [
       `SECTOR: ${antenna.sector} \u00b7 ${positionLabel}: ${antenna.leg} \u00b7 ${displayNumber(antenna.height) || 'N/A'} m`,
       `AZIMUTH: ${displayNumber(antenna.azimuth) || 'N/A'}\u00b0`,
       `CID(S): ${cids.length ? cids.join(', ') : 'N/A'}`,
       ...(tiltText ? [tiltText] : []),
     ];
+    const noteLineOffset = details.length;
+    const calloutLines = [...details, ...noteLines];
     const headerHeight = 8 + titleLines.length * titleLineHeight;
-    const cardHeight = headerHeight + 6 + details.length * detailLineHeight + 6;
+    const cardHeight = headerHeight + 6 + calloutLines.length * detailLineHeight + 6;
     const cardY = cursors[column];
     cursors[column] += cardHeight + cardGap;
     return {
@@ -368,12 +374,14 @@ function antennaCallouts(state, towerHeight, geometry) {
       cardHeight,
       headerHeight,
       titleLines,
-      details,
+      calloutLines,
+      noteLineOffset,
     };
   });
 
   return arranged.map(({
-    antenna, index, world, left, cardY, cardHeight, headerHeight, titleLines, details,
+    antenna, index, world, left, cardY, cardHeight, headerHeight, titleLines, calloutLines,
+    noteLineOffset,
   }) => {
     const anchor = projectPoint({ ...world, height: antenna.height }, towerHeight, geometry);
     const direction = left ? -1 : 1;
@@ -389,8 +397,8 @@ function antennaCallouts(state, towerHeight, geometry) {
     const titleMarkup = titleLines.map((line, lineIndex) => (
       `<text data-callout-title-line="${index + 1}-${lineIndex + 1}" x="${cardX + 12}" y="${cardY + typography.titleSize + 3 + lineIndex * titleLineHeight}" fill="#fff" font-size="${typography.titleSize}" font-weight="800">${escapeXml(line)}</text>`
     )).join('');
-    const detailMarkup = details.map((detail, detailIndex) => (
-      `<text x="${cardX + 13}" y="${cardY + headerHeight + typography.size + 2 + detailIndex * detailLineHeight}" fill="#26384d" font-size="${typography.size}">${escapeXml(detail)}</text>`
+    const detailMarkup = calloutLines.map((detail, detailIndex) => (
+      `<text${detailIndex >= noteLineOffset ? ` data-callout-note-line="${detailIndex - noteLineOffset + 1}"` : ''} x="${cardX + 13}" y="${cardY + headerHeight + typography.size + 2 + detailIndex * detailLineHeight}" fill="#26384d" font-size="${typography.size}">${escapeXml(detail)}</text>`
     )).join('');
     return `<g data-callout-font-size="${typography.size}">
       <line x1="${anchor.x}" y1="${anchor.y}" x2="${mastX}" y2="${mastY + 30}" stroke="#64748b" stroke-width="5"/>
