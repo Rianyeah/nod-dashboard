@@ -325,24 +325,20 @@ function antennaCallouts(state, towerHeight, geometry) {
     .sort((a, b) => Number(b.antenna.height) - Number(a.antenna.height)
       || a.sourceIndex - b.sourceIndex);
   const cardsPerColumn = 8;
-  const cardStartY = 146;
-  const cardGap = 4;
-  const titleLineHeight = typography.titleSize + 2;
-  const detailLineHeight = typography.lineHeight;
   const columns = { left: 0, right: 0 };
-  const cursors = { left: cardStartY, right: cardStartY };
-  const arranged = antennas.map(({ antenna }, index) => {
+  const assigned = antennas.map(({ antenna }, index) => {
     const world = installationPoint(geometry, antenna.leg);
     const preferredColumn = world.x < 0 ? 'left' : 'right';
     const column = columns[preferredColumn] < cardsPerColumn
       ? preferredColumn
       : (preferredColumn === 'left' ? 'right' : 'left');
     columns[column] += 1;
-    const titleLines = wrapSvgText(
-      String(antenna.name || '').toUpperCase(),
-      typography.wrapCharacters,
-      2,
-    );
+    return { antenna, index, world, column };
+  });
+  const createMetrics = ({ antenna, index, world, column }, noteLineCap, compact) => {
+    const titleLineHeight = compact ? typography.titleSize : typography.titleSize + 2;
+    const detailLineHeight = compact ? typography.size : typography.lineHeight;
+    const titleLines = wrapSvgText(String(antenna.name || '').toUpperCase(), typography.wrapCharacters, 2);
     const mechanicalTilt = displayNumber(antenna.mechanicalTilt);
     const tiltText = [
       mechanicalTilt === null ? null : `MT: ${mechanicalTilt}\u00b0`,
@@ -351,7 +347,7 @@ function antennaCallouts(state, towerHeight, geometry) {
     const cids = normalizeCids(antenna.cids ?? antenna.cid);
     const note = String(antenna.note || '').trim();
     const noteLines = note
-      ? wrapSvgText(`NOTE: ${note}`, typography.wrapCharacters, 3)
+      ? wrapSvgText(`NOTE: ${note}`, typography.wrapCharacters, noteLineCap)
       : [];
     const details = [
       `SECTOR: ${antenna.sector} \u00b7 ${positionLabel}: ${antenna.leg} \u00b7 ${displayNumber(antenna.height) || 'N/A'} m`,
@@ -361,27 +357,62 @@ function antennaCallouts(state, towerHeight, geometry) {
     ];
     const noteLineOffset = details.length;
     const calloutLines = [...details, ...noteLines];
-    const headerHeight = 8 + titleLines.length * titleLineHeight;
-    const cardHeight = headerHeight + 6 + calloutLines.length * detailLineHeight + 6;
-    const cardY = cursors[column];
-    cursors[column] += cardHeight + cardGap;
+    const headerHeight = (compact ? 4 : 8) + titleLines.length * titleLineHeight;
+    const cardHeight = headerHeight + (compact ? 2 : 6)
+      + calloutLines.length * detailLineHeight + (compact ? 2 : 6);
     return {
       antenna,
       index,
       world,
       left: column === 'left',
-      cardY,
       cardHeight,
       headerHeight,
       titleLines,
       calloutLines,
       noteLineOffset,
+      titleLineHeight,
+      detailLineHeight,
     };
+  };
+  const assignedByColumn = {
+    left: assigned.filter((item) => item.column === 'left'),
+    right: assigned.filter((item) => item.column === 'right'),
+  };
+  const noteLineCaps = { left: 3, right: 3 };
+  const compactColumns = { left: false, right: false };
+  const normalStartY = 146;
+  const compactStartY = 132;
+  const normalGap = 4;
+  const compactGap = 1;
+  ['left', 'right'].forEach((column) => {
+    const items = assignedByColumn[column];
+    const hasNotes = items.some(({ antenna }) => String(antenna.note || '').trim());
+    const heightFor = (noteLineCap, compact) => items.reduce(
+      (total, item) => total + createMetrics(item, noteLineCap, compact).cardHeight,
+      0,
+    ) + Math.max(0, items.length - 1) * (compact ? compactGap : normalGap);
+    while (hasNotes && noteLineCaps[column] > 1
+      && normalStartY + heightFor(noteLineCaps[column], false) > TOWER_DRAWING_LAYOUT.canvasHeight) {
+      noteLineCaps[column] -= 1;
+    }
+    compactColumns[column] = hasNotes
+      && normalStartY + heightFor(noteLineCaps[column], false) > TOWER_DRAWING_LAYOUT.canvasHeight;
+  });
+  const cursors = {
+    left: compactColumns.left ? compactStartY : normalStartY,
+    right: compactColumns.right ? compactStartY : normalStartY,
+  };
+  const arranged = assigned.map((item) => {
+    const compact = compactColumns[item.column];
+    const metrics = createMetrics(item, noteLineCaps[item.column], compact);
+    const cardY = cursors[item.column];
+    cursors[item.column] += metrics.cardHeight + (compact ? compactGap : normalGap);
+    return { ...metrics, cardY };
   });
 
   return arranged.map(({
     antenna, index, world, left, cardY, cardHeight, headerHeight, titleLines, calloutLines,
-    noteLineOffset,
+    noteLineOffset, titleLineHeight, detailLineHeight,
   }) => {
     const anchor = projectPoint({ ...world, height: antenna.height }, towerHeight, geometry);
     const direction = left ? -1 : 1;
@@ -395,10 +426,10 @@ function antennaCallouts(state, towerHeight, geometry) {
     const edgeX = left ? cardX + cardWidth : cardX;
     const color = escapeXml(antenna.color);
     const titleMarkup = titleLines.map((line, lineIndex) => (
-      `<text data-callout-title-line="${index + 1}-${lineIndex + 1}" x="${cardX + 12}" y="${cardY + typography.titleSize + 3 + lineIndex * titleLineHeight}" fill="#fff" font-size="${typography.titleSize}" font-weight="800">${escapeXml(line)}</text>`
+      `<text data-callout-title-line="${index + 1}-${lineIndex + 1}" x="${cardX + 12}" y="${cardY + typography.titleSize + (titleLineHeight === typography.titleSize ? 1 : 3) + lineIndex * titleLineHeight}" fill="#fff" font-size="${typography.titleSize}" font-weight="800">${escapeXml(line)}</text>`
     )).join('');
     const detailMarkup = calloutLines.map((detail, detailIndex) => (
-      `<text${detailIndex >= noteLineOffset ? ` data-callout-note-line="${detailIndex - noteLineOffset + 1}"` : ''} x="${cardX + 13}" y="${cardY + headerHeight + typography.size + 2 + detailIndex * detailLineHeight}" fill="#26384d" font-size="${typography.size}">${escapeXml(detail)}</text>`
+      `<text${detailIndex >= noteLineOffset ? ` data-callout-note-card="${index + 1}" data-callout-note-line="${detailIndex - noteLineOffset + 1}"` : ''} x="${cardX + 13}" y="${cardY + headerHeight + typography.size + (detailLineHeight === typography.size ? 0 : 2) + detailIndex * detailLineHeight}" fill="#26384d" font-size="${typography.size}">${escapeXml(detail)}</text>`
     )).join('');
     return `<g data-callout-font-size="${typography.size}">
       <line x1="${anchor.x}" y1="${anchor.y}" x2="${mastX}" y2="${mastY + 30}" stroke="#64748b" stroke-width="5"/>

@@ -791,6 +791,58 @@ describe('Tower Plan deterministic output and dashboard wiring', () => {
     assert.ok(noteCardHeight > blankCardHeight);
   });
 
+  it('packs dense noted callouts inside the fixed SVG canvas', () => {
+    const state = applyAutofillDraft(
+      createBlankTowerPlan(),
+      buildAutofillDraft(groupedConfiguration),
+    );
+    const svg = renderTowerPlanSvg({
+      ...state,
+      detailFontPreset: 'large',
+      detailFontSize: 15,
+      antennas: Array.from({ length: MAX_ANTENNAS }, (_, index) => ({
+        ...state.antennas[0],
+        id: `dense-noted-${index + 1}`,
+        name: `Antenna Sectoral Super Long Engineering Name ${index + 1} MB4B MobI`,
+        sector: String((index % 3) + 1),
+        height: 46 - (index % 4) * 0.2,
+        azimuth: 300 + (index % 5),
+        leg: index % 2 ? 'A' : 'B',
+        mechanicalTilt: 1,
+        cids: [`${index + 20}`],
+        note: 'Verify <bracket> and feeder labels before installation with this deliberately long sentence.',
+      })),
+    });
+    const cards = [...svg.matchAll(
+      /<rect data-callout-card="(\d+)" x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)"/g,
+    )].map(([, id, x, y, width, height]) => ({
+      id: Number(id), x: Number(x), y: Number(y), width: Number(width), height: Number(height),
+    }));
+    const noteLinesByCard = new Map();
+    [...svg.matchAll(/data-callout-note-card="(\d+)" data-callout-note-line="(\d+)"/g)]
+      .forEach(([, card, line]) => {
+        const lines = noteLinesByCard.get(Number(card)) || [];
+        lines.push(Number(line));
+        noteLinesByCard.set(Number(card), lines);
+      });
+
+    assert.equal(cards.length, MAX_ANTENNAS);
+    cards.forEach((card, index) => {
+      assert.ok(card.y + card.height <= TOWER_DRAWING_LAYOUT.canvasHeight);
+      cards.slice(index + 1).forEach((other) => {
+        const separated = card.x + card.width <= other.x
+          || other.x + other.width <= card.x
+          || card.y + card.height <= other.y
+          || other.y + other.height <= card.y;
+        assert.equal(separated, true, `callout cards ${card.id} and ${other.id} overlap`);
+      });
+    });
+    cards.forEach((card) => {
+      assert.ok(noteLinesByCard.get(card.id)?.includes(1));
+      assert.ok((noteLinesByCard.get(card.id) || []).length <= 3);
+    });
+  });
+
   it('renders a contained optional workflow note with escaped content', () => {
     const plan = {
       ...createBlankTowerPlan(),
