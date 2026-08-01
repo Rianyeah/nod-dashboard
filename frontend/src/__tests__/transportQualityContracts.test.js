@@ -248,6 +248,7 @@ describe('Transport Quality dashboard contracts', () => {
 
     assert.match(charts, /import\s*\{\s*resolveTransportTrendAxes\s*\}\s*from\s*['"]\.\/transportQualityTrendAxes['"]/);
     assert.match(charts, /const\s+trendAxes\s*=\s*resolveTransportTrendAxes\(trend\)/);
+    assert.match(trendSection, /<CartesianGrid\b(?=[^>]*\byAxisId="small")[^>]*\/>/);
     assert.match(trendSection, /<YAxis\s+[^>]*yAxisId="small"[^>]*domain=\{\[0,\s*50\]\}[^>]*tickCount=\{6\}[^>]*tickLine=\{false\}[^>]*axisLine=\{false\}[^>]*width=\{36\}[^>]*tick=\{\{ fill: 'var\(--chart-axis\)', fontSize: 10 \}\}/);
     assert.match(trendSection, /trendAxes\.hasLargeSeries\s*&&\s*\(\s*<YAxis\s+[^>]*yAxisId="large"[^>]*orientation="right"[^>]*domain=\{\[0,\s*'auto'\]\}[^>]*tickLine=\{false\}[^>]*axisLine=\{false\}[^>]*width=\{42\}[^>]*tick=\{\{ fill: 'var\(--chart-axis\)', fontSize: 10 \}\}/);
 

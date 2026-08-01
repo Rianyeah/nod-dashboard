@@ -100,7 +100,7 @@ export function TransportQualityCharts({
               data-testid="transport-weekly-trend-chart"
             >
               <LineChart accessibilityLayer data={trend} margin={DASHBOARD_CHART_MARGIN}>
-                <CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 5" />
+                <CartesianGrid yAxisId="small" vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 5" />
                 <XAxis dataKey="date" tickFormatter={formatDateLabel} tickLine={false} axisLine={false} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
                 <YAxis yAxisId="small" domain={[0, 50]} tickCount={6} tickLine={false} axisLine={false} width={36} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
                 {trendAxes.hasLargeSeries && (
