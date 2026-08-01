@@ -242,6 +242,25 @@ describe('Transport Quality dashboard contracts', () => {
     assert.match(charts, /radius=\{DASHBOARD_BAR_RADIUS\}/);
   });
 
+  it('uses resolved dual axes for the weekly quality trend', () => {
+    const charts = src('features', 'transport-quality', 'TransportQualityCharts.jsx');
+    const trendSection = charts.split('Weekly Quality Trend', 2)[1].split('High Priority Transport', 1)[0];
+
+    assert.match(charts, /import\s*\{\s*resolveTransportTrendAxes\s*\}\s*from\s*['"]\.\/transportQualityTrendAxes['"]/);
+    assert.match(charts, /const\s+trendAxes\s*=\s*resolveTransportTrendAxes\(trend\)/);
+    assert.match(trendSection, /<YAxis\s+[^>]*yAxisId="small"[^>]*domain=\{\[0,\s*50\]\}[^>]*tickCount=\{6\}[^>]*tickLine=\{false\}[^>]*axisLine=\{false\}[^>]*width=\{36\}[^>]*tick=\{\{ fill: 'var\(--chart-axis\)', fontSize: 10 \}\}/);
+    assert.match(trendSection, /trendAxes\.hasLargeSeries\s*&&\s*\(\s*<YAxis\s+[^>]*yAxisId="large"[^>]*orientation="right"[^>]*domain=\{\[0,\s*'auto'\]\}[^>]*tickLine=\{false\}[^>]*axisLine=\{false\}[^>]*width=\{42\}[^>]*tick=\{\{ fill: 'var\(--chart-axis\)', fontSize: 10 \}\}/);
+
+    for (const series of [
+      'pl_over_1_sites',
+      'latency_over_5_sites',
+      'jitter_not_clear_sites',
+      'thi_fail_sites',
+    ]) {
+      assert.match(trendSection, new RegExp(`<Line[^>]*dataKey="${series}"[^>]*yAxisId=\\{trendAxes\\.axisBySeries\\.${series}\\}`));
+    }
+  });
+
   it('isolates priority table pagination from dashboard requests', () => {
     const page = src('pages', 'TransportQualityPage.jsx');
 
