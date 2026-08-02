@@ -12,7 +12,7 @@ const src = (...parts) => readFileSync(resolve(process.cwd(), 'src', ...parts), 
 const srcPath = (...parts) => resolve(process.cwd(), 'src', ...parts);
 
 describe('Transport Quality dashboard contracts', () => {
-  it('classifies each trend series independently without changing source values', () => {
+  it('keeps PL on the right axis and smaller issue series on the left axis', () => {
     const rows = [
       { pl_over_1_sites: 12, latency_over_5_sites: 1000, jitter_not_clear_sites: 4, thi_fail_sites: 9 },
       { pl_over_1_sites: 48, latency_over_5_sites: 1420, jitter_not_clear_sites: 17, thi_fail_sites: 50 },
@@ -20,8 +20,8 @@ describe('Transport Quality dashboard contracts', () => {
 
     assert.deepEqual(resolveTransportTrendAxes(rows), {
       axisBySeries: {
-        pl_over_1_sites: 'small',
-        latency_over_5_sites: 'large',
+        pl_over_1_sites: 'large',
+        latency_over_5_sites: 'small',
         jitter_not_clear_sites: 'small',
         thi_fail_sites: 'small',
       },
@@ -30,47 +30,26 @@ describe('Transport Quality dashboard contracts', () => {
     assert.equal(rows[1].latency_over_5_sites, 1420);
   });
 
-  it('classifies all-small and all-large trend data', () => {
-    assert.deepEqual(resolveTransportTrendAxes([
-      { pl_over_1_sites: 1, latency_over_5_sites: 2, jitter_not_clear_sites: 3, thi_fail_sites: 50 },
-    ]), {
+  it('uses stable axes regardless of data magnitude', () => {
+    const expected = {
       axisBySeries: {
-        pl_over_1_sites: 'small',
+        pl_over_1_sites: 'large',
         latency_over_5_sites: 'small',
         jitter_not_clear_sites: 'small',
         thi_fail_sites: 'small',
       },
-      hasLargeSeries: false,
-    });
+      hasLargeSeries: true,
+    };
 
     assert.deepEqual(resolveTransportTrendAxes([
+      { pl_over_1_sites: 1, latency_over_5_sites: 2, jitter_not_clear_sites: 3, thi_fail_sites: 50 },
+    ]), expected);
+    assert.deepEqual(resolveTransportTrendAxes([
       { pl_over_1_sites: 51, latency_over_5_sites: 52, jitter_not_clear_sites: 53, thi_fail_sites: 54 },
-    ]), {
-      axisBySeries: {
-        pl_over_1_sites: 'large',
-        latency_over_5_sites: 'large',
-        jitter_not_clear_sites: 'large',
-        thi_fail_sites: 'large',
-      },
-      hasLargeSeries: true,
-    });
+    ]), expected);
   });
 
-  it('keeps the 50 boundary small and values above it large', () => {
-    const { axisBySeries, hasLargeSeries } = resolveTransportTrendAxes([
-      { pl_over_1_sites: 50, latency_over_5_sites: 50.0001, jitter_not_clear_sites: 50, thi_fail_sites: 50 },
-    ]);
-
-    assert.deepEqual(axisBySeries, {
-      pl_over_1_sites: 'small',
-      latency_over_5_sites: 'large',
-      jitter_not_clear_sites: 'small',
-      thi_fail_sites: 'small',
-    });
-    assert.equal(hasLargeSeries, true);
-  });
-
-  it('ignores invalid values unless another valid large value exists', () => {
+  it('keeps stable axes for invalid and sparse values', () => {
     const invalidValues = [null, '', '   ', NaN, Infinity, -1];
     const invalidRows = invalidValues.map((value) => ({
       pl_over_1_sites: value,
@@ -81,19 +60,8 @@ describe('Transport Quality dashboard contracts', () => {
 
     assert.deepEqual(resolveTransportTrendAxes(invalidRows), {
       axisBySeries: {
-        pl_over_1_sites: 'small',
+        pl_over_1_sites: 'large',
         latency_over_5_sites: 'small',
-        jitter_not_clear_sites: 'small',
-        thi_fail_sites: 'small',
-      },
-      hasLargeSeries: false,
-    });
-
-    invalidRows.push({ latency_over_5_sites: 51 }, {});
-    assert.deepEqual(resolveTransportTrendAxes(invalidRows), {
-      axisBySeries: {
-        pl_over_1_sites: 'small',
-        latency_over_5_sites: 'large',
         jitter_not_clear_sites: 'small',
         thi_fail_sites: 'small',
       },
@@ -101,15 +69,15 @@ describe('Transport Quality dashboard contracts', () => {
     });
   });
 
-  it('defaults empty or undefined trend rows to four stable small-axis keys', () => {
+  it('defaults empty or undefined trend rows to four stable axis keys', () => {
     const expected = {
       axisBySeries: {
-        pl_over_1_sites: 'small',
+        pl_over_1_sites: 'large',
         latency_over_5_sites: 'small',
         jitter_not_clear_sites: 'small',
         thi_fail_sites: 'small',
       },
-      hasLargeSeries: false,
+      hasLargeSeries: true,
     };
 
     assert.deepEqual(TRANSPORT_TREND_SERIES, [
@@ -250,14 +218,12 @@ describe('Transport Quality dashboard contracts', () => {
     assert.match(charts, /const\s+trendAxes\s*=\s*resolveTransportTrendAxes\(trend\)/);
     assert.match(trendSection, /<CartesianGrid\b(?=[^>]*\byAxisId="small")[^>]*\/>/);
     assert.match(trendSection, /<YAxis\s+[^>]*yAxisId="small"[^>]*domain=\{\[0,\s*50\]\}[^>]*tickCount=\{6\}[^>]*tickLine=\{false\}[^>]*axisLine=\{false\}[^>]*width=\{36\}[^>]*tick=\{\{ fill: 'var\(--chart-axis\)', fontSize: 10 \}\}/);
-    assert.match(trendSection, /trendAxes\.hasLargeSeries\s*&&\s*\(\s*<YAxis\s+[^>]*yAxisId="large"[^>]*orientation="right"[^>]*domain=\{\[0,\s*'auto'\]\}[^>]*tickLine=\{false\}[^>]*axisLine=\{false\}[^>]*width=\{42\}[^>]*tick=\{\{ fill: 'var\(--chart-axis\)', fontSize: 10 \}\}/);
+    assert.match(trendSection, /<YAxis\s+[^>]*yAxisId="large"[^>]*orientation="right"[^>]*domain=\{\[0,\s*'auto'\]\}[^>]*tickLine=\{false\}[^>]*axisLine=\{false\}[^>]*width=\{42\}[^>]*tick=\{\{ fill: 'var\(--danger\)', fontSize: 10 \}\}/);
 
-    for (const series of [
-      'pl_over_1_sites',
-      'latency_over_5_sites',
-      'jitter_not_clear_sites',
-      'thi_fail_sites',
-    ]) {
+    assert.match(trendSection, /<ComposedChart/);
+    assert.match(trendSection, /<Area[^>]*dataKey="pl_over_1_sites"[^>]*yAxisId=\{trendAxes\.axisBySeries\.pl_over_1_sites\}[^>]*fill="url\(#transport-pl-area\)"/);
+    assert.match(trendSection, /<linearGradient\s+id="transport-pl-area"/);
+    for (const series of ['latency_over_5_sites', 'jitter_not_clear_sites', 'thi_fail_sites']) {
       assert.match(trendSection, new RegExp(`<Line[^>]*dataKey="${series}"[^>]*yAxisId=\\{trendAxes\\.axisBySeries\\.${series}\\}`));
     }
   });
@@ -289,7 +255,7 @@ describe('Transport Quality dashboard contracts', () => {
     assert.match(feature, /priority_level/);
     assert.match(feature, /P1/);
     assert.match(feature, /P2/);
-    assert.match(charts, /LineChart/);
+    assert.match(charts, /ComposedChart/);
     assert.match(charts, /BarChart/);
   });
 

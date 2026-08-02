@@ -5,12 +5,13 @@ import {
   Waves,
 } from 'lucide-react';
 import {
+  Area,
   Bar,
   BarChart,
   CartesianGrid,
+  ComposedChart,
   LabelList,
   Line,
-  LineChart,
   XAxis,
   YAxis,
 } from 'recharts';
@@ -99,20 +100,24 @@ export function TransportQualityCharts({
               className="h-[300px] w-full aspect-auto"
               data-testid="transport-weekly-trend-chart"
             >
-              <LineChart accessibilityLayer data={trend} margin={DASHBOARD_CHART_MARGIN}>
+              <ComposedChart accessibilityLayer data={trend} margin={DASHBOARD_CHART_MARGIN}>
+                <defs>
+                  <linearGradient id="transport-pl-area" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="var(--color-pl_over_1_sites)" stopOpacity={0.32} />
+                    <stop offset="92%" stopColor="var(--color-pl_over_1_sites)" stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
                 <CartesianGrid yAxisId="small" vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 5" />
                 <XAxis dataKey="date" tickFormatter={formatDateLabel} tickLine={false} axisLine={false} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
                 <YAxis yAxisId="small" domain={[0, 50]} tickCount={6} tickLine={false} axisLine={false} width={36} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
-                {trendAxes.hasLargeSeries && (
-                  <YAxis yAxisId="large" orientation="right" domain={[0, 'auto']} tickLine={false} axisLine={false} width={42} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
-                )}
+                <YAxis yAxisId="large" orientation="right" domain={[0, 'auto']} tickLine={false} axisLine={false} width={42} tick={{ fill: 'var(--danger)', fontSize: 10 }} />
                 <TransportTooltip labelFormatter={formatDateLabel} />
                 <DashboardChartLegend />
-                <Line type="monotone" dataKey="pl_over_1_sites" yAxisId={trendAxes.axisBySeries.pl_over_1_sites} stroke="var(--color-pl_over_1_sites)" strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
+                <Area type="monotone" dataKey="pl_over_1_sites" yAxisId={trendAxes.axisBySeries.pl_over_1_sites} fill="url(#transport-pl-area)" stroke="var(--color-pl_over_1_sites)" strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
                 <Line type="monotone" dataKey="latency_over_5_sites" yAxisId={trendAxes.axisBySeries.latency_over_5_sites} stroke="var(--color-latency_over_5_sites)" strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
                 <Line type="monotone" dataKey="jitter_not_clear_sites" yAxisId={trendAxes.axisBySeries.jitter_not_clear_sites} stroke="var(--color-jitter_not_clear_sites)" strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
                 <Line type="monotone" dataKey="thi_fail_sites" yAxisId={trendAxes.axisBySeries.thi_fail_sites} stroke="var(--color-thi_fail_sites)" strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
-              </LineChart>
+              </ComposedChart>
             </ChartContainer>
           ) : <DashboardChartEmpty className="h-[300px]" />}
         </ChartCard>
