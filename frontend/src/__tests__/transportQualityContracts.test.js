@@ -120,6 +120,8 @@ describe('Transport Quality dashboard contracts', () => {
     assert.match(api, /\/transport-quality\/priority-sites/);
     assert.match(api, /Date\.now\(\)/);
     assert.match(api, /Cache-Control': 'no-cache'/);
+    assert.match(api, /withTransportRetry/);
+    assert.match(api, /signal/);
   });
 
   it('renders the required dense NOC sections and global filters', () => {
