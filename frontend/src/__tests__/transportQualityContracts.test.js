@@ -3,11 +3,125 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import {
+  resolveTransportTrendAxes,
+  TRANSPORT_TREND_SERIES,
+} from '../features/transport-quality/transportQualityTrendAxes.js';
 
 const src = (...parts) => readFileSync(resolve(process.cwd(), 'src', ...parts), 'utf8');
 const srcPath = (...parts) => resolve(process.cwd(), 'src', ...parts);
 
 describe('Transport Quality dashboard contracts', () => {
+  it('classifies each trend series independently without changing source values', () => {
+    const rows = [
+      { pl_over_1_sites: 12, latency_over_5_sites: 1000, jitter_not_clear_sites: 4, thi_fail_sites: 9 },
+      { pl_over_1_sites: 48, latency_over_5_sites: 1420, jitter_not_clear_sites: 17, thi_fail_sites: 50 },
+    ];
+
+    assert.deepEqual(resolveTransportTrendAxes(rows), {
+      axisBySeries: {
+        pl_over_1_sites: 'small',
+        latency_over_5_sites: 'large',
+        jitter_not_clear_sites: 'small',
+        thi_fail_sites: 'small',
+      },
+      hasLargeSeries: true,
+    });
+    assert.equal(rows[1].latency_over_5_sites, 1420);
+  });
+
+  it('classifies all-small and all-large trend data', () => {
+    assert.deepEqual(resolveTransportTrendAxes([
+      { pl_over_1_sites: 1, latency_over_5_sites: 2, jitter_not_clear_sites: 3, thi_fail_sites: 50 },
+    ]), {
+      axisBySeries: {
+        pl_over_1_sites: 'small',
+        latency_over_5_sites: 'small',
+        jitter_not_clear_sites: 'small',
+        thi_fail_sites: 'small',
+      },
+      hasLargeSeries: false,
+    });
+
+    assert.deepEqual(resolveTransportTrendAxes([
+      { pl_over_1_sites: 51, latency_over_5_sites: 52, jitter_not_clear_sites: 53, thi_fail_sites: 54 },
+    ]), {
+      axisBySeries: {
+        pl_over_1_sites: 'large',
+        latency_over_5_sites: 'large',
+        jitter_not_clear_sites: 'large',
+        thi_fail_sites: 'large',
+      },
+      hasLargeSeries: true,
+    });
+  });
+
+  it('keeps the 50 boundary small and values above it large', () => {
+    const { axisBySeries, hasLargeSeries } = resolveTransportTrendAxes([
+      { pl_over_1_sites: 50, latency_over_5_sites: 50.0001, jitter_not_clear_sites: 50, thi_fail_sites: 50 },
+    ]);
+
+    assert.deepEqual(axisBySeries, {
+      pl_over_1_sites: 'small',
+      latency_over_5_sites: 'large',
+      jitter_not_clear_sites: 'small',
+      thi_fail_sites: 'small',
+    });
+    assert.equal(hasLargeSeries, true);
+  });
+
+  it('ignores invalid values unless another valid large value exists', () => {
+    const invalidValues = [null, '', '   ', NaN, Infinity, -1];
+    const invalidRows = invalidValues.map((value) => ({
+      pl_over_1_sites: value,
+      latency_over_5_sites: value,
+      jitter_not_clear_sites: value,
+      thi_fail_sites: value,
+    }));
+
+    assert.deepEqual(resolveTransportTrendAxes(invalidRows), {
+      axisBySeries: {
+        pl_over_1_sites: 'small',
+        latency_over_5_sites: 'small',
+        jitter_not_clear_sites: 'small',
+        thi_fail_sites: 'small',
+      },
+      hasLargeSeries: false,
+    });
+
+    invalidRows.push({ latency_over_5_sites: 51 }, {});
+    assert.deepEqual(resolveTransportTrendAxes(invalidRows), {
+      axisBySeries: {
+        pl_over_1_sites: 'small',
+        latency_over_5_sites: 'large',
+        jitter_not_clear_sites: 'small',
+        thi_fail_sites: 'small',
+      },
+      hasLargeSeries: true,
+    });
+  });
+
+  it('defaults empty or undefined trend rows to four stable small-axis keys', () => {
+    const expected = {
+      axisBySeries: {
+        pl_over_1_sites: 'small',
+        latency_over_5_sites: 'small',
+        jitter_not_clear_sites: 'small',
+        thi_fail_sites: 'small',
+      },
+      hasLargeSeries: false,
+    };
+
+    assert.deepEqual(TRANSPORT_TREND_SERIES, [
+      'pl_over_1_sites',
+      'latency_over_5_sites',
+      'jitter_not_clear_sites',
+      'thi_fail_sites',
+    ]);
+    assert.deepEqual(resolveTransportTrendAxes([]), expected);
+    assert.deepEqual(resolveTransportTrendAxes(), expected);
+  });
+
   it('wires the route, navigation, breadcrumb label, and API functions', () => {
     const app = src('App.jsx');
     const sidebar = src('components', 'DashboardSidebar.jsx');
@@ -126,6 +240,26 @@ describe('Transport Quality dashboard contracts', () => {
     assert.match(charts, /p1_sites/);
     assert.match(charts, /p2_sites/);
     assert.match(charts, /radius=\{DASHBOARD_BAR_RADIUS\}/);
+  });
+
+  it('uses resolved dual axes for the weekly quality trend', () => {
+    const charts = src('features', 'transport-quality', 'TransportQualityCharts.jsx');
+    const trendSection = charts.split('Weekly Quality Trend', 2)[1].split('High Priority Transport', 1)[0];
+
+    assert.match(charts, /import\s*\{\s*resolveTransportTrendAxes\s*\}\s*from\s*['"]\.\/transportQualityTrendAxes['"]/);
+    assert.match(charts, /const\s+trendAxes\s*=\s*resolveTransportTrendAxes\(trend\)/);
+    assert.match(trendSection, /<CartesianGrid\b(?=[^>]*\byAxisId="small")[^>]*\/>/);
+    assert.match(trendSection, /<YAxis\s+[^>]*yAxisId="small"[^>]*domain=\{\[0,\s*50\]\}[^>]*tickCount=\{6\}[^>]*tickLine=\{false\}[^>]*axisLine=\{false\}[^>]*width=\{36\}[^>]*tick=\{\{ fill: 'var\(--chart-axis\)', fontSize: 10 \}\}/);
+    assert.match(trendSection, /trendAxes\.hasLargeSeries\s*&&\s*\(\s*<YAxis\s+[^>]*yAxisId="large"[^>]*orientation="right"[^>]*domain=\{\[0,\s*'auto'\]\}[^>]*tickLine=\{false\}[^>]*axisLine=\{false\}[^>]*width=\{42\}[^>]*tick=\{\{ fill: 'var\(--chart-axis\)', fontSize: 10 \}\}/);
+
+    for (const series of [
+      'pl_over_1_sites',
+      'latency_over_5_sites',
+      'jitter_not_clear_sites',
+      'thi_fail_sites',
+    ]) {
+      assert.match(trendSection, new RegExp(`<Line[^>]*dataKey="${series}"[^>]*yAxisId=\\{trendAxes\\.axisBySeries\\.${series}\\}`));
+    }
   });
 
   it('isolates priority table pagination from dashboard requests', () => {

@@ -37,6 +37,7 @@ import {
   TRANSPORT_CHART_COLORS,
   transportQualityChartConfig,
 } from './transportQualityChartConfig';
+import { resolveTransportTrendAxes } from './transportQualityTrendAxes';
 
 function asDisplay(value) {
   if (value == null || value === '') return '-';
@@ -84,6 +85,7 @@ export function TransportQualityCharts({
   latestPriority,
   formatDateLabel,
 }) {
+  const trendAxes = resolveTransportTrendAxes(trend);
   const nopBreakdown = (breakdowns.by_nop || []).slice(0, 8);
   const kabupatenBreakdown = (breakdowns.by_kabupaten || []).slice(0, 8);
 
@@ -98,15 +100,18 @@ export function TransportQualityCharts({
               data-testid="transport-weekly-trend-chart"
             >
               <LineChart accessibilityLayer data={trend} margin={DASHBOARD_CHART_MARGIN}>
-                <CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 5" />
+                <CartesianGrid yAxisId="small" vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 5" />
                 <XAxis dataKey="date" tickFormatter={formatDateLabel} tickLine={false} axisLine={false} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
-                <YAxis tickLine={false} axisLine={false} width={42} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
+                <YAxis yAxisId="small" domain={[0, 50]} tickCount={6} tickLine={false} axisLine={false} width={36} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
+                {trendAxes.hasLargeSeries && (
+                  <YAxis yAxisId="large" orientation="right" domain={[0, 'auto']} tickLine={false} axisLine={false} width={42} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
+                )}
                 <TransportTooltip labelFormatter={formatDateLabel} />
                 <DashboardChartLegend />
-                <Line type="monotone" dataKey="pl_over_1_sites" stroke="var(--color-pl_over_1_sites)" strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
-                <Line type="monotone" dataKey="latency_over_5_sites" stroke="var(--color-latency_over_5_sites)" strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
-                <Line type="monotone" dataKey="jitter_not_clear_sites" stroke="var(--color-jitter_not_clear_sites)" strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
-                <Line type="monotone" dataKey="thi_fail_sites" stroke="var(--color-thi_fail_sites)" strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
+                <Line type="monotone" dataKey="pl_over_1_sites" yAxisId={trendAxes.axisBySeries.pl_over_1_sites} stroke="var(--color-pl_over_1_sites)" strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
+                <Line type="monotone" dataKey="latency_over_5_sites" yAxisId={trendAxes.axisBySeries.latency_over_5_sites} stroke="var(--color-latency_over_5_sites)" strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
+                <Line type="monotone" dataKey="jitter_not_clear_sites" yAxisId={trendAxes.axisBySeries.jitter_not_clear_sites} stroke="var(--color-jitter_not_clear_sites)" strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
+                <Line type="monotone" dataKey="thi_fail_sites" yAxisId={trendAxes.axisBySeries.thi_fail_sites} stroke="var(--color-thi_fail_sites)" strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
               </LineChart>
             </ChartContainer>
           ) : <DashboardChartEmpty className="h-[300px]" />}

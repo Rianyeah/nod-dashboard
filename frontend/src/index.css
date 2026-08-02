@@ -30,6 +30,7 @@
   --bg-glass: rgba(23, 27, 35, 0.96);
   --bg-header: rgba(18, 22, 29, 0.96);
   --bg-sidebar: rgba(13, 16, 21, 0.98);
+  --sidebar-background: var(--bg-sidebar);
   --surface-soft: rgba(255, 255, 255, 0.035);
   --surface-muted: rgba(255, 255, 255, 0.06);
   --sidebar-active: rgba(230, 0, 18, 0.11);
@@ -142,7 +143,8 @@
   --bg-hover: #E4E8ED;
   --bg-glass: rgba(248, 250, 252, 0.97);
   --bg-header: rgba(238, 241, 244, 0.97);
-  --bg-sidebar: #CBD1D9;
+  --bg-sidebar: #C2CBD6;
+  --sidebar-background: linear-gradient(180deg, #CDD4DE 0%, #B8C3D0 100%);
   --surface-soft: rgba(23, 27, 34, 0.045);
   --surface-muted: rgba(23, 27, 34, 0.075);
   --sidebar-active: rgba(212, 0, 18, 0.10);
@@ -216,6 +218,20 @@
   --sidebar-accent-foreground: var(--text-primary);
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
+}
+
+.dashboard-sidebar {
+  background: var(--sidebar-background);
+}
+
+[data-theme="light"] .dashboard-sidebar {
+  --text-primary: #202A36;
+  --text-secondary: #3E4B5A;
+  --text-muted: #526174;
+  --border: rgba(61, 73, 89, .20);
+  --border-strong: rgba(61, 73, 89, .30);
+  --surface-soft: rgba(255, 255, 255, .24);
+  --sidebar-active: rgba(212, 0, 18, .12);
 }
 
 /* Glass card — light mode */

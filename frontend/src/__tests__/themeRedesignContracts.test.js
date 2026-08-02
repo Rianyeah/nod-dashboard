@@ -25,7 +25,7 @@ describe('global dashboard theme redesign contracts', () => {
       '--canvas-background',
       '[data-theme="light"]',
       '--bg-base: #D9DEE5',
-      '--bg-sidebar: #CBD1D9',
+      '--bg-sidebar: #C2CBD6',
       '--bg-surface: #F8FAFC',
       '--border: #C2C9D2',
       '--border-strong: #AEB7C3',
@@ -41,6 +41,21 @@ describe('global dashboard theme redesign contracts', () => {
 
     assert.doesNotMatch(css, /--primary:\s*#0EA5E9/i);
     assert.doesNotMatch(css, /--shadow-glow:\s*0 0 24px rgba\(14,\s*165,\s*233/);
+  });
+
+  it('keeps the light-mode sidebar gradient and contrast tokens scoped to the sidebar', () => {
+    const css = src('index.css');
+    const sidebar = src('components', 'DashboardSidebar.jsx');
+
+    assert.match(css, /--sidebar-background:\s*var\(--bg-sidebar\)/);
+    assert.match(css, /--sidebar-background:\s*linear-gradient\(180deg, #CDD4DE 0%, #B8C3D0 100%\)/);
+    assert.match(css, /\.dashboard-sidebar\s*\{\s*background:\s*var\(--sidebar-background\);\s*\}/);
+    assert.match(
+      css,
+      /\[data-theme="light"\]\s+\.dashboard-sidebar\s*\{[\s\S]*?--text-primary:\s*#202A36;[\s\S]*?--text-secondary:\s*#3E4B5A;[\s\S]*?--text-muted:\s*#526174;[\s\S]*?--border:\s*rgba\(61,\s*73,\s*89,\s*\.20\);[\s\S]*?--border-strong:\s*rgba\(61,\s*73,\s*89,\s*\.30\);[\s\S]*?--surface-soft:\s*rgba\(255,\s*255,\s*255,\s*\.24\);[\s\S]*?--sidebar-active:\s*rgba\(212,\s*0,\s*18,\s*\.12\);[\s\S]*?\}/,
+    );
+    assert.match(sidebar, /'dashboard-sidebar'/);
+    assert.doesNotMatch(sidebar, /bg-\[var\(--bg-sidebar\)\]/);
   });
 
   it('exposes dashboard theme tokens and shared dashboard UI primitives', () => {
