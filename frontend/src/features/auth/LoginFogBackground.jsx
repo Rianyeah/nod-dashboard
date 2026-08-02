@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { resolveVantaFogFactory } from './vantaFogRuntime.js';
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const VANTA_FOG_OPTIONS = {
@@ -11,6 +12,7 @@ export const VANTA_FOG_OPTIONS = {
   lowlightColor: 0x000000,
   baseColor: 0x000000,
   midtoneColor: 0xe60013,
+  backgroundAlpha: 1,
   blurFactor: .64,
   speed: 2.6,
   zoom: 1.3,
@@ -37,8 +39,10 @@ export default function LoginFogBackground({ children }) {
         const vantaModule = await import('vanta/dist/vanta.fog.min.js');
         if (disposed || !backgroundRef.current) return;
 
-        const createFog = vantaModule.default ?? vantaModule.FOG;
-        vantaEffect = createFog?.({
+        const createFog = resolveVantaFogFactory(vantaModule);
+        if (!createFog) throw new TypeError('Vanta fog factory is unavailable');
+
+        vantaEffect = createFog({
           el: backgroundRef.current,
           THREE,
           ...VANTA_FOG_OPTIONS,
@@ -70,7 +74,7 @@ export default function LoginFogBackground({ children }) {
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 z-[1]"
         style={{
-          backgroundImage: 'radial-gradient(ellipse at center, rgba(9, 11, 15, 0.06) 0%, rgba(9, 11, 15, 0.18) 50%, rgba(0, 0, 0, 0.78) 100%)',
+          backgroundImage: 'radial-gradient(ellipse at center, rgba(9, 11, 15, 0.02) 0%, rgba(9, 11, 15, 0.08) 58%, rgba(0, 0, 0, 0.42) 100%)',
         }}
       />
       {children}

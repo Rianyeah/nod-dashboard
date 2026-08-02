@@ -56,6 +56,9 @@ export default function LoginPage() {
           <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">
             NOD
           </h1>
+          <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--text-muted)]">
+            Network Operation Dashboard
+          </p>
         </div>
 
         {error && (

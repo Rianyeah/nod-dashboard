@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from cache import CACHE_HIT, CACHE_MISS, FILTER_CACHE_TTL_SECONDS, redis_cache
 from database import get_session
+from local_snapshot_cache import LOCAL_CACHE_STALE, transport_filter_snapshot
 from models.transport_quality import (
     TransportQualityBreakdownItem,
     TransportQualityBreakdowns,
@@ -482,33 +483,41 @@ async def get_transport_quality_filters(
             response.headers["X-Cache"] = cache_status
         return TransportQualityFilters.model_validate(cached_value)
 
-    options_result = await session.execute(text(FILTER_OPTIONS_QUERY))
-    options = dict(options_result.one()._mapping)
-    periods_result = await session.execute(text(FILTER_PERIODS_QUERY))
-    periods = rows_to_models(periods_result.fetchall(), TransportQualityPeriod)
+    async def load_filters_from_database():
+        options_result = await session.execute(text(FILTER_OPTIONS_QUERY))
+        options = dict(options_result.one()._mapping)
+        periods_result = await session.execute(text(FILTER_PERIODS_QUERY))
+        periods = rows_to_models(periods_result.fetchall(), TransportQualityPeriod)
 
-    payload = TransportQualityFilters(
-        min_date=options.get("min_date"),
-        max_date=options.get("max_date"),
-        periods=periods,
-        nops=options.get("nops") or [],
-        kabupaten=options.get("kabupaten") or [],
-        transport_types=options.get("transport_types") or [],
-        thi_statuses=options.get("thi_statuses") or [],
-        distribution_pl=options.get("distribution_pl") or [],
-        pl_status_0_1_pct=options.get("pl_status_0_1_pct") or [],
-        distribution_lat=options.get("distribution_lat") or [],
-        jitter_statuses=options.get("jitter_statuses") or [],
+        payload = TransportQualityFilters(
+            min_date=options.get("min_date"),
+            max_date=options.get("max_date"),
+            periods=periods,
+            nops=options.get("nops") or [],
+            kabupaten=options.get("kabupaten") or [],
+            transport_types=options.get("transport_types") or [],
+            thi_statuses=options.get("thi_statuses") or [],
+            distribution_pl=options.get("distribution_pl") or [],
+            pl_status_0_1_pct=options.get("pl_status_0_1_pct") or [],
+            distribution_lat=options.get("distribution_lat") or [],
+            jitter_statuses=options.get("jitter_statuses") or [],
+        )
+        return payload.model_dump(mode="json")
+
+    local_value, local_status = await transport_filter_snapshot.get_or_load(
+        cache_key,
+        load_filters_from_database,
+        ttl_seconds=FILTER_CACHE_TTL_SECONDS,
     )
-    if cache_status == CACHE_MISS:
+    if cache_status == CACHE_MISS and local_status != LOCAL_CACHE_STALE:
         await redis_cache.set_json(
             cache_key,
-            payload.model_dump(mode="json"),
+            local_value,
             ttl_seconds=FILTER_CACHE_TTL_SECONDS,
         )
     if response is not None:
-        response.headers["X-Cache"] = cache_status
-    return payload
+        response.headers["X-Cache"] = local_status
+    return TransportQualityFilters.model_validate(local_value)
 
 
 @router.get("/summary", response_model=TransportQualitySummary)

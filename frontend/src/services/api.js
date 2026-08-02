@@ -3,6 +3,7 @@
  * Communicates with FastAPI backend.
  */
 import axios from 'axios';
+import { withTransportRetry } from './transportQualityRequest.js';
 
 const API_BASE_URL = '/api/v1';
 
@@ -306,34 +307,39 @@ export async function fetchActivityEnomActivityDetail(activityId, params) {
 
 // ===== Transport Quality =====
 
-export async function fetchTransportQualityFilters() {
-  const { data } = await api.get('/transport-quality/filters', {});
-  return data;
+async function transportQualityGet(path, config = {}) {
+  return withTransportRetry(async () => {
+    const { data } = await api.get(path, config);
+    return data;
+  });
 }
 
-export async function fetchTransportQualitySummary(params) {
-  const { data } = await api.get('/transport-quality/summary', { params: params });
-  return data;
+export async function fetchTransportQualityFilters(signal) {
+  return transportQualityGet('/transport-quality/filters', {
+    params: { _: Date.now() },
+    headers: { 'Cache-Control': 'no-cache' },
+    signal,
+  });
 }
 
-export async function fetchTransportQualityTrend(params) {
-  const { data } = await api.get('/transport-quality/trend', { params: params });
-  return data;
+export async function fetchTransportQualitySummary(params, signal) {
+  return transportQualityGet('/transport-quality/summary', { params, signal });
 }
 
-export async function fetchTransportQualityDistributions(params) {
-  const { data } = await api.get('/transport-quality/distributions', { params: params });
-  return data;
+export async function fetchTransportQualityTrend(params, signal) {
+  return transportQualityGet('/transport-quality/trend', { params, signal });
 }
 
-export async function fetchTransportQualityBreakdowns(params) {
-  const { data } = await api.get('/transport-quality/breakdowns', { params: params });
-  return data;
+export async function fetchTransportQualityDistributions(params, signal) {
+  return transportQualityGet('/transport-quality/distributions', { params, signal });
 }
 
-export async function fetchTransportQualityPrioritySites(params) {
-  const { data } = await api.get('/transport-quality/priority-sites', { params: params });
-  return data;
+export async function fetchTransportQualityBreakdowns(params, signal) {
+  return transportQualityGet('/transport-quality/breakdowns', { params, signal });
+}
+
+export async function fetchTransportQualityPrioritySites(params, signal) {
+  return transportQualityGet('/transport-quality/priority-sites', { params, signal });
 }
 
 // ===== Ticketing =====

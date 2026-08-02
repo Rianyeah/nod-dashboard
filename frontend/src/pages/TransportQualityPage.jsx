@@ -27,6 +27,7 @@ import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert';
 import { Button } from '../components/ui/button';
 import { TRANSPORT_CHART_COLORS } from '../features/transport-quality/transportQualityChartConfig';
 import { TransportQualityCharts } from '../features/transport-quality/TransportQualityCharts';
+import { collectTransportDashboardResults } from '../features/transport-quality/transportQualitySettled';
 import {
   DashboardKpiCard,
   DashboardStatusBadge,
@@ -172,13 +173,20 @@ function TransportQualityDashboard() {
   const [filtersLoaded, setFiltersLoaded] = useState(false);
   const [dashboardLoading, setDashboardLoading] = useState(true);
   const [tableLoading, setTableLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [filterError, setFilterError] = useState(null);
+  const [dashboardError, setDashboardError] = useState(null);
+  const [tableError, setTableError] = useState(null);
+  const [filterRefreshKey, setFilterRefreshKey] = useState(0);
+  const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
+  const [tableRefreshKey, setTableRefreshKey] = useState(0);
 
   useEffect(() => {
-    let cancelled = false;
-    fetchTransportQualityFilters()
+    const controller = new AbortController();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setFilterError(null);
+    fetchTransportQualityFilters(controller.signal)
       .then((data) => {
-        if (cancelled) return;
+        if (controller.signal.aborted) return;
         const periods = Array.isArray(data?.periods) ? data.periods : [];
         const latestDate = data?.max_date || periods[0]?.date || '';
         setFilterOptions({
@@ -197,16 +205,14 @@ function TransportQualityDashboard() {
         setFiltersLoaded(true);
       })
       .catch((err) => {
+        if (controller.signal.aborted) return;
         console.error('Failed to load Transport Quality filters:', err);
-        if (!cancelled) {
-          setError('Gagal memuat filter Transport Quality.');
-          setDashboardLoading(false);
-          setTableLoading(false);
-          setFiltersLoaded(true);
-        }
+        setFilterError('Gagal memuat filter Transport Quality.');
+        setDashboardLoading(false);
+        setTableLoading(false);
       });
-    return () => { cancelled = true; };
-  }, []);
+    return () => controller.abort();
+  }, [filterRefreshKey]);
 
   const dashboardParams = useMemo(() => ({
     date: selectedDate || undefined,
@@ -233,42 +239,61 @@ function TransportQualityDashboard() {
 
   useEffect(() => {
     if (!filtersLoaded || !selectedDate) return;
-    let cancelled = false;
+    const controller = new AbortController();
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setDashboardLoading(true);
-    setError(null);
-    Promise.all([
-      fetchTransportQualitySummary(dashboardParams),
-      fetchTransportQualityTrend(dashboardParams),
-      fetchTransportQualityDistributions(dashboardParams),
-      fetchTransportQualityBreakdowns(dashboardParams),
+    setDashboardError(null);
+    Promise.allSettled([
+      fetchTransportQualitySummary(dashboardParams, controller.signal),
+      fetchTransportQualityTrend(dashboardParams, controller.signal),
+      fetchTransportQualityDistributions(dashboardParams, controller.signal),
+      fetchTransportQualityBreakdowns(dashboardParams, controller.signal),
     ])
-      .then(([nextSummary, nextTrend, nextDistributions, nextBreakdowns]) => {
-        if (cancelled) return;
-        setSummary(nextSummary);
-        setTrend(Array.isArray(nextTrend) ? nextTrend : []);
-        setDistributions(nextDistributions || { by_packet_loss: [], by_latency: [], by_jitter: [] });
-        setBreakdowns(nextBreakdowns || { by_nop: [], by_kabupaten: [], by_transport_type: [] });
+      .then((results) => {
+        if (controller.signal.aborted) return;
+        const { values, failures, failedModules } = collectTransportDashboardResults(results);
+
+        if (Object.hasOwn(values, 'summary')) setSummary(values.summary);
+        if (Object.hasOwn(values, 'trend')) setTrend(Array.isArray(values.trend) ? values.trend : []);
+        if (Object.hasOwn(values, 'distributions')) {
+          setDistributions(values.distributions || { by_packet_loss: [], by_latency: [], by_jitter: [] });
+        }
+        if (Object.hasOwn(values, 'breakdowns')) {
+          setBreakdowns(values.breakdowns || { by_nop: [], by_kabupaten: [], by_transport_type: [] });
+        }
+
+        if (failedModules.length) {
+          Object.entries(failures).forEach(([moduleName, failure]) => {
+            console.error(`Failed to load Transport Quality ${moduleName}:`, failure);
+          });
+          setDashboardError(
+            failedModules.length === 4
+              ? 'Data dashboard gagal diperbarui. Data terakhir tetap ditampilkan bila tersedia.'
+              : `Modul ${failedModules.join(', ')} gagal diperbarui. Modul lain tetap ditampilkan.`,
+          );
+        }
       })
       .catch((err) => {
+        if (controller.signal.aborted) return;
         console.error('Failed to load Transport Quality dashboard:', err);
-        if (!cancelled) setError('Gagal memuat data Transport Quality.');
+        setDashboardError('Data dashboard gagal diperbarui. Data terakhir tetap ditampilkan bila tersedia.');
       })
       .finally(() => {
-        if (!cancelled) setDashboardLoading(false);
+        if (!controller.signal.aborted) setDashboardLoading(false);
       });
-    return () => { cancelled = true; };
-  }, [dashboardParams, filtersLoaded, selectedDate]);
+    return () => controller.abort();
+  }, [dashboardParams, dashboardRefreshKey, filtersLoaded, selectedDate]);
 
   useEffect(() => {
     if (!filtersLoaded || !selectedDate) return;
-    let cancelled = false;
+    const controller = new AbortController();
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setTableLoading(true);
-    fetchTransportQualityPrioritySites(tableParams)
+    setTableError(null);
+    fetchTransportQualityPrioritySites(tableParams, controller.signal)
       .then((nextPrioritySites) => {
-        if (!cancelled) {
+        if (!controller.signal.aborted) {
           setPrioritySites(nextPrioritySites || {
             items: [],
             total: 0,
@@ -279,14 +304,15 @@ function TransportQualityDashboard() {
         }
       })
       .catch((err) => {
+        if (controller.signal.aborted) return;
         console.error('Failed to load Transport Quality priority sites:', err);
-        if (!cancelled) setError('Gagal memuat Priority Site List.');
+        setTableError('Priority Site List gagal diperbarui. Data terakhir tetap ditampilkan bila tersedia.');
       })
       .finally(() => {
-        if (!cancelled) setTableLoading(false);
+        if (!controller.signal.aborted) setTableLoading(false);
       });
-    return () => { cancelled = true; };
-  }, [filtersLoaded, selectedDate, tableParams]);
+    return () => controller.abort();
+  }, [filtersLoaded, selectedDate, tableParams, tableRefreshKey]);
 
   const selectedPeriod = useMemo(
     () => filterOptions.periods.find((period) => period.date === selectedDate),
@@ -356,6 +382,10 @@ function TransportQualityDashboard() {
   ], [summary]);
 
   const latestPriority = prioritySites.items.slice(0, 4);
+  const retryFailedRequests = () => {
+    if (dashboardError) setDashboardRefreshKey((current) => current + 1);
+    if (tableError) setTableRefreshKey((current) => current + 1);
+  };
 
   return (
     <div className="flex min-h-screen flex-col bg-[var(--bg-base)] text-[var(--text-primary)]">
@@ -502,16 +532,45 @@ function TransportQualityDashboard() {
       <Breadcrumb />
 
       <main className="flex-1 space-y-4 overflow-y-auto p-4">
-        {error && (
-          <Alert variant="destructive">
-            <AlertTitle>Data tidak dapat diperbarui</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
+        {filterError && !filtersLoaded && (
+          <Alert variant="destructive" aria-live="polite">
+            <AlertTitle>Data awal belum tersedia</AlertTitle>
+            <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+              <span>{filterError} Tidak ada angka nol semu yang ditampilkan.</span>
+              <Button type="button" variant="outline" size="sm" onClick={() => setFilterRefreshKey((current) => current + 1)}>
+                Coba lagi
+              </Button>
+            </AlertDescription>
           </Alert>
         )}
 
+        {filtersLoaded && (dashboardError || tableError) && (
+          <Alert variant="destructive" className="py-3" aria-live="polite">
+            <AlertTitle>Sebagian data belum diperbarui</AlertTitle>
+            <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+              <span>{[dashboardError, tableError].filter(Boolean).join(' ')}</span>
+              <Button type="button" variant="outline" size="sm" onClick={retryFailedRequests}>
+                Coba lagi
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {!filtersLoaded && !filterError && (
+          <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6" aria-label="Memuat filter Transport Quality">
+            {Array.from({ length: 6 }, (_, index) => <div key={index} className="skeleton h-[86px] rounded-xl" />)}
+          </section>
+        )}
+
+        {filtersLoaded && (
+          <>
         <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
           {dashboardLoading && !summary ? (
             Array.from({ length: 6 }, (_, index) => <div key={index} className="skeleton h-[86px] rounded-xl" />)
+          ) : !summary ? (
+            <div className="glass-card col-span-full flex min-h-[86px] items-center justify-center px-4 text-sm text-[var(--text-muted)]">
+              Data ringkasan belum tersedia.
+            </div>
           ) : (
             scorecards.map((card) => <Scorecard key={card.title} {...card} />)
           )}
@@ -577,7 +636,7 @@ function TransportQualityDashboard() {
                 {!prioritySites.items.length && (
                   <tr>
                     <td colSpan={14} className="px-3 py-10 text-center text-sm text-[var(--text-muted)]">
-                      Tidak ada priority site untuk filter ini.
+                      {tableError ? 'Priority Site List belum tersedia.' : 'Tidak ada priority site untuk filter ini.'}
                     </td>
                   </tr>
                 )}
@@ -594,6 +653,8 @@ function TransportQualityDashboard() {
             testIdPrefix="transport"
           />
         </section>
+          </>
+        )}
       </main>
     </div>
   );

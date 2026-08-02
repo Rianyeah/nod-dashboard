@@ -110,6 +110,9 @@ class TransportQualityContractTest(unittest.TestCase):
         self.assertIn("nullif(trim", source)
         self.assertIn("TransportQualityFilters", models)
         self.assertIn("periods: list[TransportQualityPeriod]", models)
+        self.assertIn("transport_filter_snapshot.get_or_load", source)
+        self.assertIn("local_cache_stale", source)
+        self.assertIn('response.headers["x-cache"]', source)
 
     def test_filter_options_use_one_packet_loss_table_scan(self):
         source = self.read_router_source()
