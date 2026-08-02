@@ -237,10 +237,28 @@ describe('Transport Quality dashboard contracts', () => {
     assert.match(page, /const tableParams = useMemo/);
     assert.match(page, /dashboardLoading/);
     assert.match(page, /tableLoading/);
-    assert.match(page, /fetchTransportQualityPrioritySites\(tableParams\)/);
+    assert.match(page, /fetchTransportQualityPrioritySites\(tableParams,\s*controller\.signal\)/);
 
-    const dashboardRequestBlock = page.split('Promise.all([', 2)[1].split('])', 1)[0];
+    const dashboardRequestBlock = page.split('Promise.allSettled([', 2)[1].split('])', 1)[0];
     assert.doesNotMatch(dashboardRequestBlock, /fetchTransportQualityPrioritySites/);
+  });
+
+  it('preserves last successful data and exposes scoped retry states', () => {
+    const page = src('pages', 'TransportQualityPage.jsx');
+
+    assert.match(page, /Promise\.allSettled\(\[/);
+    assert.doesNotMatch(page, /Promise\.all\(\[/);
+    assert.match(page, /collectTransportDashboardResults/);
+    assert.match(page, /new AbortController\(\)/g);
+    assert.match(page, /filterError/);
+    assert.match(page, /dashboardError/);
+    assert.match(page, /tableError/);
+    assert.match(page, /filterRefreshKey/);
+    assert.match(page, /dashboardRefreshKey/);
+    assert.match(page, /tableRefreshKey/);
+    assert.match(page, /Coba lagi/);
+    assert.match(page, /Data ringkasan belum tersedia/);
+    assert.match(page, /Sebagian data belum diperbarui/);
   });
 
   it('keeps threshold and priority semantics visible in the frontend', () => {
