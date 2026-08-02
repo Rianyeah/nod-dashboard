@@ -3,8 +3,22 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { resolveVantaFogFactory } from '../features/auth/vantaFogRuntime.js';
 
 const src = (...parts) => readFileSync(resolve(process.cwd(), 'src', ...parts), 'utf8');
+
+describe('Vanta fog runtime compatibility', () => {
+  it('resolves the Vanta fog factory from supported ESM and UMD wrapper shapes', () => {
+    const factory = () => ({ destroy() {} });
+
+    assert.equal(resolveVantaFogFactory(factory), factory);
+    assert.equal(resolveVantaFogFactory({ FOG: factory }), factory);
+    assert.equal(resolveVantaFogFactory({ default: factory }), factory);
+    assert.equal(resolveVantaFogFactory({ default: { FOG: factory } }), factory);
+    assert.equal(resolveVantaFogFactory({ default: { default: factory } }), factory);
+    assert.equal(resolveVantaFogFactory({ default: {} }), null);
+  });
+});
 
 describe('cookie session authentication contracts', () => {
   it('never stores or sends a bearer token', () => {
@@ -77,6 +91,7 @@ describe('cookie session authentication contracts', () => {
     assert.match(fog, /import\('vanta\/dist\/vanta\.fog\.min\.js'\)/);
     assert.match(fog, /VANTA_FOG_OPTIONS/);
     assert.match(fog, /midtoneColor:\s*0xe60013/);
+    assert.match(fog, /backgroundAlpha:\s*1/);
     assert.match(fog, /blurFactor:\s*\.64/);
     assert.match(fog, /speed:\s*2\.6/);
     assert.match(fog, /zoom:\s*1\.3/);
@@ -92,11 +107,18 @@ describe('cookie session authentication contracts', () => {
     assert.match(fog, /if \(prefersReducedMotion\) return undefined/);
     assert.match(fog, /catch \{\s*\/\/ The static graphite-red treatment/);
     assert.match(fog, /vantaEffect\?\.destroy\?\.\(\)/);
+    assert.match(fog, /resolveVantaFogFactory\(vantaModule\)/);
     assert.doesNotMatch(fog, /window\.THREE/);
     assert.match(fog, /min-h-\[100dvh\]/);
     assert.match(fog, /data-testid="login-fog-background"/);
     assert.match(fog, /style=\{\{[\s\S]*backgroundColor:\s*'#090B0F'/);
     assert.match(fog, /backgroundImage:\s*'radial-gradient\(circle at 50% 35%, rgba\(230, 0, 19, 0\.22\), transparent 52%\)'/);
-    assert.match(fog, /radial-gradient\(ellipse at center, rgba\(9, 11, 15, 0\.06\) 0%, rgba\(9, 11, 15, 0\.18\) 50%, rgba\(0, 0, 0, 0\.78\) 100%\)/);
+    assert.match(fog, /radial-gradient\(ellipse at center, rgba\(9, 11, 15, 0\.02\) 0%, rgba\(9, 11, 15, 0\.08\) 58%, rgba\(0, 0, 0, 0\.42\) 100%\)/);
+  });
+
+  it('pins Three.js to the Vanta-compatible r134 release', () => {
+    const packageJson = JSON.parse(readFileSync(resolve(process.cwd(), 'package.json'), 'utf8'));
+
+    assert.equal(packageJson.dependencies.three, '0.134.0');
   });
 });
