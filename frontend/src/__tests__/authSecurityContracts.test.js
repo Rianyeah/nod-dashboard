@@ -68,8 +68,9 @@ describe('cookie session authentication contracts', () => {
     const fog = readFileSync(fogPath, 'utf8');
 
     assert.match(login, />\s*NOD\s*</);
+    assert.match(login, /<h1[\s\S]*?>\s*NOD\s*<\/h1>\s*<p[^>]*>\s*Network Operation Dashboard\s*<\/p>/);
     assert.match(login, /All in one Dashboard ENOM and Tools/);
-    assert.doesNotMatch(login, /NOD Dashboard|Network Operation Dashboard/);
+    assert.doesNotMatch(login, /NOD Dashboard/);
     assert.match(login, /useState\(false\)/);
     assert.match(login, /showPassword\s*\?\s*'text'\s*:\s*'password'/);
     assert.match(login, /value=\{password\}/);
