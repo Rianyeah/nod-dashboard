@@ -49,8 +49,8 @@ import {
   fetchDataPotensiSites,
   fetchDataPotensiStatusOptions,
   fetchFilterOptions,
-  fetchSiteDetail,
 } from '../services/api';
+import { fetchSiteDetailBundle } from '../services/siteDetailBundle';
 import { formatNumber } from '../utils/formatters';
 import SiteDetailModal from '../components/SiteDetailModal';
 import DataPotensiSiteTable from '../features/data-potensi/DataPotensiSiteTable';
@@ -380,6 +380,8 @@ export default function DataPotensiPage() {
 
   const [showModal, setShowModal] = useState(false);
   const [siteDetail, setSiteDetail] = useState(null);
+  const [siteDetailTrend, setSiteDetailTrend] = useState([]);
+  const [siteDetailPerformance, setSiteDetailPerformance] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -510,8 +512,10 @@ export default function DataPotensiPage() {
   // Handle site click — open detail modal
   const handleSiteClick = useCallback(async (siteId) => {
     try {
-      const detail = await fetchSiteDetail(siteId);
-      setSiteDetail(detail);
+      const bundle = await fetchSiteDetailBundle(siteId);
+      setSiteDetail(bundle.detail);
+      setSiteDetailTrend(bundle.trendData);
+      setSiteDetailPerformance(bundle.performanceData);
       setShowModal(true);
     } catch (err) {
       console.error('Failed to load site detail:', err);
@@ -829,6 +833,8 @@ export default function DataPotensiPage() {
       {showModal && siteDetail && (
         <SiteDetailModal
           data={siteDetail}
+          trendData={siteDetailTrend}
+          performanceData={siteDetailPerformance}
           onClose={() => {
             setShowModal(false);
             setSiteDetail(null);

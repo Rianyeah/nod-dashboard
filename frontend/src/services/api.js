@@ -218,6 +218,11 @@ export async function fetchRevenueTrend(period, nop) {
   return data;
 }
 
+export async function fetchSitePerformance(siteId, signal) {
+  const { data } = await api.get(`/reporting/site/${siteId}/performance`, { signal });
+  return data;
+}
+
 // ===== Impact Service =====
 
 export async function fetchImpactServiceFilters() {
