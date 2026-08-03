@@ -39,6 +39,27 @@ class TpDistributionItem(BaseModel):
     count: int = 0
 
 
+class ReadinessByKabupatenItem(BaseModel):
+    """Monitoring readiness percentages for one Kabupaten/Kota."""
+    kabupaten: str
+    total_sites: int = 0
+    enva_ready: int = 0
+    enva_ready_pct: float = 0.0
+    dual_eas_ready: int = 0
+    dual_eas_ready_pct: float = 0.0
+    bblti_software_ready: int = 0
+    bblti_software_ready_pct: float = 0.0
+
+
+class TransportConfigurationItem(BaseModel):
+    """One Transport Type, Modem, and Jumper combination."""
+    transport_type: str
+    modem_transport: str
+    jumper_modem: str
+    site_count: int = 0
+    percentage: float = 0.0
+
+
 class DataPotensiFilterOptions(BaseModel):
     """Advanced filter values available for the selected global scope."""
     clusters: list[str] = Field(default_factory=list)
@@ -89,3 +110,5 @@ class DataPotensiResponse(BaseModel):
     belting_by_cluster: list[StackedBarItem] = Field(default_factory=list)
     backup_time_by_cluster: list[StackedBarItem] = Field(default_factory=list)
     tp_distribution: list[TpDistributionItem] = Field(default_factory=list)
+    readiness_by_kabupaten: list[ReadinessByKabupatenItem] = Field(default_factory=list)
+    transport_configuration_matrix: list[TransportConfigurationItem] = Field(default_factory=list)
