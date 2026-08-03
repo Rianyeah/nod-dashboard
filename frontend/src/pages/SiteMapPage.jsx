@@ -358,7 +358,7 @@ export default function SiteMapPage() {
             setShowModal(false);
             setSiteDetail(null);
             setSiteDetailTrend([]);
-            setSiteDetailDaily([]);
+            setSiteDetailPerformance(null);
           }}
         />
       )}

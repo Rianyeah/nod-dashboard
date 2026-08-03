@@ -341,7 +341,7 @@ export default function DashboardPage() {
             setShowModal(false);
             setSiteDetail(null);
             setSiteDetailTrend([]);
-            setSiteDetailDaily([]);
+            setSiteDetailPerformance(null);
           }}
         />
       )}

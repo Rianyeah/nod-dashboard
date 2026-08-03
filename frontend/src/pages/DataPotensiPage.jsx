@@ -838,6 +838,8 @@ export default function DataPotensiPage() {
           onClose={() => {
             setShowModal(false);
             setSiteDetail(null);
+            setSiteDetailTrend([]);
+            setSiteDetailPerformance(null);
           }}
         />
       )}

@@ -22,6 +22,7 @@ import {
   Database,
   CalendarDays,
 } from 'lucide-react';
+import { formatPayload, formatRevenue } from '../utils/formatters';
 
 const EMPTY_VALUES = new Set(['', '#N/A', 'N/A', '#REF!', null, undefined]);
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
@@ -53,7 +54,6 @@ const FIELD_GROUPS = [
       ['OA Date', ['OA DATE']],
       ['TP', ['TP']],
       ['Brand Type', ['Brand Type', 'Brand']],
-      ['Band NE', ['Band NE']],
       ['Jumlah Cell', ['jumlah_cell']],
       // RCA Dominan intentionally removed — shown in "Kualitas Data" section instead
     ],
@@ -61,17 +61,20 @@ const FIELD_GROUPS = [
   {
     title: 'Teknologi',
     icon: Wifi,
-    renderMode: 'bands', // Special rendering for band/tech counts
+    renderMode: 'technology',
     fields: [
+      ['Band NE', ['Band NE']],
       ['DCS1800', ['DCS1800']],
       ['GSM900', ['GSM900']],
       ['L900', ['L900']],
       ['L1800', ['L1800']],
       ['L2100', ['L2100']],
       ['L2300', ['L2300']],
-      ['N2100', ['N2100']],
-      ['N2300', ['N2300']],
+      ['NR2100', ['NR2100', 'N2100']],
+      ['NR2300', ['NR2300', 'N2300']],
       ['LTE NB-IoT', ['LTE NB-IoT']],
+      ['NE Type', ['ne_type', 'NE Type']],
+      ['Software Version', ['software_version', 'Software Version']],
     ],
   },
   {
@@ -84,10 +87,13 @@ const FIELD_GROUPS = [
       ['Jumlah Battery', ['Jumlah Battery']],
       ['Umur Battery', ['Umur Battery (Tahun)']],
       ['Garansi Battery', ['Status Garansi Battery']],
+      ['Tgl Install Battery', ['Tgl Install Battery']],
+      ['Belting Battery', ['Belting Battery']],
       ['Rectifier', ['Jenis Rectifier']],
       ['Total Load Rectifier', ['Total Load Rectifier']],
       ['Jumlah Modul', ['Jumlah Modul']],
       ['ID PLN', ['ID PLN']],
+      ['Nama IDPEL', ['idpel_name']],
       ['Kapasitas PLN', ['Kap PLN (VA)']],
     ],
   },
@@ -113,6 +119,8 @@ const FIELD_GROUPS = [
       ['Jenis Infra', ['Jenis Infra']],
       ['Kriteria PM Site', ['Kriteria PM Site']],
       ['BBLTI', ['BBLTI']],
+      ['Modem Transport', ['modem_transport']],
+      ['Jumper Modem', ['jumper_modem']],
     ],
   },
   {
@@ -123,6 +131,8 @@ const FIELD_GROUPS = [
       ['NMS Rectifier', ['NMS RECTI STATUS', 'NMS']],
       ['EMU', ['EMU STATUS', 'EMU']],
       ['ENVA', ['ENVA STATUS', 'ENVA']],
+      ['Dual EAS', ['dual_eas', 'Dual EAS']],
+      ['BBLTI Software', ['bblti_software', 'BBLTI Software']],
       ['Relokasi Battery', ['Relokasi Batt']],
       ['Remark', ['REMARK']],
     ],
@@ -133,7 +143,11 @@ const FIELD_GROUPS = [
 
 function isEmptyValue(value) {
   if (EMPTY_VALUES.has(value)) return true;
-  if (typeof value === 'string' && EMPTY_VALUES.has(value.trim())) return true;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toUpperCase();
+    if (EMPTY_VALUES.has(value.trim())) return true;
+    if (normalized.startsWith('#N/A') || normalized.startsWith('#REF!')) return true;
+  }
   return false;
 }
 
@@ -180,6 +194,19 @@ function getStatusLabel(v) {
   if (v >= 99.5) return 'Healthy';
   if (v >= 95) return 'Warning';
   return 'Critical';
+}
+
+function formatPerformancePeriod(trxMonth) {
+  const match = /^(\d{4})-(\d{2})$/.exec(trxMonth || '');
+  if (!match) return 'Periode tidak tersedia';
+  const monthIndex = Number(match[2]) - 1;
+  return `${MONTH_LABELS[monthIndex] || match[2]} ${match[1]}`;
+}
+
+function formatMom(value) {
+  if (value == null || !Number.isFinite(Number(value))) return '–';
+  const numericValue = Number(value);
+  return `${numericValue > 0 ? '+' : ''}${numericValue.toFixed(1)}%`;
 }
 
 /* ── Chart Tooltip ──────────────────────────────────── */
@@ -348,9 +375,37 @@ function CompactMetricCard({ label, value, color }) {
   );
 }
 
+function PerformanceMetricCard({ label, value, formatter, mom, trxMonth, accent }) {
+  const numericMom = mom == null ? null : Number(mom);
+  const momColor = !Number.isFinite(numericMom)
+    ? 'var(--text-muted)'
+    : numericMom > 0
+      ? 'var(--success)'
+      : numericMom < 0
+        ? 'var(--danger)'
+        : 'var(--text-secondary)';
+
+  return (
+    <div className="flex min-h-[112px] flex-col justify-between rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] p-3">
+      <div className="flex items-start justify-between gap-3">
+        <h3 className="text-[10px] font-black uppercase tracking-[0.12em] text-[var(--text-secondary)]">{label}</h3>
+        <span className="font-mono text-xs font-black" style={{ color: momColor }}>
+          {formatMom(mom)}
+        </span>
+      </div>
+      <p className="font-mono text-lg font-black leading-tight" style={{ color: accent }}>
+        {formatter(value)}
+      </p>
+      <p className="text-[10px] text-[var(--text-muted)]">
+        MoM · {formatPerformancePeriod(trxMonth)}
+      </p>
+    </div>
+  );
+}
+
 /* ── Main Modal ─────────────────────────────────────── */
 
-export default function SiteDetailModal({ data, trendData = [], dailyData = [], onClose }) {
+export default function SiteDetailModal({ data, trendData = [], performanceData = null, onClose }) {
   const closeBtnRef = useRef(null);
   const modalId = useId();
 
@@ -377,9 +432,6 @@ export default function SiteDetailModal({ data, trendData = [], dailyData = [], 
 
   const sixMonthTrend = [...trendData].slice(-6);
   const sixMonthAverage = averageValue(sixMonthTrend, 'avg_availability');
-  const dailyTrend = [...dailyData]
-    .filter(row => row.availability != null)
-    .sort((a, b) => Number(a.tgl) - Number(b.tgl));
 
   // Prepare chart data for Recharts
   const sixMonthChartData = useMemo(() =>
@@ -392,17 +444,6 @@ export default function SiteDetailModal({ data, trendData = [], dailyData = [], 
       }))
       .filter(d => Number.isFinite(d.value)),
     [sixMonthTrend],
-  );
-
-  const dailyChartData = useMemo(() =>
-    dailyTrend
-      .map(row => ({
-        label: String(row.tgl).padStart(2, '0'),
-        value: Number(row.availability),
-        tgl: row.tgl,
-      }))
-      .filter(d => Number.isFinite(d.value)),
-    [dailyTrend],
   );
 
   if (!data) return null;
@@ -500,14 +541,24 @@ export default function SiteDetailModal({ data, trendData = [], dailyData = [], 
               headlineValue={sixMonthAverage}
               labelFormatter={(d) => `${MONTH_LABELS[(Number(d?.bulan) || 1) - 1]} ${d?.tahun || ''}`}
             />
-            <TrendCard
-              title="Daily Availability"
-              chartData={dailyChartData}
-              accent="var(--chart-neutral-1)"
-              headlineValue={avail}
-              headlinePrefix="Month Avg "
-              labelFormatter={(d) => `Tgl ${d?.tgl || ''}`}
-            />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <PerformanceMetricCard
+                label="Revenue"
+                value={performanceData?.total_revenue}
+                formatter={formatRevenue}
+                mom={performanceData?.revenue_mom_pct}
+                trxMonth={performanceData?.trx_month}
+                accent="var(--primary-light)"
+              />
+              <PerformanceMetricCard
+                label="Payload"
+                value={performanceData?.total_payload}
+                formatter={formatPayload}
+                mom={performanceData?.payload_mom_pct}
+                trxMonth={performanceData?.trx_month}
+                accent="var(--chart-info)"
+              />
+            </div>
           </div>
 
           {/* ── Monthly Scorecard ─── */}
@@ -531,12 +582,16 @@ export default function SiteDetailModal({ data, trendData = [], dailyData = [], 
               if (!rows.length) return null;
 
               // Special rendering for Teknologi section — horizontal bar pills
-              if (group.renderMode === 'bands') {
+              if (group.renderMode === 'technology') {
+                const bandLabels = new Set([
+                  'DCS1800', 'GSM900', 'L900', 'L1800', 'L2100', 'L2300',
+                  'NR2100', 'NR2300', 'LTE NB-IoT',
+                ]);
                 return (
                   <Section key={group.title} icon={group.icon} title={group.title}>
-                    {rows.map(([label, value]) => (
-                      <BandPill key={label} label={label} count={value} />
-                    ))}
+                    {rows.map(([label, value]) => bandLabels.has(label)
+                      ? <BandPill key={label} label={label} count={value} />
+                      : <InfoRow key={label} label={label} value={value} />)}
                   </Section>
                 );
               }
