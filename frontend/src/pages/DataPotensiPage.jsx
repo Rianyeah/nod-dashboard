@@ -56,6 +56,7 @@ import SiteDetailModal from '../components/SiteDetailModal';
 import DataPotensiSiteTable from '../features/data-potensi/DataPotensiSiteTable';
 import { dataPotensiChartConfig } from '../features/data-potensi/dataPotensiChartConfig';
 import { DATA_POTENSI_ADVANCED_FILTERS } from '../features/data-potensi/dataPotensiFilters';
+import DataPotensiMatrixCharts from '../features/data-potensi/DataPotensiMatrixCharts';
 
 /* ─── Constants ────────────────────────────────────────── */
 
@@ -783,7 +784,20 @@ export default function DataPotensiPage() {
           </section>
         ) : null}
 
-        {/* Section 3: Stacked Bar with Badge Selector */}
+        {/* Section 3: Monitoring and transport matrices */}
+        {dashboardLoading && !dashboardData ? (
+          <section className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+            <Skeleton className="h-[440px] rounded-xl" />
+            <Skeleton className="h-[440px] rounded-xl" />
+          </section>
+        ) : dashboardData ? (
+          <DataPotensiMatrixCharts
+            readinessData={dashboardData.readiness_by_kabupaten || []}
+            transportData={dashboardData.transport_configuration_matrix || []}
+          />
+        ) : null}
+
+        {/* Section 4: Stacked Bar with Badge Selector */}
         {dashboardLoading && !dashboardData ? (
           <Skeleton className="h-[420px] rounded-xl" />
         ) : dashboardData ? (
@@ -796,7 +810,7 @@ export default function DataPotensiPage() {
           </section>
         ) : null}
 
-        {/* Section 4: TP Distribution */}
+        {/* Section 5: TP Distribution */}
         {dashboardLoading && !dashboardData ? (
           <Skeleton className="h-[390px] rounded-xl" />
         ) : dashboardData ? (
@@ -805,7 +819,7 @@ export default function DataPotensiPage() {
           </section>
         ) : null}
 
-        {/* Section 5: Site Detail Table */}
+        {/* Section 6: Site Detail Table */}
         <section className="animate-fade-in" style={{ animationDelay: '550ms' }}>
           <DataPotensiSiteTable
             sites={sites}

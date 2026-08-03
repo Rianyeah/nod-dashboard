@@ -110,4 +110,22 @@ describe('Data Potensi dashboard contracts', () => {
     assert.match(page, /DashboardChartPanel|DashboardTableShell/);
     assert.match(page, /dataPotensiChartConfig/);
   });
+
+  it('renders both approved matrix charts before the Kabupaten breakdown', () => {
+    const page = src('pages', 'DataPotensiPage.jsx');
+    const charts = src('features', 'data-potensi', 'DataPotensiMatrixCharts.jsx');
+
+    assert.match(page, /readiness_by_kabupaten/);
+    assert.match(page, /transport_configuration_matrix/);
+    assert.match(charts, /Operational Readiness Heatmap/);
+    assert.match(charts, /Transport Configuration Matrix/);
+    assert.match(charts, /aria-label/);
+    assert.match(charts, /DashboardChartEmpty/);
+    assert.match(charts, /overflow-x-auto/);
+    assert.ok(
+      page.indexOf('<DataPotensiMatrixCharts') < page.indexOf('<StackedBarSection'),
+      'matrix charts must appear before Breakdown by Kabupaten',
+    );
+    assert.match(page, /grid grid-cols-1 gap-3 xl:grid-cols-2/);
+  });
 });
