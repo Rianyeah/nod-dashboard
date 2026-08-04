@@ -56,7 +56,7 @@ import SiteDetailModal from '../components/SiteDetailModal';
 import DataPotensiSiteTable from '../features/data-potensi/DataPotensiSiteTable';
 import { dataPotensiChartConfig } from '../features/data-potensi/dataPotensiChartConfig';
 import { DATA_POTENSI_ADVANCED_FILTERS } from '../features/data-potensi/dataPotensiFilters';
-import DataPotensiMatrixCharts from '../features/data-potensi/DataPotensiMatrixCharts';
+import DataPotensiInsightCarousel from '../features/data-potensi/DataPotensiInsightCarousel';
 
 /* ─── Constants ────────────────────────────────────────── */
 
@@ -318,7 +318,7 @@ function TpTooltip({ active, payload, label }) {
 
 function TpDistributionChart({ data }) {
   return (
-    <DashboardChartPanel title="Tower Provider Distribution" icon={TowerControl}>
+    <DashboardChartPanel title="Tower Provider Distribution" icon={TowerControl} className="h-full min-h-[440px]">
       {data.length ? <ResponsiveContainer width="100%" height={320}>
         <BarChart data={data} margin={{ top: 20, right: 20, left: 20, bottom: 50 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" vertical={false} />
@@ -784,17 +784,21 @@ export default function DataPotensiPage() {
           </section>
         ) : null}
 
-        {/* Section 3: Monitoring and transport matrices */}
+        {/* Section 3: Insight carousel and TP Distribution */}
         {dashboardLoading && !dashboardData ? (
           <section className="grid grid-cols-1 gap-3 xl:grid-cols-2">
             <Skeleton className="h-[440px] rounded-xl" />
             <Skeleton className="h-[440px] rounded-xl" />
           </section>
         ) : dashboardData ? (
-          <DataPotensiMatrixCharts
-            readinessData={dashboardData.readiness_by_kabupaten || []}
-            transportData={dashboardData.transport_configuration_matrix || []}
-          />
+          <section className="grid grid-cols-1 gap-3 xl:grid-cols-2 animate-fade-in" style={{ animationDelay: '350ms' }}>
+            <DataPotensiInsightCarousel
+              readinessData={dashboardData.readiness_by_kabupaten || []}
+              transportData={dashboardData.transport_configuration_matrix || []}
+              cellDistributionData={dashboardData.cell_distribution_by_kabupaten || []}
+            />
+            <TpDistributionChart data={dashboardData.tp_distribution || []} />
+          </section>
         ) : null}
 
         {/* Section 4: Stacked Bar with Badge Selector */}
@@ -810,16 +814,7 @@ export default function DataPotensiPage() {
           </section>
         ) : null}
 
-        {/* Section 5: TP Distribution */}
-        {dashboardLoading && !dashboardData ? (
-          <Skeleton className="h-[390px] rounded-xl" />
-        ) : dashboardData ? (
-          <section className="animate-fade-in" style={{ animationDelay: '450ms' }}>
-            <TpDistributionChart data={dashboardData.tp_distribution || []} />
-          </section>
-        ) : null}
-
-        {/* Section 6: Site Detail Table */}
+        {/* Section 5: Site Detail Table */}
         <section className="animate-fade-in" style={{ animationDelay: '550ms' }}>
           <DataPotensiSiteTable
             sites={sites}
