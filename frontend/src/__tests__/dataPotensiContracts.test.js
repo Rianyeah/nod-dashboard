@@ -156,4 +156,35 @@ describe('Data Potensi dashboard contracts', () => {
       assert.match(combined, new RegExp(label));
     }
   });
+
+  it('composes the three matrices in a controlled shadcn carousel', () => {
+    const primitivePath = root('src', 'components', 'ui', 'carousel.jsx');
+    const carouselPath = root('src', 'features', 'data-potensi', 'DataPotensiInsightCarousel.jsx');
+
+    assert.equal(existsSync(primitivePath), true);
+    assert.equal(existsSync(carouselPath), true);
+
+    const primitive = readFileSync(primitivePath, 'utf8');
+    const carousel = readFileSync(carouselPath, 'utf8');
+
+    assert.match(primitive, /useEmblaCarousel/);
+    assert.match(carousel, /CarouselContent/);
+    assert.match(carousel, /CarouselItem/);
+    assert.match(carousel, /Operational Readiness Heatmap/);
+    assert.match(carousel, /Transport Configuration Matrix/);
+    assert.match(carousel, /Cell Distribution Heatmap/);
+    assert.match(carousel, /readinessData/);
+    assert.match(carousel, /transportData/);
+    assert.match(carousel, /cellDistributionData/);
+    assert.match(carousel, /align:\s*'start'/);
+    assert.match(carousel, /loop:\s*false/);
+    assert.match(carousel, /watchDrag:\s*shouldHandleCarouselDrag/);
+    assert.match(carousel, /prefers-reduced-motion:\s*reduce/);
+    assert.match(carousel, /aria-label="Slide sebelumnya"/);
+    assert.match(carousel, /aria-label="Slide berikutnya"/);
+    assert.match(carousel, /aria-current=/);
+    assert.match(carousel, /api\?\.scrollTo\(index\)/);
+    assert.match(carousel, /aria-live="polite"/);
+    assert.match(carousel, /Slide \{current \+ 1\} dari \{slides\.length\}/);
+  });
 });
