@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-04
 
-**Status:** Conversationally approved; pending written-spec review
+**Status:** Approved for implementation planning
 
 ## Context
 
