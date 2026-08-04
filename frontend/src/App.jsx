@@ -190,8 +190,7 @@ function DashboardRoutes() {
             }
           />
           <Route path="/" element={<Navigate to="/home" />} />
-        </Routes>
-      </AuthProvider>
-    </Router>
+      </Routes>
+    </AuthProvider>
   );
 }

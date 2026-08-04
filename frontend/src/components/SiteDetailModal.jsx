@@ -236,7 +236,7 @@ function TrendCard({ title, chartData, accent = 'var(--chart-success)', headline
   const hasData = chartData.length >= 2;
 
   return (
-    <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] p-3">
+    <div data-capture-chart className="rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] p-3">
       <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
         <h3 className="min-w-0 text-[10px] font-black uppercase tracking-[0.12em] text-[var(--text-secondary)]">{title}</h3>
         <span className="whitespace-nowrap font-mono text-xs font-black" style={{ color: accent }}>
@@ -405,30 +405,34 @@ function PerformanceMetricCard({ label, value, formatter, mom, trxMonth, accent 
 
 /* ── Main Modal ─────────────────────────────────────── */
 
-export default function SiteDetailModal({ data, trendData = [], performanceData = null, onClose }) {
+export default function SiteDetailModal({ data, trendData = [], performanceData = null, onClose, captureMode = false }) {
   const closeBtnRef = useRef(null);
   const modalId = useId();
 
   // Lock body scroll while modal is open
   useEffect(() => {
+    if (captureMode) return undefined;
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = prev; };
-  }, []);
+  }, [captureMode]);
 
   // Auto-focus close button on mount
   useEffect(() => {
+    if (captureMode) return undefined;
     closeBtnRef.current?.focus();
-  }, []);
+    return undefined;
+  }, [captureMode]);
 
   // Handle Escape key
   useEffect(() => {
+    if (captureMode) return undefined;
     const handler = (e) => {
       if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [onClose]);
+  }, [captureMode, onClose]);
 
   const sixMonthTrend = [...trendData].slice(-6);
   const sixMonthAverage = averageValue(sixMonthTrend, 'avg_availability');
@@ -482,16 +486,18 @@ export default function SiteDetailModal({ data, trendData = [], performanceData 
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in"
-      onClick={onClose}
+      className={captureMode
+        ? 'site-detail-dialog site-detail-dialog--capture relative flex w-full justify-center'
+        : 'fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in'}
+      onClick={captureMode ? undefined : onClose}
       role="dialog"
-      aria-modal="true"
+      aria-modal={captureMode ? undefined : 'true'}
       aria-labelledby={`${modalId}-title`}
     >
-      <div className="absolute inset-0 bg-[var(--overlay-scrim)] backdrop-blur-sm" />
+      {!captureMode && <div className="absolute inset-0 bg-[var(--overlay-scrim)] backdrop-blur-sm" />}
 
       <div
-        className="site-detail-modal relative flex max-h-[calc(100vh-48px)] w-full max-w-[1080px] flex-col overflow-hidden rounded-[var(--noc-radius-lg)] border border-[var(--border-strong)] bg-[var(--bg-surface)] shadow-[var(--shadow-lg)] animate-fade-in-scale"
+        className={`site-detail-modal relative flex w-full max-w-[1080px] flex-col rounded-[var(--noc-radius-lg)] border border-[var(--border-strong)] bg-[var(--bg-surface)] shadow-[var(--shadow-lg)] ${captureMode ? 'site-detail-modal--capture' : 'max-h-[calc(100vh-48px)] overflow-hidden animate-fade-in-scale'}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Accent stripe at top */}
@@ -501,9 +507,11 @@ export default function SiteDetailModal({ data, trendData = [], performanceData 
         <div className="shrink-0 border-b border-[var(--border)] bg-[var(--bg-elevated)] px-5 py-4">
           <button
             ref={closeBtnRef}
-            onClick={onClose}
+            onClick={captureMode ? undefined : onClose}
             className="absolute right-3 top-4 flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg transition-colors hover:bg-[var(--bg-hover)]"
             aria-label="Tutup detail site"
+            aria-hidden={captureMode || undefined}
+            tabIndex={captureMode ? -1 : undefined}
           >
             <X className="h-4 w-4 text-[var(--text-muted)]" />
           </button>
@@ -514,7 +522,7 @@ export default function SiteDetailModal({ data, trendData = [], performanceData 
               style={{ backgroundColor: availColor, boxShadow: `0 0 12px ${availColor}` }}
             />
             <div className="min-w-0">
-              <h2 id={`${modalId}-title`} className="font-mono text-lg font-black leading-tight text-[var(--text-primary)]">{siteId}</h2>
+              <h2 data-capture-title id={`${modalId}-title`} className="font-mono text-lg font-black leading-tight text-[var(--text-primary)]">{siteId}</h2>
               <p className="mt-0.5 truncate text-xs text-[var(--text-muted)]">{siteName}</p>
             </div>
             <span

@@ -73,4 +73,45 @@ describe('site detail capture runtime', () => {
       },
     );
   });
+
+  it('waits for fonts, two visual frames, and measurable charts before capture is ready', async () => {
+    const { waitForCaptureVisuals } = await captureRuntime();
+    const frames = [];
+    const root = {
+      querySelector: () => ({ textContent: 'BGL002' }),
+      querySelectorAll: () => [{
+        getBoundingClientRect: () => ({ width: 640, height: 180 }),
+      }],
+    };
+
+    await waitForCaptureVisuals(root, {
+      expectedSiteId: 'BGL002',
+      fontsReady: Promise.resolve(),
+      nextFrame: () => new Promise((resolve) => {
+        frames.push('frame');
+        resolve();
+      }),
+    });
+
+    assert.deepEqual(frames, ['frame', 'frame']);
+  });
+
+  it('refuses a ready signal when a chart has no rendered dimensions', async () => {
+    const { waitForCaptureVisuals } = await captureRuntime();
+    const root = {
+      querySelector: () => ({ textContent: 'BGL002' }),
+      querySelectorAll: () => [{
+        getBoundingClientRect: () => ({ width: 0, height: 0 }),
+      }],
+    };
+
+    await assert.rejects(
+      waitForCaptureVisuals(root, {
+        expectedSiteId: 'BGL002',
+        fontsReady: Promise.resolve(),
+        nextFrame: () => Promise.resolve(),
+      }),
+      /chart dimensions/,
+    );
+  });
 });

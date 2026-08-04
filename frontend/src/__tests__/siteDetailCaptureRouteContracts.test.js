@@ -40,4 +40,19 @@ describe('site detail capture route isolation', () => {
     assert.match(page, /captureState === 'loading'/);
     assert.match(page, /captureState === 'error'/);
   });
+
+  it('renders the existing modal as a static, full-height capture surface before ready', () => {
+    const modal = src('components', 'SiteDetailModal.jsx');
+    const page = src('pages', 'SiteDetailCapturePage.jsx');
+    const css = src('index.css');
+
+    assert.match(modal, /captureMode = false/);
+    assert.match(modal, /site-detail-modal--capture/);
+    assert.match(modal, /data-capture-title/);
+    assert.match(page, /<SiteDetailModal/);
+    assert.match(page, /waitForCaptureVisuals/);
+    assert.match(page, /setCaptureState\('ready'\)/);
+    assert.match(css, /\.site-detail-modal--capture\s*\{[\s\S]*max-height:\s*none/);
+    assert.match(css, /\.site-detail-modal--capture\s+\.site-detail-scroll\s*\{[\s\S]*overflow:\s*visible/);
+  });
 });

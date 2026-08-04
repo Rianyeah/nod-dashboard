@@ -662,6 +662,22 @@ select option {
   );
 }
 
+.site-detail-capture-root {
+  min-height: 100vh;
+  padding: 24px;
+  background: var(--bg-base);
+}
+
+.site-detail-modal--capture {
+  max-height: none;
+}
+
+.site-detail-modal--capture .site-detail-scroll {
+  overflow: visible;
+  mask-image: none;
+  -webkit-mask-image: none;
+}
+
 /* Light-mode modal card adjustments */
 [data-theme="light"] .site-detail-modal {
   box-shadow: 0 25px 60px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.06);

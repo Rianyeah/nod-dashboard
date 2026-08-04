@@ -41,3 +41,38 @@ export function validateCaptureBundleSite(expectedSiteId, bundle) {
 
   return bundle;
 }
+
+function nextAnimationFrame() {
+  return new Promise((resolve) => window.requestAnimationFrame(resolve));
+}
+
+export async function waitForCaptureVisuals(root, {
+  expectedSiteId,
+  fontsReady = typeof document === 'undefined' ? Promise.resolve() : (document.fonts?.ready ?? Promise.resolve()),
+  nextFrame = nextAnimationFrame,
+} = {}) {
+  if (!root) {
+    throw new CaptureRouteError('Capture root is unavailable');
+  }
+
+  const expected = normalizeCaptureSiteId(expectedSiteId);
+  const title = root.querySelector('[data-capture-title]');
+
+  if (!title || normalizeCaptureSiteId(title.textContent) !== expected) {
+    throw new CaptureRouteError('Site ID mismatch');
+  }
+
+  await fontsReady;
+  await nextFrame();
+  await nextFrame();
+
+  const charts = [...root.querySelectorAll('[data-capture-chart]')];
+  const hasUnmeasurableChart = !charts.length || charts.some((chart) => {
+    const { width, height } = chart.getBoundingClientRect();
+    return width <= 0 || height <= 0;
+  });
+
+  if (hasUnmeasurableChart) {
+    throw new CaptureRouteError('Capture chart dimensions are unavailable');
+  }
+}
