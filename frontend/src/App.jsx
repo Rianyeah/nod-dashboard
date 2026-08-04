@@ -10,6 +10,7 @@ import LoginPage from './pages/LoginPage';
 import { AppShell } from './components/DashboardSidebar';
 import MapRouteErrorBoundary from './components/MapRouteErrorBoundary';
 import { AuthProvider, useAuth } from './auth/AuthContext';
+import SiteDetailCapturePage from './pages/SiteDetailCapturePage';
 
 const ImpactServicePage = React.lazy(() => import('./pages/ImpactServicePage'));
 const SiteMapPage = React.lazy(() => import('./pages/SiteMapPage'));
@@ -94,8 +95,18 @@ function LoginRoute() {
 export default function App() {
   return (
     <Router>
-      <AuthProvider>
-        <Routes>
+      <Routes>
+        <Route path="/capture/site-detail/:siteId" element={<SiteDetailCapturePage />} />
+        <Route path="*" element={<DashboardRoutes />} />
+      </Routes>
+    </Router>
+  );
+}
+
+function DashboardRoutes() {
+  return (
+    <AuthProvider>
+      <Routes>
           <Route path="/login" element={<LoginRoute />} />
           <Route
             path="/home"
