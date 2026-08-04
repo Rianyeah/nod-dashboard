@@ -270,6 +270,14 @@ LEFT JOIN (
 WHERE m."Siteid" = :site_id
 """
 
+SITE_CAPTURE_EXISTS_QUERY = """
+SELECT EXISTS (
+    SELECT 1
+    FROM data_site_master
+    WHERE "Siteid" = :site_id
+) AS site_exists
+"""
+
 # Query - Availability by Kabupaten
 AVAILABILITY_BY_KABUPATEN_QUERY = f"""
 {SITE_MONTH_AGG_CTE}

@@ -16,6 +16,8 @@ def valid_env(**overrides):
         "SESSION_COOKIE_SECURE": "true",
         "N8N_API_KEY": "n" * 32,
         "N8N_MAP_API_KEY": "m" * 32,
+        "N8N_CAPTURE_API_KEY": "c" * 32,
+        "N8N_CAPTURE_SIGNING_SECRET": base64.urlsafe_b64encode(b"s" * 32).decode(),
         "REDIS_URL": "",
     }
     env.update(overrides)
@@ -30,6 +32,7 @@ class SecuritySettingsTest(unittest.TestCase):
         self.assertEqual(settings.allowed_hosts, ("nod-dashboard.zeabur.app",))
         self.assertEqual(settings.dashboard_session_ttl_seconds, 28800)
         self.assertEqual(settings.n8n_map_api_key, "m" * 32)
+        self.assertEqual(settings.n8n_capture_api_key, "c" * 32)
 
     def test_each_required_value_fails_without_echoing_the_value(self):
         for name in (
@@ -40,6 +43,8 @@ class SecuritySettingsTest(unittest.TestCase):
             "DASHBOARD_SESSION_SECRET",
             "N8N_API_KEY",
             "N8N_MAP_API_KEY",
+            "N8N_CAPTURE_API_KEY",
+            "N8N_CAPTURE_SIGNING_SECRET",
         ):
             with self.subTest(name=name):
                 env = valid_env()
@@ -57,6 +62,9 @@ class SecuritySettingsTest(unittest.TestCase):
             {"PUBLIC_APP_ORIGIN": "http://example.com"},
             {"SESSION_COOKIE_SECURE": "false"},
             {"DASHBOARD_SESSION_SECRET": "short"},
+            {"N8N_CAPTURE_SIGNING_SECRET": "short"},
+            {"N8N_CAPTURE_API_KEY": "n" * 32},
+            {"N8N_CAPTURE_API_KEY": "m" * 32},
         )
 
         for overrides in invalid_values:

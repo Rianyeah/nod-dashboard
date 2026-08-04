@@ -10,6 +10,7 @@ from argon2.exceptions import VerificationError
 from fastapi import Header, HTTPException, Request, status
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
+from capture_tokens import CaptureClaims, CaptureTokenValidationError
 from config import SecuritySettings
 
 
@@ -125,3 +126,43 @@ def verify_n8n_map_key(
             detail="Invalid N8N Map API Key",
         )
     return x_n8n_map_api_key
+
+
+def verify_n8n_capture_key(
+    request: Request,
+    x_n8n_capture_api_key: str | None = Header(
+        default=None,
+        alias="X-N8N-Capture-API-Key",
+    ),
+) -> str:
+    """Authorize only the dedicated N8N site-detail capture credential."""
+    if not x_n8n_capture_api_key or not secrets.compare_digest(
+        x_n8n_capture_api_key,
+        _settings_for(request).n8n_capture_api_key,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid N8N Capture API Key",
+        )
+    return x_n8n_capture_api_key
+
+
+def require_capture_claims(
+    request: Request,
+    authorization: str | None = Header(default=None),
+) -> CaptureClaims:
+    """Authorize a capture bundle request with one signed Bearer credential."""
+    scheme, separator, token = (authorization or "").partition(" ")
+    if scheme != "Bearer" or not separator or not token or " " in token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid capture token",
+        )
+
+    try:
+        return request.app.state.capture_token_manager.verify(token)
+    except CaptureTokenValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid capture token",
+        ) from exc

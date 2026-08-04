@@ -21,6 +21,8 @@ os.environ.update(
         "SESSION_COOKIE_SECURE": "true",
         "N8N_API_KEY": "test-only-n8n-key",
         "N8N_MAP_API_KEY": "test-only-n8n-map-key",
+        "N8N_CAPTURE_API_KEY": "test-only-n8n-capture-key",
+        "N8N_CAPTURE_SIGNING_SECRET": base64.urlsafe_b64encode(b"c" * 32).decode(),
         "DATABASE_URL": "postgresql+asyncpg://test:test@127.0.0.1:5432/test",
         "REDIS_URL": "",
     }
