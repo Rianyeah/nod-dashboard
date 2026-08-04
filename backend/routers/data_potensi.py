@@ -17,6 +17,7 @@ from sqlalchemy import text
 from cache import redis_cache
 from database import get_session
 from models.data_potensi import (
+    CellDistributionByKabupatenItem,
     DataPotensiFilterOptions,
     DataPotensiResponse,
     DataPotensiScorecard,
@@ -25,6 +26,8 @@ from models.data_potensi import (
     DonutBreakdownItem,
     StackedBarItem,
     TpDistributionItem,
+    ReadinessByKabupatenItem,
+    TransportConfigurationItem,
 )
 
 router = APIRouter(prefix="/data-potensi", tags=["Data Potensi"])
@@ -87,6 +90,7 @@ def normalized_category_expression(column: str) -> str:
         WHEN NULLIF(TRIM(COALESCE({column}, '')), '') IS NULL THEN 'Tidak ada'
         WHEN LOWER(TRIM(COALESCE({column}, ''))) IN ('tidak ada', 'tidak tersedia', 'n/a', 'na', '-') THEN 'Tidak ada'
         WHEN UPPER(TRIM(COALESCE({column}, ''))) LIKE '#N/A%' THEN 'Tidak ada'
+        WHEN UPPER(TRIM(COALESCE({column}, ''))) LIKE '#REF!%' THEN 'Tidak ada'
         ELSE TRIM({column})
     END
     """.strip()
@@ -264,6 +268,113 @@ GROUP BY tp
 ORDER BY count DESC
 """
 
+READINESS_BY_KABUPATEN_QUERY = """
+SELECT
+    {kabupaten_expression} AS kabupaten,
+    COUNT(DISTINCT d."Siteid")::int AS total_sites,
+    COUNT(DISTINCT d."Siteid") FILTER (
+        WHERE UPPER(TRIM(COALESCE(d."ENVA STATUS", ''))) = 'COMPLETED'
+    )::int AS enva_ready,
+    COUNT(DISTINCT d."Siteid") FILTER (
+        WHERE UPPER(TRIM(COALESCE(d."dual_eas", ''))) = 'COMPLETED'
+    )::int AS dual_eas_ready,
+    COUNT(DISTINCT d."Siteid") FILTER (
+        WHERE UPPER(TRIM(COALESCE(d."bblti_software", ''))) LIKE 'YES%'
+    )::int AS bblti_software_ready
+FROM public.data_site_master d
+WHERE NULLIF(TRIM(d."Siteid"), '') IS NOT NULL
+{{nop_filter}}
+{{status_filter}}
+{{advanced_filter}}
+GROUP BY kabupaten
+ORDER BY kabupaten
+""".format(
+    kabupaten_expression=normalized_category_expression('d."Kabupaten/KOTA"'),
+)
+
+TRANSPORT_CONFIGURATION_QUERY = """
+WITH filtered_sites AS (
+    SELECT DISTINCT
+        d."Siteid" AS site_id,
+        {transport_expression} AS transport_type,
+        {modem_expression} AS modem_transport,
+        {jumper_expression} AS jumper_modem
+    FROM public.data_site_master d
+    WHERE NULLIF(TRIM(d."Siteid"), '') IS NOT NULL
+    {{nop_filter}}
+    {{status_filter}}
+    {{advanced_filter}}
+),
+filtered_total AS (
+    SELECT COUNT(*)::int AS total_sites
+    FROM filtered_sites
+)
+SELECT
+    fs.transport_type,
+    fs.modem_transport,
+    fs.jumper_modem,
+    COUNT(*)::int AS site_count,
+    ft.total_sites AS filtered_total
+FROM filtered_sites fs
+CROSS JOIN filtered_total ft
+GROUP BY fs.transport_type, fs.modem_transport, fs.jumper_modem, ft.total_sites
+ORDER BY site_count DESC, fs.transport_type, fs.modem_transport, fs.jumper_modem
+""".format(
+    transport_expression=normalized_category_expression('d."Transport Type"'),
+    modem_expression=normalized_category_expression('d."modem_transport"'),
+    jumper_expression=normalized_category_expression('d."jumper_modem"'),
+)
+
+CELL_DISTRIBUTION_QUERY = """
+SELECT
+    {kabupaten_expression} AS kabupaten,
+    SUM(CASE
+        WHEN TRIM(COALESCE(d."GSM900", '')) ~ '^[0-9]+([.][0-9]+)?$'
+        THEN TRIM(d."GSM900")::numeric ELSE 0
+    END)::int AS gsm900,
+    SUM(CASE
+        WHEN TRIM(COALESCE(d."DCS1800", '')) ~ '^[0-9]+([.][0-9]+)?$'
+        THEN TRIM(d."DCS1800")::numeric ELSE 0
+    END)::int AS dcs1800,
+    SUM(CASE
+        WHEN TRIM(COALESCE(d."L900", '')) ~ '^[0-9]+([.][0-9]+)?$'
+        THEN TRIM(d."L900")::numeric ELSE 0
+    END)::int AS l900,
+    SUM(CASE
+        WHEN TRIM(COALESCE(d."L1800", '')) ~ '^[0-9]+([.][0-9]+)?$'
+        THEN TRIM(d."L1800")::numeric ELSE 0
+    END)::int AS l1800,
+    SUM(CASE
+        WHEN TRIM(COALESCE(d."L2100", '')) ~ '^[0-9]+([.][0-9]+)?$'
+        THEN TRIM(d."L2100")::numeric ELSE 0
+    END)::int AS l2100,
+    SUM(CASE
+        WHEN TRIM(COALESCE(d."L2300", '')) ~ '^[0-9]+([.][0-9]+)?$'
+        THEN TRIM(d."L2300")::numeric ELSE 0
+    END)::int AS l2300,
+    SUM(CASE
+        WHEN TRIM(COALESCE(d."LTE NB-IoT", '')) ~ '^[0-9]+([.][0-9]+)?$'
+        THEN TRIM(d."LTE NB-IoT")::numeric ELSE 0
+    END)::int AS lte_nb_iot,
+    SUM(CASE
+        WHEN TRIM(COALESCE(d."NR2100", '')) ~ '^[0-9]+([.][0-9]+)?$'
+        THEN TRIM(d."NR2100")::numeric ELSE 0
+    END)::int AS nr2100,
+    SUM(CASE
+        WHEN TRIM(COALESCE(d."NR2300", '')) ~ '^[0-9]+([.][0-9]+)?$'
+        THEN TRIM(d."NR2300")::numeric ELSE 0
+    END)::int AS nr2300
+FROM public.data_site_master d
+WHERE NULLIF(TRIM(d."Siteid"), '') IS NOT NULL
+{{nop_filter}}
+{{status_filter}}
+{{advanced_filter}}
+GROUP BY kabupaten
+ORDER BY kabupaten
+""".format(
+    kabupaten_expression=normalized_category_expression('d."Kabupaten/KOTA"'),
+)
+
 SITES_QUERY = """
 SELECT
     d."Siteid",
@@ -352,6 +463,60 @@ def _rows_to_stacked_bar(rows) -> list[StackedBarItem]:
     ]
 
 
+def rows_to_readiness(rows) -> list[ReadinessByKabupatenItem]:
+    items = []
+    for row in rows:
+        total = int(row.get("total_sites") or 0)
+        enva_ready = int(row.get("enva_ready") or 0)
+        dual_eas_ready = int(row.get("dual_eas_ready") or 0)
+        bblti_ready = int(row.get("bblti_software_ready") or 0)
+        items.append(ReadinessByKabupatenItem(
+            kabupaten=row.get("kabupaten") or "Tidak ada",
+            total_sites=total,
+            enva_ready=enva_ready,
+            enva_ready_pct=_pct(enva_ready, total),
+            dual_eas_ready=dual_eas_ready,
+            dual_eas_ready_pct=_pct(dual_eas_ready, total),
+            bblti_software_ready=bblti_ready,
+            bblti_software_ready_pct=_pct(bblti_ready, total),
+        ))
+    return items
+
+
+def rows_to_transport_matrix(rows) -> list[TransportConfigurationItem]:
+    return [
+        TransportConfigurationItem(
+            transport_type=row.get("transport_type") or "Tidak ada",
+            modem_transport=row.get("modem_transport") or "Tidak ada",
+            jumper_modem=row.get("jumper_modem") or "Tidak ada",
+            site_count=int(row.get("site_count") or 0),
+            percentage=_pct(
+                int(row.get("site_count") or 0),
+                int(row.get("filtered_total") or 0),
+            ),
+        )
+        for row in rows
+    ]
+
+
+def rows_to_cell_distribution(rows) -> list[CellDistributionByKabupatenItem]:
+    return [
+        CellDistributionByKabupatenItem(
+            kabupaten=row.get("kabupaten") or "Tidak ada",
+            gsm900=int(row.get("gsm900") or 0),
+            dcs1800=int(row.get("dcs1800") or 0),
+            l900=int(row.get("l900") or 0),
+            l1800=int(row.get("l1800") or 0),
+            l2100=int(row.get("l2100") or 0),
+            l2300=int(row.get("l2300") or 0),
+            lte_nb_iot=int(row.get("lte_nb_iot") or 0),
+            nr2100=int(row.get("nr2100") or 0),
+            nr2300=int(row.get("nr2300") or 0),
+        )
+        for row in rows
+    ]
+
+
 # ---------- Endpoints ----------
 
 @router.get("/status-options")
@@ -431,7 +596,7 @@ async def get_data_potensi_dashboard(
     }
     cache_key = redis_cache.make_key(
         "data-potensi",
-        "dashboard",
+        "dashboard-v3",
         **filter_params,
     )
     cache_status, cached_value = await redis_cache.get_json(cache_key)
@@ -522,6 +687,28 @@ async def get_data_potensi_dashboard(
         for row in tp_result.mappings().all()
     ]
 
+    readiness_result = await session.execute(
+        text(READINESS_BY_KABUPATEN_QUERY.format(**query_context)),
+        params,
+    )
+    readiness_by_kabupaten = rows_to_readiness(readiness_result.mappings().all())
+
+    transport_matrix_result = await session.execute(
+        text(TRANSPORT_CONFIGURATION_QUERY.format(**query_context)),
+        params,
+    )
+    transport_configuration_matrix = rows_to_transport_matrix(
+        transport_matrix_result.mappings().all()
+    )
+
+    cell_distribution_result = await session.execute(
+        text(CELL_DISTRIBUTION_QUERY.format(**query_context)),
+        params,
+    )
+    cell_distribution_by_kabupaten = rows_to_cell_distribution(
+        cell_distribution_result.mappings().all()
+    )
+
     payload = DataPotensiResponse(
         scorecard=scorecard,
         cluster_breakdown=kabupaten_breakdown,
@@ -532,6 +719,9 @@ async def get_data_potensi_dashboard(
         belting_by_cluster=belting_by_kab,
         backup_time_by_cluster=backup_time_by_kab,
         tp_distribution=tp_distribution,
+        readiness_by_kabupaten=readiness_by_kabupaten,
+        transport_configuration_matrix=transport_configuration_matrix,
+        cell_distribution_by_kabupaten=cell_distribution_by_kabupaten,
     )
 
     if cache_status == "MISS":

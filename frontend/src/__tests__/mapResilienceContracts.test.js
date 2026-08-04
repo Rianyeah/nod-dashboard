@@ -69,7 +69,7 @@ describe('Mapbox runtime resilience contracts', () => {
     assert.match(siteMap, /fetchSiteAvailability\([\s\S]*?controller\.signal/);
     assert.match(page, /siteDetailAbortRef/);
     assert.match(page, /siteDetailAbortRef\.current\?\.abort\(\)/);
-    assert.match(page, /fetchSiteDetail\(siteId, bulan, tahun, controller\.signal\)/);
+    assert.match(page, /fetchSiteDetailBundle\(siteId,\s*\{[\s\S]*?signal:\s*controller\.signal/);
   });
 
   it('protects both lazy map routes with a retryable route error boundary', () => {

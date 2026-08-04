@@ -20,6 +20,7 @@ from queries.sql_queries import (
     SITES_SEARCH_QUERY,
     SITE_FULL_DETAIL_QUERY,
     POPUP_DETAIL_QUERY,
+    LATEST_PERIOD_QUERY,
     FILTER_OPTIONS_QUERY_KABUPATEN,
     FILTER_OPTIONS_QUERY_CLUSTER,
     FILTER_OPTIONS_QUERY_KELAS,
@@ -33,6 +34,23 @@ from models.site import (
 )
 
 router = APIRouter(prefix="/sites", tags=["Sites"])
+
+
+async def resolve_site_detail_period(
+    bulan: int | None,
+    tahun: int | None,
+    session: AsyncSession,
+) -> tuple[int, int]:
+    """Keep complete explicit periods; otherwise use the newest DB period."""
+    if bulan is not None and tahun is not None:
+        return bulan, tahun
+
+    result = await session.execute(text(LATEST_PERIOD_QUERY))
+    row = result.mappings().first()
+    if not row:
+        raise HTTPException(status_code=404, detail="No availability period found")
+
+    return int(row["bulan"]), int(row["tahun"])
 
 
 def _build_filters(kabupaten=None, cluster=None, status=None, kelas=None, nop=None):
@@ -138,12 +156,7 @@ async def get_site_detail(
     session: AsyncSession = Depends(get_session),
 ):
     """Get full detail for a single site (all 55+ columns)."""
-    import datetime
-    now = datetime.datetime.now()
-    if bulan is None:
-        bulan = now.month
-    if tahun is None:
-        tahun = now.year
+    bulan, tahun = await resolve_site_detail_period(bulan, tahun, session)
 
     # Get popup detail (master + availability)
     result = await session.execute(
@@ -156,6 +169,8 @@ async def get_site_detail(
         raise HTTPException(status_code=404, detail=f"Site {site_id} not found")
 
     data = dict(row)
+    data["bulan"] = bulan
+    data["tahun"] = tahun
     # Cast numeric fields
     for key in ["avg_availability", "total_outage_menit"]:
         if data.get(key) is not None:

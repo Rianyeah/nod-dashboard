@@ -1,5 +1,18 @@
 import unittest
 from pathlib import Path
+import sys
+
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from routers.data_potensi import (
+    CELL_DISTRIBUTION_QUERY,
+    READINESS_BY_KABUPATEN_QUERY,
+    TRANSPORT_CONFIGURATION_QUERY,
+    rows_to_cell_distribution,
+    rows_to_readiness,
+    rows_to_transport_matrix,
+)
 
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -132,6 +145,124 @@ class DataPotensiContractTest(unittest.TestCase):
         self.assertIn("'Tidak ada'", source)
         self.assertIn("'tidak ada'", source.lower())
         self.assertIn("#n/a", source.lower())
+        self.assertIn("#ref!", source.lower())
+
+    def test_readiness_rows_calculate_each_status_percentage(self):
+        items = rows_to_readiness([
+            {
+                "kabupaten": "SIDOARJO",
+                "total_sites": 10,
+                "enva_ready": 9,
+                "dual_eas_ready": 2,
+                "bblti_software_ready": 3,
+            }
+        ])
+
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0].kabupaten, "SIDOARJO")
+        self.assertEqual(items[0].enva_ready_pct, 90.0)
+        self.assertEqual(items[0].dual_eas_ready_pct, 20.0)
+        self.assertEqual(items[0].bblti_software_ready_pct, 30.0)
+
+    def test_transport_rows_preserve_dimensions_and_filtered_share(self):
+        items = rows_to_transport_matrix([
+            {
+                "transport_type": "FO_TELKOM",
+                "modem_transport": "ONT",
+                "jumper_modem": "UTP",
+                "site_count": 8,
+                "filtered_total": 10,
+            }
+        ])
+
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0].transport_type, "FO_TELKOM")
+        self.assertEqual(items[0].modem_transport, "ONT")
+        self.assertEqual(items[0].jumper_modem, "UTP")
+        self.assertEqual(items[0].percentage, 80.0)
+
+    def test_cell_distribution_rows_preserve_all_technology_totals(self):
+        items = rows_to_cell_distribution([{
+            "kabupaten": "SIDOARJO",
+            "gsm900": 12,
+            "dcs1800": 14,
+            "l900": 11,
+            "l1800": 17,
+            "l2100": 9,
+            "l2300": 15,
+            "lte_nb_iot": 2,
+            "nr2100": 1,
+            "nr2300": 3,
+        }])
+
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0].kabupaten, "SIDOARJO")
+        self.assertEqual(items[0].model_dump(exclude={"kabupaten"}), {
+            "gsm900": 12,
+            "dcs1800": 14,
+            "l900": 11,
+            "l1800": 17,
+            "l2100": 9,
+            "l2300": 15,
+            "lte_nb_iot": 2,
+            "nr2100": 1,
+            "nr2300": 3,
+        })
+
+    def test_new_matrix_queries_share_dashboard_filters(self):
+        for query in [READINESS_BY_KABUPATEN_QUERY, TRANSPORT_CONFIGURATION_QUERY]:
+            with self.subTest(query=query[:40]):
+                self.assertIn("{nop_filter}", query)
+                self.assertIn("{status_filter}", query)
+                self.assertIn("{advanced_filter}", query)
+
+    def test_readiness_query_uses_approved_exact_business_rules(self):
+        normalized = " ".join(READINESS_BY_KABUPATEN_QUERY.upper().split())
+
+        self.assertIn('D."ENVA STATUS"', normalized)
+        self.assertIn("= 'COMPLETED'", normalized)
+        self.assertIn('D."DUAL_EAS"', normalized)
+        self.assertIn('D."BBLTI_SOFTWARE"', normalized)
+        self.assertIn("LIKE 'YES%'", normalized)
+
+    def test_cell_distribution_query_safely_aggregates_every_source_column(self):
+        for placeholder in ["{nop_filter}", "{status_filter}", "{advanced_filter}"]:
+            with self.subTest(placeholder=placeholder):
+                self.assertIn(placeholder, CELL_DISTRIBUTION_QUERY)
+
+        source_columns = [
+            "GSM900",
+            "DCS1800",
+            "L900",
+            "L1800",
+            "L2100",
+            "L2300",
+            "LTE NB-IoT",
+            "NR2100",
+            "NR2300",
+        ]
+        for column in source_columns:
+            with self.subTest(column=column):
+                self.assertIn(f'd."{column}"', CELL_DISTRIBUTION_QUERY)
+                self.assertNotRegex(
+                    CELL_DISTRIBUTION_QUERY,
+                    rf'd\."{column}"\s*::(?:int|integer|numeric)',
+                )
+
+        self.assertEqual(
+            CELL_DISTRIBUTION_QUERY.count("~ '^[0-9]+([.][0-9]+)?$'"),
+            len(source_columns),
+        )
+
+    def test_dashboard_response_and_cache_are_versioned_for_new_arrays(self):
+        source = self.read_router_source()
+        models_source = MODELS.read_text(encoding="utf-8")
+
+        self.assertIn("readiness_by_kabupaten", models_source)
+        self.assertIn("transport_configuration_matrix", models_source)
+        self.assertIn("cell_distribution_by_kabupaten", models_source)
+        self.assertIn('"dashboard-v3"', source)
+        self.assertNotIn('"dashboard-v2"', source)
 
 
 if __name__ == "__main__":

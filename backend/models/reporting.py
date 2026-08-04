@@ -75,3 +75,16 @@ class RevenueTrendItem(BaseModel):
     total_payload: int = 0
     total_traffic: int = 0
     avg_availability: Optional[float] = None
+
+
+class SitePerformance(BaseModel):
+    """Latest Revenue and Payload values for one site with calendar-month MoM."""
+    site_id: str
+    trx_month: str | None = None
+    previous_trx_month: str | None = None
+    total_revenue: int | None = None
+    previous_revenue: int | None = None
+    revenue_mom_pct: float | None = None
+    total_payload: int | None = None
+    previous_payload: int | None = None
+    payload_mom_pct: float | None = None

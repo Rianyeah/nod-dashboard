@@ -7,7 +7,8 @@ import FilterPanel from '../components/FilterPanel';
 import SiteDetailModal from '../components/SiteDetailModal';
 import Breadcrumb from '../components/Breadcrumb';
 import { useMapData } from '../hooks/useMapData';
-import { fetchFilterOptions, fetchLatestPeriod, fetchSiteAvailability, fetchSiteDetail, fetchTrend } from '../services/api';
+import { fetchFilterOptions, fetchLatestPeriod, fetchSiteDetail } from '../services/api';
+import { fetchSiteDetailBundle } from '../services/siteDetailBundle';
 import { ChevronDown, ChevronUp, GripHorizontal } from 'lucide-react';
 
 const EMPTY_FILTERS = {};
@@ -47,7 +48,7 @@ export default function SiteMapPage() {
   const [selectedSiteFallback, setSelectedSiteFallback] = useState(null);
   const [siteDetail, setSiteDetail] = useState(null);
   const [siteDetailTrend, setSiteDetailTrend] = useState([]);
-  const [siteDetailDaily, setSiteDetailDaily] = useState([]);
+  const [siteDetailPerformance, setSiteDetailPerformance] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [filters, setFilters] = useState({});
   const [filterOptions, setFilterOptions] = useState({ kabupaten: [], cluster: [], kelas: [], nop: [] });
@@ -122,7 +123,7 @@ export default function SiteMapPage() {
     setShowModal(false);
     setSiteDetail(null);
     setSiteDetailTrend([]);
-    setSiteDetailDaily([]);
+    setSiteDetailPerformance(null);
 
     let focusFallback = normalizeSiteFocusData(
       typeof siteOrId === 'string' ? null : siteOrId,
@@ -152,14 +153,14 @@ export default function SiteMapPage() {
     const controller = new AbortController();
     siteDetailAbortRef.current = controller;
     try {
-      const [detail, trend, daily] = await Promise.all([
-        fetchSiteDetail(siteId, bulan, tahun, controller.signal),
-        fetchTrend(siteId, tahun, bulan, controller.signal),
-        fetchSiteAvailability(siteId, bulan, tahun, controller.signal),
-      ]);
-      setSiteDetail(detail);
-      setSiteDetailTrend(trend);
-      setSiteDetailDaily(daily);
+      const bundle = await fetchSiteDetailBundle(siteId, {
+        bulan,
+        tahun,
+        signal: controller.signal,
+      });
+      setSiteDetail(bundle.detail);
+      setSiteDetailTrend(bundle.trendData);
+      setSiteDetailPerformance(bundle.performanceData);
       setShowModal(true);
       setSelectedSiteId(siteId);
     } catch (err) {
@@ -352,12 +353,12 @@ export default function SiteMapPage() {
         <SiteDetailModal
           data={siteDetail}
           trendData={siteDetailTrend}
-          dailyData={siteDetailDaily}
+          performanceData={siteDetailPerformance}
           onClose={() => {
             setShowModal(false);
             setSiteDetail(null);
             setSiteDetailTrend([]);
-            setSiteDetailDaily([]);
+            setSiteDetailPerformance(null);
           }}
         />
       )}

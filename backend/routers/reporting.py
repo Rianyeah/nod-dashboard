@@ -22,6 +22,7 @@ from models.reporting import (
     SiteClassByKabupaten,
     BatteryByKabupaten,
     RevenueTrendItem,
+    SitePerformance,
 )
 from periods import build_period_meta, resolve_month_period
 
@@ -370,8 +371,89 @@ FROM traktor_data
 ORDER BY trx_month DESC
 """
 
+SITE_PERFORMANCE_QUERY = """
+WITH current_period AS (
+    SELECT MAX(trx_month) AS trx_month
+    FROM traktor_data
+    WHERE site_id = :site_id
+),
+current_metrics AS (
+    SELECT
+        t.trx_month,
+        SUM(t.rev) AS total_revenue,
+        SUM(t.payload) AS total_payload
+    FROM traktor_data t
+    CROSS JOIN current_period cp
+    WHERE t.site_id = :site_id
+      AND t.trx_month = cp.trx_month
+    GROUP BY t.trx_month
+),
+previous_target AS (
+    SELECT TO_CHAR(
+        TO_DATE(cm.trx_month || '-01', 'YYYY-MM-DD') - INTERVAL '1 month',
+        'YYYY-MM'
+    ) AS trx_month
+    FROM current_metrics cm
+),
+previous_metrics AS (
+    SELECT
+        pt.trx_month,
+        SUM(t.rev) AS total_revenue,
+        SUM(t.payload) AS total_payload
+    FROM previous_target pt
+    LEFT JOIN traktor_data t
+      ON t.site_id = :site_id
+     AND t.trx_month = pt.trx_month
+    GROUP BY pt.trx_month
+)
+SELECT
+    cm.trx_month,
+    pm.trx_month AS previous_trx_month,
+    cm.total_revenue,
+    pm.total_revenue AS previous_revenue,
+    cm.total_payload,
+    pm.total_payload AS previous_payload
+FROM current_metrics cm
+CROSS JOIN previous_metrics pm
+"""
+
+
+def relative_change(current, previous) -> float | None:
+    """Return signed percentage change, guarding absent and zero baselines."""
+    if current is None or previous is None or previous == 0:
+        return None
+    return float((current - previous) / abs(previous) * 100)
+
 
 # ---------- Endpoints ----------
+
+@router.get("/site/{site_id}/performance", response_model=SitePerformance)
+async def get_site_performance(
+    site_id: str,
+    session: AsyncSession = Depends(get_session),
+):
+    """Latest Revenue and Payload for a site with exact previous-calendar-month MoM."""
+    result = await session.execute(text(SITE_PERFORMANCE_QUERY), {"site_id": site_id})
+    row = result.mappings().first()
+    if not row:
+        return SitePerformance(site_id=site_id)
+
+    total_revenue = int(row["total_revenue"]) if row.get("total_revenue") is not None else None
+    previous_revenue = int(row["previous_revenue"]) if row.get("previous_revenue") is not None else None
+    total_payload = int(row["total_payload"]) if row.get("total_payload") is not None else None
+    previous_payload = int(row["previous_payload"]) if row.get("previous_payload") is not None else None
+
+    return SitePerformance(
+        site_id=site_id,
+        trx_month=row.get("trx_month"),
+        previous_trx_month=row.get("previous_trx_month"),
+        total_revenue=total_revenue,
+        previous_revenue=previous_revenue,
+        revenue_mom_pct=relative_change(total_revenue, previous_revenue),
+        total_payload=total_payload,
+        previous_payload=previous_payload,
+        payload_mom_pct=relative_change(total_payload, previous_payload),
+    )
 
 @router.get("/available-months")
 async def get_available_months(
