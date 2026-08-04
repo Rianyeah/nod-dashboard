@@ -60,6 +60,20 @@ class TransportConfigurationItem(BaseModel):
     percentage: float = 0.0
 
 
+class CellDistributionByKabupatenItem(BaseModel):
+    """Aggregated cell counts for one Kabupaten/Kota."""
+    kabupaten: str
+    gsm900: int = 0
+    dcs1800: int = 0
+    l900: int = 0
+    l1800: int = 0
+    l2100: int = 0
+    l2300: int = 0
+    lte_nb_iot: int = 0
+    nr2100: int = 0
+    nr2300: int = 0
+
+
 class DataPotensiFilterOptions(BaseModel):
     """Advanced filter values available for the selected global scope."""
     clusters: list[str] = Field(default_factory=list)
@@ -112,3 +126,4 @@ class DataPotensiResponse(BaseModel):
     tp_distribution: list[TpDistributionItem] = Field(default_factory=list)
     readiness_by_kabupaten: list[ReadinessByKabupatenItem] = Field(default_factory=list)
     transport_configuration_matrix: list[TransportConfigurationItem] = Field(default_factory=list)
+    cell_distribution_by_kabupaten: list[CellDistributionByKabupatenItem] = Field(default_factory=list)
