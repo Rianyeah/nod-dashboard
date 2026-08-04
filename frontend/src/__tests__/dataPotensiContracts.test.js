@@ -128,4 +128,32 @@ describe('Data Potensi dashboard contracts', () => {
     );
     assert.match(page, /grid grid-cols-1 gap-3 xl:grid-cols-2/);
   });
+
+  it('prepares three content-only matrices for carousel composition', () => {
+    const charts = src('features', 'data-potensi', 'DataPotensiMatrixCharts.jsx');
+    const utils = src('features', 'data-potensi', 'dataPotensiMatrixUtils.js');
+    const combined = `${charts}\n${utils}`;
+
+    assert.match(charts, /export function CellDistributionHeatmap/);
+    assert.match(charts, /Cell Distribution Heatmap per Kabupaten/);
+    assert.match(charts, /buildCellDistributionMatrix/);
+    assert.match(charts, /data-carousel-scroll-region/);
+    assert.doesNotMatch(charts, /Persentase site siap per Kabupaten berdasarkan status monitoring/);
+    assert.doesNotMatch(charts, /Jumlah site untuk kombinasi Transport Type, Modem, dan Jumper/);
+    assert.doesNotMatch(charts, /<DashboardChartPanel/);
+
+    for (const label of [
+      'GSM900',
+      'DCS1800',
+      'L900',
+      'L1800',
+      'L2100',
+      'L2300',
+      'LTE NB-IoT',
+      'NR2100',
+      'NR2300',
+    ]) {
+      assert.match(combined, new RegExp(label));
+    }
+  });
 });

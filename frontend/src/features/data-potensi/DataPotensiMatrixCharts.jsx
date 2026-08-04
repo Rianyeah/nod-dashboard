@@ -1,8 +1,7 @@
-import { CheckCircle2, Network } from 'lucide-react';
-
 import { DashboardChartEmpty } from '../../components/dashboard-charts/DashboardChartEmpty';
-import { DashboardChartPanel } from '../../components/ui/DashboardPrimitives';
+import { formatNumber } from '../../utils/formatters';
 import {
+  buildCellDistributionMatrix,
   buildReadinessColumns,
   buildTransportMatrix,
 } from './dataPotensiMatrixUtils';
@@ -16,9 +15,9 @@ function heatStyle(percentage, color) {
 }
 
 
-function HeatLegend({ color }) {
+function HeatLegend({ color, label = 'Legenda intensitas rendah ke tinggi' }) {
   return (
-    <div className="mt-3 flex items-center justify-end gap-2 text-[10px] text-[var(--text-muted)]" aria-label="Legenda intensitas rendah ke tinggi">
+    <div className="mt-3 flex items-center justify-end gap-2 text-[10px] text-[var(--text-muted)]" aria-label={label}>
       <span>Rendah</span>
       {[16, 30, 44, 58].map((intensity) => (
         <span
@@ -37,17 +36,15 @@ export function OperationalReadinessHeatmap({ data = [] }) {
   const columns = buildReadinessColumns();
 
   return (
-    <DashboardChartPanel
-      title="Operational Readiness Heatmap"
-      description="Persentase site siap per Kabupaten berdasarkan status monitoring."
-      icon={CheckCircle2}
-      className="h-full"
-    >
+    <div className="min-w-0" role="group" aria-label="Operational Readiness Heatmap">
       {!data.length ? (
         <DashboardChartEmpty label="Data readiness belum tersedia untuk filter ini." className="h-[280px]" />
       ) : (
         <>
-          <div className="max-h-[360px] overflow-auto rounded-lg border border-[var(--border)]">
+          <div
+            data-carousel-scroll-region
+            className="max-h-[360px] overflow-auto rounded-lg border border-[var(--border)]"
+          >
             <table className="w-full min-w-[560px] border-collapse text-xs" aria-label="Operational readiness per Kabupaten">
               <thead className="sticky top-0 z-10 bg-[var(--bg-elevated)] text-[10px] uppercase tracking-[0.08em] text-[var(--text-secondary)]">
                 <tr>
@@ -91,7 +88,7 @@ export function OperationalReadinessHeatmap({ data = [] }) {
           <HeatLegend color="var(--chart-success)" />
         </>
       )}
-    </DashboardChartPanel>
+    </div>
   );
 }
 
@@ -100,17 +97,15 @@ export function TransportConfigurationMatrix({ data = [] }) {
   const matrix = buildTransportMatrix(data);
 
   return (
-    <DashboardChartPanel
-      title="Transport Configuration Matrix"
-      description="Jumlah site untuk kombinasi Transport Type, Modem, dan Jumper."
-      icon={Network}
-      className="h-full"
-    >
+    <div className="min-w-0" role="group" aria-label="Transport Configuration Matrix">
       {!matrix.rows.length ? (
         <DashboardChartEmpty label="Data konfigurasi transport belum tersedia untuk filter ini." className="h-[280px]" />
       ) : (
         <>
-          <div className="max-h-[360px] overflow-x-auto overflow-y-auto rounded-lg border border-[var(--border)]">
+          <div
+            data-carousel-scroll-region
+            className="max-h-[360px] overflow-x-auto overflow-y-auto rounded-lg border border-[var(--border)]"
+          >
             <table className="w-full min-w-[640px] border-collapse text-xs" aria-label="Matrix konfigurasi transport berdasarkan jumper">
               <thead className="sticky top-0 z-10 bg-[var(--bg-elevated)] text-[10px] uppercase tracking-[0.08em] text-[var(--text-secondary)]">
                 <tr>
@@ -158,7 +153,67 @@ export function TransportConfigurationMatrix({ data = [] }) {
           <HeatLegend color="var(--primary)" />
         </>
       )}
-    </DashboardChartPanel>
+    </div>
+  );
+}
+
+
+export function CellDistributionHeatmap({ data = [] }) {
+  const matrix = buildCellDistributionMatrix(data);
+
+  return (
+    <div className="min-w-0" role="group" aria-label="Cell Distribution Heatmap">
+      {!matrix.rows.length ? (
+        <DashboardChartEmpty label="Data distribusi cell belum tersedia untuk filter ini." className="h-[280px]" />
+      ) : (
+        <>
+          <div
+            data-carousel-scroll-region
+            className="max-h-[360px] overflow-x-auto overflow-y-auto rounded-lg border border-[var(--border)]"
+          >
+            <table className="w-full min-w-[1040px] border-collapse text-xs" aria-label="Cell Distribution Heatmap per Kabupaten">
+              <thead className="sticky top-0 z-10 bg-[var(--bg-elevated)] text-[10px] uppercase tracking-[0.08em] text-[var(--text-secondary)]">
+                <tr>
+                  <th scope="col" className="border-b border-[var(--border)] px-3 py-2.5 text-left font-semibold">Kabupaten</th>
+                  {matrix.columns.map((column) => (
+                    <th key={column.key} scope="col" className="border-b border-l border-[var(--border)] px-3 py-2.5 text-center font-semibold">
+                      {column.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {matrix.rows.map((row) => (
+                  <tr key={row.kabupaten}>
+                    <th scope="row" className="border-b border-[var(--border)] bg-[var(--bg-surface)] px-3 py-2.5 text-left font-medium text-[var(--text-primary)]">
+                      {row.kabupaten}
+                    </th>
+                    {matrix.columns.map((column) => {
+                      const value = row[column.key];
+                      const maximum = matrix.maxima[column.key] || 0;
+                      const intensity = maximum > 0 ? (value / maximum) * 100 : 0;
+                      const label = `${row.kabupaten}, ${column.label}: ${formatNumber(value)} cell`;
+                      return (
+                        <td
+                          key={column.key}
+                          className="border-b border-l border-[var(--border)] px-3 py-2.5 text-center tabular-nums"
+                          style={heatStyle(intensity, 'var(--chart-info)')}
+                          title={label}
+                          aria-label={label}
+                        >
+                          <span className="block font-mono text-sm font-bold text-[var(--text-primary)]">{formatNumber(value)}</span>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <HeatLegend color="var(--chart-info)" label="Legenda konsentrasi cell rendah ke tinggi" />
+        </>
+      )}
+    </div>
   );
 }
 

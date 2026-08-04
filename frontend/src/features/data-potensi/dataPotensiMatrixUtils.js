@@ -19,6 +19,48 @@ export function buildReadinessColumns() {
 }
 
 
+export function buildCellDistributionColumns() {
+  return [
+    { key: 'gsm900', label: 'GSM900' },
+    { key: 'dcs1800', label: 'DCS1800' },
+    { key: 'l900', label: 'L900' },
+    { key: 'l1800', label: 'L1800' },
+    { key: 'l2100', label: 'L2100' },
+    { key: 'l2300', label: 'L2300' },
+    { key: 'lte_nb_iot', label: 'LTE NB-IoT' },
+    { key: 'nr2100', label: 'NR2100' },
+    { key: 'nr2300', label: 'NR2300' },
+  ];
+}
+
+
+function normalizeCellCount(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? Math.max(0, Math.trunc(numeric)) : 0;
+}
+
+
+export function buildCellDistributionMatrix(sourceRows = []) {
+  const columns = buildCellDistributionColumns();
+  const maxima = Object.fromEntries(columns.map((column) => [column.key, 0]));
+  const rows = sourceRows.map((sourceRow) => {
+    const row = {
+      kabupaten: normalizeDimension(sourceRow.kabupaten),
+    };
+
+    for (const column of columns) {
+      const value = normalizeCellCount(sourceRow[column.key]);
+      row[column.key] = value;
+      maxima[column.key] = Math.max(maxima[column.key], value);
+    }
+
+    return row;
+  }).sort((a, b) => a.kabupaten.localeCompare(b.kabupaten));
+
+  return { rows, columns, maxima };
+}
+
+
 export function buildTransportMatrix(sourceRows = []) {
   const cells = {};
   const rowMap = new Map();
