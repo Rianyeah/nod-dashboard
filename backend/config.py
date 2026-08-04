@@ -27,12 +27,12 @@ def _parse_bool(env: Mapping[str, str], name: str) -> bool:
     return value == "true"
 
 
-def _decode_session_secret(value: str) -> bytes:
+def _decode_urlsafe_secret(value: str, name: str) -> bytes:
     try:
         return base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
     except Exception as exc:
         raise SecurityConfigurationError(
-            "DASHBOARD_SESSION_SECRET must be URL-safe base64"
+            f"{name} must be URL-safe base64"
         ) from exc
 
 
@@ -48,6 +48,8 @@ class SecuritySettings:
     session_cookie_secure: bool
     n8n_api_key: str
     n8n_map_api_key: str
+    n8n_capture_api_key: str
+    n8n_capture_signing_secret: str
     redis_url: str
 
     @property
@@ -88,7 +90,7 @@ class SecuritySettings:
             raise SecurityConfigurationError("DASHBOARD_PASSWORD_HASH must be an Argon2id hash")
 
         session_secret = _required(source, "DASHBOARD_SESSION_SECRET")
-        if len(_decode_session_secret(session_secret)) < 32:
+        if len(_decode_urlsafe_secret(session_secret, "DASHBOARD_SESSION_SECRET")) < 32:
             raise SecurityConfigurationError(
                 "DASHBOARD_SESSION_SECRET must decode to at least 32 bytes"
             )
@@ -120,6 +122,24 @@ class SecuritySettings:
                     "ALLOWED_HOSTS must include the PUBLIC_APP_ORIGIN host"
                 )
 
+        n8n_api_key = _required(source, "N8N_API_KEY")
+        n8n_map_api_key = _required(source, "N8N_MAP_API_KEY")
+        n8n_capture_api_key = _required(source, "N8N_CAPTURE_API_KEY")
+        n8n_capture_signing_secret = _required(source, "N8N_CAPTURE_SIGNING_SECRET")
+        if len(
+            _decode_urlsafe_secret(
+                n8n_capture_signing_secret,
+                "N8N_CAPTURE_SIGNING_SECRET",
+            )
+        ) < 32:
+            raise SecurityConfigurationError(
+                "N8N_CAPTURE_SIGNING_SECRET must decode to at least 32 bytes"
+            )
+        if n8n_capture_api_key in {n8n_api_key, n8n_map_api_key}:
+            raise SecurityConfigurationError(
+                "N8N_CAPTURE_API_KEY must be distinct from other N8N keys"
+            )
+
         return cls(
             app_env=app_env,
             public_app_origin=origin,
@@ -129,7 +149,9 @@ class SecuritySettings:
             dashboard_session_secret=session_secret,
             dashboard_session_ttl_seconds=ttl_seconds,
             session_cookie_secure=cookie_secure,
-            n8n_api_key=_required(source, "N8N_API_KEY"),
-            n8n_map_api_key=_required(source, "N8N_MAP_API_KEY"),
+            n8n_api_key=n8n_api_key,
+            n8n_map_api_key=n8n_map_api_key,
+            n8n_capture_api_key=n8n_capture_api_key,
+            n8n_capture_signing_secret=n8n_capture_signing_secret,
             redis_url=source.get("REDIS_URL", "").strip(),
         )
