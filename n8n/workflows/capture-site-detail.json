@@ -1,0 +1,165 @@
+{
+  "name": "capture_site_detail",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            { "name": "site_id", "type": "string", "required": true },
+            { "name": "chat_id", "type": "string", "required": true }
+          ]
+        }
+      },
+      "id": "0f3f3e83-88e0-4fd0-a0c9-8f8f51f1a001",
+      "name": "Execute Sub-workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const rawSiteId = String($json.site_id || '').trim().toUpperCase();\nconst chatId = String($json.chat_id || '').trim();\nif (!/^[A-Z0-9][A-Z0-9_-]{1,31}$/.test(rawSiteId) || !chatId) {\n  throw new Error('INVALID_CAPTURE_INPUT');\n}\nreturn [{ json: { site_id: rawSiteId, chat_id: chatId, started_at_ms: Date.now() } }];"
+      },
+      "id": "0f3f3e83-88e0-4fd0-a0c9-8f8f51f1a002",
+      "name": "Validate Site ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.NOD_DASHBOARD_ORIGIN + '/api/v1/integrations/n8n/site-detail-capture-token' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "site_id", "value": "={{ $json.site_id }}" },
+            { "name": "theme", "value": "dark" }
+          ]
+        },
+        "options": { "timeout": 10000 }
+      },
+      "id": "0f3f3e83-88e0-4fd0-a0c9-8f8f51f1a003",
+      "name": "Mint Capture Token",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300],
+      "credentials": {
+        "httpHeaderAuth": { "name": "NOD Capture API Key" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $('Validate Site ID').first().json;\nconst minted = $json;\nif (typeof minted.capture_url !== 'string' || !minted.capture_url.startsWith('https://')) {\n  throw new Error('CAPTURE_TOKEN_MINT_FAILED');\n}\nconst ready = '[data-capture-state=\"ready\"][data-capture-site-id=\"' + input.site_id + '\"]';\nconst query = `mutation CaptureSiteDetail($url: String!, $ready: String!) {\n  viewport(width: 1200, height: 1000, deviceScaleFactor: 1.5) { width height deviceScaleFactor }\n  goto(url: $url, waitUntil: domContentLoaded) { status time }\n  ready: waitForSelector(selector: $ready, visible: true, timeout: 12000) { selector time }\n  modal: waitForSelector(selector: \".site-detail-modal\", visible: true, timeout: 1000) { width height }\n  capture: screenshot(selector: \".site-detail-modal\", type: png, captureBeyondViewport: true, optimizeForSpeed: true, waitForImages: true, timeout: 12000) { base64 format time }\n}`;\nreturn [{ json: { ...input, token_issue_ms: Date.now() - input.started_at_ms, query, variables: { url: minted.capture_url, ready } } }];"
+      },
+      "id": "0f3f3e83-88e0-4fd0-a0c9-8f8f51f1a004",
+      "name": "Prepare Browserless",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BROWSERLESS_BQL_URL || 'https://production.browserless.io/chromium/bql' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { query: $json.query, variables: $json.variables } }}",
+        "options": { "timeout": 20000 }
+      },
+      "id": "0f3f3e83-88e0-4fd0-a0c9-8f8f51f1a005",
+      "name": "Browserless Capture",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 300],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 800,
+      "credentials": {
+        "httpHeaderAuth": { "name": "Browserless Authorization" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const encoded = $json.data?.capture?.base64;\nif (typeof encoded !== 'string' || !encoded.length) throw new Error('CAPTURE_PNG_MISSING');\nconst bytes = Buffer.from(encoded, 'base64');\nif (bytes.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') throw new Error('CAPTURE_PNG_INVALID');\nif (bytes.length === 0 || bytes.length > 50 * 1024 * 1024) throw new Error('CAPTURE_PNG_SIZE_INVALID');\nconst width = bytes.readUInt32BE(16);\nconst height = bytes.readUInt32BE(20);\nconst modal = $json.data?.modal;\nif (!modal || width + 2 < Math.floor(modal.width * 1.5) || height + 2 < Math.floor(modal.height * 1.5)) throw new Error('CAPTURE_PNG_CROPPED');\nconst input = $('Validate Site ID').first().json;\nreturn [{ json: { site_id: input.site_id, chat_id: input.chat_id, started_at_ms: input.started_at_ms, token_issue_ms: $('Prepare Browserless').first().json.token_issue_ms, capture_ready_ms: $json.data.ready.time, screenshot_ms: $json.data.capture.time, png_width: width, png_height: height }, binary: { data: { data: encoded, mimeType: 'image/png', fileName: 'site-detail-' + input.site_id + '.png' } } }];"
+      },
+      "id": "0f3f3e83-88e0-4fd0-a0c9-8f8f51f1a006",
+      "name": "Validate PNG and Create Binary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map((item) => ({ json: { ...item.json, telegram_started_at_ms: Date.now() }, binary: item.binary }));"
+      },
+      "id": "0f3f3e83-88e0-4fd0-a0c9-8f8f51f1a007",
+      "name": "Prepare Telegram Upload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendDocument",
+        "chatId": "={{ $json.chat_id }}",
+        "binaryData": true,
+        "binaryPropertyName": "data",
+        "additionalFields": { "caption": "=Detail Site {{ $json.site_id }} - full capture" }
+      },
+      "id": "0f3f3e83-88e0-4fd0-a0c9-8f8f51f1a008",
+      "name": "Send Telegram Document",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1780, 300],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000,
+      "credentials": {
+        "telegramApi": { "name": "Telegram Bot" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const upload = $('Prepare Telegram Upload').first().json;\nconst totalMs = Date.now() - upload.started_at_ms;\nconsole.log(JSON.stringify({ event: 'site_detail_capture', request_id: $execution.id, site_id: upload.site_id, token_issue_ms: upload.token_issue_ms, capture_ready_ms: upload.capture_ready_ms, screenshot_ms: upload.screenshot_ms, telegram_upload_ms: Date.now() - upload.telegram_started_at_ms, total_ms: totalMs, result: 'sent' }));\nreturn [{ json: { sent: true, site_id: upload.site_id, telegram_message_id: $json.result?.message_id ?? $json.message_id, elapsed_ms: totalMs } }];"
+      },
+      "id": "0f3f3e83-88e0-4fd0-a0c9-8f8f51f1a009",
+      "name": "Return Capture Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $('Validate Site ID').first().json;\nreturn [{ json: { sent: false, site_id: input.site_id, error_code: 'CAPTURE_FAILED', elapsed_ms: Date.now() - input.started_at_ms } }];"
+      },
+      "id": "0f3f3e83-88e0-4fd0-a0c9-8f8f51f1a010",
+      "name": "Capture Failure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 520]
+    }
+  ],
+  "connections": {
+    "Execute Sub-workflow Trigger": { "main": [[{ "node": "Validate Site ID", "type": "main", "index": 0 }]] },
+    "Validate Site ID": { "main": [[{ "node": "Mint Capture Token", "type": "main", "index": 0 }]] },
+    "Mint Capture Token": { "main": [[{ "node": "Prepare Browserless", "type": "main", "index": 0 }]] },
+    "Prepare Browserless": { "main": [[{ "node": "Browserless Capture", "type": "main", "index": 0 }]] },
+    "Browserless Capture": { "main": [[{ "node": "Validate PNG and Create Binary", "type": "main", "index": 0 }]] },
+    "Validate PNG and Create Binary": { "main": [[{ "node": "Prepare Telegram Upload", "type": "main", "index": 0 }]] },
+    "Prepare Telegram Upload": { "main": [[{ "node": "Send Telegram Document", "type": "main", "index": 0 }]] },
+    "Send Telegram Document": { "main": [[{ "node": "Return Capture Status", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": { "executionOrder": "v1", "saveExecutionProgress": false, "saveManualExecutions": false },
+  "versionId": "0f3f3e83-88e0-4fd0-a0c9-8f8f51f1a100",
+  "meta": { "templateCredsSetupCompleted": false },
+  "tags": []
+}
