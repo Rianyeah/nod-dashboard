@@ -68,14 +68,30 @@ class SecurityHeadersMiddleware:
         async def secure_send(message: Message) -> None:
             if message["type"] == "http.response.start":
                 headers = list(message.get("headers", []))
-                if scope.get("path", "").startswith("/api/"):
-                    headers = [header for header in headers if header[0].lower() != b"cache-control"]
-                    headers.append((b"cache-control", b"private, no-store"))
+                path = scope.get("path", "")
+                is_capture_path = path.startswith("/capture/") or (
+                    path.startswith("/api/")
+                    and "/integrations/n8n/site-detail-capture" in path
+                )
+                if is_capture_path:
+                    headers = _replace_header(headers, b"cache-control", b"no-store")
+                elif path.startswith("/api/"):
+                    headers = _replace_header(
+                        headers,
+                        b"cache-control",
+                        b"private, no-store",
+                    )
+                headers = _replace_header(
+                    headers,
+                    b"referrer-policy",
+                    b"no-referrer"
+                    if is_capture_path
+                    else b"strict-origin-when-cross-origin",
+                )
                 headers.extend(
                     [
                         (b"x-content-type-options", b"nosniff"),
                         (b"x-frame-options", b"DENY"),
-                        (b"referrer-policy", b"strict-origin-when-cross-origin"),
                         (b"permissions-policy", b"camera=(), microphone=(), geolocation=()"),
                         (b"content-security-policy", self.content_security_policy),
                     ]
@@ -84,3 +100,13 @@ class SecurityHeadersMiddleware:
             await send(message)
 
         await self.app(scope, receive, secure_send)
+
+
+def _replace_header(
+    headers: list[tuple[bytes, bytes]],
+    name: bytes,
+    value: bytes,
+) -> list[tuple[bytes, bytes]]:
+    return [
+        header for header in headers if header[0].lower() != name
+    ] + [(name, value)]
