@@ -16,7 +16,7 @@ class TicketingFilters(BaseModel):
     nops: list[str] = []
     clusters: list[str] = []
     categories: list[str] = []
-    sla_statuses: list[str] = []
+    takeovers: list[str] = []
     ticket_statuses: list[str] = []
     backup_sukses: list[str] = []
     rc_categories: list[str] = []
@@ -35,6 +35,7 @@ class TicketingSummary(BaseModel):
     ticket_category: TicketCategorySummary
     out_sla_tickets: int = 0
     out_sla_rate: float = 0
+    average_mttr_hours: float | None = None
     median_mttr_hours: float | None = None
     visitation_tickets: int = 0
     visitation_rate: float = 0
@@ -80,6 +81,24 @@ class TicketingVisitingBackupItem(BaseModel):
     backup_rate: float = 0
 
 
+class TicketingLocationBreakdownItem(BaseModel):
+    label: str
+    takeover_tickets: int = 0
+    visitation_tickets: int = 0
+    backup_sukses_tickets: int = 0
+    escalated_tickets: int = 0
+
+
+class TicketingFopPerformanceItem(BaseModel):
+    rank: int
+    pic: str
+    performance_score: float
+    takeover_tickets: int = 0
+    visitation_tickets: int = 0
+    backup_sukses_tickets: int = 0
+    average_response_minutes: float | None = None
+
+
 class TicketingTopSite(BaseModel):
     site_id: str
     site_name: str | None = None
@@ -94,14 +113,16 @@ class TicketingTopSite(BaseModel):
 class TicketingDashboard(BaseModel):
     summary: TicketingSummary
     trend: list[TicketingTrendItem] = []
+    trend_granularity: str = "day"
     sla_distribution: list[TicketingDistributionItem] = []
     backup_distribution: list[TicketingDistributionItem] = []
     location_breakdown_title: str
-    location_breakdown: list[TicketingDistributionItem] = []
+    location_breakdown: list[TicketingLocationBreakdownItem] = []
     visiting_backup_distribution: list[TicketingVisitingBackupItem] = []
     rc_category_pareto: list[TicketingRcParetoItem] = []
     type_ticket_distribution: list[TicketingDistributionItem] = []
     top_sites: list[TicketingTopSite] = []
+    fop_performance: list[TicketingFopPerformanceItem] = []
     period_meta: MonthPeriodMeta | None = None
 
 

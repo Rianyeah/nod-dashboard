@@ -37,6 +37,13 @@ import {
 } from '@/components/dashboard-charts/dashboardChartUtils';
 import { DashboardChartPanel } from '@/components/ui/DashboardPrimitives';
 import { ChartContainer, ChartTooltip } from '@/components/ui/chart';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { formatNumber } from '@/utils/formatters';
 
 import {
@@ -45,6 +52,11 @@ import {
   getTicketTypeColor,
   ticketingChartConfig,
 } from './ticketingChartConfig';
+import {
+  getTicketTrendTitle,
+  getTopLocationRows,
+  LOCATION_METRICS,
+} from './ticketingChartUtils';
 
 export function HelpHint({ text }) {
   return (
@@ -133,6 +145,7 @@ function StandardTooltip({ valueFormatter = formatNumber, ...props }) {
 export function TicketingCharts({ dashboard }) {
   const [activeSlaIndex, setActiveSlaIndex] = useState(null);
   const [activeTicketTypeIndex, setActiveTicketTypeIndex] = useState(null);
+  const [locationMetric, setLocationMetric] = useState('takeover_tickets');
   const slaDistribution = dashboard?.sla_distribution || [];
   const slaTotal = sumChartValues(slaDistribution, 'tickets');
   const rawTypeTicketDistribution = dashboard?.type_ticket_distribution || [];
@@ -141,11 +154,15 @@ export function TicketingCharts({ dashboard }) {
     ...entry,
     share: typeTicketTotal > 0 ? (Number(entry.tickets || 0) / typeTicketTotal) * 100 : 0,
   }));
+  const trendTitle = getTicketTrendTitle(dashboard?.trend_granularity);
+  const locationRows = getTopLocationRows(dashboard?.location_breakdown, locationMetric);
+  const locationMetricOption = LOCATION_METRICS.find((option) => option.value === locationMetric)
+    || LOCATION_METRICS[0];
 
   return (
     <>
       <section className="grid gap-3 xl:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.65fr)_minmax(280px,0.65fr)]">
-        <ChartCard title="Daily Trend Ticket by Kategori" icon={TrendingUp}>
+        <ChartCard title={trendTitle} icon={TrendingUp}>
           {dashboard?.trend?.length ? (
             <ChartContainer config={ticketingChartConfig} className="h-[220px] w-full aspect-auto" data-testid="ticketing-daily-trend-chart">
               <LineChart accessibilityLayer data={dashboard.trend} margin={{ top: 12, right: 20, left: 0, bottom: 0 }}>
@@ -244,16 +261,35 @@ export function TicketingCharts({ dashboard }) {
       </section>
 
       <section className="grid gap-3 xl:grid-cols-3 2xl:grid-cols-[minmax(0,2fr)_minmax(260px,1fr)_minmax(260px,1fr)]">
-        <ChartCard title={dashboard?.location_breakdown_title || 'Kabupaten/Kota Distribution'} icon={BarChart3}>
-          {dashboard?.location_breakdown?.length ? (
+        <ChartCard
+          title={dashboard?.location_breakdown_title || 'Kabupaten/Kota Distribution'}
+          icon={BarChart3}
+          action={(
+            <Select value={locationMetric} onValueChange={setLocationMetric}>
+              <SelectTrigger
+                size="sm"
+                aria-label="Kabupaten/Kota metric"
+                className="h-7 min-w-[132px] rounded-lg px-2 text-xs"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="end" position="popper">
+                {LOCATION_METRICS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        >
+          {locationRows.length ? (
             <ChartContainer config={ticketingChartConfig} className="h-[220px] w-full aspect-auto" data-testid="ticketing-location-chart">
-              <BarChart accessibilityLayer data={dashboard.location_breakdown} layout="vertical" margin={{ top: 6, right: 58, left: 12, bottom: 0 }}>
+              <BarChart accessibilityLayer data={locationRows} layout="vertical" margin={{ top: 6, right: 58, left: 12, bottom: 0 }} aria-label={`Kabupaten/Kota Distribution by ${locationMetricOption.label}`}>
                 <CartesianGrid horizontal={false} stroke="var(--chart-grid)" strokeDasharray="3 5" />
                 <XAxis type="number" tickLine={false} axisLine={false} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
                 <YAxis type="category" dataKey="label" width={100} interval={0} tickLine={false} axisLine={false} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
                 <StandardTooltip />
-                <Bar dataKey="tickets" fill="var(--color-tickets)" radius={DASHBOARD_BAR_RADIUS} isAnimationActive={false}>
-                  <LabelList dataKey="tickets" content={<EndBarValueLabel />} />
+                <Bar dataKey={locationMetric} fill={`var(--color-${locationMetric})`} radius={DASHBOARD_BAR_RADIUS} isAnimationActive={false}>
+                  <LabelList dataKey={locationMetric} content={<EndBarValueLabel />} />
                 </Bar>
               </BarChart>
             </ChartContainer>

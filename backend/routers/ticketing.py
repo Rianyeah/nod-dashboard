@@ -26,6 +26,7 @@ from models.ticketing import (
     TicketingTicketResponse,
 )
 from periods import MonthPeriod, build_period_meta, resolve_month_period
+from ticketing_metrics import rank_fop_performance, resolve_trend_granularity
 
 router = APIRouter(prefix="/ticketing", tags=["Ticketing"])
 
@@ -73,7 +74,7 @@ def build_filter_params(
     nop: str | None = None,
     cluster_to: str | None = None,
     kategori_tt: str | None = None,
-    sla_status: str | None = None,
+    takeover: str | None = None,
     ticket_swfm_status: str | None = None,
     backup_sukses: str | None = None,
     rc_category: str | None = None,
@@ -87,7 +88,7 @@ def build_filter_params(
         "nop": nop,
         "cluster_to": cluster_to,
         "kategori_tt": kategori_tt,
-        "sla_status": sla_status,
+        "takeover": takeover,
         "ticket_swfm_status": ticket_swfm_status,
         "backup_sukses": backup_sukses,
         "rc_category": rc_category,
@@ -111,8 +112,8 @@ def build_filter_clause(params: dict) -> str:
         clauses.append("t.cluster_to = :cluster_to")
     if params.get("kategori_tt"):
         clauses.append(f"{normalize_category_sql('t.kategori_tt')} = :kategori_tt")
-    if params.get("sla_status"):
-        clauses.append("t.sla_status = :sla_status")
+    if params.get("takeover"):
+        clauses.append("UPPER(TRIM(t.takeover)) = UPPER(TRIM(:takeover))")
     if params.get("ticket_swfm_status"):
         clauses.append("t.ticket_swfm_status = :ticket_swfm_status")
     if params.get("backup_sukses"):
@@ -237,11 +238,11 @@ SELECT
         ORDER BY 1
     ) AS categories,
     ARRAY(
-        SELECT DISTINCT NULLIF(TRIM(sla_status), '')
+        SELECT DISTINCT NULLIF(UPPER(TRIM(takeover)), '')
         FROM {TABLE_NAME}
-        WHERE NULLIF(TRIM(sla_status), '') IS NOT NULL
+        WHERE NULLIF(TRIM(takeover), '') IS NOT NULL
         ORDER BY 1
-    ) AS sla_statuses,
+    ) AS takeovers,
     ARRAY(
         SELECT DISTINCT NULLIF(TRIM(ticket_swfm_status), '')
         FROM {TABLE_NAME}
@@ -279,6 +280,10 @@ SELECT
     COUNT(*) FILTER (WHERE sla_status = 'OUT SLA') AS out_sla_tickets,
     COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE sla_status = 'OUT SLA') / NULLIF(COUNT(*), 0), 2), 0)::float AS out_sla_rate,
     (
+        AVG(extract(epoch FROM mttr))
+        FILTER (WHERE mttr IS NOT NULL AND extract(epoch FROM mttr) >= 0)
+    ) / 3600 AS average_mttr_hours,
+    (
         percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM mttr))
         FILTER (WHERE mttr IS NOT NULL AND extract(epoch FROM mttr) >= 0)
     ) / 3600 AS median_mttr_hours,
@@ -292,8 +297,8 @@ SELECT
     COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE backup_sukses = 'BU Genset') / NULLIF(COUNT(*), 0), 2), 0)::float AS backup_sukses_rate,
     COUNT(*) FILTER (WHERE is_escalate = true) AS escalated_tickets,
     COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE is_escalate = true) / NULLIF(COUNT(*), 0), 2), 0)::float AS escalated_rate,
-    COUNT(*) FILTER (WHERE takeover = 'TAKE OVER') AS manual_takeover_tickets,
-    COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE takeover = 'TAKE OVER') / NULLIF(COUNT(*), 0), 2), 0)::float AS manual_takeover_rate,
+    COUNT(*) FILTER (WHERE UPPER(TRIM(takeover)) = 'TAKE OVER') AS manual_takeover_tickets,
+    COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE UPPER(TRIM(takeover)) = 'TAKE OVER') / NULLIF(COUNT(*), 0), 2), 0)::float AS manual_takeover_rate,
     COUNT(*) FILTER (WHERE ticket_swfm_status = 'CLOSED') AS closed_tickets,
     COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE ticket_swfm_status = 'CLOSED') / NULLIF(COUNT(*), 0), 2), 0)::float AS closed_rate,
     COUNT(*) FILTER (WHERE ticket_swfm_status = 'CANCELED') AS canceled_tickets,
@@ -308,6 +313,13 @@ WHERE 1=1
 {filter_clause}
 """
 
+TREND_BUCKET_SQL = {
+    "day": ("day", "DD Mon"),
+    "week": ("week", "DD Mon"),
+    "month": ("month", "Mon YYYY"),
+}
+
+
 TREND_QUERY = """
 WITH base AS (
     SELECT t.*, {category_expr} AS ticket_category_label
@@ -316,8 +328,8 @@ WITH base AS (
     {filter_clause}
 )
 SELECT
-    date_trunc('day', created_at)::date AS day,
-    to_char(date_trunc('day', created_at), 'DD Mon') AS label,
+    date_trunc('{trend_unit}', created_at)::date AS day,
+    to_char(date_trunc('{trend_unit}', created_at), '{trend_label_format}') AS label,
     COUNT(*) FILTER (WHERE ticket_category_label = 'BPS') AS bps,
     COUNT(*) FILTER (WHERE ticket_category_label = 'TS') AS ts,
     COUNT(*) AS total
@@ -354,13 +366,34 @@ WITH base AS (
 SELECT
     'Kabupaten/Kota Distribution' AS breakdown_title,
     coalesce(NULLIF(TRIM(t.kabupaten_kota), ''), 'Unknown') AS label,
-    COUNT(*) AS tickets,
-    COUNT(*) FILTER (WHERE t.sla_status = 'OUT SLA') AS out_sla,
-    COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE t.sla_status = 'OUT SLA') / NULLIF(COUNT(*), 0), 2), 0)::float AS out_sla_rate
+    COUNT(*) FILTER (WHERE UPPER(TRIM(t.takeover)) = 'TAKE OVER') AS takeover_tickets,
+    COUNT(*) FILTER (WHERE UPPER(TRIM(t.visitation)) = 'VISIT SITE') AS visitation_tickets,
+    COUNT(*) FILTER (WHERE UPPER(TRIM(t.backup_sukses)) = 'BU GENSET') AS backup_sukses_tickets,
+    COUNT(*) FILTER (WHERE t.is_escalate IS TRUE) AS escalated_tickets
 FROM base t
 GROUP BY 1, 2
-ORDER BY tickets DESC, label
-LIMIT 12
+ORDER BY label
+"""
+
+FOP_PERFORMANCE_QUERY = """
+WITH base AS (
+    SELECT t.*
+    FROM public.ticketing_fault_center t
+    WHERE NULLIF(TRIM(t.pic_take_over_ticket), '') IS NOT NULL
+    {filter_clause}
+)
+SELECT
+    TRIM(t.pic_take_over_ticket) AS pic,
+    COUNT(*) FILTER (WHERE UPPER(TRIM(t.takeover)) = 'TAKE OVER') AS takeover_tickets,
+    COUNT(*) FILTER (WHERE UPPER(TRIM(t.visitation)) = 'VISIT SITE') AS visitation_tickets,
+    COUNT(*) FILTER (WHERE UPPER(TRIM(t.backup_sukses)) = 'BU GENSET') AS backup_sukses_tickets,
+    (
+        AVG(extract(epoch FROM t.respon_time))
+        FILTER (WHERE t.respon_time IS NOT NULL AND extract(epoch FROM t.respon_time) >= 0)
+    ) / 60 AS average_response_minutes
+FROM base t
+GROUP BY 1
+ORDER BY pic
 """
 
 VISITING_BACKUP_BY_KABUPATEN_QUERY = """
@@ -565,7 +598,7 @@ def shared_query_params(
     nop: str | None = Query(None),
     cluster_to: str | None = Query(None),
     kategori_tt: str | None = Query(None),
-    sla_status: str | None = Query(None),
+    takeover: str | None = Query(None),
     ticket_swfm_status: str | None = Query(None),
     backup_sukses: str | None = Query(None),
     rc_category: str | None = Query(None),
@@ -591,7 +624,7 @@ def shared_query_params(
         nop=nop,
         cluster_to=cluster_to,
         kategori_tt=kategori_tt,
-        sla_status=sla_status,
+        takeover=takeover,
         ticket_swfm_status=ticket_swfm_status,
         backup_sukses=backup_sukses,
         rc_category=rc_category,
@@ -617,7 +650,7 @@ async def get_ticketing_filters(
     session: AsyncSession = Depends(get_session),
     response: Response = None,
 ):
-    cache_key = redis_cache.make_key("filters", "ticketing")
+    cache_key = redis_cache.make_key("filters", "ticketing-v2")
     cache_status, cached_value = await redis_cache.get_json(cache_key)
     if cache_status == CACHE_HIT:
         if response is not None:
@@ -646,6 +679,17 @@ async def get_ticketing_dashboard(
     filter_clause = build_filter_clause(params)
     category_expr = normalize_category_sql("t.kategori_tt")
     sql_params = {**params, "distribution_limit": 12}
+    period = params.get("_period")
+    trend_granularity = resolve_trend_granularity(
+        month_count=(
+            period.month_count
+            if period
+            else (1 if params.get("tahun") and params.get("bulan") else None)
+        ),
+        start_date=params.get("start_date"),
+        end_date=params.get("end_date"),
+    )
+    trend_unit, trend_label_format = TREND_BUCKET_SQL[trend_granularity]
 
     summary_result = await session.execute(
         text(DASHBOARD_SUMMARY_QUERY.format(filter_clause=filter_clause, category_expr=category_expr)),
@@ -673,7 +717,12 @@ async def get_ticketing_dashboard(
 
     trend = await rows_to_dicts(
         session,
-        TREND_QUERY.format(filter_clause=filter_clause, category_expr=category_expr),
+        TREND_QUERY.format(
+            filter_clause=filter_clause,
+            category_expr=category_expr,
+            trend_unit=trend_unit,
+            trend_label_format=trend_label_format,
+        ),
         sql_params,
     )
     sla_distribution = await rows_to_dicts(
@@ -721,10 +770,17 @@ async def get_ticketing_dashboard(
         TOP_SITES_QUERY.format(filter_clause=filter_clause),
         sql_params,
     )
+    fop_rows = await rows_to_dicts(
+        session,
+        FOP_PERFORMANCE_QUERY.format(filter_clause=filter_clause),
+        sql_params,
+    )
+    fop_performance = rank_fop_performance(fop_rows)
 
     return TicketingDashboard(
         summary=summary,
         trend=trend,
+        trend_granularity=trend_granularity,
         sla_distribution=sla_distribution,
         backup_distribution=backup_distribution,
         location_breakdown_title=location_breakdown_title,
@@ -733,6 +789,7 @@ async def get_ticketing_dashboard(
         rc_category_pareto=rc_category_pareto,
         type_ticket_distribution=type_ticket_distribution,
         top_sites=top_sites,
+        fop_performance=fop_performance,
         period_meta=await ticketing_period_meta(session, params),
     )
 

@@ -44,7 +44,8 @@ describe('Ticketing dashboard contracts', () => {
     assert.equal(existsSync(pagePath), true);
     const page = readFileSync(pagePath, 'utf8');
     const charts = src('features', 'ticketing', 'TicketingCharts.jsx');
-    const feature = `${page}\n${charts}`;
+    const chartUtils = src('features', 'ticketing', 'ticketingChartUtils.js');
+    const feature = `${page}\n${charts}\n${chartUtils}`;
 
     for (const label of [
       'Ticketing',
@@ -53,7 +54,7 @@ describe('Ticketing dashboard contracts', () => {
       'Tanggal Kustom',
       'Cluster TO',
       'Kategori Ticket',
-      'SLA Status',
+      'Takeover',
       'Ticket Status',
       'Backup Sukses',
       'RC Category',
@@ -73,14 +74,31 @@ describe('Ticketing dashboard contracts', () => {
       'RC Category Pareto',
       'Tipe Ticket INAP',
       'Top Problem Sites',
+      'Performance Tim FOP',
+      'Performance Score',
       'Ticket List',
     ]) {
       assert.match(feature, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     }
 
     assert.doesNotMatch(page, /Scorecard title="Median MTTR"/);
+    assert.doesNotMatch(page, /Scorecard title="Response P90"/);
+    assert.match(page, /Scorecard title="Average MTTR"/);
+    assert.match(page, /summary\?\.average_mttr_hours/);
     assert.match(page, /summary\?\.visitation_rate/);
     assert.match(page, /summary\?\.visitation_tickets/);
+    assert.match(page, /advancedFilters\.takeover/);
+    assert.match(page, /filterOptions\.takeovers/);
+    assert.doesNotMatch(page, /label="SLA Status"/);
+    assert.match(page, /dashboard\?\.fop_performance/);
+
+    const manualIndex = page.indexOf('Scorecard title="Manual Takeover"');
+    const visitationIndex = page.indexOf('title="Visitation Rate"');
+    const escalatedIndex = page.indexOf('Scorecard title="Escalated"');
+    const outSlaIndex = page.indexOf('Scorecard title="OUT SLA Rate"');
+    const averageMttrIndex = page.indexOf('Scorecard title="Average MTTR"');
+    assert.ok(manualIndex > -1 && manualIndex < visitationIndex);
+    assert.ok(outSlaIndex > escalatedIndex && outSlaIndex < averageMttrIndex);
 
     for (const id of [
       'ticketing-start-date',
@@ -89,7 +107,7 @@ describe('Ticketing dashboard contracts', () => {
       'ticketing-nop',
       'ticketing-cluster',
       'ticketing-category',
-      'ticketing-sla',
+      'ticketing-takeover',
       'ticketing-status',
       'ticketing-backup',
       'ticketing-rc-category',
@@ -143,7 +161,7 @@ describe('Ticketing dashboard contracts', () => {
     assert.match(charts, /activeSlaIndex/);
     assert.match(charts, /activeShape=\{renderActivePieShape\}/);
     assert.match(feature, /HelpCircle/);
-    assert.match(page, /Response P90 menghitung persentil ke-90/);
+    assert.match(page, /Average MTTR menghitung rata-rata durasi MTTR valid/);
     assert.match(charts, /Pareto menampilkan kontribusi kumulatif/);
     assert.match(charts, /ComposedChart/);
     assert.match(charts, /dataKey="cumulative_rate"/);
@@ -253,5 +271,28 @@ describe('Ticketing dashboard contracts', () => {
     assert.doesNotMatch(charts, /strokeDasharray="3 3"/);
     assert.match(charts, /var\(--chart-axis\)/);
     assert.doesNotMatch(surface, /box-shadow:\s*0 0|shadow-\[0_0_/i);
+  });
+
+  it('renders adaptive trend titles and selectable Kabupaten/Kota metrics', () => {
+    const charts = src('features', 'ticketing', 'TicketingCharts.jsx');
+    const chartUtils = src('features', 'ticketing', 'ticketingChartUtils.js');
+    const feature = `${charts}\n${chartUtils}`;
+
+    assert.match(charts, /trend_granularity/);
+    assert.match(charts, /getTicketTrendTitle/);
+    assert.match(charts, /locationMetric/);
+    assert.match(charts, /LOCATION_METRICS/);
+    assert.match(charts, /getTopLocationRows/);
+    assert.match(charts, /SelectTrigger/);
+    assert.match(charts, /Kabupaten\/Kota metric/);
+
+    for (const key of [
+      'takeover_tickets',
+      'visitation_tickets',
+      'backup_sukses_tickets',
+      'escalated_tickets',
+    ]) {
+      assert.ok(feature.includes(key), key);
+    }
   });
 });
