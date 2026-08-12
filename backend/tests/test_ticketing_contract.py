@@ -112,6 +112,11 @@ class TicketingContractTest(unittest.TestCase):
         self.assertIn("avg(extract(epoch from mttr))", dashboard_query)
         self.assertIn("percentile_cont(0.5)", dashboard_query)
         self.assertIn("percentile_cont(0.9)", dashboard_query)
+        self.assertIn(
+            "upper(trim(takeover)) = 'take over'",
+            dashboard_query,
+        )
+        self.assertNotIn("where takeover = 'take over'", dashboard_query)
 
         trend_query = source.split('TREND_QUERY = """', 1)[1].split('"""', 1)[0].lower()
         self.assertIn("date_trunc('{trend_unit}', created_at)", trend_query)
@@ -119,6 +124,10 @@ class TicketingContractTest(unittest.TestCase):
         self.assertIn("group by 1, 2", trend_query)
         self.assertIn("TREND_BUCKET_SQL", source)
         self.assertIn("resolve_trend_granularity", source)
+        self.assertIn(
+            '1 if params.get("tahun") and params.get("bulan") else None',
+            source,
+        )
 
     def test_location_breakdown_is_always_kabupaten_or_kota(self):
         source = self.read_router_source()
@@ -234,6 +243,7 @@ class TicketingContractTest(unittest.TestCase):
         self.assertIn("LATEST_MONTH_DEFAULT_QUERY", source)
         self.assertIn("default_start_date", source)
         self.assertIn("default_end_date", source)
+        self.assertIn('make_key("filters", "ticketing-v2")', source)
 
     def test_summary_exposes_total_ticket_mom_metrics(self):
         source = self.read_router_source()

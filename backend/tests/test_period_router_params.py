@@ -4,7 +4,44 @@ import pytest
 from fastapi import HTTPException
 
 from routers.activity_enom import base_params as activity_base_params, build_filter_clause as activity_filter_clause
-from routers.ticketing import previous_month_bounds, shared_query_params
+from routers.ticketing import get_ticketing_dashboard, previous_month_bounds, shared_query_params
+
+
+class DashboardRow:
+    def __init__(self, values):
+        self._mapping = values
+
+
+class DashboardResult:
+    def __init__(self, rows=None):
+        self.rows = rows or []
+
+    def first(self):
+        return self.rows[0] if self.rows else None
+
+    def fetchall(self):
+        return self.rows
+
+    def scalar(self):
+        return None
+
+
+class DashboardSession:
+    def __init__(self):
+        self.queries = []
+        self.call_count = 0
+
+    async def execute(self, statement, params=None):
+        self.queries.append(str(statement))
+        self.call_count += 1
+        if self.call_count == 1:
+            return DashboardResult([
+                DashboardRow({
+                    "total_tickets": 0,
+                    "ticket_category": {"bps": 0, "ts": 0, "total": 0},
+                })
+            ])
+        return DashboardResult()
 
 
 def ticketing_params(**overrides):
@@ -40,6 +77,24 @@ def test_ticketing_comparison_has_identical_month_count():
     previous = previous_month_bounds(params)
     assert previous["start_date"] == date(2025, 7, 1)
     assert previous["end_date"] == date(2025, 12, 31)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "params",
+    [
+        ticketing_params(tahun=2026),
+        ticketing_params(),
+    ],
+    ids=["legacy-year", "unbounded"],
+)
+async def test_ticketing_dashboard_uses_monthly_trend_for_wide_legacy_ranges(params):
+    session = DashboardSession()
+
+    response = await get_ticketing_dashboard(params=params, session=session)
+
+    assert response.trend_granularity == "month"
+    assert "date_trunc('month', created_at)" in session.queries[1]
 
 
 @pytest.mark.parametrize(

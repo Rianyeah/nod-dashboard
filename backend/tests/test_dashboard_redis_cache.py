@@ -134,7 +134,7 @@ class DashboardRedisCacheTest(unittest.IsolatedAsyncioTestCase):
             "sites.py": "options",
             "impact_service.py": "impact-service",
             "transport_quality.py": "transport-quality",
-            "ticketing.py": "ticketing",
+            "ticketing.py": "ticketing-v2",
         }
         router_dir = BACKEND_DIR / "routers"
         for filename, resource in routes.items():

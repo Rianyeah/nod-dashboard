@@ -297,8 +297,8 @@ SELECT
     COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE backup_sukses = 'BU Genset') / NULLIF(COUNT(*), 0), 2), 0)::float AS backup_sukses_rate,
     COUNT(*) FILTER (WHERE is_escalate = true) AS escalated_tickets,
     COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE is_escalate = true) / NULLIF(COUNT(*), 0), 2), 0)::float AS escalated_rate,
-    COUNT(*) FILTER (WHERE takeover = 'TAKE OVER') AS manual_takeover_tickets,
-    COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE takeover = 'TAKE OVER') / NULLIF(COUNT(*), 0), 2), 0)::float AS manual_takeover_rate,
+    COUNT(*) FILTER (WHERE UPPER(TRIM(takeover)) = 'TAKE OVER') AS manual_takeover_tickets,
+    COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE UPPER(TRIM(takeover)) = 'TAKE OVER') / NULLIF(COUNT(*), 0), 2), 0)::float AS manual_takeover_rate,
     COUNT(*) FILTER (WHERE ticket_swfm_status = 'CLOSED') AS closed_tickets,
     COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE ticket_swfm_status = 'CLOSED') / NULLIF(COUNT(*), 0), 2), 0)::float AS closed_rate,
     COUNT(*) FILTER (WHERE ticket_swfm_status = 'CANCELED') AS canceled_tickets,
@@ -650,7 +650,7 @@ async def get_ticketing_filters(
     session: AsyncSession = Depends(get_session),
     response: Response = None,
 ):
-    cache_key = redis_cache.make_key("filters", "ticketing")
+    cache_key = redis_cache.make_key("filters", "ticketing-v2")
     cache_status, cached_value = await redis_cache.get_json(cache_key)
     if cache_status == CACHE_HIT:
         if response is not None:
@@ -681,7 +681,11 @@ async def get_ticketing_dashboard(
     sql_params = {**params, "distribution_limit": 12}
     period = params.get("_period")
     trend_granularity = resolve_trend_granularity(
-        month_count=period.month_count if period else (1 if params.get("bulan") else None),
+        month_count=(
+            period.month_count
+            if period
+            else (1 if params.get("tahun") and params.get("bulan") else None)
+        ),
         start_date=params.get("start_date"),
         end_date=params.get("end_date"),
     )

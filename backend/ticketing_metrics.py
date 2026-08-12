@@ -32,7 +32,9 @@ def resolve_trend_granularity(
         return "month"
 
     if start_date is None or end_date is None:
-        return "day"
+        # An unbounded or partially legacy request can span many months/years.
+        # Monthly buckets keep those supported compatibility paths bounded.
+        return "month"
 
     inclusive_days = (end_date - start_date).days + 1
     if inclusive_days <= 31:

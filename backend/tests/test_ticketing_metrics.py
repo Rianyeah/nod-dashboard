@@ -41,6 +41,9 @@ class TicketingMetricsTest(unittest.TestCase):
             "month",
         )
 
+    def test_unbounded_period_defaults_to_monthly_trend(self):
+        self.assertEqual(resolve_trend_granularity(), "month")
+
     def test_fop_score_uses_confirmed_weights_and_inverse_response(self):
         ranked = rank_fop_performance([
             {
