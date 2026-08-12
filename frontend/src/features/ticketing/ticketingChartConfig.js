@@ -15,6 +15,14 @@ export const TICKETING_CHART_COLORS = {
   fallback: DASHBOARD_CHART_COLORS.neutralMuted,
 };
 
+export const LOCATION_STACK_COLORS = Object.freeze([
+  TICKETING_CHART_COLORS.warning,
+  TICKETING_CHART_COLORS.fallback,
+  TICKETING_CHART_COLORS.bps,
+  TICKETING_CHART_COLORS.success,
+  TICKETING_CHART_COLORS.danger,
+]);
+
 export const ticketingChartConfig = {
   bps: { label: 'BPS', color: TICKETING_CHART_COLORS.bps },
   ts: { label: 'TS', color: TICKETING_CHART_COLORS.ts },

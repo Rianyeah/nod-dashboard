@@ -366,13 +366,46 @@ WITH base AS (
 SELECT
     'Kabupaten/Kota Distribution' AS breakdown_title,
     coalesce(NULLIF(TRIM(t.kabupaten_kota), ''), 'Unknown') AS label,
-    COUNT(*) FILTER (WHERE UPPER(TRIM(t.takeover)) = 'TAKE OVER') AS takeover_tickets,
-    COUNT(*) FILTER (WHERE UPPER(TRIM(t.visitation)) = 'VISIT SITE') AS visitation_tickets,
-    COUNT(*) FILTER (WHERE UPPER(TRIM(t.backup_sukses)) = 'BU GENSET') AS backup_sukses_tickets,
-    COUNT(*) FILTER (WHERE t.is_escalate IS TRUE) AS escalated_tickets
+    category.metric,
+    category.value,
+    COUNT(*) AS tickets
 FROM base t
-GROUP BY 1, 2
-ORDER BY label
+CROSS JOIN LATERAL (
+    VALUES
+        (
+            'takeover',
+            CASE
+                WHEN NULLIF(TRIM(t.takeover), '') IS NULL THEN 'Unknown'
+                ELSE UPPER(TRIM(t.takeover))
+            END
+        ),
+        (
+            'visitation',
+            CASE UPPER(TRIM(t.visitation))
+                WHEN 'VISIT SITE' THEN 'Visit site'
+                WHEN 'NOT VISIT' THEN 'Not Visit'
+                ELSE coalesce(NULLIF(TRIM(t.visitation), ''), 'Unknown')
+            END
+        ),
+        (
+            'backup_sukses',
+            CASE UPPER(TRIM(t.backup_sukses))
+                WHEN 'BU GENSET' THEN 'BU Genset'
+                WHEN 'NOT BU GENSET' THEN 'Not BU Genset'
+                ELSE coalesce(NULLIF(TRIM(t.backup_sukses), ''), 'Unknown')
+            END
+        ),
+        (
+            'escalate',
+            CASE
+                WHEN t.is_escalate IS TRUE THEN 'Escalated'
+                WHEN t.is_escalate IS FALSE THEN 'Not Escalated'
+                ELSE 'Unknown'
+            END
+        )
+) AS category(metric, value)
+GROUP BY 1, 2, 3, 4
+ORDER BY label, category.metric, tickets DESC, category.value
 """
 
 FOP_PERFORMANCE_QUERY = """
