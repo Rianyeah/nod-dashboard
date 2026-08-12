@@ -44,7 +44,8 @@ describe('Ticketing dashboard contracts', () => {
     assert.equal(existsSync(pagePath), true);
     const page = readFileSync(pagePath, 'utf8');
     const charts = src('features', 'ticketing', 'TicketingCharts.jsx');
-    const feature = `${page}\n${charts}`;
+    const chartUtils = src('features', 'ticketing', 'ticketingChartUtils.js');
+    const feature = `${page}\n${charts}\n${chartUtils}`;
 
     for (const label of [
       'Ticketing',
@@ -270,5 +271,28 @@ describe('Ticketing dashboard contracts', () => {
     assert.doesNotMatch(charts, /strokeDasharray="3 3"/);
     assert.match(charts, /var\(--chart-axis\)/);
     assert.doesNotMatch(surface, /box-shadow:\s*0 0|shadow-\[0_0_/i);
+  });
+
+  it('renders adaptive trend titles and selectable Kabupaten/Kota metrics', () => {
+    const charts = src('features', 'ticketing', 'TicketingCharts.jsx');
+    const chartUtils = src('features', 'ticketing', 'ticketingChartUtils.js');
+    const feature = `${charts}\n${chartUtils}`;
+
+    assert.match(charts, /trend_granularity/);
+    assert.match(charts, /getTicketTrendTitle/);
+    assert.match(charts, /locationMetric/);
+    assert.match(charts, /LOCATION_METRICS/);
+    assert.match(charts, /getTopLocationRows/);
+    assert.match(charts, /SelectTrigger/);
+    assert.match(charts, /Kabupaten\/Kota metric/);
+
+    for (const key of [
+      'takeover_tickets',
+      'visitation_tickets',
+      'backup_sukses_tickets',
+      'escalated_tickets',
+    ]) {
+      assert.ok(feature.includes(key), key);
+    }
   });
 });
