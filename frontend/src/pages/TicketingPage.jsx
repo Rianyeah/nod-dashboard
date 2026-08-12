@@ -53,7 +53,7 @@ const TABLE_LIMIT = 20;
 const EMPTY_TICKETING_ADVANCED_FILTERS = {
   cluster_to: '',
   kategori_tt: '',
-  sla_status: '',
+  takeover: '',
   ticket_swfm_status: '',
   backup_sukses: '',
   rc_category: '',
@@ -261,7 +261,7 @@ function TicketingDashboard() {
     nops: [],
     clusters: [],
     categories: [],
-    sla_statuses: [],
+    takeovers: [],
     ticket_statuses: [],
     backup_sukses: [],
     rc_categories: [],
@@ -331,7 +331,7 @@ function TicketingDashboard() {
     nop: selectedNop || undefined,
     cluster_to: advancedFilters.cluster_to || undefined,
     kategori_tt: advancedFilters.kategori_tt || undefined,
-    sla_status: advancedFilters.sla_status || undefined,
+    takeover: advancedFilters.takeover || undefined,
     ticket_swfm_status: advancedFilters.ticket_swfm_status || undefined,
     backup_sukses: advancedFilters.backup_sukses || undefined,
     rc_category: advancedFilters.rc_category || undefined,
@@ -509,12 +509,12 @@ function TicketingDashboard() {
                           allLabel="Semua Kategori"
                         />
                         <DashboardFilterSelect
-                          id="ticketing-sla"
-                          label="SLA Status"
-                          value={draftValues.sla_status}
-                          onChange={(value) => setDraftValue('sla_status', value)}
-                          options={filterOptions.sla_statuses}
-                          allLabel="Semua SLA"
+                          id="ticketing-takeover"
+                          label="Takeover"
+                          value={draftValues.takeover}
+                          onChange={(value) => setDraftValue('takeover', value)}
+                          options={filterOptions.takeovers}
+                          allLabel="Semua Takeover"
                         />
                         <DashboardFilterSelect
                           id="ticketing-status"
@@ -582,7 +582,7 @@ function TicketingDashboard() {
                   items={[
                     { key: 'cluster_to', label: 'Cluster', value: advancedFilters.cluster_to },
                     { key: 'kategori_tt', label: 'Kategori', value: advancedFilters.kategori_tt },
-                    { key: 'sla_status', label: 'SLA', value: advancedFilters.sla_status },
+                    { key: 'takeover', label: 'Takeover', value: advancedFilters.takeover },
                     { key: 'ticket_swfm_status', label: 'Status', value: advancedFilters.ticket_swfm_status },
                     { key: 'backup_sukses', label: 'Backup', value: advancedFilters.backup_sukses },
                     { key: 'rc_category', label: 'RC', value: advancedFilters.rc_category },
@@ -662,7 +662,7 @@ function TicketingDashboard() {
               <span style={{ color: TICKETING_CHART_COLORS.ts }}>TS: {formatNumber(ticketCategory.ts)}</span>
             </div>
           </Scorecard>
-          <Scorecard title="OUT SLA Rate" value={formatPercent(summary?.out_sla_rate)} subtitle={`${formatNumber(summary?.out_sla_tickets)} OUT SLA`} icon={ShieldX} accent={TICKETING_CHART_COLORS.danger} glow="rgba(239,68,68,0.14)" />
+          <Scorecard title="Manual Takeover" value={formatNumber(summary?.manual_takeover_tickets)} subtitle={formatPercent(summary?.manual_takeover_rate)} icon={Zap} accent={TICKETING_CHART_COLORS.total} glow="rgba(251,191,36,0.14)" />
           <Scorecard
             title="Visitation Rate"
             value={formatPercent(summary?.visitation_rate)}
@@ -673,13 +673,13 @@ function TicketingDashboard() {
           />
           <Scorecard title="Backup Sukses Rate" value={formatPercent(summary?.backup_sukses_rate)} subtitle={`${formatNumber(summary?.backup_sukses_tickets)} BU Genset`} icon={ShieldCheck} accent={TICKETING_CHART_COLORS.success} glow="rgba(16,185,129,0.14)" />
           <Scorecard title="Escalated" value={formatNumber(summary?.escalated_tickets)} subtitle={formatPercent(summary?.escalated_rate)} icon={AlertTriangle} accent={TICKETING_CHART_COLORS.warning} glow="rgba(245,158,11,0.14)" />
-          <Scorecard title="Manual Takeover" value={formatNumber(summary?.manual_takeover_tickets)} subtitle={formatPercent(summary?.manual_takeover_rate)} icon={Zap} accent={TICKETING_CHART_COLORS.total} glow="rgba(251,191,36,0.14)" />
-          <Scorecard title="Response P90" value={formatMinutes(summary?.p90_response_minutes)} subtitle="Clean response time" icon={Clock3} accent={TICKETING_CHART_COLORS.bps} glow="rgba(59,130,246,0.14)">
+          <Scorecard title="OUT SLA Rate" value={formatPercent(summary?.out_sla_rate)} subtitle={`${formatNumber(summary?.out_sla_tickets)} OUT SLA`} icon={ShieldX} accent={TICKETING_CHART_COLORS.danger} glow="rgba(239,68,68,0.14)" />
+          <Scorecard title="Average MTTR" icon={Clock3} accent={TICKETING_CHART_COLORS.bps} glow="rgba(59,130,246,0.14)">
             <div className="mt-2 flex items-center gap-2">
               <p className="truncate font-mono text-[28px] font-bold leading-none tabular-nums tracking-tight" style={{ color: TICKETING_CHART_COLORS.bps }}>
-                {formatMinutes(summary?.p90_response_minutes)}
+                {formatHours(summary?.average_mttr_hours)}
               </p>
-              <HelpHint text="Response P90 menghitung persentil ke-90 dari waktu respons ticket yang valid." />
+              <HelpHint text="Average MTTR menghitung rata-rata durasi MTTR valid pada filter aktif." />
             </div>
           </Scorecard>
           <Scorecard title="Closed Rate" value={formatPercent(summary?.closed_rate)} subtitle={`${formatNumber(summary?.closed_tickets)} closed`} icon={CircleCheck} accent={TICKETING_CHART_COLORS.success} glow="rgba(16,185,129,0.14)" />
@@ -689,36 +689,74 @@ function TicketingDashboard() {
         <TicketingCharts dashboard={dashboard} />
 
         <section className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-          <DashboardChartPanel title="Top Problem Sites" icon={AlertTriangle}>
-            <div className="overflow-auto">
-              <table className="w-full min-w-[640px] text-left text-xs">
-                <thead className="border-b border-[var(--border)] text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
-                  <tr>
-                    <th className="px-3 py-2">Site ID</th>
-                    <th className="px-3 py-2">Site Name</th>
-                    <th className="px-3 py-2">Cluster</th>
-                    <th className="px-3 py-2 text-right">Tickets</th>
-                    <th className="px-3 py-2 text-right">OUT SLA</th>
-                    <th className="px-3 py-2 text-right">P90 MTTR</th>
-                    <th className="px-3 py-2 text-right">Backup</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--border)]">
-                  {(dashboard?.top_sites || []).map((site) => (
-                    <tr key={site.site_id} className="hover:bg-[var(--bg-elevated)]/50">
-                      <td className="px-3 py-2 font-mono font-semibold text-[var(--primary-light)]">{site.site_id}</td>
-                      <td className="px-3 py-2">{asDisplay(site.site_name)}</td>
-                      <td className="px-3 py-2">{asDisplay(site.cluster_to)}</td>
-                      <td className="px-3 py-2 text-right font-mono">{formatNumber(site.tickets)}</td>
-                      <td className="px-3 py-2 text-right font-mono text-red-300">{formatPercent(site.out_sla_rate)}</td>
-                      <td className="px-3 py-2 text-right font-mono">{formatHours(site.p90_mttr_hours)}</td>
-                      <td className="px-3 py-2 text-right font-mono text-emerald-300">{formatPercent(site.backup_sukses_rate)}</td>
+          <div className="grid content-start gap-4">
+            <DashboardChartPanel title="Top Problem Sites" icon={AlertTriangle}>
+              <div className="overflow-auto">
+                <table className="w-full min-w-[640px] text-left text-xs">
+                  <thead className="border-b border-[var(--border)] text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
+                    <tr>
+                      <th className="px-3 py-2">Site ID</th>
+                      <th className="px-3 py-2">Site Name</th>
+                      <th className="px-3 py-2">Cluster</th>
+                      <th className="px-3 py-2 text-right">Tickets</th>
+                      <th className="px-3 py-2 text-right">OUT SLA</th>
+                      <th className="px-3 py-2 text-right">P90 MTTR</th>
+                      <th className="px-3 py-2 text-right">Backup</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </DashboardChartPanel>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--border)]">
+                    {(dashboard?.top_sites || []).map((site) => (
+                      <tr key={site.site_id} className="hover:bg-[var(--bg-elevated)]/50">
+                        <td className="px-3 py-2 font-mono font-semibold text-[var(--primary-light)]">{site.site_id}</td>
+                        <td className="px-3 py-2">{asDisplay(site.site_name)}</td>
+                        <td className="px-3 py-2">{asDisplay(site.cluster_to)}</td>
+                        <td className="px-3 py-2 text-right font-mono">{formatNumber(site.tickets)}</td>
+                        <td className="px-3 py-2 text-right font-mono text-red-300">{formatPercent(site.out_sla_rate)}</td>
+                        <td className="px-3 py-2 text-right font-mono">{formatHours(site.p90_mttr_hours)}</td>
+                        <td className="px-3 py-2 text-right font-mono text-emerald-300">{formatPercent(site.backup_sukses_rate)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </DashboardChartPanel>
+
+            <DashboardChartPanel title="Performance Tim FOP" icon={Zap}>
+              <div className="max-h-[420px] overflow-auto">
+                <table className="w-full min-w-[760px] text-left text-xs">
+                  <thead className="sticky top-0 z-10 border-b border-[var(--border)] bg-[var(--bg-surface)] text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
+                    <tr>
+                      <th className="px-3 py-2 text-right">Rank</th>
+                      <th className="px-3 py-2">PIC</th>
+                      <th className="px-3 py-2 text-right">Performance Score</th>
+                      <th className="px-3 py-2 text-right">Takeover</th>
+                      <th className="px-3 py-2 text-right">Visitation</th>
+                      <th className="px-3 py-2 text-right">Backup Sukses</th>
+                      <th className="px-3 py-2 text-right">Average Response Time</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--border)]">
+                    {(dashboard?.fop_performance || []).map((member) => (
+                      <tr key={member.pic} className="hover:bg-[var(--bg-elevated)]/50">
+                        <td className="px-3 py-2 text-right font-mono text-[var(--text-muted)]">{member.rank}</td>
+                        <td className="px-3 py-2 font-semibold text-[var(--text-primary)]">{member.pic}</td>
+                        <td className="px-3 py-2 text-right font-mono font-bold text-[var(--primary-light)]">{Number(member.performance_score || 0).toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right font-mono">{formatNumber(member.takeover_tickets)}</td>
+                        <td className="px-3 py-2 text-right font-mono">{formatNumber(member.visitation_tickets)}</td>
+                        <td className="px-3 py-2 text-right font-mono">{formatNumber(member.backup_sukses_tickets)}</td>
+                        <td className="px-3 py-2 text-right font-mono">{formatMinutes(member.average_response_minutes)}</td>
+                      </tr>
+                    ))}
+                    {!dashboard?.fop_performance?.length ? (
+                      <tr>
+                        <td colSpan={7} className="px-3 py-8 text-center text-[var(--text-muted)]">Tidak ada PIC takeover pada filter aktif.</td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
+            </DashboardChartPanel>
+          </div>
 
           <section className="glass-card overflow-hidden">
             <DashboardTableToolbar

@@ -53,7 +53,7 @@ describe('Ticketing dashboard contracts', () => {
       'Tanggal Kustom',
       'Cluster TO',
       'Kategori Ticket',
-      'SLA Status',
+      'Takeover',
       'Ticket Status',
       'Backup Sukses',
       'RC Category',
@@ -73,14 +73,31 @@ describe('Ticketing dashboard contracts', () => {
       'RC Category Pareto',
       'Tipe Ticket INAP',
       'Top Problem Sites',
+      'Performance Tim FOP',
+      'Performance Score',
       'Ticket List',
     ]) {
       assert.match(feature, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     }
 
     assert.doesNotMatch(page, /Scorecard title="Median MTTR"/);
+    assert.doesNotMatch(page, /Scorecard title="Response P90"/);
+    assert.match(page, /Scorecard title="Average MTTR"/);
+    assert.match(page, /summary\?\.average_mttr_hours/);
     assert.match(page, /summary\?\.visitation_rate/);
     assert.match(page, /summary\?\.visitation_tickets/);
+    assert.match(page, /advancedFilters\.takeover/);
+    assert.match(page, /filterOptions\.takeovers/);
+    assert.doesNotMatch(page, /label="SLA Status"/);
+    assert.match(page, /dashboard\?\.fop_performance/);
+
+    const manualIndex = page.indexOf('Scorecard title="Manual Takeover"');
+    const visitationIndex = page.indexOf('title="Visitation Rate"');
+    const escalatedIndex = page.indexOf('Scorecard title="Escalated"');
+    const outSlaIndex = page.indexOf('Scorecard title="OUT SLA Rate"');
+    const averageMttrIndex = page.indexOf('Scorecard title="Average MTTR"');
+    assert.ok(manualIndex > -1 && manualIndex < visitationIndex);
+    assert.ok(outSlaIndex > escalatedIndex && outSlaIndex < averageMttrIndex);
 
     for (const id of [
       'ticketing-start-date',
@@ -89,7 +106,7 @@ describe('Ticketing dashboard contracts', () => {
       'ticketing-nop',
       'ticketing-cluster',
       'ticketing-category',
-      'ticketing-sla',
+      'ticketing-takeover',
       'ticketing-status',
       'ticketing-backup',
       'ticketing-rc-category',
@@ -143,7 +160,7 @@ describe('Ticketing dashboard contracts', () => {
     assert.match(charts, /activeSlaIndex/);
     assert.match(charts, /activeShape=\{renderActivePieShape\}/);
     assert.match(feature, /HelpCircle/);
-    assert.match(page, /Response P90 menghitung persentil ke-90/);
+    assert.match(page, /Average MTTR menghitung rata-rata durasi MTTR valid/);
     assert.match(charts, /Pareto menampilkan kontribusi kumulatif/);
     assert.match(charts, /ComposedChart/);
     assert.match(charts, /dataKey="cumulative_rate"/);
