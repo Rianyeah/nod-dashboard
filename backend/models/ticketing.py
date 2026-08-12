@@ -83,10 +83,9 @@ class TicketingVisitingBackupItem(BaseModel):
 
 class TicketingLocationBreakdownItem(BaseModel):
     label: str
-    takeover_tickets: int = 0
-    visitation_tickets: int = 0
-    backup_sukses_tickets: int = 0
-    escalated_tickets: int = 0
+    metric: str
+    value: str
+    tickets: int = 0
 
 
 class TicketingFopPerformanceItem(BaseModel):

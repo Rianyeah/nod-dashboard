@@ -144,7 +144,6 @@ describe('Ticketing dashboard contracts', () => {
   it('shows Ticketing equal-period/category percentages, SLA pie hover, and help hints', () => {
     const page = src('pages', 'TicketingPage.jsx');
     const charts = src('features', 'ticketing', 'TicketingCharts.jsx');
-    const feature = `${page}\n${charts}`;
 
     assert.match(page, /total_tickets_mom_delta/);
     assert.match(page, /total_tickets_mom_rate/);
@@ -160,8 +159,8 @@ describe('Ticketing dashboard contracts', () => {
     assert.match(charts, /getSlaStatusColor/);
     assert.match(charts, /activeSlaIndex/);
     assert.match(charts, /activeShape=\{renderActivePieShape\}/);
-    assert.match(feature, /HelpCircle/);
-    assert.match(page, /Average MTTR menghitung rata-rata durasi MTTR valid/);
+    assert.match(charts, /HelpCircle/);
+    assert.doesNotMatch(page, /Average MTTR menghitung rata-rata durasi MTTR valid/);
     assert.match(charts, /Pareto menampilkan kontribusi kumulatif/);
     assert.match(charts, /ComposedChart/);
     assert.match(charts, /dataKey="cumulative_rate"/);
@@ -282,17 +281,31 @@ describe('Ticketing dashboard contracts', () => {
     assert.match(charts, /getTicketTrendTitle/);
     assert.match(charts, /locationMetric/);
     assert.match(charts, /LOCATION_METRICS/);
-    assert.match(charts, /getTopLocationRows/);
+    assert.match(charts, /buildStackedLocationData/);
     assert.match(charts, /SelectTrigger/);
     assert.match(charts, /Kabupaten\/Kota metric/);
+    assert.match(charts, /stackId="location"/);
+    assert.match(charts, /DashboardChartLegend/);
 
     for (const key of [
-      'takeover_tickets',
-      'visitation_tickets',
-      'backup_sukses_tickets',
-      'escalated_tickets',
+      "value: 'takeover'",
+      "value: 'visitation'",
+      "value: 'backup_sukses'",
+      "value: 'escalate'",
     ]) {
       assert.ok(feature.includes(key), key);
     }
+  });
+
+  it('renders sortable FOP headers and approved threshold colors', () => {
+    const page = src('pages', 'TicketingPage.jsx');
+
+    assert.match(page, /sortFopRows/);
+    assert.match(page, /getFopMonthCount/);
+    assert.match(page, /getTakeoverThreshold/);
+    assert.match(page, /performance_score\s*>\s*50/);
+    assert.match(page, /takeover_tickets\s*>=\s*takeoverThreshold/);
+    assert.match(page, /aria-sort=/);
+    assert.match(page, /handleFopSort/);
   });
 });

@@ -131,22 +131,31 @@ class TicketingContractTest(unittest.TestCase):
 
     def test_location_breakdown_is_always_kabupaten_or_kota(self):
         source = self.read_router_source()
+        models = MODELS.read_text(encoding="utf-8")
 
         self.assertIn("LOCATION_BREAKDOWN_QUERY", source)
         self.assertIn("'Kabupaten/Kota Distribution'", source)
         self.assertIn("t.kabupaten_kota", source)
         self.assertNotIn("'NOP Distribution'", source)
 
-        location_query = source.split('LOCATION_BREAKDOWN_QUERY = """', 1)[1].split('"""', 1)[0]
-        for metric in [
-            "takeover_tickets",
-            "visitation_tickets",
-            "backup_sukses_tickets",
-            "escalated_tickets",
+        location_query = source.split('LOCATION_BREAKDOWN_QUERY = """', 1)[1].split('"""', 1)[0].lower()
+        for contract in [
+            "cross join lateral",
+            "t.takeover",
+            "t.visitation",
+            "t.backup_sukses",
+            "t.is_escalate",
+            "category.metric",
+            "category.value",
+            "count(*) as tickets",
+            "'unknown'",
         ]:
-            with self.subTest(metric=metric):
-                self.assertIn(metric, location_query)
+            with self.subTest(contract=contract):
+                self.assertIn(contract, location_query)
         self.assertNotIn("LIMIT 12", location_query)
+        self.assertIn("metric: str", models)
+        self.assertIn("value: str", models)
+        self.assertIn("tickets: int", models)
 
     def test_fop_performance_query_uses_filtered_pic_aggregates_and_ranker(self):
         source = self.read_router_source()

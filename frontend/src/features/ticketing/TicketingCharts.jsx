@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   BarChart3,
   HelpCircle,
@@ -50,11 +50,12 @@ import {
   formatCompactParetoLabel,
   getSlaStatusColor,
   getTicketTypeColor,
+  LOCATION_STACK_COLORS,
   ticketingChartConfig,
 } from './ticketingChartConfig';
 import {
+  buildStackedLocationData,
   getTicketTrendTitle,
-  getTopLocationRows,
   LOCATION_METRICS,
 } from './ticketingChartUtils';
 
@@ -127,13 +128,13 @@ function ChartCard({ title, icon, children, action }) {
   );
 }
 
-function StandardTooltip({ valueFormatter = formatNumber, ...props }) {
+function StandardTooltip({ config = ticketingChartConfig, valueFormatter = formatNumber, ...props }) {
   return (
     <ChartTooltip
       cursor={{ fill: 'var(--chart-cursor)' }}
       content={(
         <DashboardChartTooltipContent
-          config={ticketingChartConfig}
+          config={config}
           valueFormatter={valueFormatter}
           {...props}
         />
@@ -145,7 +146,7 @@ function StandardTooltip({ valueFormatter = formatNumber, ...props }) {
 export function TicketingCharts({ dashboard }) {
   const [activeSlaIndex, setActiveSlaIndex] = useState(null);
   const [activeTicketTypeIndex, setActiveTicketTypeIndex] = useState(null);
-  const [locationMetric, setLocationMetric] = useState('takeover_tickets');
+  const [locationMetric, setLocationMetric] = useState('takeover');
   const slaDistribution = dashboard?.sla_distribution || [];
   const slaTotal = sumChartValues(slaDistribution, 'tickets');
   const rawTypeTicketDistribution = dashboard?.type_ticket_distribution || [];
@@ -155,7 +156,21 @@ export function TicketingCharts({ dashboard }) {
     share: typeTicketTotal > 0 ? (Number(entry.tickets || 0) / typeTicketTotal) * 100 : 0,
   }));
   const trendTitle = getTicketTrendTitle(dashboard?.trend_granularity);
-  const locationRows = getTopLocationRows(dashboard?.location_breakdown, locationMetric);
+  const locationData = useMemo(
+    () => buildStackedLocationData(dashboard?.location_breakdown, locationMetric),
+    [dashboard?.location_breakdown, locationMetric],
+  );
+  const locationRows = locationData.rows;
+  const locationChartConfig = useMemo(
+    () => Object.fromEntries(locationData.series.map((series, index) => [
+      series.dataKey,
+      {
+        label: series.label,
+        color: LOCATION_STACK_COLORS[index % LOCATION_STACK_COLORS.length],
+      },
+    ])),
+    [locationData.series],
+  );
   const locationMetricOption = LOCATION_METRICS.find((option) => option.value === locationMetric)
     || LOCATION_METRICS[0];
 
@@ -282,15 +297,27 @@ export function TicketingCharts({ dashboard }) {
           )}
         >
           {locationRows.length ? (
-            <ChartContainer config={ticketingChartConfig} className="h-[220px] w-full aspect-auto" data-testid="ticketing-location-chart">
+            <ChartContainer config={locationChartConfig} className="h-[220px] w-full aspect-auto" data-testid="ticketing-location-chart">
               <BarChart accessibilityLayer data={locationRows} layout="vertical" margin={{ top: 6, right: 58, left: 12, bottom: 0 }} aria-label={`Kabupaten/Kota Distribution by ${locationMetricOption.label}`}>
                 <CartesianGrid horizontal={false} stroke="var(--chart-grid)" strokeDasharray="3 5" />
                 <XAxis type="number" tickLine={false} axisLine={false} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
                 <YAxis type="category" dataKey="label" width={100} interval={0} tickLine={false} axisLine={false} tick={{ fill: 'var(--chart-axis)', fontSize: 10 }} />
-                <StandardTooltip />
-                <Bar dataKey={locationMetric} fill={`var(--color-${locationMetric})`} radius={DASHBOARD_BAR_RADIUS} isAnimationActive={false}>
-                  <LabelList dataKey={locationMetric} content={<EndBarValueLabel />} />
-                </Bar>
+                <StandardTooltip config={locationChartConfig} />
+                <DashboardChartLegend />
+                {locationData.series.map((series, index) => (
+                  <Bar
+                    key={series.dataKey}
+                    dataKey={series.dataKey}
+                    stackId="location"
+                    fill={`var(--color-${series.dataKey})`}
+                    radius={index === locationData.series.length - 1 ? [0, 6, 6, 0] : 0}
+                    isAnimationActive={false}
+                  >
+                    {index === locationData.series.length - 1 ? (
+                      <LabelList dataKey="total" content={<EndBarValueLabel />} />
+                    ) : null}
+                  </Bar>
+                ))}
               </BarChart>
             </ChartContainer>
           ) : <DashboardChartEmpty />}

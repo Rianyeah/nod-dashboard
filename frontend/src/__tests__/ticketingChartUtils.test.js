@@ -2,8 +2,8 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  buildStackedLocationData,
   getTicketTrendTitle,
-  getTopLocationRows,
 } from '../features/ticketing/ticketingChartUtils.js';
 
 describe('Ticketing chart utilities', () => {
@@ -14,34 +14,35 @@ describe('Ticketing chart utilities', () => {
     assert.equal(getTicketTrendTitle('unexpected'), 'Daily Trend Ticket by Kategori');
   });
 
-  it('sorts a copy by the active metric and keeps deterministic top rows', () => {
+  it('pivots all values for the active location metric into deterministic stacked rows', () => {
     const rows = [
-      { label: 'Zulu', takeover_tickets: 2, escalated_tickets: 9 },
-      { label: 'Alpha', takeover_tickets: 2, escalated_tickets: 1 },
-      { label: 'Beta', takeover_tickets: 5, escalated_tickets: 3 },
+      { label: 'Beta', metric: 'takeover', value: 'TAKE OVER', tickets: 5 },
+      { label: 'Beta', metric: 'takeover', value: 'NOT TAKEN', tickets: 1 },
+      { label: 'Alpha', metric: 'takeover', value: 'TAKE OVER', tickets: 2 },
+      { label: 'Alpha', metric: 'takeover', value: 'NOT TAKEN', tickets: 8 },
+      { label: 'Zulu', metric: 'visitation', value: 'Visit site', tickets: 99 },
     ];
 
-    assert.deepEqual(
-      getTopLocationRows(rows, 'takeover_tickets', 2).map((row) => row.label),
-      ['Beta', 'Alpha'],
-    );
-    assert.deepEqual(rows.map((row) => row.label), ['Zulu', 'Alpha', 'Beta']);
-    assert.deepEqual(
-      getTopLocationRows(rows, 'escalated_tickets', 2).map((row) => row.label),
-      ['Zulu', 'Beta'],
-    );
+    const result = buildStackedLocationData(rows, 'takeover', 2);
+
+    assert.deepEqual(result.series.map((series) => series.label), ['TAKE OVER', 'NOT TAKEN']);
+    assert.deepEqual(result.rows, [
+      { label: 'Alpha', total: 10, location_series_0: 2, location_series_1: 8 },
+      { label: 'Beta', total: 6, location_series_0: 5, location_series_1: 1 },
+    ]);
+    assert.equal(rows[0].label, 'Beta');
   });
 
-  it('treats missing or nonnumeric metric values as zero', () => {
+  it('normalizes invalid tickets, keeps unknown categories, and limits after total sorting', () => {
     const rows = [
-      { label: 'Missing' },
-      { label: 'Text', takeover_tickets: 'not-a-number' },
-      { label: 'Valid', takeover_tickets: 1 },
+      { label: 'Zulu', metric: 'takeover', value: 'Unknown', tickets: '2' },
+      { label: 'Alpha', metric: 'takeover', value: 'TAKE OVER', tickets: 'invalid' },
+      { label: 'Beta', metric: 'takeover', value: 'TAKE OVER', tickets: 1 },
     ];
 
-    assert.deepEqual(
-      getTopLocationRows(rows, 'takeover_tickets').map((row) => row.label),
-      ['Valid', 'Missing', 'Text'],
-    );
+    const result = buildStackedLocationData(rows, 'takeover', 2);
+
+    assert.deepEqual(result.series.map((series) => series.label), ['TAKE OVER', 'Unknown']);
+    assert.deepEqual(result.rows.map((row) => [row.label, row.total]), [['Zulu', 2], ['Beta', 1]]);
   });
 });

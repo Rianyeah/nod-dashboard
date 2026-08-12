@@ -2,7 +2,10 @@ import { Component, useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
+  ArrowDown,
   ArrowLeft,
+  ArrowUp,
+  ArrowUpDown,
   CircleCheck,
   Clock3,
   Download,
@@ -32,7 +35,12 @@ import {
 import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert';
 import { Button } from '../components/ui/button';
 import { TICKETING_CHART_COLORS } from '../features/ticketing/ticketingChartConfig';
-import { HelpHint, TicketingCharts } from '../features/ticketing/TicketingCharts';
+import { TicketingCharts } from '../features/ticketing/TicketingCharts';
+import {
+  getFopMonthCount,
+  getTakeoverThreshold,
+  sortFopRows,
+} from '../features/ticketing/ticketingFopUtils';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import {
   DashboardChartPanel,
@@ -166,6 +174,26 @@ function Scorecard({ title, value, subtitle, icon: Icon, accent, glow, children 
   );
 }
 
+function FopSortHeader({ column, label, sort, onSort, align = 'right' }) {
+  const active = sort.key === column;
+  const SortIcon = !active ? ArrowUpDown : sort.direction === 'asc' ? ArrowUp : ArrowDown;
+  return (
+    <th
+      className={`px-3 py-2 ${align === 'right' ? 'text-right' : 'text-left'}`}
+      aria-sort={active ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(column)}
+        className={`inline-flex items-center gap-1 rounded-sm transition-colors hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]/40 ${align === 'right' ? 'justify-end' : 'justify-start'}`}
+      >
+        <span>{label}</span>
+        <SortIcon className="size-3" aria-hidden="true" />
+      </button>
+    </th>
+  );
+}
+
 function StatusBadge({ value }) {
   const status = String(value || '-').toUpperCase();
   return (
@@ -285,6 +313,7 @@ function TicketingDashboard() {
   const [error, setError] = useState('');
   const [filtersLoaded, setFiltersLoaded] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [fopSort, setFopSort] = useState({ key: 'performance_score', direction: 'desc' });
 
   const loadFilterOptions = useCallback(async () => {
     try {
@@ -436,6 +465,21 @@ function TicketingDashboard() {
     ? getPeriodComparisonLabel(selectedPeriod.start, selectedPeriod.end)
     : 'vs periode sebelumnya';
   const coverageMissing = dashboard?.period_meta?.missing_months_by_source?.ticketing || [];
+  const fopMonthCount = getFopMonthCount(dashboard?.period_meta, startDate, endDate);
+  const takeoverThreshold = getTakeoverThreshold(fopMonthCount);
+  const sortedFopPerformance = useMemo(
+    () => sortFopRows(dashboard?.fop_performance, fopSort.key, fopSort.direction),
+    [dashboard?.fop_performance, fopSort],
+  );
+
+  const handleFopSort = (key) => {
+    setFopSort((current) => ({
+      key,
+      direction: current.key === key
+        ? (current.direction === 'asc' ? 'desc' : 'asc')
+        : (key === 'pic' ? 'asc' : 'desc'),
+    }));
+  };
 
   const handleExportCsv = async () => {
     try {
@@ -674,14 +718,7 @@ function TicketingDashboard() {
           <Scorecard title="Backup Sukses Rate" value={formatPercent(summary?.backup_sukses_rate)} subtitle={`${formatNumber(summary?.backup_sukses_tickets)} BU Genset`} icon={ShieldCheck} accent={TICKETING_CHART_COLORS.success} glow="rgba(16,185,129,0.14)" />
           <Scorecard title="Escalated" value={formatNumber(summary?.escalated_tickets)} subtitle={formatPercent(summary?.escalated_rate)} icon={AlertTriangle} accent={TICKETING_CHART_COLORS.warning} glow="rgba(245,158,11,0.14)" />
           <Scorecard title="OUT SLA Rate" value={formatPercent(summary?.out_sla_rate)} subtitle={`${formatNumber(summary?.out_sla_tickets)} OUT SLA`} icon={ShieldX} accent={TICKETING_CHART_COLORS.danger} glow="rgba(239,68,68,0.14)" />
-          <Scorecard title="Average MTTR" icon={Clock3} accent={TICKETING_CHART_COLORS.bps} glow="rgba(59,130,246,0.14)">
-            <div className="mt-2 flex items-center gap-2">
-              <p className="truncate font-mono text-[28px] font-bold leading-none tabular-nums tracking-tight" style={{ color: TICKETING_CHART_COLORS.bps }}>
-                {formatHours(summary?.average_mttr_hours)}
-              </p>
-              <HelpHint text="Average MTTR menghitung rata-rata durasi MTTR valid pada filter aktif." />
-            </div>
-          </Scorecard>
+          <Scorecard title="Average MTTR" value={formatHours(summary?.average_mttr_hours)} icon={Clock3} accent={TICKETING_CHART_COLORS.bps} glow="rgba(59,130,246,0.14)" />
           <Scorecard title="Closed Rate" value={formatPercent(summary?.closed_rate)} subtitle={`${formatNumber(summary?.closed_tickets)} closed`} icon={CircleCheck} accent={TICKETING_CHART_COLORS.success} glow="rgba(16,185,129,0.14)" />
           <Scorecard title="Canceled" value={formatNumber(summary?.canceled_tickets)} subtitle="Canceled tickets" icon={ShieldX} accent={TICKETING_CHART_COLORS.danger} glow="rgba(239,68,68,0.14)" />
         </section>
@@ -726,22 +763,27 @@ function TicketingDashboard() {
                 <table className="w-full min-w-[760px] text-left text-xs">
                   <thead className="sticky top-0 z-10 border-b border-[var(--border)] bg-[var(--bg-surface)] text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
                     <tr>
-                      <th className="px-3 py-2 text-right">Rank</th>
-                      <th className="px-3 py-2">PIC</th>
-                      <th className="px-3 py-2 text-right">Performance Score</th>
-                      <th className="px-3 py-2 text-right">Takeover</th>
-                      <th className="px-3 py-2 text-right">Visitation</th>
-                      <th className="px-3 py-2 text-right">Backup Sukses</th>
-                      <th className="px-3 py-2 text-right">Average Response Time</th>
+                      <FopSortHeader column="rank" label="Rank" sort={fopSort} onSort={handleFopSort} />
+                      <FopSortHeader column="pic" label="PIC" sort={fopSort} onSort={handleFopSort} align="left" />
+                      <FopSortHeader column="performance_score" label="Performance Score" sort={fopSort} onSort={handleFopSort} />
+                      <FopSortHeader column="takeover_tickets" label="Takeover" sort={fopSort} onSort={handleFopSort} />
+                      <FopSortHeader column="visitation_tickets" label="Visitation" sort={fopSort} onSort={handleFopSort} />
+                      <FopSortHeader column="backup_sukses_tickets" label="Backup Sukses" sort={fopSort} onSort={handleFopSort} />
+                      <FopSortHeader column="average_response_minutes" label="Average Response Time" sort={fopSort} onSort={handleFopSort} />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--border)]">
-                    {(dashboard?.fop_performance || []).map((member) => (
+                    {sortedFopPerformance.map((member) => (
                       <tr key={member.pic} className="hover:bg-[var(--bg-elevated)]/50">
                         <td className="px-3 py-2 text-right font-mono text-[var(--text-muted)]">{member.rank}</td>
                         <td className="px-3 py-2 font-semibold text-[var(--text-primary)]">{member.pic}</td>
-                        <td className="px-3 py-2 text-right font-mono font-bold text-[var(--primary-light)]">{Number(member.performance_score || 0).toFixed(2)}</td>
-                        <td className="px-3 py-2 text-right font-mono">{formatNumber(member.takeover_tickets)}</td>
+                        <td className={`px-3 py-2 text-right font-mono font-bold ${member.performance_score > 50 ? 'text-emerald-300' : 'text-[var(--primary-light)]'}`}>{Number(member.performance_score || 0).toFixed(2)}</td>
+                        <td
+                          className={`px-3 py-2 text-right font-mono ${member.takeover_tickets >= takeoverThreshold ? 'font-semibold text-emerald-300' : ''}`}
+                          title={`Target ${formatNumber(takeoverThreshold)} takeover untuk ${fopMonthCount} bulan`}
+                        >
+                          {formatNumber(member.takeover_tickets)}
+                        </td>
                         <td className="px-3 py-2 text-right font-mono">{formatNumber(member.visitation_tickets)}</td>
                         <td className="px-3 py-2 text-right font-mono">{formatNumber(member.backup_sukses_tickets)}</td>
                         <td className="px-3 py-2 text-right font-mono">{formatMinutes(member.average_response_minutes)}</td>
