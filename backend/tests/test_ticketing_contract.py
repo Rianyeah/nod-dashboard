@@ -42,7 +42,7 @@ class TicketingContractTest(unittest.TestCase):
             "nop: str | None = Query(None",
             "cluster_to: str | None = Query(None",
             "kategori_tt: str | None = Query(None",
-            "sla_status: str | None = Query(None",
+            "takeover: str | None = Query(None",
             "ticket_swfm_status: str | None = Query(None",
             "backup_sukses: str | None = Query(None",
             "rc_category: str | None = Query(None",
@@ -80,7 +80,7 @@ class TicketingContractTest(unittest.TestCase):
             "t.nop = :nop",
             "t.cluster_to = :cluster_to",
             "normalize_category_sql",
-            "t.sla_status = :sla_status",
+            "UPPER(TRIM(t.takeover)) = UPPER(TRIM(:takeover))",
             "t.ticket_swfm_status = :ticket_swfm_status",
             "t.backup_sukses = :backup_sukses",
             "coalesce(t.rc_category, 'Unclassified') = :rc_category",
@@ -108,13 +108,17 @@ class TicketingContractTest(unittest.TestCase):
         self.assertIn("visitation_rate", dashboard_query)
         self.assertIn("trim(visitation) = 'visit site'", dashboard_query)
         self.assertIn("extract(epoch from mttr) >= 0", dashboard_query)
+        self.assertIn("average_mttr_hours", dashboard_query)
+        self.assertIn("avg(extract(epoch from mttr))", dashboard_query)
         self.assertIn("percentile_cont(0.5)", dashboard_query)
         self.assertIn("percentile_cont(0.9)", dashboard_query)
 
         trend_query = source.split('TREND_QUERY = """', 1)[1].split('"""', 1)[0].lower()
-        self.assertIn("date_trunc('day', created_at)", trend_query)
-        self.assertIn("to_char(date_trunc('day', created_at), 'dd mon')", trend_query)
+        self.assertIn("date_trunc('{trend_unit}', created_at)", trend_query)
+        self.assertIn("'{trend_label_format}'", trend_query)
         self.assertIn("group by 1, 2", trend_query)
+        self.assertIn("TREND_BUCKET_SQL", source)
+        self.assertIn("resolve_trend_granularity", source)
 
     def test_location_breakdown_is_always_kabupaten_or_kota(self):
         source = self.read_router_source()
@@ -123,6 +127,38 @@ class TicketingContractTest(unittest.TestCase):
         self.assertIn("'Kabupaten/Kota Distribution'", source)
         self.assertIn("t.kabupaten_kota", source)
         self.assertNotIn("'NOP Distribution'", source)
+
+        location_query = source.split('LOCATION_BREAKDOWN_QUERY = """', 1)[1].split('"""', 1)[0]
+        for metric in [
+            "takeover_tickets",
+            "visitation_tickets",
+            "backup_sukses_tickets",
+            "escalated_tickets",
+        ]:
+            with self.subTest(metric=metric):
+                self.assertIn(metric, location_query)
+        self.assertNotIn("LIMIT 12", location_query)
+
+    def test_fop_performance_query_uses_filtered_pic_aggregates_and_ranker(self):
+        source = self.read_router_source()
+        models = MODELS.read_text(encoding="utf-8")
+
+        self.assertIn('FOP_PERFORMANCE_QUERY = """', source)
+        fop_query = source.split('FOP_PERFORMANCE_QUERY = """', 1)[1].split('"""', 1)[0]
+        for contract in [
+            "pic_take_over_ticket",
+            "takeover_tickets",
+            "visitation_tickets",
+            "backup_sukses_tickets",
+            "average_response_minutes",
+            "{filter_clause}",
+        ]:
+            with self.subTest(contract=contract):
+                self.assertIn(contract, fop_query)
+
+        self.assertIn("rank_fop_performance", source)
+        self.assertIn("fop_performance=fop_performance", source)
+        self.assertIn("TicketingFopPerformanceItem", models)
 
     def test_visiting_and_backup_distribution_is_broken_down_by_kabupaten(self):
         source = self.read_router_source()
@@ -176,11 +212,17 @@ class TicketingContractTest(unittest.TestCase):
                 self.assertIn(model_name, models)
 
         self.assertIn("ticket_category: TicketCategorySummary", models)
+        self.assertIn("takeovers: list[str]", models)
+        self.assertIn("average_mttr_hours: float | None", models)
         self.assertIn("visitation_tickets: int", models)
         self.assertIn("visitation_rate: float", models)
         self.assertIn("day: date", models)
         self.assertIn("TicketingVisitingBackupItem", models)
+        self.assertIn("TicketingLocationBreakdownItem", models)
+        self.assertIn("TicketingFopPerformanceItem", models)
+        self.assertIn('trend_granularity: str = "day"', models)
         self.assertIn("visiting_backup_distribution", models)
+        self.assertIn("fop_performance", models)
         self.assertIn("total_pages: int", models)
 
     def test_filter_contract_exposes_backend_default_latest_month(self):

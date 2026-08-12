@@ -18,7 +18,7 @@ def ticketing_params(**overrides):
         "nop": None,
         "cluster_to": None,
         "kategori_tt": None,
-        "sla_status": None,
+        "takeover": None,
         "ticket_swfm_status": None,
         "backup_sukses": None,
         "rc_category": None,
