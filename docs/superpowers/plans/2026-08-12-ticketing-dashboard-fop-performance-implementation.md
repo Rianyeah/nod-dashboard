@@ -27,7 +27,9 @@
 - Modify `backend/routers/ticketing.py`: takeover filter, Average MTTR, dynamic trend SQL, location aggregation, FOP aggregation, and response wiring.
 - Modify `backend/tests/test_ticketing_contract.py`: router/model/query contract coverage.
 - Modify `frontend/src/features/ticketing/ticketingChartConfig.js`: labels/colors for selectable location metrics.
+- Create `frontend/src/features/ticketing/ticketingChartUtils.js`: pure trend-title and location-metric sorting utilities.
 - Modify `frontend/src/features/ticketing/TicketingCharts.jsx`: adaptive trend title and Kabupaten/Kota dropdown.
+- Create `frontend/src/__tests__/ticketingChartUtils.test.js`: behavioral tests for adaptive chart utilities.
 - Modify `frontend/src/pages/TicketingPage.jsx`: takeover filter, scorecards, and the FOP table/layout.
 - Modify `frontend/src/__tests__/ticketingContracts.test.js`: UI and request-contract coverage.
 - Refresh `graphify-out/graph.json` and `graphify-out/GRAPH_REPORT.md` after material changes; these remain generated artifacts unless already tracked.
@@ -382,15 +384,68 @@ git commit -m "feat: add ticketing FOP performance table"
 ### Task 4: Adaptive Trend Title and Kabupaten/Kota Metric Dropdown
 
 **Files:**
+- Create: `frontend/src/features/ticketing/ticketingChartUtils.js`
+- Create: `frontend/src/__tests__/ticketingChartUtils.test.js`
 - Modify: `frontend/src/features/ticketing/TicketingCharts.jsx`
 - Modify: `frontend/src/features/ticketing/ticketingChartConfig.js`
 - Modify: `frontend/src/__tests__/ticketingContracts.test.js`
 
 **Interfaces:**
 - Consumes: `dashboard.trend_granularity` and every `dashboard.location_breakdown` metric from Task 2.
+- Produces: `getTicketTrendTitle(granularity)` and `getTopLocationRows(rows, metric, limit=12)` pure utilities.
 - Produces: local `locationMetric` state with no network request.
 
-- [ ] **Step 1: Write failing chart contract tests**
+- [ ] **Step 1: Write failing chart utility tests**
+
+Create `frontend/src/__tests__/ticketingChartUtils.test.js`:
+
+```javascript
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+
+import {
+  getTicketTrendTitle,
+  getTopLocationRows,
+} from '../features/ticketing/ticketingChartUtils.js';
+
+describe('Ticketing chart utilities', () => {
+  it('maps backend trend granularity to business titles with a daily fallback', () => {
+    assert.equal(getTicketTrendTitle('day'), 'Daily Trend Ticket by Kategori');
+    assert.equal(getTicketTrendTitle('week'), 'Weekly Trend Ticket by Kategori');
+    assert.equal(getTicketTrendTitle('month'), 'Monthly Trend Ticket by Kategori');
+    assert.equal(getTicketTrendTitle('unexpected'), 'Daily Trend Ticket by Kategori');
+  });
+
+  it('sorts a copy by the active metric and keeps deterministic top rows', () => {
+    const rows = [
+      { label: 'Zulu', takeover_tickets: 2, escalated_tickets: 9 },
+      { label: 'Alpha', takeover_tickets: 2, escalated_tickets: 1 },
+      { label: 'Beta', takeover_tickets: 5, escalated_tickets: 3 },
+    ];
+    assert.deepEqual(
+      getTopLocationRows(rows, 'takeover_tickets', 2).map((row) => row.label),
+      ['Beta', 'Alpha'],
+    );
+    assert.deepEqual(rows.map((row) => row.label), ['Zulu', 'Alpha', 'Beta']);
+    assert.deepEqual(
+      getTopLocationRows(rows, 'escalated_tickets', 2).map((row) => row.label),
+      ['Zulu', 'Beta'],
+    );
+  });
+});
+```
+
+- [ ] **Step 2: Run chart utility tests and verify RED**
+
+Run: `node --test src/__tests__/ticketingChartUtils.test.js` from `frontend/`.
+
+Expected: FAIL because `ticketingChartUtils.js` does not exist.
+
+- [ ] **Step 3: Implement pure chart utilities**
+
+Create `ticketingChartUtils.js` with a closed title map, a daily fallback, a copied descending numeric sort, an ascending `label.localeCompare` tie-breaker, and `slice(0, limit)`. Export the four frozen location options from this file so UI options and behavior tests share one contract.
+
+- [ ] **Step 4: Write failing chart integration contracts**
 
 Add expectations for:
 
@@ -406,19 +461,19 @@ assert.match(charts, /SelectTrigger/);
 assert.match(charts, /Kabupaten\/Kota metric/);
 ```
 
-- [ ] **Step 2: Run frontend contract tests and verify RED**
+- [ ] **Step 5: Run frontend contract tests and verify RED**
 
 Run: `node --test src/__tests__/ticketingContracts.test.js` from `frontend/`.
 
 Expected: FAIL on adaptive title, dropdown, and metric mapping.
 
-- [ ] **Step 3: Add chart config entries**
+- [ ] **Step 6: Add chart config entries**
 
 Extend `ticketingChartConfig` with labels/colors for the four location data keys. Use existing Ticketing chart colors; do not introduce raw hex colors.
 
-- [ ] **Step 4: Implement adaptive title and local metric selection**
+- [ ] **Step 7: Implement adaptive title and local metric selection**
 
-Import Radix wrappers from `@/components/ui/select`. Define a frozen option list:
+Import Radix wrappers from `@/components/ui/select` and the utility exports. The utility module owns this frozen option list:
 
 ```javascript
 const LOCATION_METRICS = [
@@ -429,26 +484,27 @@ const LOCATION_METRICS = [
 ];
 ```
 
-Default `locationMetric` to `takeover_tickets`. Derive a copied, sorted, top-12 location array so props are never mutated. Use the active data key for `<Bar>` and `<LabelList>`. Put the `Select` in the chart panel action slot with `aria-label="Kabupaten/Kota metric"`.
+Default `locationMetric` to `takeover_tickets`. Call `getTopLocationRows` so props are never mutated. Use the active data key for `<Bar>` and `<LabelList>`. Put the `Select` in the chart panel action slot with `aria-label="Kabupaten/Kota metric"`.
 
-Derive the trend title from a closed map whose fallback is daily.
+Call `getTicketTrendTitle(dashboard?.trend_granularity)` for the panel title.
 
-- [ ] **Step 5: Run chart tests, lint, and build**
+- [ ] **Step 8: Run chart tests, lint, and build**
 
 Run:
 
 ```powershell
 node --test src/__tests__/ticketingContracts.test.js
-npx eslint src/features/ticketing/TicketingCharts.jsx src/features/ticketing/ticketingChartConfig.js src/__tests__/ticketingContracts.test.js
+node --test src/__tests__/ticketingChartUtils.test.js
+npx eslint src/features/ticketing/TicketingCharts.jsx src/features/ticketing/ticketingChartConfig.js src/features/ticketing/ticketingChartUtils.js src/__tests__/ticketingContracts.test.js src/__tests__/ticketingChartUtils.test.js
 npm run build
 ```
 
 Expected: tests PASS, lint exits 0, Vite production build exits 0.
 
-- [ ] **Step 6: Commit Task 4**
+- [ ] **Step 9: Commit Task 4**
 
 ```powershell
-git add -- frontend/src/features/ticketing/TicketingCharts.jsx frontend/src/features/ticketing/ticketingChartConfig.js frontend/src/__tests__/ticketingContracts.test.js
+git add -- frontend/src/features/ticketing/TicketingCharts.jsx frontend/src/features/ticketing/ticketingChartConfig.js frontend/src/features/ticketing/ticketingChartUtils.js frontend/src/__tests__/ticketingContracts.test.js frontend/src/__tests__/ticketingChartUtils.test.js
 git commit -m "feat: add adaptive ticketing chart breakdowns"
 ```
 
@@ -472,6 +528,7 @@ Run:
 ```powershell
 python -m unittest tests.test_ticketing_metrics tests.test_ticketing_contract tests.test_period_router_params -v
 node --test src/__tests__/ticketingContracts.test.js
+node --test src/__tests__/ticketingChartUtils.test.js
 npm run lint -- --quiet
 npm run build
 ```
@@ -522,7 +579,7 @@ Expected: no whitespace errors, only intentional generated/untracked artifacts, 
 Only when Step 1-4 required a code correction:
 
 ```powershell
-git add -- backend/ticketing_metrics.py backend/tests/test_ticketing_metrics.py backend/models/ticketing.py backend/routers/ticketing.py backend/tests/test_ticketing_contract.py frontend/src/pages/TicketingPage.jsx frontend/src/features/ticketing/TicketingCharts.jsx frontend/src/features/ticketing/ticketingChartConfig.js frontend/src/__tests__/ticketingContracts.test.js
+git add -- backend/ticketing_metrics.py backend/tests/test_ticketing_metrics.py backend/models/ticketing.py backend/routers/ticketing.py backend/tests/test_ticketing_contract.py frontend/src/pages/TicketingPage.jsx frontend/src/features/ticketing/TicketingCharts.jsx frontend/src/features/ticketing/ticketingChartConfig.js frontend/src/features/ticketing/ticketingChartUtils.js frontend/src/__tests__/ticketingContracts.test.js frontend/src/__tests__/ticketingChartUtils.test.js
 git diff --cached --name-only
 git commit -m "fix: resolve ticketing verification regressions"
 ```
