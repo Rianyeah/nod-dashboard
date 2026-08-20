@@ -373,6 +373,23 @@ export async function fetchTicketingTicketDetail(ticketNumberSwfm) {
   return data;
 }
 
+// ===== Ticket TOTI =====
+
+export async function fetchTicketTotiFilters(signal) {
+  const { data } = await api.get('/ticketing/toti/filters', { signal });
+  return data;
+}
+
+export async function fetchTicketTotiDashboard(params, signal) {
+  const { data } = await api.get('/ticketing/toti/dashboard', { params, signal });
+  return data;
+}
+
+export async function fetchTicketTotiTickets(params, signal) {
+  const { data } = await api.get('/ticketing/toti/tickets', { params, signal });
+  return data;
+}
+
 // ===== Data Potensi =====
 
 export async function fetchDataPotensiDashboard(params) {

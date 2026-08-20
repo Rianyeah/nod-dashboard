@@ -9,6 +9,7 @@ const ROUTE_LABELS = {
   'impact-service': 'Impact Service',
   'transport-quality': 'Transport Quality',
   'ticketing': 'Ticketing',
+  toti: 'Ticket TOTI',
   'rf-tilt-analysis': 'RF Tilt Analysis',
   'tower-plan-generator': 'Tower Visualizer',
 };

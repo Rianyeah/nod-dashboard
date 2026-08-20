@@ -92,7 +92,7 @@ describe('Ticketing dashboard contracts', () => {
     assert.doesNotMatch(page, /label="SLA Status"/);
     assert.match(page, /dashboard\?\.fop_performance/);
 
-    const manualIndex = page.indexOf('Scorecard title="Manual Takeover"');
+    const manualIndex = page.indexOf('title="Manual Takeover"');
     const visitationIndex = page.indexOf('title="Visitation Rate"');
     const escalatedIndex = page.indexOf('Scorecard title="Escalated"');
     const outSlaIndex = page.indexOf('Scorecard title="OUT SLA Rate"');

@@ -16,6 +16,7 @@ const ImpactServicePage = React.lazy(() => import('./pages/ImpactServicePage'));
 const SiteMapPage = React.lazy(() => import('./pages/SiteMapPage'));
 const RfTiltAnalysisPage = React.lazy(() => import('./pages/RfTiltAnalysisPage'));
 const TowerPlanGeneratorPage = React.lazy(() => import('./pages/TowerPlanGeneratorPage'));
+const TicketTotiPage = React.lazy(() => import('./pages/TicketTotiPage'));
 
 function MapRoute({ children }) {
   return (
@@ -57,6 +58,20 @@ function TowerPlanRoute() {
       )}
     >
       <TowerPlanGeneratorPage />
+    </Suspense>
+  );
+}
+
+function TicketTotiRoute() {
+  return (
+    <Suspense
+      fallback={(
+        <div className="flex min-h-64 items-center justify-center text-sm text-muted-foreground">
+          Memuat Ticket TOTI...
+        </div>
+      )}
+    >
+      <TicketTotiPage />
     </Suspense>
   );
 }
@@ -162,6 +177,14 @@ function DashboardRoutes() {
             element={
               <PrivateRoute>
                 <TicketingPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/ticketing/toti"
+            element={
+              <PrivateRoute>
+                <TicketTotiRoute />
               </PrivateRoute>
             }
           />
