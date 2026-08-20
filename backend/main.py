@@ -270,6 +270,7 @@ def create_app(settings: SecuritySettings | None = None) -> FastAPI:
     from routers import rf_tilt as rf_tilt_router
     from routers import sites as sites_router
     from routers import ticketing as ticketing_router
+    from routers import ticket_toti as ticket_toti_router
     from routers import tower_plan as tower_plan_router
     from routers import transport_quality as transport_quality_router
 
@@ -281,6 +282,7 @@ def create_app(settings: SecuritySettings | None = None) -> FastAPI:
     app.include_router(impact_service_router.router, prefix=API_PREFIX, dependencies=dashboard_dependency)
     app.include_router(transport_quality_router.router, prefix=API_PREFIX, dependencies=dashboard_dependency)
     app.include_router(ticketing_router.router, prefix=API_PREFIX, dependencies=dashboard_dependency)
+    app.include_router(ticket_toti_router.router, prefix=API_PREFIX, dependencies=dashboard_dependency)
     app.include_router(overview_router.router, prefix=API_PREFIX, dependencies=dashboard_dependency)
     app.include_router(activity_enom_router.router, prefix=API_PREFIX, dependencies=dashboard_dependency)
     app.include_router(data_potensi_router.router, prefix=API_PREFIX, dependencies=dashboard_dependency)

@@ -9,6 +9,7 @@ PROTECTED_PATHS = (
     "/api/v1/impact-service/filters",
     "/api/v1/transport-quality/filters",
     "/api/v1/ticketing/filters",
+    "/api/v1/ticketing/toti/filters",
     "/api/v1/overview",
     "/api/v1/activity-enom/filters",
     "/api/v1/data-potensi/filter-options",
