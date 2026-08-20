@@ -65,4 +65,57 @@ describe('Ticket TOTI route contracts', () => {
     assert.match(card, /dari/);
     assert.match(card, /ticket/);
   });
+
+  it('renders the approved compact dashboard, charts, table, and scoped states', () => {
+    const chartsPath = sourcePath('features', 'ticket-toti', 'TicketTotiCharts.jsx');
+    const tablePath = sourcePath('features', 'ticket-toti', 'TicketTotiTable.jsx');
+    assert.equal(existsSync(chartsPath), true, 'Ticket TOTI charts must exist');
+    assert.equal(existsSync(tablePath), true, 'Ticket TOTI table must exist');
+
+    const page = source('pages', 'TicketTotiPage.jsx');
+    const charts = readFileSync(chartsPath, 'utf8');
+    const table = readFileSync(tablePath, 'utf8');
+    const surface = `${page}\n${charts}\n${table}`;
+
+    for (const label of [
+      'Total Ticket TOTI',
+      'Top Tower Provider',
+      'Kategori Terbanyak',
+      'Ticket Vandalisme',
+      'Trend Ticket TOTI & Vandalisme',
+      'Distribusi Cluster',
+      'Distribusi Tower Provider',
+      'Daftar Ticket TOTI',
+      'Site ID',
+      'Site Name',
+      'Nomor Ticket',
+      'Kategori',
+      'Sub Kategori',
+      'Permasalahan',
+      'Kondisi Site',
+      'Durasi',
+    ]) {
+      assert.ok(surface.includes(label), label);
+    }
+
+    assert.match(page, /fetchTicketTotiFilters/);
+    assert.match(page, /fetchTicketTotiDashboard/);
+    assert.match(page, /fetchTicketTotiTickets/);
+    assert.match(page, /const TABLE_LIMIT = 15/);
+    assert.match(page, /dashboardLoading/);
+    assert.match(page, /tableLoading/);
+    assert.match(page, /setDashboardError/);
+    assert.match(page, /setTableError/);
+    assert.match(page, /Tidak ada Ticket TOTI pada periode ini/);
+    assert.match(page, /Coba lagi/);
+    assert.match(charts, /ComposedChart/);
+    assert.match(charts, /dataKey="total"/);
+    assert.match(charts, /dataKey="vandalism"/);
+    assert.match(charts, /layout="vertical"/g);
+    assert.match(charts, /accessibilityLayer/g);
+    assert.match(table, /overflow-x-auto/);
+    assert.match(table, /sticky top-0/);
+    assert.match(table, /Belum close/);
+    assert.match(table, /DashboardPagination/);
+  });
 });
