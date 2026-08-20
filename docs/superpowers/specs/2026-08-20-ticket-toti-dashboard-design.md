@@ -1,6 +1,6 @@
 # Ticket TOTI Dashboard Design
 
-**Status:** Chat design approved on 2026-08-20; written review pending
+**Status:** Approved on 2026-08-20
 
 ## Context
 
