@@ -12,22 +12,23 @@ import {
 import { DashboardChartEmpty } from '@/components/dashboard-charts/DashboardChartEmpty';
 import { DashboardChartLegend } from '@/components/dashboard-charts/DashboardChartLegend';
 import { DashboardChartTooltipContent } from '@/components/dashboard-charts/DashboardChartTooltipContent';
+import { DASHBOARD_CHART_COLORS } from '@/components/dashboard-charts/dashboardChartUtils';
 import { DashboardChartPanel } from '@/components/ui/DashboardPrimitives';
 import { ChartContainer, ChartTooltip } from '@/components/ui/chart';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatNumber } from '@/utils/formatters';
 
 const trendConfig = {
-  total: { label: 'Total Ticket TOTI', color: 'var(--chart-blue)' },
-  vandalism: { label: 'Vandalisme', color: 'var(--danger)' },
+  total: { label: 'Total Ticket TOTI', color: DASHBOARD_CHART_COLORS.info },
+  vandalism: { label: 'Vandalisme', color: DASHBOARD_CHART_COLORS.danger },
 };
 
 const clusterConfig = {
-  tickets: { label: 'Ticket', color: 'var(--chart-violet)' },
+  tickets: { label: 'Ticket', color: DASHBOARD_CHART_COLORS.neutral },
 };
 
 const mitraConfig = {
-  tickets: { label: 'Ticket', color: 'var(--chart-amber)' },
+  tickets: { label: 'Ticket', color: DASHBOARD_CHART_COLORS.warning },
 };
 
 function Tooltip({ config }) {

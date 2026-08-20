@@ -118,4 +118,15 @@ describe('Ticket TOTI route contracts', () => {
     assert.match(table, /Belum close/);
     assert.match(table, /DashboardPagination/);
   });
+
+  it('uses existing chart tokens and lets the header wrap before very wide viewports', () => {
+    const page = source('pages', 'TicketTotiPage.jsx');
+    const charts = source('features', 'ticket-toti', 'TicketTotiCharts.jsx');
+    const surface = `${page}\n${charts}`;
+
+    assert.match(charts, /DASHBOARD_CHART_COLORS/);
+    assert.doesNotMatch(surface, /--chart-blue|--chart-violet|--chart-amber/);
+    assert.match(page, /2xl:flex-nowrap/);
+    assert.match(page, /2xl:w-auto/);
+  });
 });

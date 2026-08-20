@@ -21,6 +21,7 @@ import {
   DashboardMonthRangePicker,
 } from '../components/dashboard-filters/DashboardFilters';
 import TicketingSectionNav from '../components/TicketingSectionNav';
+import { DASHBOARD_CHART_COLORS } from '../components/dashboard-charts/dashboardChartUtils';
 import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert';
 import { Button } from '../components/ui/button';
 import { DashboardKpiCard } from '../components/ui/DashboardPrimitives';
@@ -86,17 +87,18 @@ function TotiKpiGrid({ summary, loading }) {
           summary?.total_tickets_period_rate,
         )}
         icon={TicketCheck}
-        accent="var(--chart-blue)"
+        accent={DASHBOARD_CHART_COLORS.info}
       />
       <DashboardKpiCard
         title="Top Tower Provider"
         subtitle={formatRankSubtitle(topMitra.tickets, topMitra.share)}
         icon={Building2}
-        accent="var(--chart-amber)"
+        accent={DASHBOARD_CHART_COLORS.warning}
       >
         <p
           title={topMitra.label}
-          className="mt-2 truncate text-[25px] font-bold leading-none tracking-tight text-[var(--chart-amber)]"
+          className="mt-2 truncate text-[25px] font-bold leading-none tracking-tight"
+          style={{ color: DASHBOARD_CHART_COLORS.warning }}
         >
           {topMitra.label}
         </p>
@@ -105,11 +107,12 @@ function TotiKpiGrid({ summary, loading }) {
         title="Kategori Terbanyak"
         subtitle={formatRankSubtitle(topCategory.tickets, topCategory.share)}
         icon={Layers3}
-        accent="var(--chart-violet)"
+        accent={DASHBOARD_CHART_COLORS.neutral}
       >
         <p
           title={topCategory.label}
-          className="mt-2 truncate text-[25px] font-bold leading-none tracking-tight text-[var(--chart-violet)]"
+          className="mt-2 truncate text-[25px] font-bold leading-none tracking-tight"
+          style={{ color: DASHBOARD_CHART_COLORS.neutral }}
         >
           {topCategory.label}
         </p>
@@ -278,8 +281,8 @@ export default function TicketTotiPage() {
   return (
     <div className="flex min-h-screen min-w-0 flex-col overflow-x-hidden bg-[var(--bg-base)] text-[var(--text-primary)]">
       <header className="border-b border-[var(--border)] bg-gradient-to-r from-[var(--bg-base)] via-[var(--bg-surface)] to-[var(--bg-base)] px-4 py-3 lg:px-6">
-        <div className="flex flex-wrap items-end justify-between gap-3 lg:flex-nowrap">
-          <div className="flex min-w-0 items-center gap-3 lg:shrink-0">
+        <div className="flex flex-wrap items-end justify-between gap-3 2xl:flex-nowrap">
+          <div className="flex min-w-0 items-center gap-3 2xl:shrink-0">
             <button
               type="button"
               onClick={() => navigate('/home')}
@@ -297,12 +300,12 @@ export default function TicketTotiPage() {
             </div>
           </div>
 
-          <div className="flex w-full min-w-0 flex-wrap items-end justify-end gap-2 lg:w-auto lg:flex-nowrap">
+          <div className="flex w-full min-w-0 flex-wrap items-end justify-end gap-2 2xl:w-auto 2xl:flex-nowrap">
             <p className="hidden shrink-0 font-mono text-xs text-[var(--text-muted)] 2xl:block">
               Updated: {formatTotiDateTime(summary?.last_updated_at)}
             </p>
             <DashboardFilterBar
-              className="w-full border-0 bg-transparent p-0 shadow-none backdrop-blur-none lg:w-auto"
+              className="w-full border-0 bg-transparent p-0 shadow-none backdrop-blur-none 2xl:w-auto"
               actions={(
                 <>
                   <DashboardFilterPopover
