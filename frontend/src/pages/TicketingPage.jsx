@@ -20,6 +20,7 @@ import {
   Zap,
 } from 'lucide-react';
 import Breadcrumb from '../components/Breadcrumb';
+import TicketingSectionNav from '../components/TicketingSectionNav';
 import {
   DashboardCombobox,
   DashboardDateRangePicker,
@@ -678,6 +679,7 @@ function TicketingDashboard() {
       <Breadcrumb />
 
       <main className="flex-1 space-y-4 overflow-auto p-5">
+        <TicketingSectionNav />
         {error && (
           <Alert variant="destructive">
             <AlertTitle>Data tidak dapat diperbarui</AlertTitle>
@@ -706,7 +708,14 @@ function TicketingDashboard() {
               <span style={{ color: TICKETING_CHART_COLORS.ts }}>TS: {formatNumber(ticketCategory.ts)}</span>
             </div>
           </Scorecard>
-          <Scorecard title="Manual Takeover" value={formatNumber(summary?.manual_takeover_tickets)} subtitle={formatPercent(summary?.manual_takeover_rate)} icon={Zap} accent={TICKETING_CHART_COLORS.total} glow="rgba(251,191,36,0.14)" />
+          <Scorecard
+            title="Manual Takeover"
+            value={formatPercent(summary?.manual_takeover_rate)}
+            subtitle={`${formatNumber(summary?.manual_takeover_tickets)} dari ${formatNumber(summary?.total_tickets)} ticket`}
+            icon={Zap}
+            accent={TICKETING_CHART_COLORS.total}
+            glow="rgba(251,191,36,0.14)"
+          />
           <Scorecard
             title="Visitation Rate"
             value={formatPercent(summary?.visitation_rate)}
