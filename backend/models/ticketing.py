@@ -98,6 +98,17 @@ class TicketingFopPerformanceItem(BaseModel):
     average_response_minutes: float | None = None
 
 
+class TicketingTakeoverRankingItem(BaseModel):
+    rank: int
+    pic: str
+    fault_center: int = 0
+    pms: int = 0
+    pmg: int = 0
+    fna: int = 0
+    bbm: int = 0
+    total_takeover: int = 0
+
+
 class TicketingTopSite(BaseModel):
     site_id: str
     site_name: str | None = None
@@ -122,6 +133,7 @@ class TicketingDashboard(BaseModel):
     type_ticket_distribution: list[TicketingDistributionItem] = []
     top_sites: list[TicketingTopSite] = []
     fop_performance: list[TicketingFopPerformanceItem] = []
+    takeover_ranking: list[TicketingTakeoverRankingItem] = []
     period_meta: MonthPeriodMeta | None = None
 
 

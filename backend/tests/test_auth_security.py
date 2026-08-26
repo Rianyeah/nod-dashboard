@@ -20,7 +20,12 @@ def test_valid_login_sets_hardened_cookie(client, credentials):
     assert "Secure" in cookie
     assert "SameSite=strict" in cookie
     assert "Max-Age=28800" in cookie
-    assert response.json() == {"authenticated": True, "username": "operator"}
+    assert response.json() == {
+        "authenticated": True,
+        "username": "operator",
+        "role": "viewer",
+        "permissions": ["dashboard:view"],
+    }
     assert "token" not in response.json()
 
 

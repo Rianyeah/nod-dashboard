@@ -75,6 +75,9 @@ describe('Ticketing dashboard contracts', () => {
       'Tipe Ticket INAP',
       'Top Problem Sites',
       'Performance Tim FOP',
+      'Ranking Total Takeover Ticket oleh PIC',
+      'Fault Center',
+      'Total Takeover',
       'Performance Score',
       'Ticket List',
     ]) {
@@ -91,6 +94,7 @@ describe('Ticketing dashboard contracts', () => {
     assert.match(page, /filterOptions\.takeovers/);
     assert.doesNotMatch(page, /label="SLA Status"/);
     assert.match(page, /dashboard\?\.fop_performance/);
+    assert.match(page, /dashboard\?\.takeover_ranking/);
 
     const manualIndex = page.indexOf('title="Manual Takeover"');
     const visitationIndex = page.indexOf('title="Visitation Rate"');

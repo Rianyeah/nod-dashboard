@@ -125,6 +125,23 @@ def build_filter_clause(params: dict) -> str:
     return "".join(f" AND {clause}" for clause in clauses)
 
 
+def build_takeover_filter_clause(params: dict, *, source: str) -> str:
+    """Use only filters shared by Fault Center and non-INAP takeover sources."""
+    date_column = "t.created_at" if source == "fault_center" else "t.ticket_date"
+    clauses = []
+    if params.get("start_date"):
+        clauses.append(f"{date_column} >= CAST(:start_date AS date)")
+    if params.get("end_date"):
+        clauses.append(f"{date_column} < (CAST(:end_date AS date) + interval '1 day')")
+    if params.get("tahun"):
+        clauses.append(f"EXTRACT(YEAR FROM {date_column})::int = :tahun")
+    if params.get("bulan"):
+        clauses.append(f"EXTRACT(MONTH FROM {date_column})::int = :bulan")
+    if params.get("nop"):
+        clauses.append("t.nop = :nop")
+    return "".join(f" AND {clause}" for clause in clauses)
+
+
 def row_to_dict(row):
     return dict(row._mapping)
 
@@ -427,6 +444,60 @@ SELECT
 FROM base t
 GROUP BY 1
 ORDER BY pic
+"""
+
+TAKEOVER_RANKING_QUERY = """
+WITH takeover_events AS (
+    SELECT
+        LOWER(REGEXP_REPLACE(TRIM(t.pic_take_over_ticket), '\\s+', ' ', 'g')) AS pic_key,
+        REGEXP_REPLACE(TRIM(t.pic_take_over_ticket), '\\s+', ' ', 'g') AS pic_display,
+        'FAULT_CENTER'::text AS ticket_type
+    FROM public.ticketing_fault_center t
+    WHERE UPPER(TRIM(t.takeover)) = 'TAKE OVER'
+      AND NULLIF(TRIM(t.pic_take_over_ticket), '') IS NOT NULL
+      {fault_filter_clause}
+
+    UNION ALL
+
+    SELECT
+        t.pic_takeover_key AS pic_key,
+        t.pic_takeover_raw AS pic_display,
+        t.ticket_type
+    FROM public.ticketing_swfm_non_inap t
+    WHERE NULLIF(TRIM(t.pic_takeover_key), '') IS NOT NULL
+      {non_inap_filter_clause}
+), normalized AS (
+    SELECT
+        COALESCE(a.canonical_pic, e.pic_display) AS pic,
+        e.ticket_type
+    FROM takeover_events e
+    LEFT JOIN public.ticketing_pic_aliases a ON a.alias_key = e.pic_key
+), totals AS (
+    SELECT
+        pic,
+        COUNT(*) FILTER (WHERE ticket_type = 'FAULT_CENTER')::int AS fault_center,
+        COUNT(*) FILTER (WHERE ticket_type = 'PMS')::int AS pms,
+        COUNT(*) FILTER (WHERE ticket_type = 'PMG')::int AS pmg,
+        COUNT(*) FILTER (WHERE ticket_type = 'FNA')::int AS fna,
+        COUNT(*) FILTER (WHERE ticket_type = 'BBM')::int AS bbm,
+        COUNT(*)::int AS total_takeover
+    FROM normalized
+    GROUP BY pic
+)
+SELECT
+    ROW_NUMBER() OVER (
+        ORDER BY total_takeover DESC, fault_center DESC, pms DESC, pmg DESC,
+                 fna DESC, bbm DESC, LOWER(pic)
+    )::int AS rank,
+    pic,
+    fault_center,
+    pms,
+    pmg,
+    fna,
+    bbm,
+    total_takeover
+FROM totals
+ORDER BY rank
 """
 
 VISITING_BACKUP_BY_KABUPATEN_QUERY = """
@@ -809,6 +880,14 @@ async def get_ticketing_dashboard(
         sql_params,
     )
     fop_performance = rank_fop_performance(fop_rows)
+    takeover_ranking = await rows_to_dicts(
+        session,
+        TAKEOVER_RANKING_QUERY.format(
+            fault_filter_clause=build_takeover_filter_clause(params, source="fault_center"),
+            non_inap_filter_clause=build_takeover_filter_clause(params, source="non_inap"),
+        ),
+        sql_params,
+    )
 
     return TicketingDashboard(
         summary=summary,
@@ -823,6 +902,7 @@ async def get_ticketing_dashboard(
         type_ticket_distribution=type_ticket_distribution,
         top_sites=top_sites,
         fop_performance=fop_performance,
+        takeover_ranking=takeover_ranking,
         period_meta=await ticketing_period_meta(session, params),
     )
 
