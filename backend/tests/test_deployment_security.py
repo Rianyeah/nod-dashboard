@@ -2,6 +2,8 @@ import json
 import re
 from pathlib import Path
 
+from packaging.version import Version
+
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -78,6 +80,25 @@ def test_hashed_dev_lock_includes_linux_standard_server_dependency():
         lockfile,
         flags=re.MULTILINE,
     ), "uvloop must be pinned and hashed for Linux uvicorn[standard] installs"
+
+
+def test_python_multipart_pin_meets_security_audit_floor():
+    for relative_path in (
+        "backend/requirements.in",
+        "backend/requirements.lock",
+        "backend/requirements-dev.lock",
+    ):
+        dependency_file = (ROOT / relative_path).read_text(encoding="utf-8")
+        match = re.search(
+            r"^python-multipart==([^\s\\]+)",
+            dependency_file,
+            flags=re.MULTILINE,
+        )
+
+        assert match, f"python-multipart must be exactly pinned in {relative_path}"
+        assert Version(match.group(1)) >= Version("0.0.31"), (
+            f"python-multipart in {relative_path} must include all currently audited fixes"
+        )
 
 
 def test_ghcr_image_owner_is_normalized_to_lowercase():
