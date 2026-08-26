@@ -8,6 +8,14 @@ import {
 
 const AuthContext = createContext(null);
 
+function sessionUser(session) {
+  return {
+    username: session.username,
+    role: session.role || 'viewer',
+    permissions: Array.isArray(session.permissions) ? session.permissions : [],
+  };
+}
+
 function clearLegacyBrowserState() {
   try {
     localStorage.removeItem('nod_auth_token');
@@ -31,7 +39,7 @@ export function AuthProvider({ children }) {
     try {
       const session = await authSession();
       if (session.authenticated && session.username) {
-        setUser({ username: session.username });
+        setUser(sessionUser(session));
         setStatus('authenticated');
         return;
       }
@@ -54,7 +62,7 @@ export function AuthProvider({ children }) {
       becomeAnonymous();
       throw new Error('The server did not create a dashboard session.');
     }
-    setUser({ username: session.username });
+    setUser(sessionUser(session));
     setStatus('authenticated');
     return session;
   }, [becomeAnonymous]);
@@ -73,6 +81,7 @@ export function AuthProvider({ children }) {
     login,
     logout,
     refreshSession,
+    hasPermission: (permission) => Boolean(user?.permissions?.includes(permission)),
   }), [login, logout, refreshSession, status, user]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

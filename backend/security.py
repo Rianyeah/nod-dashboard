@@ -4,14 +4,17 @@ from __future__ import annotations
 
 import hashlib
 import secrets
+from dataclasses import dataclass
+from typing import Callable
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerificationError
-from fastapi import Header, HTTPException, Request, status
+from fastapi import Depends, Header, HTTPException, Request, status
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 from capture_tokens import CaptureClaims, CaptureTokenValidationError
 from config import SecuritySettings
+from user_store import AppUser, ROLE_PERMISSIONS
 
 
 SESSION_COOKIE_NAME = "nod_session"
@@ -21,6 +24,12 @@ _password_hasher = PasswordHasher()
 
 class SessionValidationError(ValueError):
     """Raised when a browser session is missing, expired, or forged."""
+
+
+@dataclass(frozen=True)
+class SessionClaims:
+    subject: str
+    session_version: int
 
 
 class SessionManager:
@@ -34,10 +43,13 @@ class SessionManager:
             signer_kwargs={"digest_method": hashlib.sha256},
         )
 
-    def issue(self, subject: str) -> str:
-        return self._serializer.dumps({"sub": subject, "sv": 1})
+    def issue(self, subject: str, session_version: int = 1) -> str:
+        return self._serializer.dumps({"sub": subject, "sv": session_version})
 
     def verify(self, token: str) -> str:
+        return self.verify_claims(token).subject
+
+    def verify_claims(self, token: str) -> SessionClaims:
         try:
             payload = self._serializer.loads(
                 token,
@@ -46,10 +58,16 @@ class SessionManager:
         except (BadSignature, SignatureExpired) as exc:
             raise SessionValidationError("Invalid session") from exc
 
-        expected_payload = {"sub": self._settings.dashboard_user, "sv": 1}
-        if payload != expected_payload:
+        subject = payload.get("sub") if isinstance(payload, dict) else None
+        session_version = payload.get("sv") if isinstance(payload, dict) else None
+        if (
+            not isinstance(subject, str)
+            or not subject
+            or not isinstance(session_version, int)
+            or session_version < 1
+        ):
             raise SessionValidationError("Invalid session")
-        return self._settings.dashboard_user
+        return SessionClaims(subject=subject, session_version=session_version)
 
 
 def _settings_for(request: Request) -> SecuritySettings:
@@ -83,20 +101,46 @@ def verify_browser_origin(request: Request) -> None:
         )
 
 
-async def require_dashboard_session(request: Request) -> str:
+async def require_dashboard_session(request: Request) -> AppUser:
     """FastAPI dependency for all browser-visible dashboard routers."""
     token = request.cookies.get(SESSION_COOKIE_NAME, "")
     try:
-        subject = request.app.state.session_manager.verify(token)
+        claims = request.app.state.session_manager.verify_claims(token)
     except SessionValidationError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required",
         ) from exc
 
+    user = await request.app.state.user_store.get_by_username(claims.subject)
+    if (
+        user is None
+        or not user.is_active
+        or user.session_version != claims.session_version
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+        )
+
     verify_browser_origin(request)
-    request.state.dashboard_subject = subject
-    return subject
+    request.state.dashboard_subject = user.username
+    request.state.dashboard_user = user
+    return user
+
+
+def require_permission(permission: str) -> Callable[..., object]:
+    """Build a dependency that enforces a server-side role permission."""
+
+    async def dependency(user: AppUser = Depends(require_dashboard_session)) -> AppUser:
+        if permission not in ROLE_PERMISSIONS.get(user.role, ()):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permission",
+            )
+        return user
+
+    return dependency
 
 
 def verify_n8n_key(

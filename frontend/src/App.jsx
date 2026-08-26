@@ -17,6 +17,7 @@ const SiteMapPage = React.lazy(() => import('./pages/SiteMapPage'));
 const RfTiltAnalysisPage = React.lazy(() => import('./pages/RfTiltAnalysisPage'));
 const TowerPlanGeneratorPage = React.lazy(() => import('./pages/TowerPlanGeneratorPage'));
 const TicketTotiPage = React.lazy(() => import('./pages/TicketTotiPage'));
+const ManagementDataPage = React.lazy(() => import('./pages/ManagementDataPage'));
 
 function MapRoute({ children }) {
   return (
@@ -77,8 +78,8 @@ function TicketTotiRoute() {
 }
 
 // Simple PrivateRoute wrapper
-function PrivateRoute({ children }) {
-  const { status } = useAuth();
+function PrivateRoute({ children, permission }) {
+  const { status, hasPermission } = useAuth();
   const location = useLocation();
 
   if (status === 'loading') {
@@ -89,9 +90,13 @@ function PrivateRoute({ children }) {
     );
   }
 
-  return status === 'authenticated'
-    ? <AppShell>{children}</AppShell>
-    : <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  if (status !== 'authenticated') {
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
+  if (permission && !hasPermission(permission)) {
+    return <Navigate to="/home" replace />;
+  }
+  return <AppShell>{children}</AppShell>;
 }
 
 // Session guard — must be inside <Router> to use useNavigate()
@@ -201,6 +206,16 @@ function DashboardRoutes() {
             element={
               <PrivateRoute>
                 <MapRoute><RfTiltAnalysisPage /></MapRoute>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/management-data"
+            element={
+              <PrivateRoute permission="management_data:write">
+                <Suspense fallback={<div className="flex min-h-64 items-center justify-center text-sm text-muted-foreground">Memuat Management Data...</div>}>
+                  <ManagementDataPage />
+                </Suspense>
               </PrivateRoute>
             }
           />

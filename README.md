@@ -8,6 +8,9 @@ Mapbox build-token configuration and production troubleshooting are documented i
 N8N static-map sector export configuration is documented in
 [`docs/n8n_map_integration.md`](docs/n8n_map_integration.md).
 
+Management Data imports, dashboard roles, and the combined Ticketing takeover ranking are documented in
+[`docs/management_data.md`](docs/management_data.md).
+
 > Real-time availability monitoring for 1,246+ telecom sites across Jawa Timur
 
 ![Dark Theme Dashboard](https://img.shields.io/badge/theme-OLED%20Dark-0A0E1A?style=flat-square)

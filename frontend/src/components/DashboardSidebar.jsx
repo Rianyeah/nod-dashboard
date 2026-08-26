@@ -8,6 +8,7 @@ import {
   ChevronRight,
   ClipboardList,
   Database,
+  DatabaseZap,
   Home,
   LogOut,
   Map,
@@ -36,6 +37,7 @@ const NAV_ITEMS = [
 ];
 
 const TOOL_ITEMS = [
+  { to: '/management-data', label: 'Management Data', icon: DatabaseZap, permission: 'management_data:write' },
   { to: '/rf-tilt-analysis', label: 'RF Tilt Analysis', icon: Radio },
   { to: '/tower-plan-generator', label: 'Tower Visualizer', icon: TowerControl },
 ];
@@ -89,7 +91,7 @@ function LastUpdatePanel({ collapsed, rows }) {
 
 export default function DashboardSidebar({ collapsed, onToggle, lastUpdates }) {
   const { theme, toggleTheme } = useTheme();
-  const { logout } = useAuth();
+  const { logout, hasPermission } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -153,7 +155,7 @@ export default function DashboardSidebar({ collapsed, onToggle, lastUpdates }) {
             </div>
           )}
           <div className="space-y-1.5">
-            {TOOL_ITEMS.map((item) => (
+            {TOOL_ITEMS.filter((item) => !item.permission || hasPermission(item.permission)).map((item) => (
               <SidebarNavItem key={item.to} item={item} collapsed={collapsed} />
             ))}
           </div>

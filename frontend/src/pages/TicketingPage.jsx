@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   ShieldX,
   TicketCheck,
+  Trophy,
   X,
   Zap,
 } from 'lucide-react';
@@ -733,6 +734,46 @@ function TicketingDashboard() {
         </section>
 
         <TicketingCharts dashboard={dashboard} />
+
+        <DashboardChartPanel title="Ranking Total Takeover Ticket oleh PIC" icon={Trophy}>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--text-muted)]">
+            <span>Gabungan Fault Center, PMS, PMG, FNA, dan BBM.</span>
+            <span>Ranking mengikuti periode dan NOP aktif.</span>
+          </div>
+          <div className="max-h-[440px] overflow-auto">
+            <table className="w-full min-w-[820px] text-left text-xs">
+              <thead className="sticky top-0 z-10 border-b border-[var(--border)] bg-[var(--bg-surface)] text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
+                <tr>
+                  <th className="px-3 py-2 text-right">Rank</th>
+                  <th className="px-3 py-2">PIC</th>
+                  <th className="px-3 py-2 text-right">Fault Center</th>
+                  <th className="px-3 py-2 text-right">PMS</th>
+                  <th className="px-3 py-2 text-right">PMG</th>
+                  <th className="px-3 py-2 text-right">FNA</th>
+                  <th className="px-3 py-2 text-right">BBM</th>
+                  <th className="px-3 py-2 text-right">Total Takeover</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--border)]">
+                {(dashboard?.takeover_ranking || []).map((member) => (
+                  <tr key={member.pic} className="hover:bg-[var(--bg-elevated)]/50">
+                    <td className="px-3 py-2 text-right font-mono text-[var(--text-muted)]">{member.rank}</td>
+                    <td className="px-3 py-2 font-semibold text-[var(--text-primary)]">{member.pic}</td>
+                    <td className="px-3 py-2 text-right font-mono">{formatNumber(member.fault_center)}</td>
+                    <td className="px-3 py-2 text-right font-mono">{formatNumber(member.pms)}</td>
+                    <td className="px-3 py-2 text-right font-mono">{formatNumber(member.pmg)}</td>
+                    <td className="px-3 py-2 text-right font-mono">{formatNumber(member.fna)}</td>
+                    <td className="px-3 py-2 text-right font-mono">{formatNumber(member.bbm)}</td>
+                    <td className="px-3 py-2 text-right font-mono font-bold text-[var(--primary-light)]">{formatNumber(member.total_takeover)}</td>
+                  </tr>
+                ))}
+                {!dashboard?.takeover_ranking?.length ? (
+                  <tr><td colSpan={8} className="px-3 py-8 text-center text-[var(--text-muted)]">Belum ada data takeover PIC pada periode aktif.</td></tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </DashboardChartPanel>
 
         <section className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
           <div className="grid content-start gap-4">

@@ -44,10 +44,24 @@ def session_manager(security_settings):
 
 
 @pytest.fixture
-def client(security_settings):
+def user_store(security_settings):
+    from user_store import AppUser, InMemoryUserStore
+
+    return InMemoryUserStore([
+        AppUser(
+            id="00000000-0000-0000-0000-000000000001",
+            username=security_settings.dashboard_user,
+            password_hash=security_settings.dashboard_password_hash,
+            role="viewer",
+        )
+    ])
+
+
+@pytest.fixture
+def client(security_settings, user_store):
     from main import create_app
 
-    return TestClient(create_app(security_settings), base_url=TEST_ORIGIN)
+    return TestClient(create_app(security_settings, user_store=user_store), base_url=TEST_ORIGIN)
 
 
 @pytest.fixture

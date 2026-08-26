@@ -390,6 +390,60 @@ export async function fetchTicketTotiTickets(params, signal) {
   return data;
 }
 
+// ===== Management Data =====
+
+export async function fetchManagementTargets() {
+  const { data } = await api.get('/management-data/targets');
+  return data;
+}
+
+export async function validateManagementImport(target, files) {
+  const body = new FormData();
+  body.append('target', target);
+  files.forEach((file) => body.append('files', file));
+  const { data } = await api.post('/management-data/imports/validate', body);
+  return data;
+}
+
+export async function commitManagementImport(jobId) {
+  const { data } = await api.post(`/management-data/imports/${encodeURIComponent(jobId)}/commit`);
+  return data;
+}
+
+export async function fetchManagementImports() {
+  const { data } = await api.get('/management-data/imports');
+  return data;
+}
+
+export async function fetchPicAliases() {
+  const { data } = await api.get('/management-data/pic-aliases');
+  return data;
+}
+
+export async function savePicAlias(payload) {
+  const { data } = await api.post('/management-data/pic-aliases', payload);
+  return data;
+}
+
+export async function deletePicAlias(aliasId) {
+  await api.delete(`/management-data/pic-aliases/${encodeURIComponent(aliasId)}`);
+}
+
+export async function fetchDashboardUsers() {
+  const { data } = await api.get('/management-data/users');
+  return data;
+}
+
+export async function createDashboardUser(payload) {
+  const { data } = await api.post('/management-data/users', payload);
+  return data;
+}
+
+export async function updateDashboardUser(userId, payload) {
+  const { data } = await api.patch(`/management-data/users/${encodeURIComponent(userId)}`, payload);
+  return data;
+}
+
 // ===== Data Potensi =====
 
 export async function fetchDataPotensiDashboard(params) {

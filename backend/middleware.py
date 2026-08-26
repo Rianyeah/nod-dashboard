@@ -6,21 +6,35 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 
 class RequestBodyLimitMiddleware:
-    def __init__(self, app: ASGIApp, max_bytes: int = 1_048_576) -> None:
+    def __init__(
+        self,
+        app: ASGIApp,
+        max_bytes: int = 1_048_576,
+        route_limits: dict[str, int] | None = None,
+    ) -> None:
         self.app = app
         self.max_bytes = max_bytes
+        self.route_limits = route_limits or {}
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
 
+        request_limit = next(
+            (
+                limit
+                for prefix, limit in self.route_limits.items()
+                if scope.get("path", "").startswith(prefix)
+            ),
+            self.max_bytes,
+        )
         content_length = next(
             (value for name, value in scope["headers"] if name == b"content-length"),
             b"",
         )
         try:
-            is_oversized = int(content_length or 0) > self.max_bytes
+            is_oversized = int(content_length or 0) > request_limit
         except ValueError:
             is_oversized = True
         if is_oversized:
@@ -34,7 +48,7 @@ class RequestBodyLimitMiddleware:
             message = await receive()
             if message["type"] == "http.request":
                 consumed += len(message.get("body", b""))
-                if consumed > self.max_bytes:
+                if consumed > request_limit:
                     raise RequestBodyTooLarge
             return message
 

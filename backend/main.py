@@ -24,11 +24,11 @@ from rate_limit import InMemoryRateLimiter, RateLimitExceeded
 from security import (
     SESSION_COOKIE_NAME,
     SessionManager,
-    credentials_are_valid,
     require_dashboard_session,
     verify_browser_origin,
     verify_n8n_key,
 )
+from user_store import AppUser, HybridUserStore, UserStore, password_is_valid
 
 
 load_dotenv()
@@ -61,6 +61,7 @@ async def lifespan(app: FastAPI):
 
     try:
         from database import engine as database_engine
+        from management_schema import management_schema_statements
         from queries.metrics_cache import (
             BOOTSTRAP_SITE_MONTH_METRICS_STATEMENTS,
             REFRESH_SITE_MONTH_DELETE_QUERY,
@@ -76,6 +77,10 @@ async def lifespan(app: FastAPI):
             expire_on_commit=False,
         )
         async with session_local() as session:
+            for statement in management_schema_statements():
+                await session.execute(text(statement))
+            await session.commit()
+
             for statement in BOOTSTRAP_SITE_MONTH_METRICS_STATEMENTS:
                 await session.execute(text(statement))
             await session.commit()
@@ -117,6 +122,8 @@ class LoginRequest(BaseModel):
 class AuthSessionResponse(BaseModel):
     authenticated: bool
     username: str | None = None
+    role: str | None = None
+    permissions: list[str] = Field(default_factory=list)
 
 
 class N8NAlertPayload(BaseModel):
@@ -161,7 +168,10 @@ def _runtime_allowed_hosts(configured_hosts: tuple[str, ...]) -> list[str]:
     return allowed_hosts
 
 
-def create_app(settings: SecuritySettings | None = None) -> FastAPI:
+def create_app(
+    settings: SecuritySettings | None = None,
+    user_store: UserStore | None = None,
+) -> FastAPI:
     """Build the application with explicit security configuration for tests."""
     security_settings = settings or SecuritySettings.from_env()
     documentation_url = None if security_settings.is_production else "/docs"
@@ -178,6 +188,7 @@ def create_app(settings: SecuritySettings | None = None) -> FastAPI:
         openapi_url=openapi_url,
     )
     app.state.security_settings = security_settings
+    app.state.user_store = user_store or HybridUserStore(security_settings)
     app.state.session_manager = SessionManager(security_settings)
     app.state.capture_token_manager = CaptureTokenManager(security_settings)
     app.state.capture_token_limiter = InMemoryRateLimiter()
@@ -188,7 +199,11 @@ def create_app(settings: SecuritySettings | None = None) -> FastAPI:
         TrustedHostMiddleware,
         allowed_hosts=_runtime_allowed_hosts(security_settings.allowed_hosts),
     )
-    app.add_middleware(RequestBodyLimitMiddleware, max_bytes=1_048_576)
+    app.add_middleware(
+        RequestBodyLimitMiddleware,
+        max_bytes=1_048_576,
+        route_limits={f"{API_PREFIX}/management-data/imports/validate": 20_971_520},
+    )
     app.add_middleware(SecurityHeadersMiddleware, content_security_policy=CONTENT_SECURITY_POLICY)
 
     @app.get(f"{API_PREFIX}/health")
@@ -213,9 +228,9 @@ def create_app(settings: SecuritySettings | None = None) -> FastAPI:
                 headers={"Retry-After": str(exc.retry_after)},
             ) from exc
 
-        if not credentials_are_valid(
-            security_settings,
-            credentials.username,
+        user = await app.state.user_store.get_by_username(credentials.username)
+        if user is None or not user.is_active or not password_is_valid(
+            user.password_hash,
             credentials.password,
         ):
             app.state.login_limiter.record_failure(
@@ -232,19 +247,26 @@ def create_app(settings: SecuritySettings | None = None) -> FastAPI:
         _set_session_cookie(
             response,
             security_settings,
-            app.state.session_manager.issue(security_settings.dashboard_user),
+            app.state.session_manager.issue(user.username, user.session_version),
         )
         return AuthSessionResponse(
             authenticated=True,
-            username=security_settings.dashboard_user,
+            username=user.username,
+            role=user.role,
+            permissions=list(user.permissions),
         )
 
     @app.get(f"{API_PREFIX}/auth/session", response_model=AuthSessionResponse)
-    async def auth_session(subject: str = Depends(require_dashboard_session)):
-        return AuthSessionResponse(authenticated=True, username=subject)
+    async def auth_session(user: AppUser = Depends(require_dashboard_session)):
+        return AuthSessionResponse(
+            authenticated=True,
+            username=user.username,
+            role=user.role,
+            permissions=list(user.permissions),
+        )
 
     @app.post(f"{API_PREFIX}/auth/logout", response_model=AuthSessionResponse)
-    async def logout(response: Response, _: str = Depends(require_dashboard_session)):
+    async def logout(response: Response, _: AppUser = Depends(require_dashboard_session)):
         _clear_session_cookie(response, security_settings)
         return AuthSessionResponse(authenticated=False)
 
@@ -262,6 +284,7 @@ def create_app(settings: SecuritySettings | None = None) -> FastAPI:
     from routers import availability as availability_router
     from routers import data_potensi as data_potensi_router
     from routers import impact_service as impact_service_router
+    from routers import management_data as management_data_router
     from routers import map as map_router
     from routers import n8n_map as n8n_map_router
     from routers import n8n_site_capture as n8n_site_capture_router
@@ -288,6 +311,7 @@ def create_app(settings: SecuritySettings | None = None) -> FastAPI:
     app.include_router(data_potensi_router.router, prefix=API_PREFIX, dependencies=dashboard_dependency)
     app.include_router(rf_tilt_router.router, prefix=API_PREFIX, dependencies=dashboard_dependency)
     app.include_router(tower_plan_router.router, prefix=API_PREFIX, dependencies=dashboard_dependency)
+    app.include_router(management_data_router.router, prefix=API_PREFIX)
     app.include_router(admin_router.router, prefix=API_PREFIX)
     app.include_router(n8n_map_router.router, prefix=API_PREFIX)
     app.include_router(n8n_site_capture_router.router, prefix=API_PREFIX)
