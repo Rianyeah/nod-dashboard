@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Mapping
 from uuid import uuid4
 
 from fastapi import HTTPException, UploadFile, status
@@ -675,6 +675,24 @@ def _fault_insert_statement() -> str:
     )
 
 
+def _prepare_non_inap_commit_rows(
+    staged_rows: Iterable[Mapping[str, object]],
+    job_id: str,
+) -> list[dict[str, object]]:
+    changed: list[dict[str, object]] = []
+    for row in staged_rows:
+        if row["change_kind"] == "unchanged":
+            continue
+        payload = dict(row["payload"])
+        ticket_date = payload.get("ticket_date")
+        if isinstance(ticket_date, str):
+            payload["ticket_date"] = date.fromisoformat(ticket_date)
+        payload["job_id"] = job_id
+        payload["source_payload"] = json.dumps(payload["source_payload"], ensure_ascii=False)
+        changed.append(payload)
+    return changed
+
+
 async def commit_import(job_id: str, actor: AppUser) -> dict[str, object]:
     async with async_session() as session:
         result = await session.execute(
@@ -691,28 +709,31 @@ async def commit_import(job_id: str, actor: AppUser) -> dict[str, object]:
         if job["actor_username"].casefold() != actor.username.casefold() and actor.role != "sysadmin":
             raise HTTPException(status_code=403, detail="Job import dimiliki pengguna lain")
 
-        await session.execute(text("SELECT pg_advisory_xact_lock(hashtext(:target))"), {"target": job["target"]})
-        await session.execute(
-            text("UPDATE data_import_jobs SET status = 'committing', updated_at = NOW() WHERE id = CAST(:id AS uuid)"),
-            {"id": job_id},
-        )
-        staged = await session.execute(
-            text(
-                """
-                SELECT payload, change_kind FROM data_import_job_rows
-                WHERE job_id = CAST(:id AS uuid) AND change_kind <> 'invalid'
-                ORDER BY id
-                """
-            ),
-            {"id": job_id},
-        )
-        staged_rows = list(staged.mappings())
         try:
+            await session.execute(
+                text("SELECT pg_advisory_xact_lock(hashtext(:target))"),
+                {"target": job["target"]},
+            )
+            await session.execute(
+                text(
+                    "UPDATE data_import_jobs SET status = 'committing', updated_at = NOW() "
+                    "WHERE id = CAST(:id AS uuid)"
+                ),
+                {"id": job_id},
+            )
+            staged = await session.execute(
+                text(
+                    """
+                    SELECT payload, change_kind FROM data_import_job_rows
+                    WHERE job_id = CAST(:id AS uuid) AND change_kind <> 'invalid'
+                    ORDER BY id
+                    """
+                ),
+                {"id": job_id},
+            )
+            staged_rows = list(staged.mappings())
             if job["target"] == "ticketing_swfm_non_inap":
-                changed = [dict(row["payload"]) for row in staged_rows if row["change_kind"] != "unchanged"]
-                for payload in changed:
-                    payload["job_id"] = job_id
-                    payload["source_payload"] = json.dumps(payload["source_payload"], ensure_ascii=False)
+                changed = _prepare_non_inap_commit_rows(staged_rows, job_id)
                 if changed:
                     await session.execute(
                         text(
@@ -775,18 +796,24 @@ async def commit_import(job_id: str, actor: AppUser) -> dict[str, object]:
                 {"id": job_id},
             )
             await session.commit()
-        except Exception:
+        except Exception as exc:
             await session.rollback()
             async with async_session() as failure_session:
                 await failure_session.execute(
                     text(
                         "UPDATE data_import_jobs SET status = 'failed', updated_at = NOW() "
-                        "WHERE id = CAST(:id AS uuid)"
+                        "WHERE id = CAST(:id AS uuid) AND status <> 'completed'"
                     ),
                     {"id": job_id},
                 )
                 await failure_session.commit()
-            raise
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=(
+                    "Commit import gagal. Data target tidak berubah; silakan upload ulang. "
+                    "Jika masalah berulang, periksa log aplikasi."
+                ),
+            ) from exc
     return await get_job(job_id)
 
 
