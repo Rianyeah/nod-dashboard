@@ -29,6 +29,14 @@ class TicketingMetricsTest(unittest.TestCase):
         active_period_day_count = ticketing_metrics.active_period_day_count
         self.assertEqual(active_period_day_count(year=2024, month=2), 29)
         self.assertEqual(active_period_day_count(year=2024), 366)
+        self.assertEqual(active_period_day_count(month=2, active_years=[2024, 2025]), 57)
+        self.assertEqual(
+            active_period_day_count(
+                coverage_start=date(2025, 1, 1),
+                coverage_end=date(2025, 12, 31),
+            ),
+            365,
+        )
         self.assertEqual(active_period_day_count(), 1)
 
     def test_takeover_daily_average_uses_total_and_does_not_mutate_source_rows(self):

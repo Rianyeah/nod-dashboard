@@ -29,6 +29,9 @@ def test_takeover_ranking_unions_fault_center_and_non_inap_by_type():
     assert "ticketing_pic_aliases" in source
     for ticket_type in ("BPS", "TS", "PMS", "PMG", "FNA", "BBM"):
         assert ticket_type in source
+    assert "MIN(event_date)::date AS coverage_start" in source
+    assert "DISTINCT EXTRACT(YEAR FROM event_date)::int" in source
+    assert "AS active_years" in source
     assert "fault_center: int" not in model
     assert "bps: int" in model
     assert "ts: int" in model

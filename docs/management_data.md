@@ -53,7 +53,7 @@ The Ticketing dashboard combines:
 - Fault Center rows where `takeover = TAKE OVER`, `pic_take_over_ticket` is not blank, and the normalized category is BPS or TS.
 - PMS, PMG, FNA, and BBM rows where the normalized takeover PIC is not blank.
 
-The result contains Rank, PIC, BPS, TS, PMS, PMG, FNA, BBM, Avg daily, and Total Takeover. Avg daily divides Total Takeover by the inclusive calendar-day count of the active period. Total Takeover is highlighted green only when it is greater than 26 tickets per active calendar month. PIC aliases are applied at query time, so correcting an alias immediately updates historical ranking without rewriting source rows. The shared period and NOP filters apply to the combined ranking.
+The result contains Rank, PIC, BPS, TS, PMS, PMG, FNA, BBM, Avg daily, and Total Takeover. Avg daily divides Total Takeover by the inclusive calendar-day count of the active period. Canonical and custom ranges use their selected boundaries, a legacy month-only filter sums that calendar month's days across the years present in the filtered takeover data, and an unbounded request uses the earliest-to-latest filtered takeover date. Total Takeover is highlighted green only when it is greater than 26 tickets per active calendar month. PIC aliases are applied at query time, so correcting an alias immediately updates historical ranking without rewriting source rows. The shared period and NOP filters apply to the combined ranking.
 
 ## Deployment order
 

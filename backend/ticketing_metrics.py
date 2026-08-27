@@ -24,6 +24,9 @@ def active_period_day_count(
     end_date: date | None = None,
     year: int | None = None,
     month: int | None = None,
+    active_years: list[int] | tuple[int, ...] | None = None,
+    coverage_start: date | None = None,
+    coverage_end: date | None = None,
 ) -> int:
     """Return inclusive calendar days for the active Ticketing period."""
     if start_date is not None and end_date is not None:
@@ -32,6 +35,12 @@ def active_period_day_count(
         return monthrange(year, month)[1]
     if year is not None:
         return 366 if isleap(year) else 365
+    if month is not None and 1 <= month <= 12 and active_years:
+        years = sorted({int(value) for value in active_years if value is not None})
+        if years:
+            return sum(monthrange(active_year, month)[1] for active_year in years)
+    if coverage_start is not None and coverage_end is not None:
+        return max(1, (coverage_end - coverage_start).days + 1)
     return 1
 
 

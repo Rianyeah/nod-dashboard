@@ -27,13 +27,17 @@ class DashboardResult:
 
 
 class DashboardSession:
-    def __init__(self):
+    def __init__(self, takeover_rows=None):
         self.queries = []
         self.call_count = 0
+        self.takeover_rows = takeover_rows or []
 
     async def execute(self, statement, params=None):
-        self.queries.append(str(statement))
+        query = str(statement)
+        self.queries.append(query)
         self.call_count += 1
+        if "WITH takeover_events AS" in query:
+            return DashboardResult([DashboardRow(row) for row in self.takeover_rows])
         if self.call_count == 1:
             return DashboardResult([
                 DashboardRow({
@@ -95,6 +99,61 @@ async def test_ticketing_dashboard_uses_monthly_trend_for_wide_legacy_ranges(par
 
     assert response.trend_granularity == "month"
     assert "date_trunc('month', created_at)" in session.queries[1]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("params", "takeover_row", "expected_avg"),
+    [
+        (
+            ticketing_params(),
+            {
+                "rank": 1,
+                "pic": "Alpha",
+                "bps": 31,
+                "ts": 0,
+                "pms": 0,
+                "pmg": 0,
+                "fna": 0,
+                "bbm": 0,
+                "total_takeover": 31,
+                "coverage_start": date(2026, 1, 1),
+                "coverage_end": date(2026, 1, 31),
+                "active_years": [2026],
+            },
+            1.0,
+        ),
+        (
+            ticketing_params(bulan=2),
+            {
+                "rank": 1,
+                "pic": "Beta",
+                "bps": 57,
+                "ts": 0,
+                "pms": 0,
+                "pmg": 0,
+                "fna": 0,
+                "bbm": 0,
+                "total_takeover": 57,
+                "coverage_start": date(2024, 2, 1),
+                "coverage_end": date(2025, 2, 28),
+                "active_years": [2024, 2025],
+            },
+            1.0,
+        ),
+    ],
+    ids=["unbounded-coverage", "legacy-month-across-years"],
+)
+async def test_ticketing_dashboard_uses_effective_takeover_coverage_for_daily_average(
+    params,
+    takeover_row,
+    expected_avg,
+):
+    session = DashboardSession(takeover_rows=[takeover_row])
+
+    response = await get_ticketing_dashboard(params=params, session=session)
+
+    assert response.takeover_ranking[0].avg_daily == expected_avg
 
 
 @pytest.mark.parametrize(

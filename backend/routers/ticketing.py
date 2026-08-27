@@ -456,7 +456,8 @@ WITH takeover_events AS (
     SELECT
         LOWER(REGEXP_REPLACE(TRIM(t.pic_take_over_ticket), '\\s+', ' ', 'g')) AS pic_key,
         REGEXP_REPLACE(TRIM(t.pic_take_over_ticket), '\\s+', ' ', 'g') AS pic_display,
-        {fault_category_expr} AS ticket_type
+        {fault_category_expr} AS ticket_type,
+        t.created_at::date AS event_date
     FROM public.ticketing_fault_center t
     WHERE UPPER(TRIM(t.takeover)) = 'TAKE OVER'
       AND NULLIF(TRIM(t.pic_take_over_ticket), '') IS NOT NULL
@@ -468,14 +469,16 @@ WITH takeover_events AS (
     SELECT
         t.pic_takeover_key AS pic_key,
         t.pic_takeover_raw AS pic_display,
-        t.ticket_type
+        t.ticket_type,
+        t.ticket_date::date AS event_date
     FROM public.ticketing_swfm_non_inap t
     WHERE NULLIF(TRIM(t.pic_takeover_key), '') IS NOT NULL
       {non_inap_filter_clause}
 ), normalized AS (
     SELECT
         COALESCE(a.canonical_pic, e.pic_display) AS pic,
-        e.ticket_type
+        e.ticket_type,
+        e.event_date
     FROM takeover_events e
     LEFT JOIN public.ticketing_pic_aliases a ON a.alias_key = e.pic_key
 ), totals AS (
@@ -490,6 +493,15 @@ WITH takeover_events AS (
         COUNT(*)::int AS total_takeover
     FROM normalized
     GROUP BY pic
+), coverage AS (
+    SELECT
+        MIN(event_date)::date AS coverage_start,
+        MAX(event_date)::date AS coverage_end,
+        ARRAY_AGG(
+            DISTINCT EXTRACT(YEAR FROM event_date)::int
+            ORDER BY EXTRACT(YEAR FROM event_date)::int
+        ) FILTER (WHERE event_date IS NOT NULL) AS active_years
+    FROM normalized
 )
 SELECT
     ROW_NUMBER() OVER (
@@ -503,8 +515,12 @@ SELECT
     pmg,
     fna,
     bbm,
-    total_takeover
+    total_takeover,
+    coverage.coverage_start,
+    coverage.coverage_end,
+    coverage.active_years
 FROM totals
+CROSS JOIN coverage
 ORDER BY rank
 """
 
@@ -897,6 +913,14 @@ async def get_ticketing_dashboard(
         ),
         sql_params,
     )
+    coverage = takeover_rows[0] if takeover_rows else {}
+    coverage_start = coverage.get("coverage_start")
+    coverage_end = coverage.get("coverage_end")
+    active_years = coverage.get("active_years")
+    for row in takeover_rows:
+        row.pop("coverage_start", None)
+        row.pop("coverage_end", None)
+        row.pop("active_years", None)
     takeover_ranking = add_takeover_daily_average(
         takeover_rows,
         active_days=active_period_day_count(
@@ -904,6 +928,9 @@ async def get_ticketing_dashboard(
             end_date=params.get("end_date"),
             year=params.get("tahun"),
             month=params.get("bulan"),
+            active_years=active_years,
+            coverage_start=coverage_start,
+            coverage_end=coverage_end,
         ),
     )
 
