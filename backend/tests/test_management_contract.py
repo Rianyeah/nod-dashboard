@@ -27,7 +27,15 @@ def test_takeover_ranking_unions_fault_center_and_non_inap_by_type():
     assert "UPPER(TRIM(t.takeover)) = 'TAKE OVER'" in source
     assert "ticketing_swfm_non_inap" in source
     assert "ticketing_pic_aliases" in source
-    for ticket_type in ("FAULT_CENTER", "PMS", "PMG", "FNA", "BBM"):
+    for ticket_type in ("BPS", "TS", "PMS", "PMG", "FNA", "BBM"):
         assert ticket_type in source
+    assert "MIN(event_date)::date AS coverage_start" in source
+    assert "DISTINCT EXTRACT(YEAR FROM event_date)::int" in source
+    assert "AS active_years" in source
+    assert "fault_center: int" not in model
+    assert "bps: int" in model
+    assert "ts: int" in model
+    assert "avg_daily: float" in model
+    assert "add_takeover_daily_average" in source
     assert "takeover_ranking=takeover_ranking" in source
     assert "class TicketingTakeoverRankingItem" in model

@@ -33,6 +33,21 @@ export function getTakeoverThreshold(monthCount) {
   return safeMonthCount * 26;
 }
 
+export function exceedsTakeoverMonthlyTarget(ticketCount, monthCount) {
+  const tickets = Number(ticketCount);
+  return Number.isFinite(tickets) && tickets > getTakeoverThreshold(monthCount);
+}
+
+export function formatTakeoverDaily(value) {
+  if (value == null || value === '') return '-';
+  const number = Number(value);
+  if (!Number.isFinite(number)) return '-';
+  return number.toLocaleString('id-ID', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 function compareNullableNumbers(left, right, direction) {
   const leftNumber = left == null ? null : Number(left);
   const rightNumber = right == null ? null : Number(right);

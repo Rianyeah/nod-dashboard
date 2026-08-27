@@ -26,7 +26,12 @@ from models.ticketing import (
     TicketingTicketResponse,
 )
 from periods import MonthPeriod, build_period_meta, resolve_month_period
-from ticketing_metrics import rank_fop_performance, resolve_trend_granularity
+from ticketing_metrics import (
+    active_period_day_count,
+    add_takeover_daily_average,
+    rank_fop_performance,
+    resolve_trend_granularity,
+)
 
 router = APIRouter(prefix="/ticketing", tags=["Ticketing"])
 
@@ -451,10 +456,12 @@ WITH takeover_events AS (
     SELECT
         LOWER(REGEXP_REPLACE(TRIM(t.pic_take_over_ticket), '\\s+', ' ', 'g')) AS pic_key,
         REGEXP_REPLACE(TRIM(t.pic_take_over_ticket), '\\s+', ' ', 'g') AS pic_display,
-        'FAULT_CENTER'::text AS ticket_type
+        {fault_category_expr} AS ticket_type,
+        t.created_at::date AS event_date
     FROM public.ticketing_fault_center t
     WHERE UPPER(TRIM(t.takeover)) = 'TAKE OVER'
       AND NULLIF(TRIM(t.pic_take_over_ticket), '') IS NOT NULL
+      AND {fault_category_expr} IN ('BPS', 'TS')
       {fault_filter_clause}
 
     UNION ALL
@@ -462,20 +469,23 @@ WITH takeover_events AS (
     SELECT
         t.pic_takeover_key AS pic_key,
         t.pic_takeover_raw AS pic_display,
-        t.ticket_type
+        t.ticket_type,
+        t.ticket_date::date AS event_date
     FROM public.ticketing_swfm_non_inap t
     WHERE NULLIF(TRIM(t.pic_takeover_key), '') IS NOT NULL
       {non_inap_filter_clause}
 ), normalized AS (
     SELECT
         COALESCE(a.canonical_pic, e.pic_display) AS pic,
-        e.ticket_type
+        e.ticket_type,
+        e.event_date
     FROM takeover_events e
     LEFT JOIN public.ticketing_pic_aliases a ON a.alias_key = e.pic_key
 ), totals AS (
     SELECT
         pic,
-        COUNT(*) FILTER (WHERE ticket_type = 'FAULT_CENTER')::int AS fault_center,
+        COUNT(*) FILTER (WHERE ticket_type = 'BPS')::int AS bps,
+        COUNT(*) FILTER (WHERE ticket_type = 'TS')::int AS ts,
         COUNT(*) FILTER (WHERE ticket_type = 'PMS')::int AS pms,
         COUNT(*) FILTER (WHERE ticket_type = 'PMG')::int AS pmg,
         COUNT(*) FILTER (WHERE ticket_type = 'FNA')::int AS fna,
@@ -483,20 +493,34 @@ WITH takeover_events AS (
         COUNT(*)::int AS total_takeover
     FROM normalized
     GROUP BY pic
+), coverage AS (
+    SELECT
+        MIN(event_date)::date AS coverage_start,
+        MAX(event_date)::date AS coverage_end,
+        ARRAY_AGG(
+            DISTINCT EXTRACT(YEAR FROM event_date)::int
+            ORDER BY EXTRACT(YEAR FROM event_date)::int
+        ) FILTER (WHERE event_date IS NOT NULL) AS active_years
+    FROM normalized
 )
 SELECT
     ROW_NUMBER() OVER (
-        ORDER BY total_takeover DESC, fault_center DESC, pms DESC, pmg DESC,
+        ORDER BY total_takeover DESC, bps DESC, ts DESC, pms DESC, pmg DESC,
                  fna DESC, bbm DESC, LOWER(pic)
     )::int AS rank,
     pic,
-    fault_center,
+    bps,
+    ts,
     pms,
     pmg,
     fna,
     bbm,
-    total_takeover
+    total_takeover,
+    coverage.coverage_start,
+    coverage.coverage_end,
+    coverage.active_years
 FROM totals
+CROSS JOIN coverage
 ORDER BY rank
 """
 
@@ -880,13 +904,34 @@ async def get_ticketing_dashboard(
         sql_params,
     )
     fop_performance = rank_fop_performance(fop_rows)
-    takeover_ranking = await rows_to_dicts(
+    takeover_rows = await rows_to_dicts(
         session,
         TAKEOVER_RANKING_QUERY.format(
+            fault_category_expr=normalize_category_sql("t.kategori_tt"),
             fault_filter_clause=build_takeover_filter_clause(params, source="fault_center"),
             non_inap_filter_clause=build_takeover_filter_clause(params, source="non_inap"),
         ),
         sql_params,
+    )
+    coverage = takeover_rows[0] if takeover_rows else {}
+    coverage_start = coverage.get("coverage_start")
+    coverage_end = coverage.get("coverage_end")
+    active_years = coverage.get("active_years")
+    for row in takeover_rows:
+        row.pop("coverage_start", None)
+        row.pop("coverage_end", None)
+        row.pop("active_years", None)
+    takeover_ranking = add_takeover_daily_average(
+        takeover_rows,
+        active_days=active_period_day_count(
+            start_date=params.get("start_date"),
+            end_date=params.get("end_date"),
+            year=params.get("tahun"),
+            month=params.get("bulan"),
+            active_years=active_years,
+            coverage_start=coverage_start,
+            coverage_end=coverage_end,
+        ),
     )
 
     return TicketingDashboard(

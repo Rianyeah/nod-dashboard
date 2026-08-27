@@ -75,8 +75,9 @@ describe('Ticketing dashboard contracts', () => {
       'Tipe Ticket INAP',
       'Top Problem Sites',
       'Performance Tim FOP',
-      'Ranking Total Takeover Ticket oleh PIC',
-      'Fault Center',
+      'Ticket Fault Center only',
+      'Ranking Takeover All Ticket Tim FOP',
+      'Avg daily',
       'Total Takeover',
       'Performance Score',
       'Ticket List',
@@ -95,6 +96,21 @@ describe('Ticketing dashboard contracts', () => {
     assert.doesNotMatch(page, /label="SLA Status"/);
     assert.match(page, /dashboard\?\.fop_performance/);
     assert.match(page, /dashboard\?\.takeover_ranking/);
+    assert.match(page, /member\.bps/);
+    assert.match(page, /member\.ts/);
+    assert.match(page, /member\.avg_daily/);
+    assert.doesNotMatch(page, /Ranking Total Takeover Ticket oleh PIC/);
+    assert.doesNotMatch(page, /Gabungan Fault Center, PMS, PMG, FNA, dan BBM\./);
+    assert.doesNotMatch(page, /Ranking mengikuti periode dan NOP aktif\./);
+
+    const performanceIndex = page.indexOf('title="Performance Tim FOP"');
+    const rankingIndex = page.indexOf('title="Ranking Takeover All Ticket Tim FOP"');
+    assert.ok(performanceIndex > -1 && performanceIndex < rankingIndex);
+    assert.match(page.slice(performanceIndex, rankingIndex), /description="Ticket Fault Center only"/);
+    assert.match(
+      page,
+      /<section className="grid gap-4 xl:grid-cols-2">[\s\S]*title="Performance Tim FOP"[\s\S]*title="Ranking Takeover All Ticket Tim FOP"/,
+    );
 
     const manualIndex = page.indexOf('title="Manual Takeover"');
     const visitationIndex = page.indexOf('title="Visitation Rate"');

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from calendar import isleap, monthrange
 from datetime import date
 import math
 from typing import Literal
@@ -15,6 +16,32 @@ COUNT_METRIC_WEIGHTS = {
     "backup_sukses_tickets": 0.10,
 }
 RESPONSE_WEIGHT = 0.10
+
+
+def active_period_day_count(
+    *,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    year: int | None = None,
+    month: int | None = None,
+    active_years: list[int] | tuple[int, ...] | None = None,
+    coverage_start: date | None = None,
+    coverage_end: date | None = None,
+) -> int:
+    """Return inclusive calendar days for the active Ticketing period."""
+    if start_date is not None and end_date is not None:
+        return max(1, (end_date - start_date).days + 1)
+    if year is not None and month is not None and 1 <= month <= 12:
+        return monthrange(year, month)[1]
+    if year is not None:
+        return 366 if isleap(year) else 365
+    if month is not None and 1 <= month <= 12 and active_years:
+        years = sorted({int(value) for value in active_years if value is not None})
+        if years:
+            return sum(monthrange(active_year, month)[1] for active_year in years)
+    if coverage_start is not None and coverage_end is not None:
+        return max(1, (coverage_end - coverage_start).days + 1)
+    return 1
 
 
 def resolve_trend_granularity(
@@ -50,6 +77,21 @@ def _nonnegative_number(value) -> float:
     except (TypeError, ValueError):
         return 0.0
     return number if math.isfinite(number) and number >= 0 else 0.0
+
+
+def add_takeover_daily_average(rows: list[dict], active_days: int) -> list[dict]:
+    """Attach a two-decimal takeover-per-calendar-day average to copied rows."""
+    try:
+        denominator = max(1, int(active_days))
+    except (TypeError, ValueError):
+        denominator = 1
+    return [
+        {
+            **row,
+            "avg_daily": round(_nonnegative_number(row.get("total_takeover")) / denominator, 2),
+        }
+        for row in rows
+    ]
 
 
 def _normalized_count_scores(rows: list[dict], key: str) -> list[float]:

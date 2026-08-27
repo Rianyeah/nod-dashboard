@@ -1,11 +1,13 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import {
+import * as fopUtils from '../features/ticketing/ticketingFopUtils.js';
+
+const {
   getFopMonthCount,
   getTakeoverThreshold,
   sortFopRows,
-} from '../features/ticketing/ticketingFopUtils.js';
+} = fopUtils;
 
 describe('Ticketing FOP utilities', () => {
   it('uses active period months and calculates 26 tickets per month', () => {
@@ -20,6 +22,21 @@ describe('Ticketing FOP utilities', () => {
     assert.equal(getFopMonthCount(null, '2026-06-15', '2026-08-02'), 3);
     assert.equal(getFopMonthCount(null, '2026-07-01', '2026-07-31'), 1);
     assert.equal(getFopMonthCount(null, 'invalid', ''), 1);
+  });
+
+  it('marks takeover totals green only when they exceed 26 tickets per active month', () => {
+    assert.equal(typeof fopUtils.exceedsTakeoverMonthlyTarget, 'function');
+    assert.equal(fopUtils.exceedsTakeoverMonthlyTarget(26, 1), false);
+    assert.equal(fopUtils.exceedsTakeoverMonthlyTarget(27, 1), true);
+    assert.equal(fopUtils.exceedsTakeoverMonthlyTarget(52, 2), false);
+    assert.equal(fopUtils.exceedsTakeoverMonthlyTarget(53, 2), true);
+  });
+
+  it('formats average daily takeover with two Indonesian decimal digits', () => {
+    assert.equal(typeof fopUtils.formatTakeoverDaily, 'function');
+    assert.equal(fopUtils.formatTakeoverDaily(2), '2,00');
+    assert.equal(fopUtils.formatTakeoverDaily(0.03), '0,03');
+    assert.equal(fopUtils.formatTakeoverDaily(null), '-');
   });
 
   it('sorts a copy by numeric fields with nulls last and deterministic ties', () => {

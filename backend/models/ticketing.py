@@ -101,11 +101,13 @@ class TicketingFopPerformanceItem(BaseModel):
 class TicketingTakeoverRankingItem(BaseModel):
     rank: int
     pic: str
-    fault_center: int = 0
+    bps: int = 0
+    ts: int = 0
     pms: int = 0
     pmg: int = 0
     fna: int = 0
     bbm: int = 0
+    avg_daily: float = 0
     total_takeover: int = 0
 
 
