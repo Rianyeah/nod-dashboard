@@ -41,7 +41,8 @@ class _SessionContext:
 
 
 class _FailingCommitSession:
-    def __init__(self):
+    def __init__(self, fail_on="insert"):
+        self.fail_on = fail_on
         self.rolled_back = False
 
     async def execute(self, statement, parameters=None):
@@ -54,6 +55,8 @@ class _FailingCommitSession:
                 "invalid_rows": 0,
                 "actor_username": "nod-sysadmin",
             })
+        if "pg_advisory_xact_lock" in sql and self.fail_on == "advisory_lock":
+            raise RuntimeError("raw advisory lock failure")
         if "SELECT payload, change_kind" in sql:
             return _Result(rows=[{
                 "payload": {
@@ -75,8 +78,10 @@ class _FailingCommitSession:
 class _FailureAuditSession:
     def __init__(self):
         self.committed = False
+        self.executed_sql = []
 
     async def execute(self, statement, parameters=None):
+        self.executed_sql.append(str(statement))
         return _Result()
 
     async def commit(self):
@@ -188,3 +193,31 @@ async def test_commit_import_returns_safe_api_error_after_database_failure(monke
     )
     assert primary.rolled_back is True
     assert failure_audit.committed is True
+
+
+@pytest.mark.asyncio
+async def test_commit_import_safely_fails_before_target_write_without_overwriting_completed_job(
+    monkeypatch,
+):
+    primary = _FailingCommitSession(fail_on="advisory_lock")
+    failure_audit = _FailureAuditSession()
+    sessions = iter([primary, failure_audit])
+    monkeypatch.setattr(
+        management_imports,
+        "async_session",
+        lambda: _SessionContext(next(sessions)),
+    )
+    actor = AppUser(
+        id="user-1",
+        username="nod-sysadmin",
+        password_hash="unused",
+        role="sysadmin",
+    )
+
+    with pytest.raises(HTTPException) as caught:
+        await management_imports.commit_import("00000000-0000-0000-0000-000000000001", actor)
+
+    assert caught.value.status_code == 500
+    assert primary.rolled_back is True
+    assert failure_audit.committed is True
+    assert "status <> 'completed'" in failure_audit.executed_sql[0]

@@ -709,23 +709,29 @@ async def commit_import(job_id: str, actor: AppUser) -> dict[str, object]:
         if job["actor_username"].casefold() != actor.username.casefold() and actor.role != "sysadmin":
             raise HTTPException(status_code=403, detail="Job import dimiliki pengguna lain")
 
-        await session.execute(text("SELECT pg_advisory_xact_lock(hashtext(:target))"), {"target": job["target"]})
-        await session.execute(
-            text("UPDATE data_import_jobs SET status = 'committing', updated_at = NOW() WHERE id = CAST(:id AS uuid)"),
-            {"id": job_id},
-        )
-        staged = await session.execute(
-            text(
-                """
-                SELECT payload, change_kind FROM data_import_job_rows
-                WHERE job_id = CAST(:id AS uuid) AND change_kind <> 'invalid'
-                ORDER BY id
-                """
-            ),
-            {"id": job_id},
-        )
-        staged_rows = list(staged.mappings())
         try:
+            await session.execute(
+                text("SELECT pg_advisory_xact_lock(hashtext(:target))"),
+                {"target": job["target"]},
+            )
+            await session.execute(
+                text(
+                    "UPDATE data_import_jobs SET status = 'committing', updated_at = NOW() "
+                    "WHERE id = CAST(:id AS uuid)"
+                ),
+                {"id": job_id},
+            )
+            staged = await session.execute(
+                text(
+                    """
+                    SELECT payload, change_kind FROM data_import_job_rows
+                    WHERE job_id = CAST(:id AS uuid) AND change_kind <> 'invalid'
+                    ORDER BY id
+                    """
+                ),
+                {"id": job_id},
+            )
+            staged_rows = list(staged.mappings())
             if job["target"] == "ticketing_swfm_non_inap":
                 changed = _prepare_non_inap_commit_rows(staged_rows, job_id)
                 if changed:
@@ -796,7 +802,7 @@ async def commit_import(job_id: str, actor: AppUser) -> dict[str, object]:
                 await failure_session.execute(
                     text(
                         "UPDATE data_import_jobs SET status = 'failed', updated_at = NOW() "
-                        "WHERE id = CAST(:id AS uuid)"
+                        "WHERE id = CAST(:id AS uuid) AND status <> 'completed'"
                     ),
                     {"id": job_id},
                 )
