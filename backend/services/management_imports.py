@@ -8,6 +8,7 @@ import io
 import json
 import re
 import zipfile
+from calendar import month_name
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
@@ -123,6 +124,38 @@ FAULT_INTERVALS = {"mttr", "respon_time"}
 FAULT_INTEGERS = {"tahun", "tanggal", "rank"}
 FAULT_DECIMALS = {"pln_downtime", "rh_start", "rh_stop"}
 FAULT_BOOLEANS = {"is_escalate", "is_auto_resolved", "is_excluded_in_kpi"}
+RAW_FAULT_RENAMED_HEADERS = {
+    "Chek in At": "Check In At",
+    "Fault Text": "Fault Level",
+    "Closed at": "Closed At",
+    "Follow up at": "Follow Up At",
+    "Holding status": "Holding Status",
+}
+RAW_FAULT_DERIVED_HEADERS = {
+    "Kategori TT", "Kabupaten Kota", "Tahun", "Periode/Bulan", "Tanggal", "MTTR",
+    "Respon time", "TakeOver", "PLN downtime", "Durasi", "Visitation", "Backup sukses",
+}
+RAW_FAULT_REQUIRED_HEADERS = (
+    set(FAULT_CSV_TO_COLUMN)
+    .difference(RAW_FAULT_DERIVED_HEADERS)
+    .difference(RAW_FAULT_RENAMED_HEADERS)
+    .union(RAW_FAULT_RENAMED_HEADERS.values())
+)
+FAULT_MONTH_VARIANTS = (
+    {"january", "januari"},
+    {"february", "februari"},
+    {"march", "maret"},
+    {"april"},
+    {"may", "mei"},
+    {"june", "juni"},
+    {"july", "juli"},
+    {"august", "agustus"},
+    {"september"},
+    {"october", "oktober"},
+    {"november"},
+    {"december", "desember"},
+)
+FAULT_MISSING_LOCATION_VALUES = {"tidak ada", "tidak tersedia", "n/a", "na", "-"}
 
 
 @dataclass
@@ -354,16 +387,28 @@ def _nullable(value: object) -> str | None:
     return normalize_text(value)
 
 
-def _fault_timestamp(value: object) -> str | None:
-    value = _nullable(value)
-    if value is None:
+def _fault_datetime(value: object) -> datetime | None:
+    if isinstance(value, datetime):
+        return value.replace(microsecond=0)
+    if isinstance(value, date):
+        return datetime.combine(value, datetime.min.time())
+    normalized = _nullable(value)
+    if normalized is None:
         return None
-    for fmt in ("%d/%m/%Y %H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S"):
+    for fmt in (
+        "%d/%m/%Y %H:%M", "%d-%m-%Y %H:%M:%S", "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S.%f",
+    ):
         try:
-            return datetime.strptime(value, fmt).isoformat(sep=" ")
+            return datetime.strptime(normalized, fmt).replace(microsecond=0)
         except ValueError:
             continue
-    raise ValueError(f"Timestamp tidak valid: {value}")
+    raise ValueError(f"Timestamp tidak valid: {normalized}")
+
+
+def _fault_timestamp(value: object) -> str | None:
+    parsed = _fault_datetime(value)
+    return parsed.isoformat(sep=" ") if parsed else None
 
 
 def _fault_interval(value: object) -> str | None:
@@ -408,17 +453,94 @@ def _fault_boolean(value: object) -> bool | None:
     raise ValueError(f"Boolean tidak valid: {value}")
 
 
+def _fault_interval_from_seconds(seconds: float | None) -> str | None:
+    if seconds is None:
+        return None
+    total_seconds = int(seconds)
+    sign = "-" if total_seconds < 0 else ""
+    hours, remainder = divmod(abs(total_seconds), 3600)
+    minutes, remaining_seconds = divmod(remainder, 60)
+    return f"{sign}{hours}:{minutes:02d}:{remaining_seconds:02d}"
+
+
+def _fault_duration_bucket(seconds: float | None) -> str | None:
+    if seconds is None:
+        return None
+    if seconds < 59 * 60:
+        return "<1 Jam"
+    if seconds < 7200:
+        return "1-2 Jam"
+    if seconds < 14400:
+        return "2-4 Jam"
+    return ">4 Jam"
+
+
+def _raw_fault_source(source: dict[str, object]) -> dict[str, object]:
+    normalized = {header: source.get(header) for header in FAULT_CSV_TO_COLUMN}
+    for legacy_header, raw_header in RAW_FAULT_RENAMED_HEADERS.items():
+        normalized[legacy_header] = source.get(raw_header)
+
+    ticket = normalize_text(source.get("Ticket Number SWFM")) or ""
+    occured_at = _fault_datetime(source.get("Occured Time"))
+    created_at = _fault_datetime(source.get("Created At"))
+    cleared_at = _fault_datetime(source.get("Cleared Time"))
+    takeover_at = _fault_datetime(source.get("Take Over Date"))
+    period_at = occured_at or created_at
+    mttr_seconds = (
+        (cleared_at - occured_at).total_seconds()
+        if cleared_at is not None and occured_at is not None
+        else None
+    )
+    response_seconds = (
+        (takeover_at - created_at).total_seconds()
+        if takeover_at is not None and created_at is not None
+        else 0
+    )
+    check_in_at = _fault_datetime(source.get("Check In At"))
+    rh_start_at = _fault_datetime(source.get("RH Start Time"))
+
+    normalized.update({
+        "Kategori TT": ticket[:3] or None,
+        "Kabupaten Kota": None,
+        "Tahun": period_at.year if period_at else None,
+        "Periode/Bulan": month_name[period_at.month] if period_at else None,
+        "Tanggal": period_at.day if period_at else None,
+        "MTTR": _fault_interval_from_seconds(mttr_seconds),
+        "Respon time": _fault_interval_from_seconds(response_seconds),
+        "TakeOver": "TAKE OVER" if takeover_at else "NOT TAKEN",
+        "PLN downtime": (
+            str((Decimal(str(mttr_seconds)) / Decimal(60)).quantize(Decimal("0.01")))
+            if mttr_seconds is not None else None
+        ),
+        "Durasi": _fault_duration_bucket(mttr_seconds),
+        "Visitation": "Visit site" if check_in_at else "Not Visit",
+        "Backup sukses": "BU Genset" if rh_start_at else "Not BU Genset",
+    })
+    return normalized
+
+
 def _parse_fault_file(filename: str, content: bytes) -> ParsedImport:
     headers, source_rows = _tabular_rows(filename, content)
-    missing = set(FAULT_CSV_TO_COLUMN).difference(headers)
-    if missing:
-        raise ValueError(f"Kolom wajib tidak ditemukan: {', '.join(sorted(missing)[:8])}")
+    legacy_missing = set(FAULT_CSV_TO_COLUMN).difference(headers)
+    raw_missing = RAW_FAULT_REQUIRED_HEADERS.difference(headers)
+    source_format = "legacy"
+    if legacy_missing:
+        if raw_missing:
+            raise ValueError(
+                f"Kolom wajib tidak ditemukan: {', '.join(sorted(legacy_missing)[:8])}"
+            )
+        source_format = "raw_swfm"
     parsed: list[ParsedRow] = []
     for index, source in enumerate(source_rows, start=2):
         if not any(normalize_text(value) for value in source.values()):
             continue
         payload: dict[str, object] = {}
         errors: list[str] = []
+        if source_format == "raw_swfm":
+            try:
+                source = _raw_fault_source(source)
+            except (ValueError, TypeError) as exc:
+                errors.append(f"Normalisasi SWFM: {exc}")
         for source_column, db_column in FAULT_CSV_TO_COLUMN.items():
             value = source.get(source_column)
             try:
@@ -452,10 +574,19 @@ def _parse_fault_file(filename: str, content: bytes) -> ParsedImport:
         "year": next(iter(years)) if len(years) == 1 else None,
         "period": next(iter(periods)) if len(periods) == 1 else None,
     }
+    if source_format == "raw_swfm":
+        metadata["source_format"] = source_format
     if errors:
         for row in parsed:
             row.errors.extend(errors)
-    return ParsedImport(parsed, [], metadata)
+    warnings = []
+    if source_format == "raw_swfm":
+        missing_mttr = sum(1 for row in parsed if row.payload.get("mttr") is None)
+        if missing_mttr:
+            warnings.append(
+                f"{missing_mttr} baris tidak memiliki Occured Time/Cleared Time; MTTR dikosongkan"
+            )
+    return ParsedImport(parsed, warnings, metadata)
 
 
 def _mark_duplicates(rows: list[ParsedRow]) -> None:
@@ -464,6 +595,64 @@ def _mark_duplicates(rows: list[ParsedRow]) -> None:
     for row in rows:
         if row.row_key in duplicates:
             row.errors.append("Nomor ticket duplikat di dalam berkas upload")
+
+
+def _fault_site_lookup_keys(row: ParsedRow) -> list[str]:
+    keys: list[str] = []
+    site_id = normalize_text(row.payload.get("site_id"))
+    if site_id:
+        keys.append(site_id.upper())
+    site_name = normalize_text(row.payload.get("site_name")) or ""
+    site_code = re.match(r"([A-Za-z]{3}\d{3})", site_name)
+    if site_code and site_code.group(1).upper() not in keys:
+        keys.append(site_code.group(1).upper())
+    return keys
+
+
+def _fault_location(value: object) -> str | None:
+    normalized = normalize_text(value)
+    if normalized is None:
+        return None
+    if normalized.casefold() in FAULT_MISSING_LOCATION_VALUES:
+        return None
+    if normalized.upper().startswith(("#N/A", "#REF!")):
+        return None
+    return normalized
+
+
+async def _enrich_raw_fault_locations(session: object, rows: list[ParsedRow]) -> None:
+    lookup_keys = sorted({key for row in rows for key in _fault_site_lookup_keys(row)})
+    if not lookup_keys:
+        for row in rows:
+            row.errors.append("Kabupaten Kota tidak dapat dicari karena Site Id/Site Name kosong")
+        return
+    result = await session.execute(
+        text(
+            """
+            SELECT UPPER(TRIM("Siteid")) AS site_id,
+                   MAX(NULLIF(TRIM("Kabupaten/KOTA"), '')) AS kabupaten
+            FROM data_site_master
+            WHERE UPPER(TRIM("Siteid")) = ANY(CAST(:site_ids AS text[]))
+            GROUP BY UPPER(TRIM("Siteid"))
+            """
+        ),
+        {"site_ids": lookup_keys},
+    )
+    site_locations = {}
+    for record in result.mappings():
+        site_id = normalize_text(record["site_id"])
+        location = _fault_location(record["kabupaten"])
+        if site_id and location:
+            site_locations[site_id.upper()] = location
+    for row in rows:
+        location = next(
+            (site_locations[key] for key in _fault_site_lookup_keys(row) if key in site_locations),
+            None,
+        )
+        row.payload["kabupaten_kota"] = location
+        if location is None:
+            site_id = normalize_text(row.payload.get("site_id")) or "(kosong)"
+            row.errors.append(f"Kabupaten Kota tidak ditemukan untuk Site Id {site_id}")
 
 
 async def validate_import(target: str, uploads: list[UploadFile], actor: AppUser) -> dict[str, object]:
@@ -500,9 +689,11 @@ async def validate_import(target: str, uploads: list[UploadFile], actor: AppUser
         if blank_pic:
             parsed.warnings.append(f"{blank_pic} baris memiliki PIC kosong dan tidak masuk ranking takeover")
 
-    valid_rows = [row for row in parsed.rows if not row.errors]
     existing: dict[str, str] = {}
     async with async_session() as session:
+        if target == "ticketing_fault_center" and parsed.metadata.get("source_format") == "raw_swfm":
+            await _enrich_raw_fault_locations(session, parsed.rows)
+        valid_rows = [row for row in parsed.rows if not row.errors]
         if valid_rows:
             keys = [row.row_key for row in valid_rows]
             if target == "ticketing_swfm_non_inap":
@@ -650,7 +841,10 @@ def _job_response(
 
 def _period_variants(period: str) -> list[str]:
     normalized = period.casefold()
-    return ["juli", "july"] if normalized in {"juli", "july"} else [normalized]
+    for variants in FAULT_MONTH_VARIANTS:
+        if normalized in variants:
+            return sorted(variants)
+    return [normalized]
 
 
 def _fault_insert_statement() -> str:

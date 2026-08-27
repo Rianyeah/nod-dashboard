@@ -1,7 +1,10 @@
-from datetime import date
+import json
+from datetime import date, datetime
+from io import BytesIO
 
 import pytest
-from fastapi import HTTPException
+from fastapi import HTTPException, UploadFile
+from openpyxl import Workbook
 
 import services.management_imports as management_imports
 from services.management_imports import (
@@ -12,6 +15,36 @@ from services.management_imports import (
     normalize_pic_key,
 )
 from user_store import AppUser
+
+
+RAW_FAULT_HEADERS = [
+    "Ticket Number Inap", "Ticket Number SWFM", "Severity", "Type Ticket", "Site Id",
+    "Site Name", "Site Class", "Cluster TO", "Sub Cluster", "Impact", "Occured Time",
+    "Created At", "Duration Ticket", "Age Ticket", "NE Class", "Ticket Inap Status",
+    "Ticket SWFM Status", "PIC Take Over Ticket", "NOP", "Regional", "Area",
+    "Is Escalate", "Escalate To", "Cleared Time", "Is Auto Resolved", "RH Start",
+    "RH Start Time", "RH Stop", "RH Stop Time", "RC Owner", "RC Category", "RC 1",
+    "RC 2", "Note", "Resolution Action", "Take Over Date", "Check In At", "INAP RC 1",
+    "INAP RC 2", "INAP Resolution Action", "SLA Status", "Fault Level", "NOSSA No",
+    "Assignee Group", "Summary", "Description", "Submitted Time", "Incident Priority",
+    "Hub", "Is Excluded In KPI", "Ticket Creation", "Ticket Creator", "Site Cleared On",
+    "Rank", "Closed At", "Dispatch By", "Dispatch Date", "Follow Up At",
+    "RC Owner Engineer", "RC Category Engineer", "RC 1 Engineer", "RC 2 Engineer",
+    "RCA Validated", "RCA Validate At", "RCA Validated By", "Holding Status",
+    "Is Force Dispatch", "PIC Email", "RAT", "Parking Status",
+]
+
+
+def _raw_fault_xlsx(*rows: dict[str, object]) -> bytes:
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.append(RAW_FAULT_HEADERS)
+    for row in rows:
+        worksheet.append([row.get(header) for header in RAW_FAULT_HEADERS])
+    output = BytesIO()
+    workbook.save(output)
+    workbook.close()
+    return output.getvalue()
 
 
 class _Result:
@@ -88,6 +121,26 @@ class _FailureAuditSession:
         self.committed = True
 
 
+class _ImportValidationSession:
+    def __init__(self, site_rows=None):
+        self.executions = []
+        self.committed = False
+        self.site_rows = (
+            [{"site_id": "MJO105", "kabupaten": "MOJOKERTO"}]
+            if site_rows is None else site_rows
+        )
+
+    async def execute(self, statement, parameters=None):
+        sql = str(statement)
+        self.executions.append((sql, parameters))
+        if 'FROM data_site_master' in sql:
+            return _Result(rows=self.site_rows)
+        return _Result()
+
+    async def commit(self):
+        self.committed = True
+
+
 def test_fna_csv_normalizes_canonical_fields():
     content = (
         "No ticket;Pic name;Created at;Ticket status;Site Id;Site Name;NOP;Regional\n"
@@ -144,6 +197,251 @@ def test_fault_center_requires_one_period_and_maps_all_allowlisted_columns():
     assert parsed.rows[0].errors == []
     assert parsed.rows[0].payload["created_at"] == "2026-08-26 08:30:00"
     assert set(parsed.rows[0].payload) == set(FAULT_CSV_TO_COLUMN.values())
+
+
+def test_fault_center_raw_swfm_xlsx_derives_existing_table_payload():
+    content = _raw_fault_xlsx({
+        "Ticket Number Inap": "IM-20260801-00000001",
+        "Ticket Number SWFM": "BPS-2026-000001857508",
+        "Severity": "Minor",
+        "Type Ticket": "Event",
+        "Site Id": "MJO105",
+        "Site Name": "MLIRM41",
+        "Site Class": "Bronze",
+        "Cluster TO": "TO JOMBANG",
+        "Impact": "3-MODERATE",
+        "Occured Time": datetime(2026, 8, 1, 8, 0),
+        "Created At": datetime(2026, 8, 1, 8, 10),
+        "Ticket Inap Status": "CLOSED",
+        "Ticket SWFM Status": "CLOSED",
+        "PIC Take Over Ticket": "A'ang Fauzi",
+        "NOP": "NOP SIDOARJO",
+        "Regional": "R06_Jawa Timur",
+        "Area": "AREA 3",
+        "Is Escalate": False,
+        "Cleared Time": datetime(2026, 8, 1, 9, 30),
+        "Is Auto Resolved": "Manual Resolved",
+        "RH Start": 1200.5,
+        "RH Start Time": datetime(2026, 8, 1, 8, 40),
+        "RH Stop": 1204.0,
+        "Take Over Date": datetime(2026, 8, 1, 8, 15),
+        "Check In At": datetime(2026, 8, 1, 8, 45),
+        "Fault Level": "Enva Site GSB",
+        "Submitted Time": datetime(2026, 8, 1, 8, 12, 30, 341000),
+        "Is Excluded In KPI": "NO",
+        "Rank": 1,
+        "Closed At": datetime(2026, 8, 1, 12, 30),
+        "Follow Up At": datetime(2026, 8, 1, 8, 20),
+        "Holding Status": "Dispatched",
+    })
+
+    parsed = _parse_fault_file("Ticket_SWFM_27-08-2026.xlsx", content)
+
+    assert parsed.metadata == {"year": 2026, "period": "August", "source_format": "raw_swfm"}
+    assert parsed.warnings == []
+    assert len(parsed.rows) == 1
+    assert parsed.rows[0].errors == []
+    payload = parsed.rows[0].payload
+    assert set(payload) == set(FAULT_CSV_TO_COLUMN.values())
+    assert payload["kategori_tt"] == "BPS"
+    assert payload["kabupaten_kota"] is None
+    assert payload["tahun"] == 2026
+    assert payload["periode_bulan"] == "August"
+    assert payload["tanggal"] == 1
+    assert payload["mttr"] == "1:30:00"
+    assert payload["respon_time"] == "0:05:00"
+    assert payload["takeover"] == "TAKE OVER"
+    assert payload["pln_downtime"] == "90.00"
+    assert payload["durasi"] == "1-2 Jam"
+    assert payload["visitation"] == "Visit site"
+    assert payload["backup_sukses"] == "BU Genset"
+    assert payload["chek_in_at"] == "2026-08-01 08:45:00"
+    assert payload["fault_text"] == "Enva Site GSB"
+    assert payload["submitted_time"] == "2026-08-01 08:12:30"
+    assert payload["closed_at"] == "2026-08-01 12:30:00"
+    assert payload["follow_up_at"] == "2026-08-01 08:20:00"
+    assert payload["holding_status"] == "Dispatched"
+
+
+def test_raw_fault_uses_occurrence_takeover_date_and_rh_start_time_semantics():
+    content = _raw_fault_xlsx({
+        "Ticket Number SWFM": "TS-2026-000001132656",
+        "Site Id": "MJO105",
+        "Site Name": "MLIRM41",
+        "Occured Time": datetime(2026, 8, 31, 23, 50),
+        "Created At": datetime(2026, 9, 1, 0, 10),
+        "Cleared Time": datetime(2026, 9, 1, 0, 50),
+        "PIC Take Over Ticket": "A'ang Fauzi",
+        "Take Over Date": None,
+        "RH Start": 1200.5,
+        "RH Start Time": None,
+        "Is Escalate": False,
+        "Is Excluded In KPI": "NO",
+        "Rank": 1,
+    })
+
+    parsed = _parse_fault_file("Ticket_SWFM_27-08-2026.xlsx", content)
+
+    assert parsed.metadata == {"year": 2026, "period": "August", "source_format": "raw_swfm"}
+    payload = parsed.rows[0].payload
+    assert payload["tanggal"] == 31
+    assert payload["takeover"] == "NOT TAKEN"
+    assert payload["respon_time"] == "0:00:00"
+    assert payload["backup_sukses"] == "Not BU Genset"
+
+
+def test_fault_duration_uses_established_59_minute_boundary():
+    assert management_imports._fault_duration_bucket(59 * 60 - 1) == "<1 Jam"
+    assert management_imports._fault_duration_bucket(59 * 60) == "1-2 Jam"
+
+
+def test_fault_period_variants_cover_english_and_indonesian_month_names():
+    assert set(management_imports._period_variants("August")) == {"august", "agustus"}
+    assert set(management_imports._period_variants("Agustus")) == {"august", "agustus"}
+
+
+@pytest.mark.asyncio
+async def test_validate_raw_fault_enriches_kabupaten_from_existing_site_master(monkeypatch):
+    content = _raw_fault_xlsx({
+        "Ticket Number SWFM": "BPS-2026-000001857508",
+        "Site Id": "MJO105",
+        "Site Name": "MLIRM41",
+        "Occured Time": datetime(2026, 8, 1, 8, 0),
+        "Created At": datetime(2026, 8, 1, 8, 10),
+        "Cleared Time": datetime(2026, 8, 1, 9, 30),
+        "RH Start": 0,
+        "RH Stop": 0,
+        "Is Escalate": False,
+        "Is Excluded In KPI": "NO",
+        "Rank": 1,
+    })
+    session = _ImportValidationSession()
+    monkeypatch.setattr(management_imports, "async_session", lambda: _SessionContext(session))
+    actor = AppUser(
+        id="user-1",
+        username="nod-sysadmin",
+        password_hash="unused",
+        role="sysadmin",
+    )
+    upload = UploadFile(file=BytesIO(content), filename="Ticket_SWFM_27-08-2026.xlsx")
+
+    result = await management_imports.validate_import("ticketing_fault_center", [upload], actor)
+
+    assert result["valid_rows"] == 1
+    assert result["invalid_rows"] == 0
+    staged_call = next(
+        parameters
+        for sql, parameters in session.executions
+        if "INSERT INTO data_import_job_rows" in sql
+    )
+    staged_payload = json.loads(staged_call[0]["payload"])
+    assert staged_payload["kabupaten_kota"] == "MOJOKERTO"
+    assert session.committed is True
+
+
+@pytest.mark.asyncio
+async def test_validate_raw_fault_uses_site_name_code_when_export_site_id_is_epm(monkeypatch):
+    content = _raw_fault_xlsx({
+        "Ticket Number SWFM": "TS-2026-000001132656",
+        "Site Id": "EPM106",
+        "Site Name": "SDA284_SDA_SMKN1BUDURANOLEG",
+        "Occured Time": datetime(2026, 8, 1, 8, 0),
+        "Created At": datetime(2026, 8, 1, 8, 10),
+        "Cleared Time": datetime(2026, 8, 1, 9, 30),
+        "RH Start": 0,
+        "RH Stop": 0,
+        "Is Escalate": False,
+        "Is Excluded In KPI": "NO",
+        "Rank": 1,
+    })
+    session = _ImportValidationSession(
+        site_rows=[{"site_id": "SDA284", "kabupaten": "SIDOARJO"}],
+    )
+    monkeypatch.setattr(management_imports, "async_session", lambda: _SessionContext(session))
+    actor = AppUser(
+        id="user-1",
+        username="nod-sysadmin",
+        password_hash="unused",
+        role="sysadmin",
+    )
+    upload = UploadFile(file=BytesIO(content), filename="Ticket_SWFM_27-08-2026.xlsx")
+
+    result = await management_imports.validate_import("ticketing_fault_center", [upload], actor)
+
+    assert result["valid_rows"] == 1
+    staged_call = next(
+        parameters
+        for sql, parameters in session.executions
+        if "INSERT INTO data_import_job_rows" in sql
+    )
+    staged_payload = json.loads(staged_call[0]["payload"])
+    assert staged_payload["kabupaten_kota"] == "SIDOARJO"
+
+
+@pytest.mark.asyncio
+async def test_validate_raw_fault_rejects_unresolved_kabupaten_without_writing_target(monkeypatch):
+    content = _raw_fault_xlsx({
+        "Ticket Number SWFM": "TS-2026-000001132656",
+        "Site Id": "UNKNOWN001",
+        "Site Name": "UNKNOWN_SITE",
+        "Occured Time": datetime(2026, 8, 1, 8, 0),
+        "Created At": datetime(2026, 8, 1, 8, 10),
+        "Cleared Time": datetime(2026, 8, 1, 9, 30),
+        "RH Start": 0,
+        "RH Stop": 0,
+        "Is Escalate": False,
+        "Is Excluded In KPI": "NO",
+        "Rank": 1,
+    })
+    session = _ImportValidationSession(site_rows=[])
+    monkeypatch.setattr(management_imports, "async_session", lambda: _SessionContext(session))
+    actor = AppUser(
+        id="user-1",
+        username="nod-sysadmin",
+        password_hash="unused",
+        role="sysadmin",
+    )
+    upload = UploadFile(file=BytesIO(content), filename="Ticket_SWFM_27-08-2026.xlsx")
+
+    result = await management_imports.validate_import("ticketing_fault_center", [upload], actor)
+
+    assert result["valid_rows"] == 0
+    assert result["invalid_rows"] == 1
+    assert result["preview_rows"][0]["errors"] == [
+        "Kabupaten Kota tidak ditemukan untuk Site Id UNKNOWN001",
+    ]
+    assert all("DELETE FROM ticketing_fault_center" not in sql for sql, _ in session.executions)
+
+
+@pytest.mark.asyncio
+async def test_validate_raw_fault_rejects_placeholder_kabupaten(monkeypatch):
+    content = _raw_fault_xlsx({
+        "Ticket Number SWFM": "BPS-2026-000001857508",
+        "Site Id": "MJO105",
+        "Site Name": "MLIRM41",
+        "Occured Time": datetime(2026, 8, 1, 8, 0),
+        "Created At": datetime(2026, 8, 1, 8, 10),
+        "Cleared Time": datetime(2026, 8, 1, 9, 30),
+        "Is Escalate": False,
+        "Is Excluded In KPI": "NO",
+        "Rank": 1,
+    })
+    session = _ImportValidationSession(
+        site_rows=[{"site_id": "MJO105", "kabupaten": "#N/A"}],
+    )
+    monkeypatch.setattr(management_imports, "async_session", lambda: _SessionContext(session))
+    actor = AppUser(
+        id="user-1",
+        username="nod-sysadmin",
+        password_hash="unused",
+        role="sysadmin",
+    )
+    upload = UploadFile(file=BytesIO(content), filename="Ticket_SWFM_27-08-2026.xlsx")
+
+    result = await management_imports.validate_import("ticketing_fault_center", [upload], actor)
+
+    assert result["valid_rows"] == 0
+    assert result["invalid_rows"] == 1
 
 
 def test_pic_key_collapses_whitespace_and_case():
