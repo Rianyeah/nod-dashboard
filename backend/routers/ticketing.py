@@ -26,7 +26,12 @@ from models.ticketing import (
     TicketingTicketResponse,
 )
 from periods import MonthPeriod, build_period_meta, resolve_month_period
-from ticketing_metrics import rank_fop_performance, resolve_trend_granularity
+from ticketing_metrics import (
+    active_period_day_count,
+    add_takeover_daily_average,
+    rank_fop_performance,
+    resolve_trend_granularity,
+)
 
 router = APIRouter(prefix="/ticketing", tags=["Ticketing"])
 
@@ -451,10 +456,11 @@ WITH takeover_events AS (
     SELECT
         LOWER(REGEXP_REPLACE(TRIM(t.pic_take_over_ticket), '\\s+', ' ', 'g')) AS pic_key,
         REGEXP_REPLACE(TRIM(t.pic_take_over_ticket), '\\s+', ' ', 'g') AS pic_display,
-        'FAULT_CENTER'::text AS ticket_type
+        {fault_category_expr} AS ticket_type
     FROM public.ticketing_fault_center t
     WHERE UPPER(TRIM(t.takeover)) = 'TAKE OVER'
       AND NULLIF(TRIM(t.pic_take_over_ticket), '') IS NOT NULL
+      AND {fault_category_expr} IN ('BPS', 'TS')
       {fault_filter_clause}
 
     UNION ALL
@@ -475,7 +481,8 @@ WITH takeover_events AS (
 ), totals AS (
     SELECT
         pic,
-        COUNT(*) FILTER (WHERE ticket_type = 'FAULT_CENTER')::int AS fault_center,
+        COUNT(*) FILTER (WHERE ticket_type = 'BPS')::int AS bps,
+        COUNT(*) FILTER (WHERE ticket_type = 'TS')::int AS ts,
         COUNT(*) FILTER (WHERE ticket_type = 'PMS')::int AS pms,
         COUNT(*) FILTER (WHERE ticket_type = 'PMG')::int AS pmg,
         COUNT(*) FILTER (WHERE ticket_type = 'FNA')::int AS fna,
@@ -486,11 +493,12 @@ WITH takeover_events AS (
 )
 SELECT
     ROW_NUMBER() OVER (
-        ORDER BY total_takeover DESC, fault_center DESC, pms DESC, pmg DESC,
+        ORDER BY total_takeover DESC, bps DESC, ts DESC, pms DESC, pmg DESC,
                  fna DESC, bbm DESC, LOWER(pic)
     )::int AS rank,
     pic,
-    fault_center,
+    bps,
+    ts,
     pms,
     pmg,
     fna,
@@ -880,13 +888,23 @@ async def get_ticketing_dashboard(
         sql_params,
     )
     fop_performance = rank_fop_performance(fop_rows)
-    takeover_ranking = await rows_to_dicts(
+    takeover_rows = await rows_to_dicts(
         session,
         TAKEOVER_RANKING_QUERY.format(
+            fault_category_expr=normalize_category_sql("t.kategori_tt"),
             fault_filter_clause=build_takeover_filter_clause(params, source="fault_center"),
             non_inap_filter_clause=build_takeover_filter_clause(params, source="non_inap"),
         ),
         sql_params,
+    )
+    takeover_ranking = add_takeover_daily_average(
+        takeover_rows,
+        active_days=active_period_day_count(
+            start_date=params.get("start_date"),
+            end_date=params.get("end_date"),
+            year=params.get("tahun"),
+            month=params.get("bulan"),
+        ),
     )
 
     return TicketingDashboard(

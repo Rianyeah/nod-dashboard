@@ -39,6 +39,8 @@ import { Button } from '../components/ui/button';
 import { TICKETING_CHART_COLORS } from '../features/ticketing/ticketingChartConfig';
 import { TicketingCharts } from '../features/ticketing/TicketingCharts';
 import {
+  exceedsTakeoverMonthlyTarget,
+  formatTakeoverDaily,
   getFopMonthCount,
   getTakeoverThreshold,
   sortFopRows,
@@ -735,49 +737,96 @@ function TicketingDashboard() {
 
         <TicketingCharts dashboard={dashboard} />
 
-        <DashboardChartPanel title="Ranking Total Takeover Ticket oleh PIC" icon={Trophy}>
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--text-muted)]">
-            <span>Gabungan Fault Center, PMS, PMG, FNA, dan BBM.</span>
-            <span>Ranking mengikuti periode dan NOP aktif.</span>
-          </div>
+        <section className="grid gap-4 xl:grid-cols-2">
+          <DashboardChartPanel title="Performance Tim FOP" description="Ticket Fault Center only" icon={Zap}>
+            <div className="max-h-[440px] overflow-auto">
+              <table className="w-full min-w-[760px] text-left text-xs">
+                <thead className="sticky top-0 z-10 border-b border-[var(--border)] bg-[var(--bg-surface)] text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
+                  <tr>
+                    <FopSortHeader column="rank" label="Rank" sort={fopSort} onSort={handleFopSort} />
+                    <FopSortHeader column="pic" label="PIC" sort={fopSort} onSort={handleFopSort} align="left" />
+                    <FopSortHeader column="performance_score" label="Performance Score" sort={fopSort} onSort={handleFopSort} />
+                    <FopSortHeader column="takeover_tickets" label="Takeover" sort={fopSort} onSort={handleFopSort} />
+                    <FopSortHeader column="visitation_tickets" label="Visitation" sort={fopSort} onSort={handleFopSort} />
+                    <FopSortHeader column="backup_sukses_tickets" label="Backup Sukses" sort={fopSort} onSort={handleFopSort} />
+                    <FopSortHeader column="average_response_minutes" label="Average Response Time" sort={fopSort} onSort={handleFopSort} />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--border)]">
+                  {sortedFopPerformance.map((member) => (
+                    <tr key={member.pic} className="hover:bg-[var(--bg-elevated)]/50">
+                      <td className="px-3 py-2 text-right font-mono text-[var(--text-muted)]">{member.rank}</td>
+                      <td className="px-3 py-2 font-semibold text-[var(--text-primary)]">{member.pic}</td>
+                      <td className={`px-3 py-2 text-right font-mono font-bold ${member.performance_score > 50 ? 'text-emerald-300' : 'text-[var(--primary-light)]'}`}>{Number(member.performance_score || 0).toFixed(2)}</td>
+                      <td
+                        className={`px-3 py-2 text-right font-mono ${member.takeover_tickets >= takeoverThreshold ? 'font-semibold text-emerald-300' : ''}`}
+                        title={`Target ${formatNumber(takeoverThreshold)} takeover untuk ${fopMonthCount} bulan`}
+                      >
+                        {formatNumber(member.takeover_tickets)}
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono">{formatNumber(member.visitation_tickets)}</td>
+                      <td className="px-3 py-2 text-right font-mono">{formatNumber(member.backup_sukses_tickets)}</td>
+                      <td className="px-3 py-2 text-right font-mono">{formatMinutes(member.average_response_minutes)}</td>
+                    </tr>
+                  ))}
+                  {!dashboard?.fop_performance?.length ? (
+                    <tr>
+                      <td colSpan={7} className="px-3 py-8 text-center text-[var(--text-muted)]">Tidak ada PIC takeover pada filter aktif.</td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </DashboardChartPanel>
+
+        <DashboardChartPanel title="Ranking Takeover All Ticket Tim FOP" icon={Trophy}>
           <div className="max-h-[440px] overflow-auto">
-            <table className="w-full min-w-[820px] text-left text-xs">
+            <table className="w-full min-w-[760px] text-left text-xs">
               <thead className="sticky top-0 z-10 border-b border-[var(--border)] bg-[var(--bg-surface)] text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
                 <tr>
-                  <th className="px-3 py-2 text-right">Rank</th>
-                  <th className="px-3 py-2">PIC</th>
-                  <th className="px-3 py-2 text-right">Fault Center</th>
-                  <th className="px-3 py-2 text-right">PMS</th>
-                  <th className="px-3 py-2 text-right">PMG</th>
-                  <th className="px-3 py-2 text-right">FNA</th>
-                  <th className="px-3 py-2 text-right">BBM</th>
-                  <th className="px-3 py-2 text-right">Total Takeover</th>
+                  <th className="px-2 py-2 text-right">Rank</th>
+                  <th className="px-2 py-2">PIC</th>
+                  <th className="px-2 py-2 text-right">BPS</th>
+                  <th className="px-2 py-2 text-right">TS</th>
+                  <th className="px-2 py-2 text-right">PMS</th>
+                  <th className="px-2 py-2 text-right">PMG</th>
+                  <th className="px-2 py-2 text-right">FNA</th>
+                  <th className="px-2 py-2 text-right">BBM</th>
+                  <th className="px-2 py-2 text-right">Avg daily</th>
+                  <th className="px-2 py-2 text-right">Total Takeover</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
                 {(dashboard?.takeover_ranking || []).map((member) => (
                   <tr key={member.pic} className="hover:bg-[var(--bg-elevated)]/50">
-                    <td className="px-3 py-2 text-right font-mono text-[var(--text-muted)]">{member.rank}</td>
-                    <td className="px-3 py-2 font-semibold text-[var(--text-primary)]">{member.pic}</td>
-                    <td className="px-3 py-2 text-right font-mono">{formatNumber(member.fault_center)}</td>
-                    <td className="px-3 py-2 text-right font-mono">{formatNumber(member.pms)}</td>
-                    <td className="px-3 py-2 text-right font-mono">{formatNumber(member.pmg)}</td>
-                    <td className="px-3 py-2 text-right font-mono">{formatNumber(member.fna)}</td>
-                    <td className="px-3 py-2 text-right font-mono">{formatNumber(member.bbm)}</td>
-                    <td className="px-3 py-2 text-right font-mono font-bold text-[var(--primary-light)]">{formatNumber(member.total_takeover)}</td>
+                    <td className="px-2 py-2 text-right font-mono text-[var(--text-muted)]">{member.rank}</td>
+                    <td className="px-2 py-2 font-semibold text-[var(--text-primary)]">{member.pic}</td>
+                    <td className="px-2 py-2 text-right font-mono">{formatNumber(member.bps)}</td>
+                    <td className="px-2 py-2 text-right font-mono">{formatNumber(member.ts)}</td>
+                    <td className="px-2 py-2 text-right font-mono">{formatNumber(member.pms)}</td>
+                    <td className="px-2 py-2 text-right font-mono">{formatNumber(member.pmg)}</td>
+                    <td className="px-2 py-2 text-right font-mono">{formatNumber(member.fna)}</td>
+                    <td className="px-2 py-2 text-right font-mono">{formatNumber(member.bbm)}</td>
+                    <td className="px-2 py-2 text-right font-mono">{formatTakeoverDaily(member.avg_daily)}</td>
+                    <td
+                      className={`px-2 py-2 text-right font-mono font-bold ${exceedsTakeoverMonthlyTarget(member.total_takeover, fopMonthCount) ? 'text-emerald-300' : 'text-[var(--primary-light)]'}`}
+                      title={`Hijau jika lebih dari ${formatNumber(takeoverThreshold)} takeover untuk ${fopMonthCount} bulan`}
+                    >
+                      {formatNumber(member.total_takeover)}
+                    </td>
                   </tr>
                 ))}
                 {!dashboard?.takeover_ranking?.length ? (
-                  <tr><td colSpan={8} className="px-3 py-8 text-center text-[var(--text-muted)]">Belum ada data takeover PIC pada periode aktif.</td></tr>
+                  <tr><td colSpan={10} className="px-3 py-8 text-center text-[var(--text-muted)]">Belum ada data takeover PIC pada periode aktif.</td></tr>
                 ) : null}
               </tbody>
             </table>
           </div>
         </DashboardChartPanel>
+        </section>
 
         <section className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-          <div className="grid content-start gap-4">
-            <DashboardChartPanel title="Top Problem Sites" icon={AlertTriangle}>
+          <DashboardChartPanel title="Top Problem Sites" icon={AlertTriangle}>
               <div className="overflow-auto">
                 <table className="w-full min-w-[640px] text-left text-xs">
                   <thead className="border-b border-[var(--border)] text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
@@ -807,48 +856,6 @@ function TicketingDashboard() {
                 </table>
               </div>
             </DashboardChartPanel>
-
-            <DashboardChartPanel title="Performance Tim FOP" icon={Zap}>
-              <div className="max-h-[420px] overflow-auto">
-                <table className="w-full min-w-[760px] text-left text-xs">
-                  <thead className="sticky top-0 z-10 border-b border-[var(--border)] bg-[var(--bg-surface)] text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
-                    <tr>
-                      <FopSortHeader column="rank" label="Rank" sort={fopSort} onSort={handleFopSort} />
-                      <FopSortHeader column="pic" label="PIC" sort={fopSort} onSort={handleFopSort} align="left" />
-                      <FopSortHeader column="performance_score" label="Performance Score" sort={fopSort} onSort={handleFopSort} />
-                      <FopSortHeader column="takeover_tickets" label="Takeover" sort={fopSort} onSort={handleFopSort} />
-                      <FopSortHeader column="visitation_tickets" label="Visitation" sort={fopSort} onSort={handleFopSort} />
-                      <FopSortHeader column="backup_sukses_tickets" label="Backup Sukses" sort={fopSort} onSort={handleFopSort} />
-                      <FopSortHeader column="average_response_minutes" label="Average Response Time" sort={fopSort} onSort={handleFopSort} />
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[var(--border)]">
-                    {sortedFopPerformance.map((member) => (
-                      <tr key={member.pic} className="hover:bg-[var(--bg-elevated)]/50">
-                        <td className="px-3 py-2 text-right font-mono text-[var(--text-muted)]">{member.rank}</td>
-                        <td className="px-3 py-2 font-semibold text-[var(--text-primary)]">{member.pic}</td>
-                        <td className={`px-3 py-2 text-right font-mono font-bold ${member.performance_score > 50 ? 'text-emerald-300' : 'text-[var(--primary-light)]'}`}>{Number(member.performance_score || 0).toFixed(2)}</td>
-                        <td
-                          className={`px-3 py-2 text-right font-mono ${member.takeover_tickets >= takeoverThreshold ? 'font-semibold text-emerald-300' : ''}`}
-                          title={`Target ${formatNumber(takeoverThreshold)} takeover untuk ${fopMonthCount} bulan`}
-                        >
-                          {formatNumber(member.takeover_tickets)}
-                        </td>
-                        <td className="px-3 py-2 text-right font-mono">{formatNumber(member.visitation_tickets)}</td>
-                        <td className="px-3 py-2 text-right font-mono">{formatNumber(member.backup_sukses_tickets)}</td>
-                        <td className="px-3 py-2 text-right font-mono">{formatMinutes(member.average_response_minutes)}</td>
-                      </tr>
-                    ))}
-                    {!dashboard?.fop_performance?.length ? (
-                      <tr>
-                        <td colSpan={7} className="px-3 py-8 text-center text-[var(--text-muted)]">Tidak ada PIC takeover pada filter aktif.</td>
-                      </tr>
-                    ) : null}
-                  </tbody>
-                </table>
-              </div>
-            </DashboardChartPanel>
-          </div>
 
           <section className="glass-card overflow-hidden">
             <DashboardTableToolbar

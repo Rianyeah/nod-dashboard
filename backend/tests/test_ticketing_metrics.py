@@ -1,10 +1,50 @@
 from datetime import date
 import unittest
 
+import ticketing_metrics
 from ticketing_metrics import rank_fop_performance, resolve_trend_granularity
 
 
 class TicketingMetricsTest(unittest.TestCase):
+    def test_active_period_day_count_uses_inclusive_calendar_days(self):
+        self.assertTrue(hasattr(ticketing_metrics, "active_period_day_count"))
+        active_period_day_count = ticketing_metrics.active_period_day_count
+        self.assertEqual(
+            active_period_day_count(
+                start_date=date(2026, 8, 1),
+                end_date=date(2026, 8, 31),
+            ),
+            31,
+        )
+        self.assertEqual(
+            active_period_day_count(
+                start_date=date(2026, 8, 26),
+                end_date=date(2026, 9, 1),
+            ),
+            7,
+        )
+
+    def test_active_period_day_count_supports_legacy_month_and_year_filters(self):
+        self.assertTrue(hasattr(ticketing_metrics, "active_period_day_count"))
+        active_period_day_count = ticketing_metrics.active_period_day_count
+        self.assertEqual(active_period_day_count(year=2024, month=2), 29)
+        self.assertEqual(active_period_day_count(year=2024), 366)
+        self.assertEqual(active_period_day_count(), 1)
+
+    def test_takeover_daily_average_uses_total_and_does_not_mutate_source_rows(self):
+        self.assertTrue(hasattr(ticketing_metrics, "add_takeover_daily_average"))
+        add_takeover_daily_average = ticketing_metrics.add_takeover_daily_average
+        rows = [
+            {"pic": "Alpha", "total_takeover": 62},
+            {"pic": "Beta", "total_takeover": 1},
+        ]
+
+        result = add_takeover_daily_average(rows, active_days=31)
+
+        self.assertEqual(result[0]["avg_daily"], 2.0)
+        self.assertEqual(result[1]["avg_daily"], 0.03)
+        self.assertNotIn("avg_daily", rows[0])
+
     def test_month_periods_choose_daily_weekly_and_monthly_trends(self):
         self.assertEqual(resolve_trend_granularity(month_count=1), "day")
         self.assertEqual(resolve_trend_granularity(month_count=2), "week")
