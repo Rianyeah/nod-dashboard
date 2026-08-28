@@ -70,6 +70,8 @@ CREATE TABLE IF NOT EXISTS ticketing_swfm_non_inap (
     site_name TEXT,
     nop TEXT,
     regional TEXT,
+    cluster TEXT,
+    kabupaten TEXT,
     pic_takeover_raw TEXT,
     pic_takeover_key TEXT,
     source_file TEXT NOT NULL,
@@ -80,6 +82,12 @@ CREATE TABLE IF NOT EXISTS ticketing_swfm_non_inap (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE ticketing_swfm_non_inap
+    ADD COLUMN IF NOT EXISTS cluster TEXT;
+
+ALTER TABLE ticketing_swfm_non_inap
+    ADD COLUMN IF NOT EXISTS kabupaten TEXT;
 
 CREATE INDEX IF NOT EXISTS ticketing_swfm_non_inap_date_idx
     ON ticketing_swfm_non_inap (ticket_date);
