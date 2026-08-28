@@ -48,6 +48,18 @@ def _raw_fault_xlsx(*rows: dict[str, object]) -> bytes:
     return output.getvalue()
 
 
+def _tabular_xlsx(headers: list[str], *rows: dict[str, object]) -> bytes:
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.append(headers)
+    for row in rows:
+        worksheet.append([row.get(header) for header in headers])
+    output = BytesIO()
+    workbook.save(output)
+    workbook.close()
+    return output.getvalue()
+
+
 class _Result:
     def __init__(self, *, first=None, rows=()):
         self._first = first
@@ -127,7 +139,7 @@ class _ImportValidationSession:
         self.executions = []
         self.committed = False
         self.site_rows = (
-            [{"site_id": "MJO105", "kabupaten": "MOJOKERTO"}]
+            [{"site_id": "MJO105", "cluster": "TO JOMBANG", "kabupaten": "MOJOKERTO"}]
             if site_rows is None else site_rows
         )
 
@@ -165,6 +177,136 @@ def test_pm_genset_uses_schedule_date_and_filename_fallback():
 
     assert row.payload["ticket_type"] == "PMG"
     assert row.payload["ticket_date"] == "2026-08-25"
+
+
+def test_pms_uses_submitted_date_without_fallback_and_maps_site_location_fields():
+    content = _tabular_xlsx(
+        [
+            "Ticket No", "Submitted Date", "Created Date", "Schedule Date", "Site",
+            "Site Name", "Cluster", "Kabupaten", "Status", "PIC",
+        ],
+        {
+            "Ticket No": "PMS-202608-000000000001",
+            "Submitted Date": datetime(2026, 8, 26, 14, 30),
+            "Created Date": datetime(2026, 8, 1, 8, 0),
+            "Schedule Date": datetime(2026, 8, 20),
+            "Site": "MJO025",
+            "Site Name": "PURI",
+            "Cluster": "TO JOMBANG",
+            "Kabupaten": "MOJOKERTO",
+            "Status": "SUBMITTED",
+            "PIC": "Operator PMS",
+        },
+        {
+            "Ticket No": "PMS-202608-000000000002",
+            "Submitted Date": None,
+            "Created Date": datetime(2026, 8, 2, 8, 0),
+            "Schedule Date": datetime(2026, 8, 21),
+            "Site": "JMB001",
+            "Site Name": "JOMBANG",
+            "Cluster": "TO JOMBANG",
+            "Status": "OPEN",
+            "PIC": None,
+        },
+    )
+
+    rows = _parse_non_inap_file("PM Site_26-08-2026.xlsx", content)
+
+    assert rows[0].payload["ticket_date"] == "2026-08-26"
+    assert rows[1].payload["ticket_date"] is None
+    assert rows[0].payload["site_id"] == "MJO025"
+    assert rows[0].payload["cluster"] == "TO JOMBANG"
+    assert rows[0].payload["kabupaten"] == "MOJOKERTO"
+
+
+@pytest.mark.parametrize("submitted_header", ["Submitted Time", "Submit Time"])
+def test_bbm_uses_submitted_time_aliases_without_date_fallback(submitted_header):
+    content = _tabular_xlsx(
+        [
+            "Ticket Number", "Assignee Name", submitted_header, "Date", "Site",
+            "Site Name", "Status",
+        ],
+        {
+            "Ticket Number": "BBM-202608-000000000001",
+            "Assignee Name": "Operator BBM",
+            submitted_header: datetime(2026, 8, 27, 21, 45),
+            "Date": datetime(2026, 8, 1, 8, 0),
+            "Site": "JMB036",
+            "Site Name": "TUNGGORONOJOMBANG",
+            "Status": "SUBMITTED",
+        },
+        {
+            "Ticket Number": "BBM-202608-000000000002",
+            "Assignee Name": None,
+            submitted_header: None,
+            "Date": datetime(2026, 8, 2, 8, 0),
+            "Site": "PSN002",
+            "Site Name": "PANDAAN",
+            "Status": "OPEN",
+        },
+    )
+
+    rows = _parse_non_inap_file("ExportBBMFixedGensetRefill.xlsx", content)
+
+    assert rows[0].payload["ticket_date"] == "2026-08-27"
+    assert rows[1].payload["ticket_date"] is None
+    assert rows[0].payload["site_id"] == "JMB036"
+
+
+@pytest.mark.asyncio
+async def test_validate_non_inap_enriches_only_missing_location_fields(monkeypatch):
+    pms_content = _tabular_xlsx(
+        ["Ticket No", "Submitted Date", "Site", "Site Name", "Cluster", "PIC"],
+        {
+            "Ticket No": "PMS-202608-000000000001",
+            "Submitted Date": datetime(2026, 8, 26),
+            "Site": "MJO025",
+            "Site Name": "PURI",
+            "Cluster": "FILE CLUSTER",
+            "PIC": "Operator PMS",
+        },
+    )
+    bbm_content = _tabular_xlsx(
+        ["Ticket Number", "Assignee Name", "Submit Time", "Site", "Site Name"],
+        {
+            "Ticket Number": "BBM-202608-000000000001",
+            "Assignee Name": "Operator BBM",
+            "Submit Time": datetime(2026, 8, 27, 21, 45),
+            "Site": "JMB036",
+            "Site Name": "TUNGGORONOJOMBANG",
+        },
+    )
+    original_pms_hash = _parse_non_inap_file("PM Site.xlsx", pms_content)[0].payload["source_hash"]
+    session = _ImportValidationSession(site_rows=[
+        {"site_id": "MJO025", "cluster": "MASTER CLUSTER 1", "kabupaten": "MOJOKERTO"},
+        {"site_id": "JMB036", "cluster": "MASTER CLUSTER 2", "kabupaten": "JOMBANG"},
+    ])
+    monkeypatch.setattr(management_imports, "async_session", lambda: _SessionContext(session))
+    actor = AppUser(
+        id="user-1",
+        username="nod-sysadmin",
+        password_hash="unused",
+        role="sysadmin",
+    )
+    uploads = [
+        UploadFile(file=BytesIO(pms_content), filename="PM Site.xlsx"),
+        UploadFile(file=BytesIO(bbm_content), filename="ExportBBMFixedGensetRefill.xlsx"),
+    ]
+
+    result = await management_imports.validate_import("ticketing_swfm_non_inap", uploads, actor)
+
+    assert result["valid_rows"] == 2
+    staged_call = next(
+        parameters
+        for sql, parameters in session.executions
+        if "INSERT INTO data_import_job_rows" in sql
+    )
+    staged = {item["row_key"]: json.loads(item["payload"]) for item in staged_call}
+    assert staged["PMS-202608-000000000001"]["cluster"] == "FILE CLUSTER"
+    assert staged["PMS-202608-000000000001"]["kabupaten"] == "MOJOKERTO"
+    assert staged["BBM-202608-000000000001"]["cluster"] == "MASTER CLUSTER 2"
+    assert staged["BBM-202608-000000000001"]["kabupaten"] == "JOMBANG"
+    assert staged["PMS-202608-000000000001"]["source_hash"] != original_pms_hash
 
 
 def test_duplicate_ticket_rows_are_invalidated():
@@ -463,6 +605,15 @@ def test_non_inap_commit_payload_rehydrates_ticket_date_for_asyncpg():
 
     assert changed[0]["ticket_date"] == date(2026, 8, 26)
     assert isinstance(changed[0]["ticket_date"], date)
+
+
+def test_non_inap_upsert_writes_location_columns_on_insert_and_update():
+    statement = management_imports._non_inap_upsert_statement()
+
+    assert "cluster, kabupaten" in statement
+    assert ":cluster, :kabupaten" in statement
+    assert "cluster = EXCLUDED.cluster" in statement
+    assert "kabupaten = EXCLUDED.kabupaten" in statement
 
 
 def test_fault_commit_payload_rehydrates_postgres_types_for_asyncpg():

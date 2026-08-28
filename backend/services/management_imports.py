@@ -346,11 +346,14 @@ def _parse_non_inap_file(filename: str, content: bytes) -> list[ParsedRow]:
             continue
         ticket = normalize_text(_first(source, "No ticket", "Ticket Number", "Ticket No"))
         pic = normalize_text(_first(source, "Pic name", "Assignee Name", "PIC"))
-        date_value = _first(source, "Created at", "Date")
-        if ticket_type == "PMG":
+        if ticket_type == "PMS":
+            date_value = _first(source, "Submitted Date")
+        elif ticket_type == "BBM":
+            date_value = _first(source, "Submitted Time", "Submit Time")
+        elif ticket_type == "PMG":
             date_value = _first(source, "Schedule Date", "Created Date", "Created at", "Date")
-        elif ticket_type == "PMS":
-            date_value = _first(source, "Created Date", "Schedule Date", "Created at", "Date")
+        else:
+            date_value = _first(source, "Created at", "Date")
         errors: list[str] = []
         if not ticket:
             errors.append("Nomor ticket wajib diisi")
@@ -366,10 +369,14 @@ def _parse_non_inap_file(filename: str, content: bytes) -> list[ParsedRow]:
             "ticket_type": ticket_type,
             "ticket_date": ticket_date.isoformat() if ticket_date else None,
             "status": normalize_text(_first(source, "Status", "Ticket status", "Ticket Status")),
-            "site_id": normalize_text(_first(source, "Site Id", "Site ID", "Siteid")),
+            "site_id": normalize_text(_first(source, "Site", "Site Id", "Site ID", "Siteid")),
             "site_name": normalize_text(_first(source, "Site Name", "Sitename")),
             "nop": normalize_text(_first(source, "NOP", "Witel", "Territory")),
             "regional": normalize_text(_first(source, "Regional", "Region")),
+            "cluster": normalize_text(_first(source, "Cluster", "Cluster Name")),
+            "kabupaten": normalize_text(
+                _first(source, "Kabupaten", "Kabupaten/Kota", "Kabupaten Kota")
+            ),
             "pic_takeover_raw": pic,
             "pic_takeover_key": normalize_pic_key(pic),
             "source_file": filename,
@@ -620,6 +627,64 @@ def _fault_location(value: object) -> str | None:
     return normalized
 
 
+def _refresh_non_inap_source_hash(row: ParsedRow) -> None:
+    row.payload["source_hash"] = _source_hash({
+        key: value
+        for key, value in row.payload.items()
+        if key not in {"source_file", "source_row", "source_hash"}
+    })
+
+
+async def _enrich_non_inap_locations(session: object, rows: list[ParsedRow]) -> list[str]:
+    site_ids = sorted({
+        site_id.upper()
+        for row in rows
+        if (site_id := normalize_text(row.payload.get("site_id")))
+    })
+    site_locations: dict[str, dict[str, str | None]] = {}
+    if site_ids:
+        result = await session.execute(
+            text(
+                """
+                SELECT UPPER(TRIM("Siteid")) AS site_id,
+                       MAX(NULLIF(TRIM("New Cluster"), '')) AS cluster,
+                       MAX(NULLIF(TRIM("Kabupaten/KOTA"), '')) AS kabupaten
+                FROM data_site_master
+                WHERE UPPER(TRIM("Siteid")) = ANY(CAST(:site_ids AS text[]))
+                GROUP BY UPPER(TRIM("Siteid"))
+                """
+            ),
+            {"site_ids": site_ids},
+        )
+        for record in result.mappings():
+            site_id = normalize_text(record["site_id"])
+            if site_id:
+                site_locations[site_id.upper()] = {
+                    "cluster": _fault_location(record["cluster"]),
+                    "kabupaten": _fault_location(record["kabupaten"]),
+                }
+
+    for row in rows:
+        site_id = normalize_text(row.payload.get("site_id"))
+        master = site_locations.get(site_id.upper(), {}) if site_id else {}
+        row.payload["cluster"] = (
+            _fault_location(row.payload.get("cluster")) or master.get("cluster")
+        )
+        row.payload["kabupaten"] = (
+            _fault_location(row.payload.get("kabupaten")) or master.get("kabupaten")
+        )
+        _refresh_non_inap_source_hash(row)
+
+    warnings = []
+    missing_cluster = sum(1 for row in rows if not row.payload.get("cluster"))
+    missing_kabupaten = sum(1 for row in rows if not row.payload.get("kabupaten"))
+    if missing_cluster:
+        warnings.append(f"{missing_cluster} baris tidak memiliki cluster setelah lookup site master")
+    if missing_kabupaten:
+        warnings.append(f"{missing_kabupaten} baris tidak memiliki kabupaten setelah lookup site master")
+    return warnings
+
+
 async def _enrich_raw_fault_locations(session: object, rows: list[ParsedRow]) -> None:
     lookup_keys = sorted({key for row in rows for key in _fault_site_lookup_keys(row)})
     if not lookup_keys:
@@ -691,7 +756,9 @@ async def validate_import(target: str, uploads: list[UploadFile], actor: AppUser
 
     existing: dict[str, str] = {}
     async with async_session() as session:
-        if target == "ticketing_fault_center" and parsed.metadata.get("source_format") == "raw_swfm":
+        if target == "ticketing_swfm_non_inap":
+            parsed.warnings.extend(await _enrich_non_inap_locations(session, parsed.rows))
+        elif target == "ticketing_fault_center" and parsed.metadata.get("source_format") == "raw_swfm":
             await _enrich_raw_fault_locations(session, parsed.rows)
         valid_rows = [row for row in parsed.rows if not row.errors]
         if valid_rows:
@@ -869,6 +936,39 @@ def _fault_insert_statement() -> str:
     )
 
 
+def _non_inap_upsert_statement() -> str:
+    return """
+        INSERT INTO ticketing_swfm_non_inap (
+            ticket_number, ticket_type, ticket_date, status, site_id, site_name,
+            nop, regional, cluster, kabupaten, pic_takeover_raw, pic_takeover_key,
+            source_file, source_row, source_payload, source_hash, import_job_id
+        ) VALUES (
+            :ticket_number, :ticket_type, CAST(:ticket_date AS date), :status,
+            :site_id, :site_name, :nop, :regional, :cluster, :kabupaten,
+            :pic_takeover_raw, :pic_takeover_key, :source_file, :source_row,
+            CAST(:source_payload AS jsonb), :source_hash, CAST(:job_id AS uuid)
+        )
+        ON CONFLICT (ticket_number) DO UPDATE SET
+            ticket_type = EXCLUDED.ticket_type,
+            ticket_date = EXCLUDED.ticket_date,
+            status = EXCLUDED.status,
+            site_id = EXCLUDED.site_id,
+            site_name = EXCLUDED.site_name,
+            nop = EXCLUDED.nop,
+            regional = EXCLUDED.regional,
+            cluster = EXCLUDED.cluster,
+            kabupaten = EXCLUDED.kabupaten,
+            pic_takeover_raw = EXCLUDED.pic_takeover_raw,
+            pic_takeover_key = EXCLUDED.pic_takeover_key,
+            source_file = EXCLUDED.source_file,
+            source_row = EXCLUDED.source_row,
+            source_payload = EXCLUDED.source_payload,
+            source_hash = EXCLUDED.source_hash,
+            import_job_id = EXCLUDED.import_job_id,
+            updated_at = NOW()
+    """
+
+
 def _prepare_non_inap_commit_rows(
     staged_rows: Iterable[Mapping[str, object]],
     job_id: str,
@@ -960,39 +1060,7 @@ async def commit_import(job_id: str, actor: AppUser) -> dict[str, object]:
             if job["target"] == "ticketing_swfm_non_inap":
                 changed = _prepare_non_inap_commit_rows(staged_rows, job_id)
                 if changed:
-                    await session.execute(
-                        text(
-                            """
-                            INSERT INTO ticketing_swfm_non_inap (
-                                ticket_number, ticket_type, ticket_date, status, site_id, site_name,
-                                nop, regional, pic_takeover_raw, pic_takeover_key, source_file,
-                                source_row, source_payload, source_hash, import_job_id
-                            ) VALUES (
-                                :ticket_number, :ticket_type, CAST(:ticket_date AS date), :status,
-                                :site_id, :site_name, :nop, :regional, :pic_takeover_raw,
-                                :pic_takeover_key, :source_file, :source_row,
-                                CAST(:source_payload AS jsonb), :source_hash, CAST(:job_id AS uuid)
-                            )
-                            ON CONFLICT (ticket_number) DO UPDATE SET
-                                ticket_type = EXCLUDED.ticket_type,
-                                ticket_date = EXCLUDED.ticket_date,
-                                status = EXCLUDED.status,
-                                site_id = EXCLUDED.site_id,
-                                site_name = EXCLUDED.site_name,
-                                nop = EXCLUDED.nop,
-                                regional = EXCLUDED.regional,
-                                pic_takeover_raw = EXCLUDED.pic_takeover_raw,
-                                pic_takeover_key = EXCLUDED.pic_takeover_key,
-                                source_file = EXCLUDED.source_file,
-                                source_row = EXCLUDED.source_row,
-                                source_payload = EXCLUDED.source_payload,
-                                source_hash = EXCLUDED.source_hash,
-                                import_job_id = EXCLUDED.import_job_id,
-                                updated_at = NOW()
-                            """
-                        ),
-                        changed,
-                    )
+                    await session.execute(text(_non_inap_upsert_statement()), changed)
             else:
                 metadata = dict(job["metadata"])
                 period = str(metadata["period"])
