@@ -1,5 +1,6 @@
 import json
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
+from decimal import Decimal
 from io import BytesIO
 
 import pytest
@@ -462,6 +463,35 @@ def test_non_inap_commit_payload_rehydrates_ticket_date_for_asyncpg():
 
     assert changed[0]["ticket_date"] == date(2026, 8, 26)
     assert isinstance(changed[0]["ticket_date"], date)
+
+
+def test_fault_commit_payload_rehydrates_postgres_types_for_asyncpg():
+    staged_rows = [{
+        "payload": {
+            "occured_time": "2026-08-01 00:38:49",
+            "created_at": "2026-08-01 00:59:02",
+            "cleared_time": None,
+            "mttr": "1:57:05",
+            "respon_time": "-0:20:13",
+            "pln_downtime": "117.08",
+            "rh_start": None,
+            "tahun": 2026,
+            "is_escalate": False,
+        },
+        "change_kind": "insert",
+    }]
+
+    prepared = management_imports._prepare_fault_commit_rows(staged_rows)
+
+    assert prepared[0]["occured_time"] == datetime(2026, 8, 1, 0, 38, 49)
+    assert prepared[0]["created_at"] == datetime(2026, 8, 1, 0, 59, 2)
+    assert prepared[0]["cleared_time"] is None
+    assert prepared[0]["mttr"] == timedelta(hours=1, minutes=57, seconds=5)
+    assert prepared[0]["respon_time"] == -timedelta(minutes=20, seconds=13)
+    assert prepared[0]["pln_downtime"] == Decimal("117.08")
+    assert prepared[0]["rh_start"] is None
+    assert prepared[0]["tahun"] == 2026
+    assert prepared[0]["is_escalate"] is False
 
 
 @pytest.mark.asyncio

@@ -887,6 +887,37 @@ def _prepare_non_inap_commit_rows(
     return changed
 
 
+def _prepare_fault_commit_rows(
+    staged_rows: Iterable[Mapping[str, object]],
+) -> list[dict[str, object]]:
+    prepared: list[dict[str, object]] = []
+    for row in staged_rows:
+        payload = dict(row["payload"])
+        for column in FAULT_TIMESTAMPS:
+            value = payload.get(column)
+            if isinstance(value, str):
+                payload[column] = _fault_datetime(value)
+        for column in FAULT_INTERVALS:
+            value = payload.get(column)
+            if isinstance(value, str):
+                match = re.fullmatch(r"(-?)(\d+):(\d{2}):(\d{2})", value)
+                if match is None:
+                    raise ValueError(f"Interval staging tidak valid: {value}")
+                sign, hours, minutes, seconds = match.groups()
+                duration = timedelta(
+                    hours=int(hours),
+                    minutes=int(minutes),
+                    seconds=int(seconds),
+                )
+                payload[column] = -duration if sign else duration
+        for column in FAULT_DECIMALS:
+            value = payload.get(column)
+            if value is not None and not isinstance(value, Decimal):
+                payload[column] = Decimal(str(value))
+        prepared.append(payload)
+    return prepared
+
+
 async def commit_import(job_id: str, actor: AppUser) -> dict[str, object]:
     async with async_session() as session:
         result = await session.execute(
@@ -975,7 +1006,7 @@ async def commit_import(job_id: str, actor: AppUser) -> dict[str, object]:
                     ),
                     {"year": metadata["year"], "periods": _period_variants(period)},
                 )
-                fault_rows = [dict(row["payload"]) for row in staged_rows]
+                fault_rows = _prepare_fault_commit_rows(staged_rows)
                 if fault_rows:
                     await session.execute(text(_fault_insert_statement()), fault_rows)
 
