@@ -50,3 +50,36 @@ export function buildSectorViewportDescriptor(map, nop) {
     key: `${bbox}|${zoom.toFixed(2)}|${normalizedNop || ''}`,
   };
 }
+
+
+export function sectorStatusLabel(status = {}) {
+  switch (status.kind) {
+    case 'off':
+      return 'Sectors Off';
+    case 'zoom-required':
+      return 'Zoom in for sectors';
+    case 'loading':
+      return 'Loading sectors…';
+    case 'ready': {
+      const count = Number.isFinite(Number(status.count))
+        ? Math.max(0, Math.trunc(Number(status.count)))
+        : 0;
+      const lod = typeof status.lod === 'string' && status.lod
+        ? `${status.lod.charAt(0).toUpperCase()}${status.lod.slice(1)}`
+        : 'Unknown';
+      return `${count} sectors · ${lod}`;
+    }
+    case 'limit':
+      return 'Area too wide — zoom in';
+    case 'error':
+    default:
+      return 'Sector layer unavailable';
+  }
+}
+
+
+export function shouldShowSectorBandLegend(status = {}, selectedFeatureCount = 0) {
+  if (status.kind === 'off') return false;
+  return Number(selectedFeatureCount) > 0
+    || (status.kind === 'ready' && status.lod === 'full');
+}

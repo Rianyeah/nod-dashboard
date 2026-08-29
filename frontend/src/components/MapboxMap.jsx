@@ -5,12 +5,18 @@ import { getMarkerColor } from '../utils/mapColors';
 import { fetchMapSectorViewport, fetchMapSectors, fetchSiteAvailability } from '../services/api';
 import { domElement, textElement } from '../utils/safeMapDom';
 import { describeMapboxError, validateMapboxRuntime } from '../utils/mapboxRuntime';
-import { buildSectorViewportDescriptor, SECTOR_MIN_ZOOM } from '../utils/sectorViewport';
+import {
+  buildSectorViewportDescriptor,
+  sectorStatusLabel,
+  SECTOR_MIN_ZOOM,
+  shouldShowSectorBandLegend,
+} from '../utils/sectorViewport';
 import { Layers, Globe2, Satellite } from 'lucide-react';
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 
 const SITE_LAYER_IDS = ['site-pin-label', 'site-pin', 'site-pin-halo'];
+const SITE_CLUSTER_LAYER_IDS = ['site-cluster-count', 'site-cluster', 'site-cluster-halo'];
 const RADIUS_SOURCE_ID = 'site-radius-source';
 const RADIUS_LAYER_IDS = ['site-radius-fill', 'site-radius-glow', 'site-radius-outline'];
 const SECTOR_VIEWPORT_SOURCE_ID = 'sector-viewport-source';
@@ -62,6 +68,124 @@ const BAND_LINE_COLOR = [
   'L2300', '#C4B5FD',
   '#94A3B8',
 ];
+
+const UNCLUSTERED_SITE_FILTER = ['!', ['has', 'point_count']];
+
+function addSiteSourceAndLayers(mapInstance, data = EMPTY_GEOJSON) {
+  if (!mapInstance.getSource('sites-source')) {
+    mapInstance.addSource('sites-source', {
+      type: 'geojson',
+      data,
+      cluster: true,
+      clusterRadius: 42,
+      clusterMaxZoom: 11,
+    });
+  }
+
+  if (!mapInstance.getLayer('site-cluster-halo')) {
+    mapInstance.addLayer({
+      id: 'site-cluster-halo',
+      type: 'circle',
+      source: 'sites-source',
+      filter: ['has', 'point_count'],
+      slot: 'top',
+      paint: {
+        'circle-color': '#38BDF8',
+        'circle-radius': ['step', ['get', 'point_count'], 17, 20, 21, 75, 25],
+        'circle-opacity': 0.18,
+        'circle-blur': 0.5,
+      },
+    });
+  }
+  if (!mapInstance.getLayer('site-cluster')) {
+    mapInstance.addLayer({
+      id: 'site-cluster',
+      type: 'circle',
+      source: 'sites-source',
+      filter: ['has', 'point_count'],
+      slot: 'top',
+      paint: {
+        'circle-color': ['step', ['get', 'point_count'], '#2563EB', 20, '#1D4ED8', 75, '#1E40AF'],
+        'circle-radius': ['step', ['get', 'point_count'], 13, 20, 16, 75, 19],
+        'circle-stroke-color': 'rgba(255,255,255,0.82)',
+        'circle-stroke-width': 1.4,
+        'circle-opacity': 0.92,
+      },
+    });
+  }
+  if (!mapInstance.getLayer('site-cluster-count')) {
+    mapInstance.addLayer({
+      id: 'site-cluster-count',
+      type: 'symbol',
+      source: 'sites-source',
+      filter: ['has', 'point_count'],
+      slot: 'top',
+      layout: {
+        'text-field': ['get', 'point_count_abbreviated'],
+        'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
+        'text-size': 11,
+      },
+      paint: {
+        'text-color': '#F8FAFC',
+        'text-halo-color': 'rgba(15,23,42,0.45)',
+        'text-halo-width': 0.8,
+      },
+    });
+  }
+  if (!mapInstance.getLayer('site-pin-halo')) {
+    mapInstance.addLayer({
+      id: 'site-pin-halo',
+      type: 'circle',
+      source: 'sites-source',
+      filter: UNCLUSTERED_SITE_FILTER,
+      slot: 'top',
+      paint: {
+        'circle-color': ['get', 'color'],
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 8, 10, 12, 14, 16],
+        'circle-opacity': 0.34,
+        'circle-blur': 0.55,
+      },
+    });
+  }
+  if (!mapInstance.getLayer('site-pin')) {
+    mapInstance.addLayer({
+      id: 'site-pin',
+      type: 'circle',
+      source: 'sites-source',
+      filter: UNCLUSTERED_SITE_FILTER,
+      slot: 'top',
+      paint: {
+        'circle-color': ['get', 'color'],
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 4.6, 10, 6.2, 14, 7.6],
+        'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 6, 1.3, 10, 1.8],
+        'circle-stroke-color': 'rgba(255,255,255,0.94)',
+        'circle-opacity': 0.95,
+      },
+    });
+  }
+  if (!mapInstance.getLayer('site-pin-label')) {
+    mapInstance.addLayer({
+      id: 'site-pin-label',
+      type: 'symbol',
+      source: 'sites-source',
+      filter: UNCLUSTERED_SITE_FILTER,
+      minzoom: 10,
+      slot: 'top',
+      layout: {
+        'text-field': ['get', 'site_id'],
+        'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
+        'text-size': 11,
+        'text-offset': [0, 1.2],
+        'text-anchor': 'top',
+      },
+      paint: {
+        'text-color': '#ffffff',
+        'text-halo-color': 'rgba(0, 0, 0, 0.8)',
+        'text-halo-width': 2,
+      },
+    });
+  }
+}
 
 function addSectorSourcesAndLayers(mapInstance, {
   viewportData = EMPTY_GEOJSON,
@@ -557,7 +681,7 @@ export default function MapboxMap({
   const showSectorsRef = useRef(false);
   const [sectorViewportState, setSectorViewport] = useState({ key: null, geoJson: EMPTY_GEOJSON });
   const [selectedSectorState, setSelectedSectors] = useState({ siteId: null, geoJson: EMPTY_GEOJSON });
-  const [, setSectorStatus] = useState({ kind: 'off', count: 0, lod: 'none' });
+  const [sectorStatus, setSectorStatus] = useState({ kind: 'off', count: 0, lod: 'none' });
   const [viewportDescriptor, setViewportDescriptor] = useState(null);
   const normalizedNop = nop || null;
   const sitesGeoJson = useMemo(() => buildSitesGeoJson(sites), [sites]);
@@ -571,6 +695,9 @@ export default function MapboxMap({
     && selectedSectorState.siteId === selectedSiteId
     ? selectedSectorState.geoJson
     : EMPTY_GEOJSON;
+  const showBandLegend = showSectors
+    && shouldShowSectorBandLegend(sectorStatus, selectedSectors.features.length);
+  const sectorStatusText = sectorStatusLabel(sectorStatus);
 
   useEffect(() => {
     sitesRef.current = sites || [];
@@ -1220,7 +1347,7 @@ export default function MapboxMap({
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
 
-    [...SITE_LAYER_IDS, ...RADIUS_LAYER_IDS, ...SECTOR_LAYER_IDS, ...LEGACY_LAYER_IDS].forEach(id => {
+    [...SITE_LAYER_IDS, ...SITE_CLUSTER_LAYER_IDS, ...RADIUS_LAYER_IDS, ...SECTOR_LAYER_IDS, ...LEGACY_LAYER_IDS].forEach(id => {
       if (map.current.getLayer(id)) map.current.removeLayer(id);
     });
     if (map.current.getSource(RADIUS_SOURCE_ID)) map.current.removeSource(RADIUS_SOURCE_ID);
@@ -1228,64 +1355,12 @@ export default function MapboxMap({
     if (map.current.getSource(SECTOR_SELECTED_SOURCE_ID)) map.current.removeSource(SECTOR_SELECTED_SOURCE_ID);
     if (map.current.getSource('sites-source')) map.current.removeSource('sites-source');
 
-    map.current.addSource('sites-source', {
-      type: 'geojson',
-      data: emptyFeatureCollection(),
-      cluster: false,
-    });
-
     addSectorSourcesAndLayers(map.current, {
       viewportData: EMPTY_GEOJSON,
       selectedData: EMPTY_GEOJSON,
       visibility: showSectorsRef.current ? 'visible' : 'none',
     });
-
-    map.current.addLayer({
-      id: 'site-pin-halo',
-      type: 'circle',
-      source: 'sites-source',
-      slot: 'top',
-      paint: {
-        'circle-color': ['get', 'color'],
-        'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 8, 10, 12, 14, 16],
-        'circle-opacity': 0.34,
-        'circle-blur': 0.55,
-      },
-    });
-
-    map.current.addLayer({
-      id: 'site-pin',
-      type: 'circle',
-      source: 'sites-source',
-      slot: 'top',
-      paint: {
-        'circle-color': ['get', 'color'],
-        'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 4.6, 10, 6.2, 14, 7.6],
-        'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 6, 1.3, 10, 1.8],
-        'circle-stroke-color': 'rgba(255,255,255,0.94)',
-        'circle-opacity': 0.95,
-      },
-    });
-
-    map.current.addLayer({
-      id: 'site-pin-label',
-      type: 'symbol',
-      source: 'sites-source',
-      minzoom: 10,
-      slot: 'top',
-      layout: {
-        'text-field': ['get', 'site_id'],
-        'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
-        'text-size': 11,
-        'text-offset': [0, 1.2],
-        'text-anchor': 'top',
-      },
-      paint: {
-        'text-color': '#ffffff',
-        'text-halo-color': 'rgba(0, 0, 0, 0.8)',
-        'text-halo-width': 2,
-      },
-    });
+    addSiteSourceAndLayers(map.current, EMPTY_GEOJSON);
 
     const handleSiteClick = (e) => {
       const p = e.features[0].properties;
@@ -1293,12 +1368,26 @@ export default function MapboxMap({
       focusSiteRef.current?.(p, c, { notify: true });
     };
 
+    const handleClusterClick = (e) => {
+      const feature = e.features?.[0];
+      const clusterId = feature?.properties?.cluster_id;
+      const coordinates = feature?.geometry?.coordinates?.slice();
+      const source = map.current?.getSource('sites-source');
+      if (clusterId == null || !coordinates || !source?.getClusterExpansionZoom) return;
+
+      source.getClusterExpansionZoom(clusterId, (error, zoom) => {
+        if (error || !Number.isFinite(zoom) || !map.current) return;
+        map.current.easeTo({ center: coordinates, zoom });
+      });
+    };
+
     const setPointerCursor = () => { map.current.getCanvas().style.cursor = 'pointer'; };
     const clearPointerCursor = () => { map.current.getCanvas().style.cursor = ''; };
 
     map.current.on('click', 'site-pin', handleSiteClick);
     map.current.on('click', 'site-pin-label', handleSiteClick);
-    ['site-pin', 'site-pin-label'].forEach(layer => {
+    map.current.on('click', 'site-cluster', handleClusterClick);
+    ['site-pin', 'site-pin-label', 'site-cluster'].forEach(layer => {
       map.current.on('mouseenter', layer, setPointerCursor);
       map.current.on('mouseleave', layer, clearPointerCursor);
     });
@@ -1307,7 +1396,8 @@ export default function MapboxMap({
       if (!map.current) return;
       map.current.off('click', 'site-pin', handleSiteClick);
       map.current.off('click', 'site-pin-label', handleSiteClick);
-      ['site-pin', 'site-pin-label'].forEach(layer => {
+      map.current.off('click', 'site-cluster', handleClusterClick);
+      ['site-pin', 'site-pin-label', 'site-cluster'].forEach(layer => {
         if (!map.current.getLayer(layer)) return;
         map.current.off('mouseenter', layer, setPointerCursor);
         map.current.off('mouseleave', layer, clearPointerCursor);
@@ -1344,6 +1434,8 @@ export default function MapboxMap({
       setSectorViewport({ key: null, geoJson: EMPTY_GEOJSON });
       setSelectedSectors({ siteId: null, geoJson: EMPTY_GEOJSON });
       setSectorStatus({ kind: 'off', count: 0, lod: 'none' });
+    } else {
+      setSectorStatus({ kind: 'loading', count: 0, lod: 'none' });
     }
     setShowSectors(nextVisible);
   }, [showSectors]);
@@ -1404,90 +1496,14 @@ export default function MapboxMap({
         applyDuskScene(map.current);
       }
 
-      // Re-add all custom sources and layers
-      // Sites source
-      if (!map.current.getSource('sites-source')) {
-        map.current.addSource('sites-source', {
-          type: 'geojson',
-          data: sitesGeoJson || emptyFeatureCollection(),
-          cluster: false,
-        });
-      }
-
+      // Re-add all custom sources and layers.
       const sectorVisibility = showSectorsRef.current ? 'visible' : 'none';
       addSectorSourcesAndLayers(map.current, {
         viewportData: sectorViewportRef.current,
         selectedData: selectedSectorsRef.current,
         visibility: sectorVisibility,
       });
-
-      // Re-add site layers
-      if (!map.current.getLayer('site-pin-halo')) {
-        map.current.addLayer({
-          id: 'site-pin-halo',
-          type: 'circle',
-          source: 'sites-source',
-          slot: 'top',
-          paint: {
-            'circle-color': ['get', 'color'],
-            'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 8, 10, 12, 14, 16],
-            'circle-opacity': 0.34,
-            'circle-blur': 0.55,
-          },
-        });
-      }
-      if (!map.current.getLayer('site-pin')) {
-        map.current.addLayer({
-          id: 'site-pin',
-          type: 'circle',
-          source: 'sites-source',
-          slot: 'top',
-          paint: {
-            'circle-color': ['get', 'color'],
-            'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 4.6, 10, 6.2, 14, 7.6],
-            'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 6, 1.3, 10, 1.8],
-            'circle-stroke-color': 'rgba(255,255,255,0.94)',
-            'circle-opacity': 0.95,
-          },
-        });
-      }
-      if (!map.current.getLayer('site-pin-label')) {
-        map.current.addLayer({
-          id: 'site-pin-label',
-          type: 'symbol',
-          source: 'sites-source',
-          minzoom: 10,
-          slot: 'top',
-          layout: {
-            'text-field': ['get', 'site_id'],
-            'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
-            'text-size': 11,
-            'text-offset': [0, 1.2],
-            'text-anchor': 'top',
-          },
-          paint: {
-            'text-color': '#ffffff',
-            'text-halo-color': 'rgba(0, 0, 0, 0.8)',
-            'text-halo-width': 2,
-          },
-        });
-      }
-
-      // Re-attach click handlers for site pins
-      const handleSiteClick = (e) => {
-        const p = e.features[0].properties;
-        const c = e.features[0].geometry.coordinates.slice();
-        focusSiteRef.current?.(p, c, { notify: true });
-      };
-      const setPointerCursor = () => { map.current.getCanvas().style.cursor = 'pointer'; };
-      const clearPointerCursor = () => { map.current.getCanvas().style.cursor = ''; };
-
-      map.current.on('click', 'site-pin', handleSiteClick);
-      map.current.on('click', 'site-pin-label', handleSiteClick);
-      ['site-pin', 'site-pin-label'].forEach(layer => {
-        map.current.on('mouseenter', layer, setPointerCursor);
-        map.current.on('mouseleave', layer, clearPointerCursor);
-      });
+      addSiteSourceAndLayers(map.current, sitesGeoJson || EMPTY_GEOJSON);
     });
   }, [mapStyle, sitesGeoJson]);
 
@@ -1546,8 +1562,8 @@ export default function MapboxMap({
           Belum ada data marker untuk periode dan filter ini.
         </div>
       )}
-      {/* Sector Band Legend — hidden when sectors are off */}
-      {showSectors && (
+      {/* Sector Band Legend — only shown for band-specific geometry. */}
+      {showBandLegend && (
         <div className="nod-sector-legend absolute bottom-3 left-3 z-10 px-3 py-2.5">
           <p className="nod-sector-legend-title text-[9px] font-semibold uppercase tracking-widest mb-1.5">
             Sector Bands
@@ -1595,7 +1611,7 @@ export default function MapboxMap({
         >
           <Layers className="w-4 h-4" />
           <span className="text-[10px] font-semibold">
-            {showSectors ? 'Sectors On' : 'Sectors Off'}
+            <span aria-live="polite">{sectorStatusText}</span>
           </span>
         </button>
       </div>

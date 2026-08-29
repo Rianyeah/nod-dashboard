@@ -4,6 +4,8 @@ import assert from 'node:assert/strict';
 import {
   buildSectorViewportDescriptor,
   sectorLodForZoom,
+  sectorStatusLabel,
+  shouldShowSectorBandLegend,
 } from '../utils/sectorViewport.js';
 
 
@@ -82,5 +84,23 @@ describe('sector viewport helpers', () => {
     assert.throws(() => buildSectorViewportDescriptor(null, null), /map/i);
     assert.throws(() => buildSectorViewportDescriptor(mapAt({ west: Number.NaN }), null), /bounds/i);
     assert.throws(() => buildSectorViewportDescriptor(mapAt({ west: 114, east: 112 }), null), /bounds/i);
+  });
+
+  it('formats compact and actionable sector layer states', () => {
+    assert.equal(sectorStatusLabel({ kind: 'off' }), 'Sectors Off');
+    assert.equal(sectorStatusLabel({ kind: 'zoom-required' }), 'Zoom in for sectors');
+    assert.equal(sectorStatusLabel({ kind: 'loading' }), 'Loading sectors…');
+    assert.equal(sectorStatusLabel({ kind: 'ready', count: 37, lod: 'lite' }), '37 sectors · Lite');
+    assert.equal(sectorStatusLabel({ kind: 'ready', count: 8, lod: 'medium' }), '8 sectors · Medium');
+    assert.equal(sectorStatusLabel({ kind: 'limit' }), 'Area too wide — zoom in');
+    assert.equal(sectorStatusLabel({ kind: 'error' }), 'Sector layer unavailable');
+  });
+
+  it('shows the band legend only for band-specific polygon detail', () => {
+    assert.equal(shouldShowSectorBandLegend({ kind: 'ready', lod: 'lite' }, 0), false);
+    assert.equal(shouldShowSectorBandLegend({ kind: 'ready', lod: 'medium' }, 0), false);
+    assert.equal(shouldShowSectorBandLegend({ kind: 'ready', lod: 'full' }, 0), true);
+    assert.equal(shouldShowSectorBandLegend({ kind: 'ready', lod: 'lite' }, 3), true);
+    assert.equal(shouldShowSectorBandLegend({ kind: 'off', lod: 'full' }, 3), false);
   });
 });

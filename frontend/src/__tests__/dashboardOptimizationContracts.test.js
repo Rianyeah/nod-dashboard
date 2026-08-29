@@ -105,6 +105,28 @@ describe('dashboard loading optimization contracts', () => {
     assert.doesNotMatch(map, /allSectorLoadNop|allSectorsLoadedRef|allLoaded/);
   });
 
+  it('clusters site markers independently from sector polygon LOD', () => {
+    const map = src('components', 'MapboxMap.jsx');
+
+    assert.match(map, /cluster:\s*true/);
+    assert.match(map, /clusterRadius:\s*42/);
+    assert.match(map, /clusterMaxZoom:\s*11/);
+    assert.match(map, /id:\s*'site-cluster'/);
+    assert.match(map, /id:\s*'site-cluster-count'/);
+    assert.match(map, /UNCLUSTERED_SITE_FILTER\s*=\s*\['!',\s*\['has',\s*'point_count'\]\]/);
+    assert.match(map, /filter:\s*UNCLUSTERED_SITE_FILTER/);
+    assert.match(map, /getClusterExpansionZoom\(clusterId/);
+    assert.match(map, /easeTo\(\{[\s\S]*?center:\s*coordinates[\s\S]*?zoom/);
+  });
+
+  it('renders sector status and hides the band legend for lite aggregate geometry', () => {
+    const map = src('components', 'MapboxMap.jsx');
+
+    assert.match(map, /sectorStatusLabel\(sectorStatus\)/);
+    assert.match(map, /shouldShowSectorBandLegend\(sectorStatus,\s*selectedSectors\.features\.length\)/);
+    assert.match(map, /showBandLegend\s*&&/);
+  });
+
   it('resizes Mapbox when the dashboard layout changes', () => {
     const dashboard = src('pages', 'DashboardPage.jsx');
     const map = src('components', 'MapboxMap.jsx');
