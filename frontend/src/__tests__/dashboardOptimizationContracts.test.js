@@ -62,6 +62,16 @@ describe('dashboard loading optimization contracts', () => {
     assert.match(dashboard, /nop=\{nop\}/);
   });
 
+  it('separates bounded viewport sectors from selected-site full detail', () => {
+    const api = src('services', 'api.js');
+
+    assert.match(api, /export async function fetchMapSectorViewport\(\{ bbox, zoom, nop, signal \}\)/);
+    assert.match(api, /api\.get\('\/map\/sectors\/viewport'/);
+    assert.match(api, /params:\s*\{\s*bbox,\s*zoom,\s*nop:\s*nop\s*\|\|\s*undefined\s*\}/);
+    assert.match(api, /export async function fetchMapSectors\(\{ nop, siteId, signal \}\s*=\s*\{\}\)/);
+    assert.match(api, /site_id:\s*siteId\s*\|\|\s*undefined/);
+  });
+
   it('keeps selected-site radius below sector antenna polygons', () => {
     const map = src('components', 'MapboxMap.jsx');
 

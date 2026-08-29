@@ -68,7 +68,14 @@ export async function fetchMapSectors({ nop, siteId, signal } = {}) {
       nop: nop || undefined,
       site_id: siteId || undefined,
     },
-    timeout: 60000,
+    signal,
+  });
+  return data;
+}
+
+export async function fetchMapSectorViewport({ bbox, zoom, nop, signal }) {
+  const { data } = await api.get('/map/sectors/viewport', {
+    params: { bbox, zoom, nop: nop || undefined },
     signal,
   });
   return data;
