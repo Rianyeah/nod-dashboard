@@ -1,5 +1,6 @@
 import unittest
 import importlib
+import math
 import re
 import types
 from pathlib import Path
@@ -73,6 +74,23 @@ class SectorQueryContractTest(unittest.TestCase):
         self.assertIn(":site_id", loader_source)
         self.assertIn(":nop", loader_source)
 
+    def test_viewport_queries_are_spatially_bounded_and_budgeted(self):
+        from queries.sql_queries import (
+            MAP_SECTORS_VIEWPORT_FULL_QUERY,
+            MAP_SECTORS_VIEWPORT_GROUPED_QUERY,
+        )
+
+        for query in (MAP_SECTORS_VIEWPORT_GROUPED_QUERY, MAP_SECTORS_VIEWPORT_FULL_QUERY):
+            normalized = " ".join(query.split()).lower()
+            self.assertIn("geom && st_makeenvelope(:west, :south, :east, :north, 4326)", normalized)
+            self.assertIn("limit :row_limit", normalized)
+            self.assertIn("{filters}", query)
+
+        grouped = " ".join(MAP_SECTORS_VIEWPORT_GROUPED_QUERY.split()).lower()
+        self.assertIn("round(azimuth::numeric, 1)", grouped)
+        self.assertIn("array_agg(distinct", grouped)
+        self.assertIn("count(*)", grouped)
+
     def test_map_sectors_endpoint_matches_public_map_route_contract(self):
         backend_root = Path(__file__).resolve().parents[1]
         map_source = (backend_root / "routers" / "map.py").read_text(encoding="utf-8")
@@ -104,6 +122,48 @@ class SectorRouterBehaviorTest(unittest.IsolatedAsyncioTestCase):
             cls.get_map_sectors = staticmethod(
                 importlib.import_module("routers.map").get_map_sectors
             )
+            cls.get_map_sector_viewport = staticmethod(
+                importlib.import_module("routers.map").get_map_sector_viewport
+            )
+
+    def test_parse_viewport_bbox_accepts_valid_bounds(self):
+        from map_sectors import parse_viewport_bbox
+
+        self.assertEqual(
+            parse_viewport_bbox("112,-8,114,-6"),
+            (112.0, -8.0, 114.0, -6.0),
+        )
+
+    def test_parse_viewport_bbox_rejects_malformed_or_unbounded_values(self):
+        from map_sectors import parse_viewport_bbox
+
+        invalid_values = [
+            "112,-8,114",
+            "west,-8,114,-6",
+            "114,-8,112,-6",
+            "112,-6,114,-8",
+            "-181,-8,114,-6",
+            "112,-91,114,-6",
+            "nan,-8,114,-6",
+            f"112,-8,{math.inf},-6",
+        ]
+        for value in invalid_values:
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError):
+                    parse_viewport_bbox(value)
+
+    async def test_dashboard_sector_endpoint_rejects_unbounded_request(self):
+        from fastapi import HTTPException
+
+        with self.assertRaises(HTTPException) as raised:
+            await self.get_map_sectors(
+                site_id=None,
+                nop=None,
+                session=FakeSession([]),
+            )
+
+        self.assertEqual(raised.exception.status_code, 422)
+        self.assertIn("site_id", raised.exception.detail)
 
     async def test_get_map_sectors_filters_params_and_omits_invalid_features(self):
         valid_row = {
@@ -154,6 +214,86 @@ class SectorRouterBehaviorTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(payload["features"]), 1)
         self.assertEqual(payload["features"][0]["type"], "Feature")
         self.assertEqual(payload["features"][0]["properties"]["cell_name"], "BGL001_1")
+
+    async def test_viewport_endpoint_returns_lite_metadata_and_bound_sql(self):
+        fake_session = FakeSession([
+            {
+                "site_id": "PST001",
+                "latitude_fix": -7.645,
+                "longitude_fix": 112.908,
+                "azimuth": 30,
+                "beamwidth": 65,
+                "radius": 1200,
+                "bands": ["L900", "L1800", "L2100"],
+                "sector_count": 3,
+            }
+        ])
+
+        payload = await self.get_map_sector_viewport(
+            bbox="112,-8,114,-6",
+            zoom=10.5,
+            nop="PASURUAN",
+            session=fake_session,
+        )
+
+        self.assertEqual(payload["metadata"], {
+            "lod": "lite",
+            "zoom": 10.5,
+            "feature_count": 1,
+            "feature_limit": 2500,
+            "limit_exceeded": False,
+            "zoom_required": False,
+        })
+        self.assertEqual(payload["features"][0]["properties"]["bands"], ["L900", "L1800", "L2100"])
+        self.assertIn("AND nop = :nop", fake_session.executed_sql)
+        self.assertEqual(fake_session.executed_params, {
+            "west": 112.0,
+            "south": -8.0,
+            "east": 114.0,
+            "north": -6.0,
+            "nop": "PASURUAN",
+            "row_limit": 2501,
+        })
+
+    async def test_viewport_loader_does_not_execute_below_minimum_zoom(self):
+        fake_session = FakeSession([])
+
+        payload = await self.get_map_sector_viewport(
+            bbox="112,-8,114,-6",
+            zoom=8.5,
+            nop=None,
+            session=fake_session,
+        )
+
+        self.assertIsNone(fake_session.executed_sql)
+        self.assertEqual(payload["features"], [])
+        self.assertTrue(payload["metadata"]["zoom_required"])
+        self.assertEqual(payload["metadata"]["lod"], "none")
+
+    async def test_viewport_loader_returns_no_partial_geometry_when_limit_exceeded(self):
+        row = {
+            "site_id": "PST001",
+            "latitude_fix": -7.645,
+            "longitude_fix": 112.908,
+            "azimuth": 30,
+            "beamwidth": 65,
+            "radius": 1200,
+            "bands": ["L900"],
+            "sector_count": 1,
+        }
+        fake_session = FakeSession([row] * 2501)
+
+        payload = await self.get_map_sector_viewport(
+            bbox="112,-8,114,-6",
+            zoom=10,
+            nop=None,
+            session=fake_session,
+        )
+
+        self.assertEqual(payload["features"], [])
+        self.assertEqual(payload["metadata"]["feature_count"], 0)
+        self.assertTrue(payload["metadata"]["limit_exceeded"])
+        self.assertTrue(payload["metadata"]["zoom_required"])
 
 
 if __name__ == "__main__":

@@ -9,7 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
 from database import get_session
-from map_sectors import load_sector_feature_collection
+from map_sectors import (
+    load_sector_feature_collection,
+    load_sector_viewport_feature_collection,
+    parse_viewport_bbox,
+)
 from queries.metrics_cache import ensure_site_month_metrics
 from queries.sql_queries import MAP_SITES_QUERY, POPUP_DETAIL_QUERY
 from models.site import SiteMapFeature, SiteDetail
@@ -71,8 +75,34 @@ async def get_map_sectors(
     nop: str = Query(None),
     session: AsyncSession = Depends(get_session),
 ):
-    """Get sector antenna direction polygons as GeoJSON."""
+    """Get full-detail sector polygons for one selected site."""
+    if not site_id:
+        raise HTTPException(
+            status_code=422,
+            detail="site_id is required; use /map/sectors/viewport for bounded map sectors",
+        )
     return await load_sector_feature_collection(session, site_id=site_id, nop=nop)
+
+
+@router.get("/sectors/viewport")
+async def get_map_sector_viewport(
+    bbox: str = Query(..., description="WGS84 west,south,east,north"),
+    zoom: float = Query(..., ge=0, le=24),
+    nop: str = Query(None),
+    session: AsyncSession = Depends(get_session),
+):
+    """Get spatially bounded sector polygons at a zoom-derived detail level."""
+    try:
+        parsed_bbox = parse_viewport_bbox(bbox)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return await load_sector_viewport_feature_collection(
+        session,
+        bbox=parsed_bbox,
+        zoom=zoom,
+        nop=nop,
+    )
 
 
 @router.get("/sites/{site_id}/popup")
