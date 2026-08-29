@@ -7,12 +7,44 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from sector_geometry import (
     clamp_render_radius_m,
     destination_point,
+    feature_limit_for_lod,
     normalize_bearing,
+    sector_lod_for_zoom,
     sector_row_to_feature,
+    sector_row_to_viewport_feature,
 )
 
 
 class SectorGeometryTest(unittest.TestCase):
+    def test_sector_lod_thresholds_and_feature_limits(self):
+        cases = [
+            (0, "none"),
+            (8.99, "none"),
+            (9, "lite"),
+            (11.99, "lite"),
+            (12, "medium"),
+            (13.99, "medium"),
+            (14, "full"),
+            (24, "full"),
+        ]
+
+        for zoom, expected in cases:
+            with self.subTest(zoom=zoom):
+                self.assertEqual(sector_lod_for_zoom(zoom), expected)
+
+        self.assertEqual(feature_limit_for_lod("lite"), 2500)
+        self.assertEqual(feature_limit_for_lod("medium"), 1500)
+        self.assertEqual(feature_limit_for_lod("full"), 750)
+
+    def test_sector_lod_rejects_invalid_zoom_and_unknown_lod(self):
+        for value in (-1, 24.01, float("nan"), float("inf"), "bad", None):
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError):
+                    sector_lod_for_zoom(value)
+
+        with self.assertRaises(ValueError):
+            feature_limit_for_lod("none")
+
     def test_radius_clamp_uses_min_max_and_fallback(self):
         # Without band, falls back to FALLBACK_RENDER_RADIUS_M = 600.0
         self.assertEqual(clamp_render_radius_m(None), 600.0)
@@ -109,6 +141,67 @@ class SectorGeometryTest(unittest.TestCase):
         self.assertIsNone(sector_row_to_feature(invalid_lat))
         self.assertIsNone(sector_row_to_feature(invalid_lon))
         self.assertIsNone(sector_row_to_feature(invalid_azimuth))
+
+    def test_viewport_lite_and_medium_features_are_compact_and_multiband(self):
+        row = {
+            "site_id": "PST001",
+            "latitude_fix": -7.645,
+            "longitude_fix": 112.908,
+            "azimuth": 30,
+            "beamwidth": 65,
+            "radius": 1200,
+            "bands": ["L2100", "L900", "L2100", None],
+            "sector_count": 4,
+        }
+
+        lite = sector_row_to_viewport_feature(row, lod="lite")
+        medium = sector_row_to_viewport_feature(row, lod="medium")
+
+        self.assertEqual(len(lite["geometry"]["coordinates"][0]), 5)
+        self.assertEqual(len(medium["geometry"]["coordinates"][0]), 9)
+        self.assertEqual(lite["properties"], {
+            "site_id": "PST001",
+            "azimuth": 30.0,
+            "beamwidth": 65.0,
+            "bands": ["L900", "L2100"],
+            "sector_count": 4,
+            "lod": "lite",
+        })
+        self.assertNotIn("antenna_type", medium["properties"])
+        self.assertNotIn("cell_name", medium["properties"])
+
+    def test_viewport_full_feature_keeps_band_but_prunes_heavy_properties(self):
+        row = {
+            "site_id": "PST001",
+            "cell_name": "PST001_LONG_CELL_NAME",
+            "sector_base": "1",
+            "band": "L1800",
+            "site_type": "MACRO",
+            "latitude_fix": -7.645,
+            "longitude_fix": 112.908,
+            "azimuth": 150,
+            "beamwidth": 30,
+            "radius": 800,
+            "antenna_type": "HEAVY-MODEL-NAME",
+        }
+
+        feature = sector_row_to_viewport_feature(row, lod="full")
+
+        self.assertEqual(len(feature["geometry"]["coordinates"][0]), 19)
+        self.assertEqual(feature["properties"], {
+            "site_id": "PST001",
+            "sector_base": "1",
+            "band": "L1800",
+            "azimuth": 150.0,
+            "beamwidth": 30.0,
+            "lod": "full",
+        })
+        self.assertNotIn("cell_name", feature["properties"])
+        self.assertNotIn("antenna_type", feature["properties"])
+
+    def test_viewport_feature_rejects_none_lod(self):
+        with self.assertRaises(ValueError):
+            sector_row_to_viewport_feature({}, lod="none")
 
 
 if __name__ == "__main__":

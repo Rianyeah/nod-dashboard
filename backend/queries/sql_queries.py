@@ -147,6 +147,62 @@ WHERE latitude_fix IS NOT NULL
 ORDER BY site_id, sector_base, band, cell_name
 """
 
+MAP_SECTORS_VIEWPORT_GROUPED_QUERY = """
+WITH scoped AS (
+    SELECT
+        site_id,
+        latitude_fix,
+        longitude_fix,
+        ROUND(azimuth::numeric, 1)::double precision AS azimuth,
+        COALESCE(NULLIF(beamwidth, 0), 30) AS beamwidth,
+        radius,
+        band
+    FROM ransys_gabungan
+    WHERE latitude_fix IS NOT NULL
+      AND longitude_fix IS NOT NULL
+      AND azimuth IS NOT NULL
+      AND longitude_fix BETWEEN -180 AND 180
+      AND latitude_fix BETWEEN -90 AND 90
+      AND geom && ST_MakeEnvelope(:west, :south, :east, :north, 4326)
+    {filters}
+)
+SELECT
+    site_id,
+    AVG(latitude_fix)::double precision AS latitude_fix,
+    AVG(longitude_fix)::double precision AS longitude_fix,
+    azimuth,
+    MAX(beamwidth)::double precision AS beamwidth,
+    MAX(radius)::double precision AS radius,
+    ARRAY_AGG(DISTINCT band ORDER BY band) FILTER (WHERE band IS NOT NULL) AS bands,
+    COUNT(*)::integer AS sector_count
+FROM scoped
+GROUP BY site_id, azimuth
+ORDER BY site_id, azimuth
+LIMIT :row_limit
+"""
+
+MAP_SECTORS_VIEWPORT_FULL_QUERY = """
+SELECT
+    site_id,
+    sector_base,
+    band,
+    latitude_fix,
+    longitude_fix,
+    azimuth,
+    beamwidth,
+    radius
+FROM ransys_gabungan
+WHERE latitude_fix IS NOT NULL
+  AND longitude_fix IS NOT NULL
+  AND azimuth IS NOT NULL
+  AND longitude_fix BETWEEN -180 AND 180
+  AND latitude_fix BETWEEN -90 AND 90
+  AND geom && ST_MakeEnvelope(:west, :south, :east, :north, 4326)
+{filters}
+ORDER BY site_id, sector_base, band
+LIMIT :row_limit
+"""
+
 # Query 2 - Summary Card Dashboard
 SUMMARY_CARD_QUERY = f"""
 SELECT

@@ -7,6 +7,18 @@ MIN_RENDER_RADIUS_M = 350.0
 MAX_RENDER_RADIUS_M = 1500.0
 FALLBACK_RENDER_RADIUS_M = 600.0
 DEFAULT_ARC_STEPS = 16
+LITE_ARC_STEPS = 2
+MEDIUM_ARC_STEPS = 6
+MIN_SECTOR_ZOOM = 9.0
+MEDIUM_SECTOR_ZOOM = 12.0
+FULL_SECTOR_ZOOM = 14.0
+MAX_SECTOR_ZOOM = 24.0
+
+SECTOR_FEATURE_LIMITS: dict[str, int] = {
+    "lite": 2500,
+    "medium": 1500,
+    "full": 750,
+}
 
 # Per-band visualization radius — reflects real RF propagation characteristics.
 # Low-band (L900) propagates farthest; ultra-high (L2300) is shortest.
@@ -16,6 +28,28 @@ BAND_RENDER_RADIUS_M: dict[str, float] = {
     "L2100": 600.0,
     "L2300": 450.0,
 }
+
+
+def sector_lod_for_zoom(zoom: Any) -> str:
+    """Resolve the server-owned viewport geometry detail for a Mapbox zoom."""
+    numeric = _to_float(zoom)
+    if numeric is None or numeric < 0 or numeric > MAX_SECTOR_ZOOM:
+        raise ValueError("zoom must be a finite number between 0 and 24")
+    if numeric < MIN_SECTOR_ZOOM:
+        return "none"
+    if numeric < MEDIUM_SECTOR_ZOOM:
+        return "lite"
+    if numeric < FULL_SECTOR_ZOOM:
+        return "medium"
+    return "full"
+
+
+def feature_limit_for_lod(lod: str) -> int:
+    """Return the hard viewport feature budget for a renderable LOD."""
+    try:
+        return SECTOR_FEATURE_LIMITS[lod]
+    except KeyError as exc:
+        raise ValueError(f"unsupported sector LOD: {lod}") from exc
 
 
 def _to_float(value: Any) -> float | None:
@@ -82,6 +116,29 @@ def _row_value(row: Mapping[str, Any], key: str) -> Any:
     return row[key]
 
 
+def _normalized_bands(value: Any) -> list[str]:
+    if isinstance(value, str):
+        candidates = [value]
+    elif isinstance(value, (list, tuple, set)):
+        candidates = list(value)
+    else:
+        candidates = []
+
+    unique = {str(item).strip().upper() for item in candidates if str(item or "").strip()}
+
+    def band_sort_key(band: str) -> tuple[float, str]:
+        digits = "".join(character for character in band if character.isdigit())
+        return (float(digits) if digits else math.inf, band)
+
+    return sorted(unique, key=band_sort_key)
+
+
+def _viewport_radius_band(bands: list[str]) -> str | None:
+    if not bands:
+        return None
+    return max(bands, key=render_radius_for_band)
+
+
 def sector_row_to_feature(
     row: Mapping[str, Any],
     arc_steps: int = DEFAULT_ARC_STEPS,
@@ -136,3 +193,52 @@ def sector_row_to_feature(
             "coordinates": [[center, *arc, center]],
         },
     }
+
+
+def sector_row_to_viewport_feature(
+    row: Mapping[str, Any],
+    *,
+    lod: str,
+) -> dict[str, Any] | None:
+    """Build a payload-pruned sector feature for a bounded map viewport."""
+    if lod not in SECTOR_FEATURE_LIMITS:
+        raise ValueError(f"unsupported sector LOD: {lod}")
+
+    arc_steps = {
+        "lite": LITE_ARC_STEPS,
+        "medium": MEDIUM_ARC_STEPS,
+        "full": DEFAULT_ARC_STEPS,
+    }[lod]
+
+    bands = _normalized_bands(_row_value(row, "bands") if lod != "full" else _row_value(row, "band"))
+    feature_row = dict(row)
+    if lod != "full" and not feature_row.get("band"):
+        feature_row["band"] = _viewport_radius_band(bands)
+
+    feature = sector_row_to_feature(feature_row, arc_steps=arc_steps)
+    if feature is None:
+        return None
+
+    full_properties = feature["properties"]
+    if lod == "full":
+        properties = {
+            "site_id": full_properties["site_id"],
+            "sector_base": full_properties["sector_base"],
+            "band": full_properties["band"],
+            "azimuth": full_properties["azimuth"],
+            "beamwidth": full_properties["beamwidth"],
+            "lod": lod,
+        }
+    else:
+        raw_count = _to_float(_row_value(row, "sector_count"))
+        properties = {
+            "site_id": full_properties["site_id"],
+            "azimuth": full_properties["azimuth"],
+            "beamwidth": full_properties["beamwidth"],
+            "bands": bands,
+            "sector_count": max(int(raw_count or 0), 0),
+            "lod": lod,
+        }
+
+    feature["properties"] = properties
+    return feature

@@ -53,55 +53,78 @@ describe('dashboard loading optimization contracts', () => {
 
     assert.match(api, /fetchMapSectors/);
     assert.match(api, /\/map\/sectors/);
-    assert.match(map, /SECTOR_SOURCE_ID/);
-    assert.match(map, /sector-fill/);
+    assert.match(map, /SECTOR_VIEWPORT_SOURCE_ID/);
+    assert.match(map, /SECTOR_SELECTED_SOURCE_ID/);
+    assert.match(map, /sector-viewport-fill/);
     assert.match(map, /sector-selected-fill/);
-    assert.match(map, /minzoom:\s*10/);
+    assert.match(map, /SECTOR_MIN_ZOOM/);
     assert.match(map, /selectedSiteId/);
-    assert.match(map, /setFilter\('sector-selected-fill'/);
     assert.match(dashboard, /nop=\{nop\}/);
+  });
+
+  it('separates bounded viewport sectors from selected-site full detail', () => {
+    const api = src('services', 'api.js');
+
+    assert.match(api, /export async function fetchMapSectorViewport\(\{ bbox, zoom, nop, signal \}\)/);
+    assert.match(api, /api\.get\('\/map\/sectors\/viewport'/);
+    assert.match(api, /params:\s*\{\s*bbox,\s*zoom,\s*nop:\s*nop\s*\|\|\s*undefined\s*\}/);
+    assert.match(api, /export async function fetchMapSectors\(\{ nop, siteId, signal \}\s*=\s*\{\}\)/);
+    assert.match(api, /site_id:\s*siteId\s*\|\|\s*undefined/);
   });
 
   it('keeps selected-site radius below sector antenna polygons', () => {
     const map = src('components', 'MapboxMap.jsx');
 
     assert.match(map, /radiusBeforeLayer/);
-    assert.match(map, /map\.current\.getLayer\('sector-fill'\)/);
+    assert.match(map, /map\.current\.getLayer\('sector-viewport-fill'\)/);
     assert.match(map, /map\.current\.moveLayer\(layerId,\s*radiusBeforeLayer\)/);
     assert.match(map, /map\.current\.addLayer\(\{[\s\S]*?id:\s*'site-radius-fill'[\s\S]*?\},\s*radiusBeforeLayer\)/);
-    assert.match(map, /triggerSectorLoad\(\)/);
   });
 
-  it('lazy-loads all sector polygons only after zoom threshold or selected-site focus', () => {
+  it('loads bounded viewport sectors only while the default-off layer is active', () => {
     const map = src('components', 'MapboxMap.jsx');
 
-    assert.doesNotMatch(
-      map,
-      /useEffect\(\(\)\s*=>\s*\{[\s\S]*?fetchMapSectors\(\{\s*nop\s*\}\)[\s\S]*?\},\s*\[\s*nop\s*\]\s*\)/,
-    );
-    assert.match(map, /const\s+\[sectorState,\s*setSectorState\]\s*=\s*useState\(\{/);
-    assert.match(map, /getZoom\(\)\s*>=\s*SECTOR_MIN_ZOOM/);
+    assert.match(map, /const\s+\[showSectors,\s*setShowSectors\]\s*=\s*useState\(false\)/);
+    assert.match(map, /buildSectorViewportDescriptor/);
     assert.match(map, /map\.current\.on\('(?:zoomend|moveend)'/);
-    assert.match(map, /fetchMapSectors\(\{\s*nop:\s*allSectorLoadNop\.nop,\s*signal:\s*controller\.signal\s*\}\)/);
+    assert.match(map, /fetchMapSectorViewport\(\{[\s\S]*?bbox:\s*descriptor\.bbox[\s\S]*?zoom:\s*descriptor\.zoom[\s\S]*?signal:\s*controller\.signal/);
+    assert.match(map, /if\s*\(!showSectors\s*\|\|\s*!selectedSiteId\)/);
     assert.match(map, /fetchMapSectors\(\{\s*nop:\s*normalizedNop,\s*siteId:\s*selectedSiteId,\s*signal:\s*controller\.signal\s*\}\)/);
-    assert.match(map, /sectorState\.nop\s*===\s*normalizedNop\s*\?\s*sectorState\.geoJson\s*:\s*EMPTY_GEOJSON/);
+    assert.doesNotMatch(map, /fetchMapSectors\(\{\s*nop:\s*[^,}]+,\s*signal:/);
   });
 
-  it('scopes full-sector lazy loading to the NOP that crossed the zoom threshold', () => {
+  it('aborts and clears both sector sources when the layer is disabled', () => {
     const map = src('components', 'MapboxMap.jsx');
 
-    assert.doesNotMatch(
-      map,
-      /useEffect\(\(\)\s*=>\s*\{[\s\S]*?if\s*\(!shouldLoadAllSectors\)\s*return;[\s\S]*?fetchMapSectors\(\{\s*nop\s*\}\)[\s\S]*?\},\s*\[\s*nop,\s*shouldLoadAllSectors\s*\]\s*\)/,
-    );
-    assert.match(map, /const\s+\[allSectorLoadNop,\s*setAllSectorLoadNop\]\s*=\s*useState\(null\)/);
-    assert.match(map, /const\s+normalizedNop\s*=\s*nop\s*\|\|\s*null/);
-    assert.match(map, /setAllSectorLoadNop\(\{\s*nop:\s*normalizedNop\s*\}\)/);
-    assert.match(map, /if\s*\(!allSectorLoadNop\)\s*return/);
-    assert.match(map, /fetchMapSectors\(\{\s*nop:\s*allSectorLoadNop\.nop,\s*signal:\s*controller\.signal\s*\}\)/);
-    assert.match(map, /setSectorState\(\{\s*nop:\s*allSectorLoadNop\.nop/);
-    assert.match(map, /allSectorsLoadedRef\.current\s*=\s*true/);
-    assert.match(map, /setSectorState\(prev\s*=>\s*\{[\s\S]*?prev\.nop\s*===\s*normalizedNop\s*&&\s*prev\.allLoaded/);
+    assert.match(map, /const\s+handleToggleSectors\s*=\s*useCallback/);
+    assert.match(map, /viewportAbortRef\.current\?\.abort\(\)/);
+    assert.match(map, /selectedSectorAbortRef\.current\?\.abort\(\)/);
+    assert.match(map, /setSectorViewport\(\{\s*key:\s*null,\s*geoJson:\s*EMPTY_GEOJSON\s*\}\)/);
+    assert.match(map, /setSelectedSectors\(\{\s*siteId:\s*null,\s*geoJson:\s*EMPTY_GEOJSON\s*\}\)/);
+    assert.match(map, /viewportRequestKeyRef\.current\s*===\s*descriptor\.key/);
+    assert.doesNotMatch(map, /allSectorLoadNop|allSectorsLoadedRef|allLoaded/);
+  });
+
+  it('clusters site markers independently from sector polygon LOD', () => {
+    const map = src('components', 'MapboxMap.jsx');
+
+    assert.match(map, /cluster:\s*true/);
+    assert.match(map, /clusterRadius:\s*42/);
+    assert.match(map, /clusterMaxZoom:\s*11/);
+    assert.match(map, /id:\s*'site-cluster'/);
+    assert.match(map, /id:\s*'site-cluster-count'/);
+    assert.match(map, /UNCLUSTERED_SITE_FILTER\s*=\s*\['!',\s*\['has',\s*'point_count'\]\]/);
+    assert.match(map, /filter:\s*UNCLUSTERED_SITE_FILTER/);
+    assert.match(map, /getClusterExpansionZoom\(clusterId/);
+    assert.match(map, /easeTo\(\{[\s\S]*?center:\s*coordinates[\s\S]*?zoom/);
+  });
+
+  it('renders sector status and hides the band legend for lite aggregate geometry', () => {
+    const map = src('components', 'MapboxMap.jsx');
+
+    assert.match(map, /sectorStatusLabel\(sectorStatus\)/);
+    assert.match(map, /shouldShowSectorBandLegend\(sectorStatus,\s*selectedSectors\.features\.length\)/);
+    assert.match(map, /showBandLegend\s*&&/);
   });
 
   it('resizes Mapbox when the dashboard layout changes', () => {

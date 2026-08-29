@@ -65,7 +65,10 @@ describe('Mapbox runtime resilience contracts', () => {
     const siteMap = src('components', 'MapboxMap.jsx');
     const page = src('pages', 'SiteMapPage.jsx');
 
-    assert.match(siteMap, /fetchMapSectors\(\{[\s\S]*?signal:\s*controller\.signal/);
+    assert.match(siteMap, /fetchMapSectorViewport\(\{[\s\S]*?signal:\s*controller\.signal/);
+    assert.match(siteMap, /fetchMapSectors\(\{[\s\S]*?siteId:\s*selectedSiteId[\s\S]*?signal:\s*controller\.signal/);
+    assert.match(siteMap, /viewportAbortRef\.current\?\.abort\(\)/);
+    assert.match(siteMap, /selectedSectorAbortRef\.current\?\.abort\(\)/);
     assert.match(siteMap, /fetchSiteAvailability\([\s\S]*?controller\.signal/);
     assert.match(page, /siteDetailAbortRef/);
     assert.match(page, /siteDetailAbortRef\.current\?\.abort\(\)/);
