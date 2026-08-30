@@ -173,6 +173,19 @@ describe('RF Tilt site selection contracts', () => {
     assert.match(form, /compatibilityWarning/);
   });
 
+  it('primes Site Map handoff search without auto-selecting a sector', () => {
+    const page = src('pages', 'RfTiltAnalysisPage.jsx');
+    const form = src('features', 'rf-tilt', 'RfTiltParamForm.jsx');
+
+    assert.match(page, /useSearchParams/);
+    assert.match(page, /normalizedDeepLinkSite/);
+    assert.match(page, /initialSiteQuery=\{deepLinkedSite\}/);
+    assert.match(form, /lastInitialSiteQueryRef/);
+    assert.match(form, /setSearchQuery\(initialSiteQuery\)/);
+    assert.match(form, /searchSites\(initialSiteQuery\)/);
+    assert.doesNotMatch(form, /selectSite\(initialSiteQuery\)/);
+  });
+
   it('renders Antenna Specification immediately above Result Summary', () => {
     const page = src('pages', 'RfTiltAnalysisPage.jsx');
     const panel = src('features', 'rf-tilt', 'RfTiltAntennaSpecPanel.jsx');

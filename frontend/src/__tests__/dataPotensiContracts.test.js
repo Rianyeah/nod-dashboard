@@ -102,6 +102,15 @@ describe('Data Potensi dashboard contracts', () => {
     assert.doesNotMatch(page, /useDashboardThemeTokens/);
   });
 
+  it('opens a valid Site Map handoff once without weakening site-id validation', () => {
+    const page = src('pages', 'DataPotensiPage.jsx');
+
+    assert.match(page, /useSearchParams/);
+    assert.match(page, /normalizedDeepLinkSite/);
+    assert.match(page, /lastDeepLinkedSiteRef/);
+    assert.match(page, /handleSiteClick\(deepLinkedSite\)/);
+  });
+
   it('uses the graphite Data Potensi chart language', () => {
     const page = src('pages', 'DataPotensiPage.jsx');
 

@@ -100,6 +100,7 @@ function formatSiteLabel(site) {
 }
 
 export default function RfTiltParamForm({
+  initialSiteQuery = null,
   params,
   set,
   targetMode,
@@ -128,6 +129,7 @@ export default function RfTiltParamForm({
   const [siteSearchOpen, setSiteSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef(null);
+  const lastInitialSiteQueryRef = useRef(null);
   const [modelSearchOpen, setModelSearchOpen] = useState(false);
   const [modelQuery, setModelQuery] = useState('');
   const [previewedAntennaModelId, setPreviewedAntennaModelId] = useState(null);
@@ -147,6 +149,15 @@ export default function RfTiltParamForm({
   useEffect(() => {
     if (siteSearchOpen && searchInputRef.current) setTimeout(() => searchInputRef.current?.focus(), 100);
   }, [siteSearchOpen]);
+
+  useEffect(() => {
+    if (!initialSiteQuery || lastInitialSiteQueryRef.current === initialSiteQuery) return;
+
+    lastInitialSiteQueryRef.current = initialSiteQuery;
+    setSearchQuery(initialSiteQuery);
+    setSiteSearchOpen(true);
+    searchSites(initialSiteQuery);
+  }, [initialSiteQuery, searchSites]);
 
   useEffect(() => {
     if (modelSearchOpen && modelSearchInputRef.current) setTimeout(() => modelSearchInputRef.current?.focus(), 100);
