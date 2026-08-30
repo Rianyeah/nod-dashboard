@@ -1,8 +1,31 @@
+import { useEffect, useState } from 'react';
 import { RotateCcw } from 'lucide-react';
 
 import FilterPanel from '../../components/FilterPanel';
 import { DashboardSearchInput } from '../../components/dashboard-filters/DashboardFilters';
 import { Button } from '../../components/ui/button';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue';
+
+function DebouncedSiteSearch({ initialQuery, onQueryChange }) {
+  const [queryDraft, setQueryDraft] = useState(initialQuery);
+  const debouncedQuery = useDebouncedValue(queryDraft.trim(), 300);
+
+  useEffect(() => {
+    if (debouncedQuery === initialQuery.trim()) return;
+    onQueryChange(debouncedQuery);
+  }, [debouncedQuery, initialQuery, onQueryChange]);
+
+  return (
+    <DashboardSearchInput
+      id="site-map-search"
+      value={queryDraft}
+      onChange={setQueryDraft}
+      placeholder="Cari Site ID, nama, atau kabupaten"
+      aria-label="Cari site pada map"
+      className="w-full max-w-none lg:max-w-[360px]"
+    />
+  );
+}
 
 export default function SiteMapToolbar({
   q,
@@ -19,13 +42,10 @@ export default function SiteMapToolbar({
       aria-label="Pencarian dan filter Site Map"
       className="flex flex-col gap-2 rounded-[var(--noc-radius-lg)] border border-[var(--border-strong)] bg-[var(--bg-surface)] px-3 py-2 shadow-[var(--shadow-sm)] lg:flex-row lg:items-center"
     >
-      <DashboardSearchInput
-        id="site-map-search"
-        value={q}
-        onChange={onQueryChange}
-        placeholder="Cari Site ID, nama, atau kabupaten"
-        aria-label="Cari site pada map"
-        className="w-full max-w-none lg:max-w-[360px]"
+      <DebouncedSiteSearch
+        key={q || 'empty-search'}
+        initialQuery={q || ''}
+        onQueryChange={onQueryChange}
       />
 
       <div className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-2 lg:justify-end">

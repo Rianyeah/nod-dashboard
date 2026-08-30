@@ -10,9 +10,10 @@ const exists = (...parts) => existsSync(resolve(process.cwd(), 'src', ...parts))
 describe('Site Map spatial explorer contracts', () => {
   it('composes one URL-backed state across every explorer surface', () => {
     const page = src('pages', 'SiteMapPage.jsx');
+    const toolbar = src('features', 'site-map', 'SiteMapToolbar.jsx');
 
     assert.match(page, /useSearchParams/);
-    assert.match(page, /useDebouncedValue/);
+    assert.match(toolbar, /useDebouncedValue/);
     assert.match(page, /parseSiteMapSearchParams/);
     assert.match(page, /writeSiteMapSearchParams/);
     assert.match(page, /<SiteMapToolbar/);
@@ -48,14 +49,15 @@ describe('Site Map spatial explorer contracts', () => {
     const table = src('components', 'SiteTable.jsx');
 
     assert.match(toolbar, /DashboardSearchInput/);
-    assert.match(toolbar, /value=\{q\}/);
-    assert.match(toolbar, /onChange=\{onQueryChange\}/);
+    assert.match(toolbar, /value=\{queryDraft\}/);
+    assert.match(toolbar, /onChange=\{setQueryDraft\}/);
     assert.match(toolbar, /map, sector, dan hasil/i);
     assert.doesNotMatch(table, /DashboardSearchInput|useDebouncedValue/);
   });
 
   it('keeps inspector actions and bottom-sheet semantics available', () => {
     const inspector = src('features', 'site-map', 'SiteMapInspector.jsx');
+    const page = src('pages', 'SiteMapPage.jsx');
 
     assert.match(inspector, /<aside/);
     assert.match(inspector, /<Sheet/);
@@ -64,6 +66,9 @@ describe('Site Map spatial explorer contracts', () => {
     assert.match(inspector, /\/data-potensi\?site=/);
     assert.match(inspector, /\/rf-tilt-analysis\?site=/);
     assert.match(inspector, /outsideFilters/);
+    assert.match(page, /mobileInspectorState/);
+    assert.match(page, /mobileInspectorState\.siteId === selectedSiteId/);
+    assert.match(page, /setMobileInspectorState\(\{ siteId, open: true \}\)/);
   });
 
   it('uses a default-collapsed bounded results drawer and server-side sorting', () => {
@@ -75,13 +80,30 @@ describe('Site Map spatial explorer contracts', () => {
     assert.match(drawer, /max-h-/);
     assert.match(drawer, /setPage\(1\)/);
     assert.match(drawer, /scopeKey/);
-    assert.doesNotMatch(drawer, /useEffect/);
+    assert.match(drawer, /<Sheet/);
+    assert.match(drawer, /<SheetContent side="bottom"/);
+    assert.match(drawer, /lg:hidden/);
+    assert.match(drawer, /hidden[\s\S]*?lg:block/);
+    assert.match(drawer, /useMobileResultsSheet/);
     assert.match(table, /fetchSites\(\{[\s\S]*?sortBy,[\s\S]*?sortDir/);
     assert.match(table, /queryKey/);
     assert.doesNotMatch(table, /setLoading\(true\)/);
     assert.match(table, /aria-sort/);
     assert.match(table, /Coba lagi/);
     assert.doesNotMatch(table, /const sorted =|\.sort\(/);
+  });
+
+  it('debounces trimmed search before URL replacement and announces context changes', () => {
+    const page = src('pages', 'SiteMapPage.jsx');
+    const toolbar = src('features', 'site-map', 'SiteMapToolbar.jsx');
+    const contextStrip = src('features', 'site-map', 'SiteMapContextStrip.jsx');
+
+    assert.match(toolbar, /useDebouncedValue\(queryDraft\.trim\(\), 300\)/);
+    assert.match(toolbar, /onQueryChange\(debouncedQuery\)/);
+    assert.match(toolbar, /key=\{q \|\| 'empty-search'\}/);
+    assert.match(page, /updateExplorerState\(\{ q: value \|\| null \}\)/);
+    assert.doesNotMatch(page, /nextParams\.set\('q', value\)/);
+    assert.match(contextStrip, /aria-live="polite"/);
   });
 
   it('keeps Mapbox focused on layers, camera, and normalized selection only', () => {

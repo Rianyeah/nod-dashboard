@@ -15,7 +15,6 @@ import {
   parseSiteMapSearchParams,
   writeSiteMapSearchParams,
 } from '../features/site-map/siteMapState';
-import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useMapData } from '../hooks/useMapData';
 import { fetchFilterOptions, fetchLatestPeriod, fetchSiteDetail } from '../services/api';
 import { fetchSiteDetailBundle } from '../services/siteDetailBundle';
@@ -68,7 +67,7 @@ export default function SiteMapPage() {
   const bulan = explorerState.bulan || null;
   const tahun = explorerState.tahun || null;
   const nop = explorerState.nop || null;
-  const query = searchParams.get('q') || '';
+  const query = explorerState.q || '';
   const selectedSiteId = explorerState.site || null;
   const filters = useMemo(() => ({
     ...(explorerState.kabupaten ? { kabupaten: explorerState.kabupaten } : {}),
@@ -85,7 +84,10 @@ export default function SiteMapPage() {
     loading: false,
     error: null,
   });
-  const [mobileInspectorOpen, setMobileInspectorOpen] = useState(false);
+  const [mobileInspectorState, setMobileInspectorState] = useState(() => ({
+    siteId: selectedSiteId,
+    open: Boolean(selectedSiteId),
+  }));
   const [resultsOpen, setResultsOpen] = useState(false);
   const [layoutResizeKey, setLayoutResizeKey] = useState(0);
   const [sectorStatus, setSectorStatus] = useState({ kind: 'off', count: 0, lod: 'none' });
@@ -94,13 +96,15 @@ export default function SiteMapPage() {
   const [siteDetailPerformance, setSiteDetailPerformance] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [filterOptions, setFilterOptions] = useState({ kabupaten: [], cluster: [], kelas: [], nop: [] });
-  const debouncedQuery = useDebouncedValue(query.trim(), 300);
+  const mobileInspectorOpen = Boolean(selectedSiteId) && (
+    mobileInspectorState.siteId === selectedSiteId ? mobileInspectorState.open : true
+  );
 
   const mapFilters = useMemo(() => normalizeSiteMapFilters({
     ...filters,
     nop,
-    q: debouncedQuery,
-  }), [debouncedQuery, filters, nop]);
+    q: query,
+  }), [filters, nop, query]);
 
   const {
     sites,
@@ -228,11 +232,11 @@ export default function SiteMapPage() {
     updateExplorerState({ site: siteId });
     setSelectedSiteFocusKey((key) => key + 1);
     setResultsOpen(false);
-    if (isMobileViewport()) setMobileInspectorOpen(true);
+    if (isMobileViewport()) setMobileInspectorState({ siteId, open: true });
     setLayoutResizeKey((key) => key + 1);
   }, [
     setLayoutResizeKey,
-    setMobileInspectorOpen,
+    setMobileInspectorState,
     setResultsOpen,
     setSelectedSiteFallback,
     setSelectedSiteFocusKey,
@@ -243,21 +247,18 @@ export default function SiteMapPage() {
     fallbackAbortRef.current?.abort();
     updateExplorerState({ site: null });
     setSelectedSiteFallback(null);
-    setMobileInspectorOpen(false);
+    setMobileInspectorState({ siteId: null, open: false });
     setLayoutResizeKey((key) => key + 1);
   }, [
     setLayoutResizeKey,
-    setMobileInspectorOpen,
+    setMobileInspectorState,
     setSelectedSiteFallback,
     updateExplorerState,
   ]);
 
   const handleQueryChange = useCallback((value) => {
-    const nextParams = new URLSearchParams(searchParams);
-    if (value) nextParams.set('q', value);
-    else nextParams.delete('q');
-    setSearchParams(nextParams, { replace: true });
-  }, [searchParams, setSearchParams]);
+    updateExplorerState({ q: value || null });
+  }, [updateExplorerState]);
 
   const handleFilterChange = useCallback((nextFilters) => {
     updateExplorerState({
@@ -277,9 +278,15 @@ export default function SiteMapPage() {
 
   const handleResultsOpenChange = useCallback((nextOpen) => {
     setResultsOpen(nextOpen);
-    if (nextOpen && isMobileViewport()) setMobileInspectorOpen(false);
+    if (nextOpen && isMobileViewport()) {
+      setMobileInspectorState({ siteId: selectedSiteId, open: false });
+    }
     setLayoutResizeKey((key) => key + 1);
-  }, [setLayoutResizeKey, setMobileInspectorOpen, setResultsOpen]);
+  }, [selectedSiteId, setLayoutResizeKey, setMobileInspectorState, setResultsOpen]);
+
+  const handleMobileInspectorOpenChange = useCallback((nextOpen) => {
+    setMobileInspectorState({ siteId: selectedSiteId, open: nextOpen });
+  }, [selectedSiteId, setMobileInspectorState]);
 
   const handleSectorStatusChange = useCallback((nextStatus) => {
     setSectorStatus(nextStatus);
@@ -370,7 +377,7 @@ export default function SiteMapPage() {
             onOpenDetail={handleOpenDetail}
             onSelectNearby={handleSelectSite}
             mobileOpen={mobileInspectorOpen}
-            onMobileOpenChange={setMobileInspectorOpen}
+            onMobileOpenChange={handleMobileInspectorOpenChange}
           />
         </div>
 
@@ -378,7 +385,7 @@ export default function SiteMapPage() {
           bulan={bulan}
           tahun={tahun}
           filters={mapFilters}
-          q={debouncedQuery}
+          q={query}
           total={total}
           onSiteSelect={handleSelectSite}
           open={resultsOpen}

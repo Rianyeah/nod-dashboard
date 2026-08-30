@@ -61,10 +61,9 @@ export async function fetchMapSites({ bulan, tahun, filters = {}, signal } = {})
   return data;
 }
 
-export async function fetchMapSectors({ nop, siteId, signal } = {}) {
+export async function fetchMapSectors({ siteId, signal } = {}) {
   const { data } = await api.get('/map/sectors', {
     params: {
-      nop: nop || undefined,
       site_id: siteId || undefined,
     },
     signal,

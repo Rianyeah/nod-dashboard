@@ -73,8 +73,9 @@ describe('dashboard loading optimization contracts', () => {
     assert.match(api, /export async function fetchMapSectorViewport\(\{ bbox, zoom, filters = \{\}, signal \}\)/);
     assert.match(api, /api\.get\('\/map\/sectors\/viewport'/);
     assert.match(api, /params:\s*\{\s*bbox,\s*zoom,\s*\.\.\.filters\s*\}/);
-    assert.match(api, /export async function fetchMapSectors\(\{ nop, siteId, signal \}\s*=\s*\{\}\)/);
+    assert.match(api, /export async function fetchMapSectors\(\{ siteId, signal \}\s*=\s*\{\}\)/);
     assert.match(api, /site_id:\s*siteId\s*\|\|\s*undefined/);
+    assert.doesNotMatch(api, /fetchMapSectors\(\{[^}]*\bnop\b/);
   });
 
   it('keeps selected-site radius below sector antenna polygons', () => {
@@ -94,8 +95,8 @@ describe('dashboard loading optimization contracts', () => {
     assert.match(map, /map\.current\.on\('(?:zoomend|moveend)'/);
     assert.match(map, /fetchMapSectorViewport\(\{[\s\S]*?bbox:\s*descriptor\.bbox[\s\S]*?zoom:\s*descriptor\.zoom[\s\S]*?signal:\s*controller\.signal/);
     assert.match(map, /if\s*\(!showSectors\s*\|\|\s*!selectedSiteId\)/);
-    assert.match(map, /fetchMapSectors\(\{\s*nop:\s*normalizedNop,\s*siteId:\s*selectedSiteId,\s*signal:\s*controller\.signal\s*\}\)/);
-    assert.doesNotMatch(map, /fetchMapSectors\(\{\s*nop:\s*[^,}]+,\s*signal:/);
+    assert.match(map, /fetchMapSectors\(\{\s*siteId:\s*selectedSiteId,\s*signal:\s*controller\.signal\s*\}\)/);
+    assert.doesNotMatch(map, /fetchMapSectors\(\{[^}]*nop:/);
   });
 
   it('aborts and clears both sector sources when the layer is disabled', () => {

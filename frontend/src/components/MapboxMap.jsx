@@ -437,7 +437,6 @@ export default function MapboxMap({
   const onSiteSelectRef = useRef(onSiteSelect);
   const cameraProgrammatic = useRef(false);
   const lastFocusedRequest = useRef(null);
-  const currentNopRef = useRef(filters.nop || null);
   const sectorViewportRef = useRef(EMPTY_GEOJSON);
   const selectedSectorsRef = useRef(EMPTY_GEOJSON);
   const viewportAbortRef = useRef(null);
@@ -456,7 +455,6 @@ export default function MapboxMap({
   const [selectedSectorState, setSelectedSectors] = useState({ siteId: null, geoJson: EMPTY_GEOJSON });
   const [sectorStatus, setSectorStatus] = useState({ kind: 'off', count: 0, lod: 'none' });
   const [viewportDescriptor, setViewportDescriptor] = useState(null);
-  const normalizedNop = filters.nop || null;
   const sitesGeoJson = useMemo(() => buildSitesGeoJson(sites), [sites]);
   const sectorViewport = showSectors
     && viewportDescriptor
@@ -519,10 +517,6 @@ export default function MapboxMap({
     scheduleMapResize();
     scheduleMapResize(340);
   }, [layoutResizeKey, scheduleMapResize]);
-
-  useEffect(() => {
-    currentNopRef.current = normalizedNop;
-  }, [normalizedNop]);
 
   useEffect(() => {
     if (!map.current || !mapLoaded || !showSectors) return undefined;
@@ -626,22 +620,20 @@ export default function MapboxMap({
     const controller = new AbortController();
     selectedSectorAbortRef.current = controller;
 
-    fetchMapSectors({ nop: normalizedNop, siteId: selectedSiteId, signal: controller.signal })
+    fetchMapSectors({ siteId: selectedSiteId, signal: controller.signal })
       .then((geoJson) => {
-        if (!controller.signal.aborted && currentNopRef.current === normalizedNop) {
+        if (!controller.signal.aborted) {
           setSelectedSectors({ siteId: selectedSiteId, geoJson: geoJson || EMPTY_GEOJSON });
         }
       })
       .catch((err) => {
         if (controller.signal.aborted || err?.code === 'ERR_CANCELED') return;
         console.error('Failed to load selected sector polygons:', err);
-        if (currentNopRef.current === normalizedNop) {
-          setSelectedSectors({ siteId: selectedSiteId, geoJson: EMPTY_GEOJSON });
-        }
+        setSelectedSectors({ siteId: selectedSiteId, geoJson: EMPTY_GEOJSON });
       });
 
     return () => controller.abort();
-  }, [normalizedNop, selectedSiteId, showSectors]);
+  }, [selectedSiteId, showSectors]);
 
   useEffect(() => {
     sectorViewportRef.current = sectorViewport;

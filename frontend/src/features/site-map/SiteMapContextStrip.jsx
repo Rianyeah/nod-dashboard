@@ -22,6 +22,7 @@ export default function SiteMapContextStrip({
   return (
     <dl
       aria-label="Konteks spasial Site Map"
+      aria-live="polite"
       className="grid grid-cols-2 divide-x divide-y divide-[var(--border)] border-y border-[var(--border-strong)] lg:grid-cols-4 lg:divide-y-0"
     >
       <ContextValue label="Hasil filter">{Number(total || 0).toLocaleString()} site</ContextValue>
