@@ -11,18 +11,20 @@ export default function SiteMapResultsDrawer({
   total,
   onSiteSelect,
   onOpenChange,
+  open: controlledOpen,
 }) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [sortBy, setSortBy] = useState('site_id');
   const [sortDir, setSortDir] = useState('asc');
+  const open = controlledOpen ?? internalOpen;
 
   useEffect(() => {
     setPage(1);
   }, [filters, q, bulan, tahun]);
 
   const setDrawerOpen = (nextOpen) => {
-    setOpen(nextOpen);
+    if (controlledOpen == null) setInternalOpen(nextOpen);
     onOpenChange?.(nextOpen);
   };
 

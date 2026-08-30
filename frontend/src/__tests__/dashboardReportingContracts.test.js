@@ -18,15 +18,12 @@ describe('dashboard and reporting visual/data contracts', () => {
     assert.match(header, /object-contain/);
   });
 
-  it('uses theme-aware classes for map surrounding-site cards and sector legend', () => {
+  it('uses a theme-aware sector legend without floating surrounding-site cards', () => {
     const map = src('components', 'MapboxMap.jsx');
     const css = src('index.css');
 
-    assert.match(map, /nod-neighbor-card-shell/);
-    assert.match(map, /nod-neighbor-card-label/);
+    assert.doesNotMatch(map, /nod-neighbor-card-shell|nod-neighbor-card-label/);
     assert.match(map, /nod-sector-legend/);
-    assert.match(css, /\.nod-neighbor-card-shell/);
-    assert.match(css, /\[data-theme="light"\]\s+\.nod-neighbor-card-shell/);
     assert.match(css, /\.nod-sector-legend/);
     assert.match(css, /\[data-theme="light"\]\s+\.nod-sector-legend/);
     assert.doesNotMatch(map, /background:rgba\(15,23,42,0\.72\)/);

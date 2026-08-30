@@ -102,7 +102,7 @@ describe('sector viewport helpers', () => {
     assert.equal(sectorStatusLabel({ kind: 'loading' }), 'Loading sectors…');
     assert.equal(sectorStatusLabel({ kind: 'ready', count: 37, lod: 'lite' }), '37 sectors · Lite');
     assert.equal(sectorStatusLabel({ kind: 'ready', count: 8, lod: 'medium' }), '8 sectors · Medium');
-    assert.equal(sectorStatusLabel({ kind: 'limit' }), 'Area too wide — zoom in');
+    assert.equal(sectorStatusLabel({ kind: 'limit' }), 'Area too wide - zoom in');
     assert.equal(sectorStatusLabel({ kind: 'error' }), 'Sector layer unavailable');
   });
 

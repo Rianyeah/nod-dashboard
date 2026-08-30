@@ -8,6 +8,22 @@ const src = (...parts) => readFileSync(resolve(process.cwd(), 'src', ...parts), 
 const exists = (...parts) => existsSync(resolve(process.cwd(), 'src', ...parts));
 
 describe('Site Map spatial explorer contracts', () => {
+  it('composes one URL-backed state across every explorer surface', () => {
+    const page = src('pages', 'SiteMapPage.jsx');
+
+    assert.match(page, /useSearchParams/);
+    assert.match(page, /useDebouncedValue/);
+    assert.match(page, /parseSiteMapSearchParams/);
+    assert.match(page, /writeSiteMapSearchParams/);
+    assert.match(page, /<SiteMapToolbar/);
+    assert.match(page, /<SiteMapContextStrip/);
+    assert.match(page, /<SiteMapInspector/);
+    assert.match(page, /<SiteMapResultsDrawer/);
+    assert.match(page, /filters=\{mapFilters\}/g);
+    assert.match(page, /nearbySites\(/);
+    assert.doesNotMatch(page, /SummaryCards|isDraggingSidebar|isDraggingTable/);
+  });
+
   it('provides focused explorer surfaces instead of duplicating summary cards', () => {
     for (const component of [
       'SiteMapToolbar.jsx',
@@ -59,5 +75,17 @@ describe('Site Map spatial explorer contracts', () => {
     assert.match(table, /aria-sort/);
     assert.match(table, /Coba lagi/);
     assert.doesNotMatch(table, /const sorted =|\.sort\(/);
+  });
+
+  it('keeps Mapbox focused on layers, camera, and normalized selection only', () => {
+    const map = src('components', 'MapboxMap.jsx');
+
+    assert.match(map, /onSiteSelect/);
+    assert.match(map, /onSectorStatusChange/);
+    assert.match(map, /buildSectorViewportDescriptor\(map\.current, filters\)/);
+    assert.match(map, /cluster:\s*true/);
+    assert.match(map, /updateRadius/);
+    assert.doesNotMatch(map, /createSitePopupContent|mapboxgl\.Popup|enablePopupDrag/);
+    assert.doesNotMatch(map, /nod-neighbor-card|fetchSiteAvailability|safeMapDom/);
   });
 });

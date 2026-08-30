@@ -61,7 +61,7 @@ describe('Mapbox runtime resilience contracts', () => {
     assert.match(rfMap, /mapRef\.current = null/);
   });
 
-  it('aborts stale sector, popup, and selected-site detail requests', () => {
+  it('aborts stale sector and selected-site detail requests', () => {
     const siteMap = src('components', 'MapboxMap.jsx');
     const page = src('pages', 'SiteMapPage.jsx');
 
@@ -69,7 +69,7 @@ describe('Mapbox runtime resilience contracts', () => {
     assert.match(siteMap, /fetchMapSectors\(\{[\s\S]*?siteId:\s*selectedSiteId[\s\S]*?signal:\s*controller\.signal/);
     assert.match(siteMap, /viewportAbortRef\.current\?\.abort\(\)/);
     assert.match(siteMap, /selectedSectorAbortRef\.current\?\.abort\(\)/);
-    assert.match(siteMap, /fetchSiteAvailability\([\s\S]*?controller\.signal/);
+    assert.doesNotMatch(siteMap, /fetchSiteAvailability|mapboxgl\.Popup/);
     assert.match(page, /siteDetailAbortRef/);
     assert.match(page, /siteDetailAbortRef\.current\?\.abort\(\)/);
     assert.match(page, /fetchSiteDetailBundle\(siteId,\s*\{[\s\S]*?signal:\s*controller\.signal/);

@@ -77,7 +77,7 @@ export function sectorStatusLabel(status = {}) {
       return `${count} sectors · ${lod}`;
     }
     case 'limit':
-      return 'Area too wide — zoom in';
+      return 'Area too wide - zoom in';
     case 'error':
     default:
       return 'Sector layer unavailable';

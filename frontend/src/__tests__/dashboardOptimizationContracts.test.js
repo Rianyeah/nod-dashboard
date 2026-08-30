@@ -27,13 +27,16 @@ describe('dashboard loading optimization contracts', () => {
     assert.doesNotMatch(table, /DashboardSearchInput|useDebouncedValue/);
   });
 
-  it('memoizes map GeoJSON and caches popup daily availability', () => {
+  it('memoizes complete marker GeoJSON for the React inspector', () => {
     const map = src('components', 'MapboxMap.jsx');
 
     assert.match(map, /useMemo/);
     assert.match(map, /sitesGeoJson/);
-    assert.match(map, /dailyAvailabilityCache/);
+    assert.match(map, /nop: site\.nop/);
+    assert.match(map, /cluster: site\.cluster/);
+    assert.match(map, /rca_dominan: site\.rca_dominan/);
     assert.match(map, /source\.setData\(sitesGeoJson\)/);
+    assert.doesNotMatch(map, /dailyAvailabilityCache|dailySparklineContent/);
   });
 
   it('aborts stale map site requests when canonical filters change', () => {
@@ -142,33 +145,12 @@ describe('dashboard loading optimization contracts', () => {
     assert.match(map, /map\.current\?\.resize\(\)/);
   });
 
-  it('keeps the main popup visible inside the map viewport', () => {
+  it('removes popup DOM and floating neighbor cards from the Mapbox canvas', () => {
     const map = src('components', 'MapboxMap.jsx');
 
-    assert.match(map, /ensurePopupVisible/);
-    assert.match(map, /getBoundingClientRect/);
-    assert.match(map, /panBy/);
-    assert.match(map, /POPUP_SAFE_PADDING/);
-  });
-
-  it('limits neighbor popup cards and avoids covering the main popup', () => {
-    const map = src('components', 'MapboxMap.jsx');
-
-    assert.match(map, /MAX_NEIGHBOR_CARDS/);
-    assert.match(map, /mainPopupRect/);
-    assert.match(map, /rectsIntersect/);
-    assert.match(map, /nod-neighbor-card/);
-  });
-
-  it('supports dragging the main site popup to an adjusted position', () => {
-    const map = src('components', 'MapboxMap.jsx');
-
-    assert.match(map, /enablePopupDrag/);
-    assert.match(map, /popupDragCleanup/);
-    assert.match(map, /popupDragOffset/);
-    assert.match(map, /nod-popup-drag-handle/);
-    assert.match(map, /pointerdown/);
-    assert.match(map, /pointermove/);
+    assert.doesNotMatch(map, /mapboxgl\.Popup|nod-popup|nod-neighbor-card/);
+    assert.doesNotMatch(map, /pointerdown|pointermove|fetchSiteAvailability/);
+    assert.match(map, /onSiteSelect/);
   });
 
   it('keeps the detail site modal compact and information dense', () => {

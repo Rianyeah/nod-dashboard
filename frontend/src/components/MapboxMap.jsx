@@ -2,8 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { getMarkerColor } from '../utils/mapColors';
-import { fetchMapSectorViewport, fetchMapSectors, fetchSiteAvailability } from '../services/api';
-import { domElement, textElement } from '../utils/safeMapDom';
+import { fetchMapSectorViewport, fetchMapSectors } from '../services/api';
 import { describeMapboxError, validateMapboxRuntime } from '../utils/mapboxRuntime';
 import {
   buildSectorViewportDescriptor,
@@ -34,11 +33,6 @@ const PITCH_ZOOM_THRESHOLD = 11;
 const FOCUS_ZOOM = 13;
 const FOCUS_DURATION_MS = 1400;
 const NEIGHBOR_RADIUS_KM = 1;
-const MAX_NEIGHBOR_CARDS = 8;
-const NEIGHBOR_CARD_WIDTH = 126;
-const NEIGHBOR_CARD_HEIGHT = 96;
-const POPUP_SAFE_PADDING = 18;
-const POPUP_PAN_DURATION_MS = 320;
 
 function emptyFeatureCollection() {
   return {
@@ -337,18 +331,24 @@ function applyDuskScene(mapInstance) {
   }
 }
 
-function siteToPopupData(site) {
+function normalizeSiteData(site, coordinates) {
+  const longitude = Number(coordinates?.[0] ?? site?.longitude);
+  const latitude = Number(coordinates?.[1] ?? site?.latitude);
   return {
-    site_id: site.site_id,
-    site_name: site.site_name || '',
-    kabupaten: site.kabupaten || '',
-    site_class: site.site_class || '',
-    avg_availability: site.avg_availability,
-    total_outage_menit: site.total_outage_menit,
-    jumlah_cell: site.jumlah_cell,
-    latitude: site.latitude,
-    longitude: site.longitude,
-    color: getMarkerColor(site.avg_availability, site.status_site),
+    site_id: site?.site_id || '',
+    site_name: site?.site_name || '',
+    kabupaten: site?.kabupaten || '',
+    site_class: site?.site_class || '',
+    status_site: site?.status_site || '',
+    nop: site?.nop || '',
+    cluster: site?.cluster || '',
+    type_site: site?.type_site || '',
+    avg_availability: site?.avg_availability == null ? null : Number(site.avg_availability),
+    total_outage_menit: site?.total_outage_menit == null ? null : Number(site.total_outage_menit),
+    jumlah_cell: site?.jumlah_cell == null ? null : Number(site.jumlah_cell),
+    rca_dominan: site?.rca_dominan || '',
+    latitude,
+    longitude,
   };
 }
 
@@ -370,9 +370,13 @@ function buildSitesGeoJson(sites = []) {
           kabupaten: site.kabupaten || '',
           site_class: site.site_class || '',
           status_site: site.status_site || '',
+          nop: site.nop || '',
+          cluster: site.cluster || '',
+          type_site: site.type_site || '',
           avg_availability: site.avg_availability,
           total_outage_menit: site.total_outage_menit,
           jumlah_cell: site.jumlah_cell,
+          rca_dominan: site.rca_dominan || '',
           latitude: site.latitude,
           longitude: site.longitude,
           color: getMarkerColor(site.avg_availability, site.status_site),
@@ -380,120 +384,6 @@ function buildSitesGeoJson(sites = []) {
         geometry: { type: 'Point', coordinates: [site.longitude, site.latitude] },
       })),
   };
-}
-
-function formatAvailability(value) {
-  return value == null ? 'N/A' : `${Number(value).toFixed(2)}%`;
-}
-
-function formatCell(value) {
-  return value == null ? '-' : Number(value).toLocaleString();
-}
-
-function formatOutageMinutes(value) {
-  if (value == null) return 'N/A';
-  if (Number(value) < 60) return `${Math.round(Number(value))} min`;
-  return `${Math.round(Number(value) / 60).toLocaleString()}h`;
-}
-
-function buildSparklinePath(values, width = 218, height = 48, padding = 8) {
-  const points = values
-    .map((value, index) => ({ value: Number(value), index }))
-    .filter(point => Number.isFinite(point.value));
-
-  if (points.length < 2) return '';
-
-  const min = Math.min(90, ...points.map(point => point.value));
-  const max = Math.max(100, ...points.map(point => point.value));
-  const range = Math.max(max - min, 1);
-  const step = (width - padding * 2) / Math.max(points.length - 1, 1);
-
-  return points
-    .map((point, visibleIndex) => {
-      const x = padding + visibleIndex * step;
-      const y = height - padding - ((point.value - min) / range) * (height - padding * 2);
-      return `${visibleIndex === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(' ');
-}
-
-function dailySparklineContent(rows = [], monthAvailability = null) {
-  const orderedRows = [...rows]
-    .filter(row => row.availability != null)
-    .sort((a, b) => Number(a.tgl) - Number(b.tgl));
-  const values = orderedRows.map(row => row.availability);
-  const path = buildSparklinePath(values);
-  const monthAvg = monthAvailability != null ? Number(monthAvailability).toFixed(2) : 'N/A';
-
-  if (!path) {
-    return textElement('div', 'Daily trend tidak tersedia', {
-      style: {
-        height: '46px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        color: '#64748B', fontSize: '10px',
-      },
-    });
-  }
-
-  const root = domElement('div');
-  const heading = domElement('div', {
-    style: {
-      display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', alignItems: 'center',
-      gap: '8px', marginBottom: '6px',
-    },
-  });
-  heading.append(
-    textElement('span', 'Daily Availability', {
-      style: {
-        fontSize: '9px', color: 'var(--text-muted)', textTransform: 'uppercase',
-        letterSpacing: '.08em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-      },
-    }),
-    textElement('b', `Month Avg ${monthAvg}%`, {
-      style: { fontSize: '10px', color: '#34D399', whiteSpace: 'nowrap' },
-    }),
-  );
-
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('width', '218');
-  svg.setAttribute('height', '48');
-  svg.setAttribute('viewBox', '0 0 218 48');
-  svg.style.cssText = 'display:block;width:100%;height:48px;overflow:visible';
-  const area = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  area.setAttribute('d', `${path} L210,46 L8,46 Z`);
-  area.setAttribute('fill', 'rgba(16,185,129,.16)');
-  area.setAttribute('stroke', 'none');
-  const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  line.setAttribute('d', path);
-  line.setAttribute('fill', 'none');
-  line.setAttribute('stroke', '#34D399');
-  line.setAttribute('stroke-width', '2.2');
-  line.setAttribute('stroke-linecap', 'round');
-  line.setAttribute('stroke-linejoin', 'round');
-  svg.append(area, line);
-  root.append(heading, svg);
-  return root;
-}
-
-function distanceKm(from, to) {
-  const toRad = (value) => value * Math.PI / 180;
-  const earthRadiusKm = 6371;
-  const dLat = toRad(to.latitude - from.latitude);
-  const dLng = toRad(to.longitude - from.longitude);
-  const lat1 = toRad(from.latitude);
-  const lat2 = toRad(to.latitude);
-  const a = Math.sin(dLat / 2) ** 2
-    + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
-  return 2 * earthRadiusKm * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-function rectsIntersect(a, b, padding = 0) {
-  if (!a || !b) return false;
-  return !(
-    a.right + padding < b.left
-    || a.left - padding > b.right
-    || a.bottom + padding < b.top
-    || a.top - padding > b.bottom
-  );
 }
 
 function createCircleFeature(center, radiusKm, steps = 96) {
@@ -528,150 +418,33 @@ function createCircleFeature(center, radiusKm, steps = 96) {
   };
 }
 
-function createNeighborCard(site) {
-  const color = getMarkerColor(site.avg_availability, site.status_site);
-  const element = domElement('div', { className: 'nod-neighbor-card' });
-  element.style.zIndex = '12';
-  const shell = domElement('div', { className: 'nod-neighbor-card-shell' });
-  const title = domElement('div', {
-    style: { display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '6px' },
-  });
-  title.append(
-    domElement('span', {
-      style: {
-        width: '6px', height: '6px', borderRadius: '999px', background: color,
-      },
-    }),
-    textElement('strong', site.site_id, { className: 'nod-neighbor-card-id' }),
-  );
-
-  const metrics = domElement('div', {
-    style: { display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '3px 8px' },
-  });
-  const appendMetric = (label, value, valueStyle = {}) => {
-    metrics.append(
-      textElement('span', label, { className: 'nod-neighbor-card-label' }),
-      textElement('b', value, { style: { textAlign: 'right', ...valueStyle } }),
-    );
-  };
-  appendMetric('Avail', formatAvailability(site.avg_availability), { color });
-  appendMetric('Cell', formatCell(site.jumlah_cell));
-  appendMetric('Outage', formatOutageMinutes(site.total_outage_menit));
-  shell.append(title, metrics);
-  element.append(shell);
-  return element;
-}
-
-function createSitePopupContent(site, availability, outage) {
-  const shell = domElement('div', {
-    className: 'nod-popup-shell',
-    style: { padding: '12px', fontFamily: 'Inter, sans-serif', width: '248px' },
-  });
-  const handle = domElement('div', {
-    className: 'nod-popup-drag-handle',
-    style: {
-      display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '8px', paddingRight: '18px',
-    },
-  });
-  handle.append(
-    domElement('span', {
-      style: {
-        width: '8px', height: '8px', borderRadius: '50%', background: site.color,
-        boxShadow: `0 0 8px ${site.color}`,
-      },
-    }),
-    textElement('span', site.site_id, {
-      style: { fontSize: '13px', fontWeight: '800', color: 'var(--text-primary)', lineHeight: '1' },
-    }),
-  );
-  const name = textElement('p', site.site_name, {
-    style: {
-      fontSize: '10px', color: 'var(--text-muted)', margin: '0 0 10px', lineHeight: '1.25',
-      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-    },
-  });
-  const chart = domElement('div', {
-    style: {
-      marginBottom: '10px', border: '1px solid var(--border)', background: 'var(--bg-elevated)',
-      borderRadius: '8px', padding: '8px 9px',
-    },
-  });
-  chart.append(textElement('div', 'Memuat daily trend...', {
-    style: {
-      height: '65px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      color: 'var(--text-muted)', fontSize: '10px',
-    },
-  }));
-  const metrics = domElement('div', {
-    style: {
-      display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '5px 10px', fontSize: '10px',
-      alignItems: 'center',
-    },
-  });
-  const appendMetric = (label, value, valueStyle = {}) => {
-    metrics.append(
-      textElement('span', label, { style: { color: 'var(--text-muted)' } }),
-      textElement('b', value, { style: { color: 'var(--text-primary)', textAlign: 'right', ...valueStyle } }),
-    );
-  };
-  appendMetric('Avail', availability, { color: site.color, fontSize: '13px' });
-  appendMetric('Outage', outage);
-  appendMetric('Cell', formatCell(site.jumlah_cell));
-  appendMetric('Class', site.site_class || '-');
-  const detailButton = textElement('button', 'Lihat Detail Lengkap', {
-    attributes: { type: 'button' },
-    style: {
-      marginTop: '10px', width: '100%', padding: '7px',
-      background: 'linear-gradient(135deg,#1E40AF,#3B82F6)', color: '#fff', border: 'none',
-      borderRadius: '7px', fontSize: '10px', fontWeight: '700', cursor: 'pointer',
-      letterSpacing: '.2px', transition: 'opacity .2s',
-    },
-  });
-  detailButton.addEventListener('mouseenter', () => { detailButton.style.opacity = '0.9'; });
-  detailButton.addEventListener('mouseleave', () => { detailButton.style.opacity = '1'; });
-  detailButton.addEventListener('click', () => {
-    window.dispatchEvent(new CustomEvent('open-site-detail', { detail: site.site_id }));
-  });
-  shell.append(handle, name, chart, metrics, detailButton);
-  return { shell, chart };
-}
-
 export default function MapboxMap({
   sites,
   loading,
   error,
   onRetry,
-  onSiteClick,
+  onSiteSelect,
+  onSectorStatusChange,
   selectedSiteId,
   selectedSiteFocusKey = 0,
   selectedSiteFallback,
-  bulan,
-  tahun,
-  nop,
+  filters = {},
   layoutResizeKey = 0,
 }) {
   const mapContainer = useRef(null);
   const map = useRef(null);
-  const popup = useRef(null);
-  const neighborMarkers = useRef([]);
   const sitesRef = useRef([]);
-  const focusSiteRef = useRef(null);
-  const dailyAvailabilityCache = useRef(new Map());
-  const dailyAvailabilityAbort = useRef(null);
+  const onSiteSelectRef = useRef(onSiteSelect);
   const cameraProgrammatic = useRef(false);
   const lastFocusedRequest = useRef(null);
-  const currentNopRef = useRef(nop || null);
+  const currentNopRef = useRef(filters.nop || null);
   const sectorViewportRef = useRef(EMPTY_GEOJSON);
   const selectedSectorsRef = useRef(EMPTY_GEOJSON);
   const viewportAbortRef = useRef(null);
   const selectedSectorAbortRef = useRef(null);
   const viewportRequestKeyRef = useRef(null);
   const viewportDebounceRef = useRef(null);
-  const activePopupSiteId = useRef(null);
-  const activePopupSiteData = useRef(null);
   const resizeFrame = useRef(null);
-  const popupDragCleanup = useRef(null);
-  const popupDragOffset = useRef({ x: 0, y: 0 });
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapInitError, setMapInitError] = useState(null);
   const [mapRetryKey, setMapRetryKey] = useState(0);
@@ -683,7 +456,7 @@ export default function MapboxMap({
   const [selectedSectorState, setSelectedSectors] = useState({ siteId: null, geoJson: EMPTY_GEOJSON });
   const [sectorStatus, setSectorStatus] = useState({ kind: 'off', count: 0, lod: 'none' });
   const [viewportDescriptor, setViewportDescriptor] = useState(null);
-  const normalizedNop = nop || null;
+  const normalizedNop = filters.nop || null;
   const sitesGeoJson = useMemo(() => buildSitesGeoJson(sites), [sites]);
   const sectorViewport = showSectors
     && viewportDescriptor
@@ -702,6 +475,14 @@ export default function MapboxMap({
   useEffect(() => {
     sitesRef.current = sites || [];
   }, [sites]);
+
+  useEffect(() => {
+    onSiteSelectRef.current = onSiteSelect;
+  }, [onSiteSelect]);
+
+  useEffect(() => {
+    onSectorStatusChange?.(sectorStatus);
+  }, [onSectorStatusChange, sectorStatus]);
 
   const scheduleMapResize = useCallback((delay = 0) => {
     if (!map.current || typeof window === 'undefined') return;
@@ -754,7 +535,7 @@ export default function MapboxMap({
         viewportDebounceRef.current = null;
         if (!map.current) return;
         try {
-          const descriptor = buildSectorViewportDescriptor(map.current, { nop: normalizedNop });
+          const descriptor = buildSectorViewportDescriptor(map.current, filters);
           if (descriptor.lod === 'none') {
             viewportAbortRef.current?.abort();
             viewportRequestKeyRef.current = descriptor.key;
@@ -785,7 +566,7 @@ export default function MapboxMap({
         viewportDebounceRef.current = null;
       }
     };
-  }, [mapLoaded, normalizedNop, showSectors]);
+  }, [filters, mapLoaded, showSectors]);
 
   useEffect(() => {
     if (!showSectors || !viewportDescriptor) return undefined;
@@ -801,6 +582,10 @@ export default function MapboxMap({
       zoom: descriptor.zoom,
       filters: {
         nop: descriptor.nop || undefined,
+        kabupaten: descriptor.kabupaten || undefined,
+        cluster: descriptor.cluster || undefined,
+        kelas: descriptor.kelas || undefined,
+        q: descriptor.q || undefined,
       },
       signal: controller.signal,
     })
@@ -940,16 +725,6 @@ export default function MapboxMap({
       mapInstance.off('style.load', onStyleLoad);
       mapInstance.off('load', onLoad);
       mapInstance.off('error', onMapError);
-      popupDragCleanup.current?.();
-      popupDragCleanup.current = null;
-      popup.current?.remove();
-      popup.current = null;
-      activePopupSiteId.current = null;
-      activePopupSiteData.current = null;
-      dailyAvailabilityAbort.current?.abort();
-      dailyAvailabilityAbort.current = null;
-      neighborMarkers.current.forEach(marker => marker.remove());
-      neighborMarkers.current = [];
       if (resizeFrame.current && typeof window !== 'undefined') {
         window.cancelAnimationFrame(resizeFrame.current);
         resizeFrame.current = null;
@@ -959,55 +734,10 @@ export default function MapboxMap({
     };
   }, [mapRetryKey]);
 
-  useEffect(() => {
-    dailyAvailabilityAbort.current?.abort();
-  }, [bulan, tahun]);
-
-  const clearNeighborMarkers = useCallback(() => {
-    neighborMarkers.current.forEach(marker => marker.remove());
-    neighborMarkers.current = [];
-  }, []);
-
   const clearRadius = useCallback(() => {
     const source = map.current?.getSource(RADIUS_SOURCE_ID);
     if (source) source.setData(emptyFeatureCollection());
   }, []);
-
-  const getMainPopupRect = useCallback(() => {
-    const popupElement = popup.current?.getElement();
-    if (!popupElement) return null;
-
-    const shell = popupElement.querySelector('.nod-popup-shell');
-    return (shell || popupElement).getBoundingClientRect();
-  }, []);
-
-  const ensurePopupVisible = useCallback(() => {
-    if (!map.current || !mapContainer.current || !popup.current) return;
-
-    const mapRect = mapContainer.current.getBoundingClientRect();
-    const popupRect = getMainPopupRect();
-    if (!popupRect) return;
-    let panX = 0;
-    let panY = 0;
-
-    const leftOverflow = mapRect.left + POPUP_SAFE_PADDING - popupRect.left;
-    const rightOverflow = popupRect.right - (mapRect.right - POPUP_SAFE_PADDING);
-    const topOverflow = mapRect.top + POPUP_SAFE_PADDING - popupRect.top;
-    const bottomOverflow = popupRect.bottom - (mapRect.bottom - POPUP_SAFE_PADDING);
-
-    if (leftOverflow > 0) panX = -leftOverflow;
-    else if (rightOverflow > 0) panX = rightOverflow;
-
-    if (topOverflow > 0) panY = -topOverflow;
-    else if (bottomOverflow > 0) panY = bottomOverflow;
-
-    if (panX !== 0 || panY !== 0) {
-      map.current.panBy([panX, panY], {
-        duration: POPUP_PAN_DURATION_MS,
-        essential: true,
-      });
-    }
-  }, [getMainPopupRect]);
 
   const updateRadius = useCallback((coordinates) => {
     if (!map.current) return;
@@ -1089,206 +819,11 @@ export default function MapboxMap({
     }, radiusBeforeLayer);
   }, []);
 
-  const renderNeighborMarkers = useCallback((siteData) => {
-    const currentSites = sitesRef.current;
-    if (!map.current || !mapContainer.current || !currentSites.length) return;
-
-    clearNeighborMarkers();
-
-    const mapRect = mapContainer.current.getBoundingClientRect();
-    const mainPopupRect = getMainPopupRect();
-
-    const center = {
-      latitude: Number(siteData.latitude),
-      longitude: Number(siteData.longitude),
-    };
-
-    const neighbors = currentSites
-      .filter(site => site.site_id !== siteData.site_id && site.latitude && site.longitude)
-      .map(site => ({
-        ...site,
-        distance: distanceKm(center, {
-          latitude: Number(site.latitude),
-          longitude: Number(site.longitude),
-        }),
-      }))
-      .filter(site => site.distance <= NEIGHBOR_RADIUS_KM)
-      .sort((a, b) => a.distance - b.distance);
-
-    const visibleNeighbors = [];
-    for (const site of neighbors) {
-      const point = map.current.project([Number(site.longitude), Number(site.latitude)]);
-      const estimatedRect = {
-        left: mapRect.left + point.x - NEIGHBOR_CARD_WIDTH / 2,
-        right: mapRect.left + point.x + NEIGHBOR_CARD_WIDTH / 2,
-        top: mapRect.top + point.y - NEIGHBOR_CARD_HEIGHT - 12,
-        bottom: mapRect.top + point.y - 12,
-      };
-
-      if (rectsIntersect(estimatedRect, mainPopupRect, 12)) continue;
-
-      visibleNeighbors.push(site);
-      if (visibleNeighbors.length >= MAX_NEIGHBOR_CARDS) break;
-    }
-
-    neighborMarkers.current = visibleNeighbors.map((site) => {
-      const element = createNeighborCard(site);
-
-      return new mapboxgl.Marker({
-        element,
-        anchor: 'bottom',
-        offset: [0, -12],
-      })
-        .setLngLat([site.longitude, site.latitude])
-        .addTo(map.current);
-    });
-  }, [clearNeighborMarkers, getMainPopupRect]);
-
-  const enablePopupDrag = useCallback(() => {
-    popupDragCleanup.current?.();
-    popupDragCleanup.current = null;
-
-    const popupElement = popup.current?.getElement();
-    const shell = popupElement?.querySelector('.nod-popup-shell');
-    const handle = popupElement?.querySelector('.nod-popup-drag-handle');
-    if (!shell || !handle) return;
-
-    const applyPopupDragOffset = () => {
-      popup.current?.setOffset({
-        top: [popupDragOffset.current.x, 16 + popupDragOffset.current.y],
-      });
-    };
-
-    applyPopupDragOffset();
-
-    let dragging = false;
-    let startClientX = 0;
-    let startClientY = 0;
-    let startOffset = { x: 0, y: 0 };
-
-    const onPointerMove = (event) => {
-      if (!dragging) return;
-      event.preventDefault();
-      popupDragOffset.current = {
-        x: startOffset.x + event.clientX - startClientX,
-        y: startOffset.y + event.clientY - startClientY,
-      };
-      applyPopupDragOffset();
-    };
-
-    const onPointerUp = () => {
-      if (!dragging) return;
-      dragging = false;
-      shell.classList.remove('nod-popup-dragging');
-      map.current?.dragPan?.enable();
-      document.removeEventListener('pointermove', onPointerMove);
-      document.removeEventListener('pointerup', onPointerUp);
-      if (activePopupSiteData.current) {
-        renderNeighborMarkers(activePopupSiteData.current);
-      }
-    };
-
-    const onPointerDown = (event) => {
-      if (event.button != null && event.button !== 0) return;
-
-      event.preventDefault();
-      event.stopPropagation();
-      dragging = true;
-      startClientX = event.clientX;
-      startClientY = event.clientY;
-      startOffset = { ...popupDragOffset.current };
-      shell.classList.add('nod-popup-dragging');
-      clearNeighborMarkers();
-      map.current?.dragPan?.disable();
-      document.addEventListener('pointermove', onPointerMove);
-      document.addEventListener('pointerup', onPointerUp);
-    };
-
-    handle.addEventListener('pointerdown', onPointerDown);
-
-    popupDragCleanup.current = () => {
-      handle.removeEventListener('pointerdown', onPointerDown);
-      document.removeEventListener('pointermove', onPointerMove);
-      document.removeEventListener('pointerup', onPointerUp);
-      if (dragging) map.current?.dragPan?.enable();
-    };
-  }, [clearNeighborMarkers, renderNeighborMarkers]);
-
-  const openSitePopup = useCallback((siteData, coordinates) => {
+  const focusSite = useCallback((coordinates) => {
     if (!map.current) return;
 
-    const p = siteData;
-    const avail = formatAvailability(p.avg_availability);
-    const outage = p.total_outage_menit != null ? `${Math.round(p.total_outage_menit)} min` : 'N/A';
-    const { shell, chart } = createSitePopupContent(p, avail, outage);
-
-    popup.current?.remove();
-    popupDragCleanup.current?.();
-    popupDragCleanup.current = null;
-    popupDragOffset.current = { x: 0, y: 0 };
-    activePopupSiteId.current = p.site_id;
-    activePopupSiteData.current = p;
-
-    popup.current = new mapboxgl.Popup({
-      anchor: 'top',
-      offset: { top: [0, 16] },
-      maxWidth: '258px',
-      className: 'nod-popup',
-    }).setLngLat(coordinates).setDOMContent(shell).addTo(map.current);
-
-    popup.current.getElement().style.zIndex = '40';
-    enablePopupDrag();
-    window.requestAnimationFrame(() => ensurePopupVisible());
-    window.setTimeout(ensurePopupVisible, POPUP_PAN_DURATION_MS + 60);
-
-    popup.current.on('close', () => {
-      popupDragCleanup.current?.();
-      popupDragCleanup.current = null;
-      activePopupSiteId.current = null;
-      activePopupSiteData.current = null;
-      clearNeighborMarkers();
-    });
-
-    if (bulan && tahun) {
-      const cacheKey = `${p.site_id}-${tahun}-${bulan}`;
-      const cachedRows = dailyAvailabilityCache.current.get(cacheKey);
-      if (cachedRows) {
-        chart.replaceChildren(dailySparklineContent(cachedRows, p.avg_availability));
-        return;
-      }
-
-      dailyAvailabilityAbort.current?.abort();
-      const controller = new AbortController();
-      dailyAvailabilityAbort.current = controller;
-      fetchSiteAvailability(p.site_id, bulan, tahun, controller.signal)
-        .then((rows) => {
-          dailyAvailabilityCache.current.set(cacheKey, rows);
-          if (activePopupSiteId.current === p.site_id) {
-            chart.replaceChildren(dailySparklineContent(rows, p.avg_availability));
-          }
-        })
-        .catch((err) => {
-          if (controller.signal.aborted || err?.code === 'ERR_CANCELED') return;
-          if (activePopupSiteId.current === p.site_id) {
-            chart.replaceChildren(textElement('div', 'Daily trend gagal dimuat', {
-              style: {
-                height: '65px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: 'var(--danger)', fontSize: '10px',
-              },
-            }));
-          }
-        });
-    }
-  }, [bulan, tahun, clearNeighborMarkers, enablePopupDrag, ensurePopupVisible]);
-
-  const focusSite = useCallback((siteData, coordinates, { notify = false } = {}) => {
-    if (!map.current) return;
-
-    popup.current?.remove();
-    clearNeighborMarkers();
     clearRadius();
     updateRadius(coordinates);
-    if (notify) onSiteClick?.(siteData.site_id, coordinates);
 
     cameraProgrammatic.current = true;
     map.current.flyTo({
@@ -1302,13 +837,8 @@ export default function MapboxMap({
 
     map.current.once('moveend', () => {
       cameraProgrammatic.current = false;
-      openSitePopup(siteData, coordinates);
-      window.setTimeout(() => {
-        if (activePopupSiteId.current !== siteData.site_id) return;
-        renderNeighborMarkers(siteData);
-      }, POPUP_PAN_DURATION_MS + 80);
     });
-  }, [onSiteClick, openSitePopup, clearNeighborMarkers, clearRadius, updateRadius, renderNeighborMarkers]);
+  }, [clearRadius, updateRadius]);
 
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
@@ -1327,7 +857,12 @@ export default function MapboxMap({
   }, [mapLoaded]);
 
   useEffect(() => {
-    if (!map.current || !mapLoaded || !selectedSiteId) return;
+    if (!map.current || !mapLoaded) return;
+    if (!selectedSiteId) {
+      lastFocusedRequest.current = null;
+      clearRadius();
+      return;
+    }
 
     const requestKey = `${selectedSiteId}:${selectedSiteFocusKey}`;
     if (requestKey === lastFocusedRequest.current) return;
@@ -1339,12 +874,8 @@ export default function MapboxMap({
     if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) return;
 
     lastFocusedRequest.current = requestKey;
-    focusSite(siteToPopupData({ ...site, longitude, latitude }), [longitude, latitude]);
-  }, [selectedSiteId, selectedSiteFocusKey, selectedSiteFallback, mapLoaded, focusSite]);
-
-  useEffect(() => {
-    focusSiteRef.current = focusSite;
-  }, [focusSite]);
+    focusSite([longitude, latitude]);
+  }, [selectedSiteId, selectedSiteFocusKey, selectedSiteFallback, mapLoaded, focusSite, clearRadius]);
 
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
@@ -1367,7 +898,7 @@ export default function MapboxMap({
     const handleSiteClick = (e) => {
       const p = e.features[0].properties;
       const c = e.features[0].geometry.coordinates.slice();
-      focusSiteRef.current?.(p, c, { notify: true });
+      onSiteSelectRef.current?.(normalizeSiteData(p, c));
     };
 
     const handleClusterClick = (e) => {
@@ -1564,7 +1095,7 @@ export default function MapboxMap({
           Belum ada data marker untuk periode dan filter ini.
         </div>
       )}
-      {/* Sector Band Legend — only shown for band-specific geometry. */}
+      {/* Sector band legend appears only for band-specific geometry. */}
       {showBandLegend && (
         <div className="nod-sector-legend absolute bottom-3 left-3 z-10 px-3 py-2.5">
           <p className="nod-sector-legend-title text-[9px] font-semibold uppercase tracking-widest mb-1.5">
@@ -1584,7 +1115,7 @@ export default function MapboxMap({
         </div>
       )}
 
-      {/* Map Control Toggles — bottom right */}
+      {/* Map control toggles at bottom right. */}
       <div className="absolute bottom-3 right-3 z-10 flex flex-col gap-2">
         {/* Basemap Toggle */}
         <button
