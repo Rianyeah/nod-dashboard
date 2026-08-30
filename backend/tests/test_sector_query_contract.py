@@ -87,7 +87,7 @@ class SectorQueryContractTest(unittest.TestCase):
             self.assertIn("{filters}", query)
 
         grouped = " ".join(MAP_SECTORS_VIEWPORT_GROUPED_QUERY.split()).lower()
-        self.assertIn("round(azimuth::numeric, 1)", grouped)
+        self.assertIn("round(r.azimuth::numeric, 1)", grouped)
         self.assertIn("array_agg(distinct", grouped)
         self.assertIn("count(*)", grouped)
 
@@ -245,7 +245,7 @@ class SectorRouterBehaviorTest(unittest.IsolatedAsyncioTestCase):
             "zoom_required": False,
         })
         self.assertEqual(payload["features"][0]["properties"]["bands"], ["L900", "L1800", "L2100"])
-        self.assertIn("AND nop = :nop", fake_session.executed_sql)
+        self.assertIn('AND m."NOP" = :nop', fake_session.executed_sql)
         self.assertEqual(fake_session.executed_params, {
             "west": 112.0,
             "south": -8.0,
@@ -254,6 +254,32 @@ class SectorRouterBehaviorTest(unittest.IsolatedAsyncioTestCase):
             "nop": "PASURUAN",
             "row_limit": 2501,
         })
+
+    async def test_viewport_filters_bind_master_dimensions_and_search(self):
+        fake_session = FakeSession([])
+
+        await self.get_map_sector_viewport(
+            bbox="112,-8,114,-6",
+            zoom=12,
+            nop="PASURUAN",
+            kabupaten="KOTA PASURUAN",
+            cluster="PASURUAN",
+            kelas="GOLD",
+            q="PSR",
+            session=fake_session,
+        )
+
+        normalized_sql = " ".join(fake_session.executed_sql.split())
+        self.assertIn('JOIN data_site_master m ON m."Siteid" = r.site_id', normalized_sql)
+        self.assertIn('m."Kabupaten/KOTA" = :kabupaten', normalized_sql)
+        self.assertIn('m."New Cluster" = :cluster', normalized_sql)
+        self.assertIn('m."Site Class" = :kelas', normalized_sql)
+        self.assertIn('m."Siteid" ILIKE :q', normalized_sql)
+        self.assertEqual(fake_session.executed_params["nop"], "PASURUAN")
+        self.assertEqual(fake_session.executed_params["kabupaten"], "KOTA PASURUAN")
+        self.assertEqual(fake_session.executed_params["cluster"], "PASURUAN")
+        self.assertEqual(fake_session.executed_params["kelas"], "GOLD")
+        self.assertEqual(fake_session.executed_params["q"], "%PSR%")
 
     async def test_viewport_loader_does_not_execute_below_minimum_zoom(self):
         fake_session = FakeSession([])

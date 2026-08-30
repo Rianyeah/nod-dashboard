@@ -114,6 +114,10 @@ async def get_map_sector_viewport(
     bbox: str = Query(..., description="WGS84 west,south,east,north"),
     zoom: float = Query(..., ge=0, le=24),
     nop: str = Query(None),
+    kabupaten: str | None = None,
+    cluster: str | None = None,
+    kelas: str | None = None,
+    q: str | None = None,
     session: AsyncSession = Depends(get_session),
 ):
     """Get spatially bounded sector polygons at a zoom-derived detail level."""
@@ -127,6 +131,10 @@ async def get_map_sector_viewport(
         bbox=parsed_bbox,
         zoom=zoom,
         nop=nop,
+        kabupaten=kabupaten,
+        cluster=cluster,
+        kelas=kelas,
+        q=q,
     )
 
 

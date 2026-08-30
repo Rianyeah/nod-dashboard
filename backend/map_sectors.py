@@ -19,6 +19,7 @@ from sector_geometry import (
     sector_row_to_feature,
     sector_row_to_viewport_feature,
 )
+from site_query import build_site_filters, build_site_search_filter
 
 
 def parse_viewport_bbox(value: str) -> tuple[float, float, float, float]:
@@ -98,6 +99,10 @@ async def load_sector_viewport_feature_collection(
     bbox: tuple[float, float, float, float],
     zoom: float,
     nop: str | None = None,
+    kabupaten: str | None = None,
+    cluster: str | None = None,
+    kelas: str | None = None,
+    q: str | None = None,
 ) -> dict[str, Any]:
     """Load a spatially bounded sector collection with server-owned LOD."""
     lod = sector_lod_for_zoom(zoom)
@@ -123,10 +128,17 @@ async def load_sector_viewport_feature_collection(
         "north": north,
         "row_limit": feature_limit + 1,
     }
-    filters = ""
-    if nop:
-        filters = " AND nop = :nop"
-        params["nop"] = nop
+    filters, filter_params = build_site_filters(
+        nop=nop,
+        kabupaten=kabupaten,
+        cluster=cluster,
+        kelas=kelas,
+        alias="m",
+    )
+    search_filter, search_params = build_site_search_filter(q, alias="m")
+    filters += search_filter
+    params.update(filter_params)
+    params.update(search_params)
 
     query = (
         MAP_SECTORS_VIEWPORT_GROUPED_QUERY

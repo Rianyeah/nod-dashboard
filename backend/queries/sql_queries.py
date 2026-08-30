@@ -168,20 +168,21 @@ ORDER BY site_id, sector_base, band, cell_name
 MAP_SECTORS_VIEWPORT_GROUPED_QUERY = """
 WITH scoped AS (
     SELECT
-        site_id,
-        latitude_fix,
-        longitude_fix,
-        ROUND(azimuth::numeric, 1)::double precision AS azimuth,
-        COALESCE(NULLIF(beamwidth, 0), 30) AS beamwidth,
-        radius,
-        band
-    FROM ransys_gabungan
-    WHERE latitude_fix IS NOT NULL
-      AND longitude_fix IS NOT NULL
-      AND azimuth IS NOT NULL
-      AND longitude_fix BETWEEN -180 AND 180
-      AND latitude_fix BETWEEN -90 AND 90
-      AND geom && ST_MakeEnvelope(:west, :south, :east, :north, 4326)
+        r.site_id,
+        r.latitude_fix,
+        r.longitude_fix,
+        ROUND(r.azimuth::numeric, 1)::double precision AS azimuth,
+        COALESCE(NULLIF(r.beamwidth, 0), 30) AS beamwidth,
+        r.radius,
+        r.band
+    FROM ransys_gabungan r
+    JOIN data_site_master m ON m."Siteid" = r.site_id
+    WHERE r.latitude_fix IS NOT NULL
+      AND r.longitude_fix IS NOT NULL
+      AND r.azimuth IS NOT NULL
+      AND r.longitude_fix BETWEEN -180 AND 180
+      AND r.latitude_fix BETWEEN -90 AND 90
+      AND r.geom && ST_MakeEnvelope(:west, :south, :east, :north, 4326)
     {filters}
 )
 SELECT
@@ -201,21 +202,22 @@ LIMIT :row_limit
 
 MAP_SECTORS_VIEWPORT_FULL_QUERY = """
 SELECT
-    site_id,
-    sector_base,
-    band,
-    latitude_fix,
-    longitude_fix,
-    azimuth,
-    beamwidth,
-    radius
-FROM ransys_gabungan
-WHERE latitude_fix IS NOT NULL
-  AND longitude_fix IS NOT NULL
-  AND azimuth IS NOT NULL
-  AND longitude_fix BETWEEN -180 AND 180
-  AND latitude_fix BETWEEN -90 AND 90
-  AND geom && ST_MakeEnvelope(:west, :south, :east, :north, 4326)
+    r.site_id,
+    r.sector_base,
+    r.band,
+    r.latitude_fix,
+    r.longitude_fix,
+    r.azimuth,
+    r.beamwidth,
+    r.radius
+FROM ransys_gabungan r
+JOIN data_site_master m ON m."Siteid" = r.site_id
+WHERE r.latitude_fix IS NOT NULL
+  AND r.longitude_fix IS NOT NULL
+  AND r.azimuth IS NOT NULL
+  AND r.longitude_fix BETWEEN -180 AND 180
+  AND r.latitude_fix BETWEEN -90 AND 90
+  AND r.geom && ST_MakeEnvelope(:west, :south, :east, :north, 4326)
 {filters}
 ORDER BY site_id, sector_base, band
 LIMIT :row_limit
