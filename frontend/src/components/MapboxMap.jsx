@@ -754,7 +754,7 @@ export default function MapboxMap({
         viewportDebounceRef.current = null;
         if (!map.current) return;
         try {
-          const descriptor = buildSectorViewportDescriptor(map.current, normalizedNop);
+          const descriptor = buildSectorViewportDescriptor(map.current, { nop: normalizedNop });
           if (descriptor.lod === 'none') {
             viewportAbortRef.current?.abort();
             viewportRequestKeyRef.current = descriptor.key;
@@ -799,7 +799,9 @@ export default function MapboxMap({
     fetchMapSectorViewport({
       bbox: descriptor.bbox,
       zoom: descriptor.zoom,
-      nop: descriptor.nop,
+      filters: {
+        nop: descriptor.nop || undefined,
+      },
       signal: controller.signal,
     })
       .then((geoJson) => {

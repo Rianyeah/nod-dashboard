@@ -53,6 +53,12 @@ export default function SiteMapPage() {
   const [filters, setFilters] = useState({});
   const [filterOptions, setFilterOptions] = useState({ kabupaten: [], cluster: [], kelas: [], nop: [] });
 
+  const mapFilters = useMemo(() => {
+    const nextFilters = { ...filters };
+    if (nop) nextFilters.nop = nop;
+    return nextFilters;
+  }, [filters, nop]);
+
   // Resizable layout state
   const [sidebarWidth, setSidebarWidth] = useState(272);
   const [tableHeight, setTableHeight] = useState(28); // percentage
@@ -70,7 +76,7 @@ export default function SiteMapPage() {
     loading: mapLoading,
     error: mapDataError,
     refetch: refetchMapData,
-  } = useMapData(bulan, tahun, nop);
+  } = useMapData(bulan, tahun, mapFilters);
 
   useEffect(() => {
     let cancelled = false;
@@ -182,11 +188,7 @@ export default function SiteMapPage() {
   }, [handleSiteSelect]);
 
   // Merge NOP into table filters
-  const tableFilters = useMemo(() => {
-    const f = { ...filters };
-    if (nop) f.nop = nop;
-    return f;
-  }, [filters, nop]);
+  const tableFilters = mapFilters;
 
   const sidebarFilters = useMemo(() => (nop ? { nop } : EMPTY_FILTERS), [nop]);
 

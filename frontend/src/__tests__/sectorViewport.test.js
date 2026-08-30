@@ -49,14 +49,24 @@ describe('sector viewport helpers', () => {
   });
 
   it('builds a stable bounded request descriptor', () => {
-    const descriptor = buildSectorViewportDescriptor(mapAt(), 'SIDOARJO');
+    const descriptor = buildSectorViewportDescriptor(mapAt(), {
+      nop: 'SIDOARJO',
+      kabupaten: 'KABUPATEN SIDOARJO',
+      cluster: 'SIDOARJO',
+      kelas: 'PLATINUM',
+      q: 'SDA',
+    });
 
     assert.deepEqual(descriptor, {
       bbox: '112.100000,-7.900000,112.900000,-7.100000',
       zoom: 10.25,
       lod: 'lite',
       nop: 'SIDOARJO',
-      key: '112.100000,-7.900000,112.900000,-7.100000|10.25|SIDOARJO',
+      kabupaten: 'KABUPATEN SIDOARJO',
+      cluster: 'SIDOARJO',
+      kelas: 'PLATINUM',
+      q: 'SDA',
+      key: '112.100000,-7.900000,112.900000,-7.100000|10.25|SIDOARJO|KABUPATEN SIDOARJO|SIDOARJO|PLATINUM|SDA',
     });
   });
 
@@ -67,23 +77,23 @@ describe('sector viewport helpers', () => {
       east: 112.9000001,
       north: -7.1000001,
       zoom: 10.251,
-    }), null);
+    }), {});
     const second = buildSectorViewportDescriptor(mapAt({
       west: 112.1000002,
       south: -7.9000002,
       east: 112.9000002,
       north: -7.1000002,
       zoom: 10.252,
-    }), '');
+    }), { nop: '' });
 
     assert.equal(first.key, second.key);
     assert.equal(first.nop, null);
   });
 
   it('rejects missing, non-finite, reversed, and dateline-crossing bounds', () => {
-    assert.throws(() => buildSectorViewportDescriptor(null, null), /map/i);
-    assert.throws(() => buildSectorViewportDescriptor(mapAt({ west: Number.NaN }), null), /bounds/i);
-    assert.throws(() => buildSectorViewportDescriptor(mapAt({ west: 114, east: 112 }), null), /bounds/i);
+    assert.throws(() => buildSectorViewportDescriptor(null, {}), /map/i);
+    assert.throws(() => buildSectorViewportDescriptor(mapAt({ west: Number.NaN }), {}), /bounds/i);
+    assert.throws(() => buildSectorViewportDescriptor(mapAt({ west: 114, east: 112 }), {}), /bounds/i);
   });
 
   it('formats compact and actionable sector layer states', () => {

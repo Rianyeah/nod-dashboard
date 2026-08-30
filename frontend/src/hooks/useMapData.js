@@ -4,8 +4,10 @@ import { fetchMapSites } from '../services/api';
 /**
  * Custom hook for fetching map site data.
  */
-export function useMapData(bulan, tahun, nop) {
+export function useMapData(bulan, tahun, filters = {}) {
   const [sites, setSites] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [withCoordinates, setWithCoordinates] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const requestIdRef = useRef(0);
@@ -20,15 +22,24 @@ export function useMapData(bulan, tahun, nop) {
 
     if (!bulan || !tahun) {
       setSites([]);
+      setTotal(0);
+      setWithCoordinates(0);
       setLoading(false);
       return;
     }
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchMapSites(bulan, tahun, nop, controller.signal);
+      const payload = await fetchMapSites({
+        bulan,
+        tahun,
+        filters,
+        signal: controller.signal,
+      });
       if (requestId !== requestIdRef.current) return;
-      setSites(data);
+      setSites(payload?.data || []);
+      setTotal(Number(payload?.total) || 0);
+      setWithCoordinates(Number(payload?.with_coordinates) || 0);
       setError(null);
     } catch (err) {
       if (controller.signal.aborted || err?.code === 'ERR_CANCELED') return;
@@ -40,7 +51,7 @@ export function useMapData(bulan, tahun, nop) {
         setLoading(false);
       }
     }
-  }, [bulan, tahun, nop]);
+  }, [bulan, tahun, filters]);
 
   useEffect(() => {
     Promise.resolve().then(loadData);
@@ -49,5 +60,5 @@ export function useMapData(bulan, tahun, nop) {
     };
   }, [loadData]);
 
-  return { sites, loading, error, refetch: loadData };
+  return { sites, total, withCoordinates, loading, error, refetch: loadData };
 }

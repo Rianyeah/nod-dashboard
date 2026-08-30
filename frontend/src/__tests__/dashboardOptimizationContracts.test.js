@@ -35,14 +35,15 @@ describe('dashboard loading optimization contracts', () => {
     assert.match(map, /source\.setData\(sitesGeoJson\)/);
   });
 
-  it('aborts stale map site requests when period or NOP changes', () => {
+  it('aborts stale map site requests when canonical filters change', () => {
     const hook = src('hooks', 'useMapData.js');
     const api = src('services', 'api.js');
 
     assert.match(hook, /new AbortController\(\)/);
-    assert.match(hook, /fetchMapSites\(bulan, tahun, nop, controller\.signal\)/);
+    assert.match(hook, /fetchMapSites\(\{\s*bulan,\s*tahun,\s*filters,\s*signal:\s*controller\.signal/);
     assert.match(hook, /abortControllerRef\.current\?\.abort\(\)/);
-    assert.match(api, /export async function fetchMapSites\(bulan, tahun, nop, signal\)/);
+    assert.match(hook, /withCoordinates/);
+    assert.match(api, /export async function fetchMapSites\(\{ bulan, tahun, filters = \{\}, signal \} = \{\}\)/);
     assert.match(api, /signal/);
   });
 
@@ -65,9 +66,9 @@ describe('dashboard loading optimization contracts', () => {
   it('separates bounded viewport sectors from selected-site full detail', () => {
     const api = src('services', 'api.js');
 
-    assert.match(api, /export async function fetchMapSectorViewport\(\{ bbox, zoom, nop, signal \}\)/);
+    assert.match(api, /export async function fetchMapSectorViewport\(\{ bbox, zoom, filters = \{\}, signal \}\)/);
     assert.match(api, /api\.get\('\/map\/sectors\/viewport'/);
-    assert.match(api, /params:\s*\{\s*bbox,\s*zoom,\s*nop:\s*nop\s*\|\|\s*undefined\s*\}/);
+    assert.match(api, /params:\s*\{\s*bbox,\s*zoom,\s*\.\.\.filters\s*\}/);
     assert.match(api, /export async function fetchMapSectors\(\{ nop, siteId, signal \}\s*=\s*\{\}\)/);
     assert.match(api, /site_id:\s*siteId\s*\|\|\s*undefined/);
   });
