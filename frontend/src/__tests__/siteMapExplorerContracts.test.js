@@ -22,6 +22,9 @@ describe('Site Map spatial explorer contracts', () => {
     assert.match(page, /filters=\{mapFilters\}/g);
     assert.match(page, /nearbySites\(/);
     assert.doesNotMatch(page, /SummaryCards|isDraggingSidebar|isDraggingTable/);
+    assert.match(page, /const explorerState = useMemo/);
+    assert.match(page, /updateExplorerState/);
+    assert.doesNotMatch(page, /initialStateRef|lastWrittenUrlRef|applyingUrlRef/);
   });
 
   it('provides focused explorer surfaces instead of duplicating summary cards', () => {
@@ -71,7 +74,11 @@ describe('Site Map spatial explorer contracts', () => {
     assert.match(drawer, /42px/);
     assert.match(drawer, /max-h-/);
     assert.match(drawer, /setPage\(1\)/);
+    assert.match(drawer, /scopeKey/);
+    assert.doesNotMatch(drawer, /useEffect/);
     assert.match(table, /fetchSites\(\{[\s\S]*?sortBy,[\s\S]*?sortDir/);
+    assert.match(table, /queryKey/);
+    assert.doesNotMatch(table, /setLoading\(true\)/);
     assert.match(table, /aria-sort/);
     assert.match(table, /Coba lagi/);
     assert.doesNotMatch(table, /const sorted =|\.sort\(/);

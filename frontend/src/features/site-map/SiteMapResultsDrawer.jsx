@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronUp, ListFilter } from 'lucide-react';
 
 import SiteTable from '../../components/SiteTable';
@@ -14,14 +14,16 @@ export default function SiteMapResultsDrawer({
   open: controlledOpen,
 }) {
   const [internalOpen, setInternalOpen] = useState(false);
-  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ scopeKey: null, page: 1 });
   const [sortBy, setSortBy] = useState('site_id');
   const [sortDir, setSortDir] = useState('asc');
   const open = controlledOpen ?? internalOpen;
-
-  useEffect(() => {
-    setPage(1);
-  }, [filters, q, bulan, tahun]);
+  const scopeKey = useMemo(
+    () => JSON.stringify({ bulan, tahun, filters, q }),
+    [bulan, filters, q, tahun],
+  );
+  const page = pagination.scopeKey === scopeKey ? pagination.page : 1;
+  const setPage = (nextPage) => setPagination({ scopeKey, page: nextPage });
 
   const setDrawerOpen = (nextOpen) => {
     if (controlledOpen == null) setInternalOpen(nextOpen);

@@ -51,27 +51,40 @@ function isMobileViewport() {
 
 export default function SiteMapPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const initialStateRef = useRef(parseSiteMapSearchParams(searchParams));
+  const explorerState = useMemo(
+    () => parseSiteMapSearchParams(searchParams),
+    [searchParams],
+  );
+  const updateExplorerState = useCallback((updates) => {
+    const nextParams = writeSiteMapSearchParams(searchParams, {
+      ...explorerState,
+      ...updates,
+    });
+    if (nextParams.toString() !== searchParams.toString()) {
+      setSearchParams(nextParams, { replace: true });
+    }
+  }, [explorerState, searchParams, setSearchParams]);
+
+  const bulan = explorerState.bulan || null;
+  const tahun = explorerState.tahun || null;
+  const nop = explorerState.nop || null;
+  const query = searchParams.get('q') || '';
+  const selectedSiteId = explorerState.site || null;
+  const filters = useMemo(() => ({
+    ...(explorerState.kabupaten ? { kabupaten: explorerState.kabupaten } : {}),
+    ...(explorerState.cluster ? { cluster: explorerState.cluster } : {}),
+    ...(explorerState.kelas ? { kelas: explorerState.kelas } : {}),
+  }), [explorerState.cluster, explorerState.kabupaten, explorerState.kelas]);
+
   const fallbackAbortRef = useRef(null);
   const siteDetailAbortRef = useRef(null);
-  const lastWrittenUrlRef = useRef(searchParams.toString());
-  const applyingUrlRef = useRef(null);
-  const initialState = initialStateRef.current;
-
-  const [bulan, setBulan] = useState(initialState.bulan || null);
-  const [tahun, setTahun] = useState(initialState.tahun || null);
-  const [nop, setNop] = useState(initialState.nop || null);
-  const [filters, setFilters] = useState({
-    ...(initialState.kabupaten ? { kabupaten: initialState.kabupaten } : {}),
-    ...(initialState.cluster ? { cluster: initialState.cluster } : {}),
-    ...(initialState.kelas ? { kelas: initialState.kelas } : {}),
-  });
-  const [query, setQuery] = useState(initialState.q || '');
-  const [selectedSiteId, setSelectedSiteId] = useState(initialState.site || null);
   const [selectedSiteFocusKey, setSelectedSiteFocusKey] = useState(0);
   const [selectedSiteFallback, setSelectedSiteFallback] = useState(null);
-  const [selectedSiteLoading, setSelectedSiteLoading] = useState(Boolean(initialState.site));
-  const [selectedSiteError, setSelectedSiteError] = useState(null);
+  const [selectedSiteRequest, setSelectedSiteRequest] = useState({
+    requestKey: null,
+    loading: false,
+    error: null,
+  });
   const [mobileInspectorOpen, setMobileInspectorOpen] = useState(false);
   const [resultsOpen, setResultsOpen] = useState(false);
   const [layoutResizeKey, setLayoutResizeKey] = useState(0);
@@ -109,6 +122,18 @@ export default function SiteMapPage() {
     [selectedSite, sites],
   );
   const selectedOutsideFilters = Boolean(selectedSiteId && selectedSite && !selectedMarkerSite);
+  const selectedSiteNeedsFallback = Boolean(selectedSiteId && !selectedMarkerSite && !(
+    selectedSiteFallback?.site_id === selectedSiteId && hasCoordinates(selectedSiteFallback)
+  ));
+  const selectedSiteRequestKey = selectedSiteId
+    ? `${selectedSiteId}:${bulan || 'none'}:${tahun || 'none'}`
+    : null;
+  const hasCurrentSelectedSiteRequest = selectedSiteRequest.requestKey === selectedSiteRequestKey;
+  const selectedSiteLoading = selectedSiteNeedsFallback
+    && (!hasCurrentSelectedSiteRequest || selectedSiteRequest.loading);
+  const selectedSiteError = selectedSiteNeedsFallback && hasCurrentSelectedSiteRequest
+    ? selectedSiteRequest.error
+    : null;
 
   useEffect(() => {
     let cancelled = false;
@@ -124,99 +149,71 @@ export default function SiteMapPage() {
   }, []);
 
   useEffect(() => {
+    if (bulan && tahun) return undefined;
+
     let cancelled = false;
     fetchLatestPeriod()
       .then((period) => {
         if (cancelled || !period?.bulan || !period?.tahun) return;
-        if (!initialStateRef.current.bulan) setBulan((current) => current || Number(period.bulan));
-        if (!initialStateRef.current.tahun) setTahun((current) => current || Number(period.tahun));
+        updateExplorerState({
+          bulan: bulan || Number(period.bulan),
+          tahun: tahun || Number(period.tahun),
+        });
       })
       .catch((error) => {
         console.error('Failed to load latest availability period:', error);
         if (cancelled) return;
         const fallbackDate = new Date();
-        if (!initialStateRef.current.bulan) setBulan((current) => current || fallbackDate.getMonth() + 1);
-        if (!initialStateRef.current.tahun) setTahun((current) => current || fallbackDate.getFullYear());
+        updateExplorerState({
+          bulan: bulan || fallbackDate.getMonth() + 1,
+          tahun: tahun || fallbackDate.getFullYear(),
+        });
       });
     return () => { cancelled = true; };
-  }, []);
-
-  useEffect(() => {
-    const currentUrl = searchParams.toString();
-    if (lastWrittenUrlRef.current === currentUrl) {
-      lastWrittenUrlRef.current = null;
-      return;
-    }
-
-    applyingUrlRef.current = currentUrl;
-    const nextState = parseSiteMapSearchParams(searchParams);
-    if (nextState.bulan) setBulan(nextState.bulan);
-    if (nextState.tahun) setTahun(nextState.tahun);
-    setNop(nextState.nop || null);
-    setFilters({
-      ...(nextState.kabupaten ? { kabupaten: nextState.kabupaten } : {}),
-      ...(nextState.cluster ? { cluster: nextState.cluster } : {}),
-      ...(nextState.kelas ? { kelas: nextState.kelas } : {}),
-    });
-    setQuery(nextState.q || '');
-    setSelectedSiteFallback(null);
-    setSelectedSiteError(null);
-    setSelectedSiteId(nextState.site || null);
-    setSelectedSiteFocusKey((key) => key + 1);
-  }, [searchParams]);
-
-  useEffect(() => {
-    const currentUrl = searchParams.toString();
-    if (applyingUrlRef.current === currentUrl) {
-      applyingUrlRef.current = null;
-      return;
-    }
-
-    const nextParams = writeSiteMapSearchParams(searchParams, {
-      bulan,
-      tahun,
-      nop,
-      ...filters,
-      q: debouncedQuery,
-      site: selectedSiteId,
-    });
-    const nextUrl = nextParams.toString();
-    if (nextUrl === currentUrl) return;
-    lastWrittenUrlRef.current = nextUrl;
-    setSearchParams(nextParams, { replace: true });
-  }, [bulan, debouncedQuery, filters, nop, searchParams, selectedSiteId, setSearchParams, tahun]);
+  }, [bulan, tahun, updateExplorerState]);
 
   useEffect(() => {
     fallbackAbortRef.current?.abort();
-    setSelectedSiteError(null);
-
-    if (!selectedSiteId || selectedMarkerSite || (
-      selectedSiteFallback?.site_id === selectedSiteId && hasCoordinates(selectedSiteFallback)
-    )) {
-      setSelectedSiteLoading(false);
-      return undefined;
-    }
+    if (!selectedSiteNeedsFallback) return undefined;
 
     const controller = new AbortController();
     fallbackAbortRef.current = controller;
-    setSelectedSiteLoading(true);
-    fetchSiteDetail(selectedSiteId, bulan, tahun, controller.signal)
+    Promise.resolve()
+      .then(() => {
+        if (controller.signal.aborted) return null;
+        setSelectedSiteRequest({
+          requestKey: selectedSiteRequestKey,
+          loading: true,
+          error: null,
+        });
+        return fetchSiteDetail(selectedSiteId, bulan, tahun, controller.signal);
+      })
       .then((detail) => {
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || !detail) return;
         const normalized = normalizeSiteFocusData(detail, selectedSiteId);
-        if (!normalized) throw new Error('Data site tidak ditemukan.');
+        if (!hasCoordinates(normalized)) throw new Error('Koordinat site tidak ditemukan.');
         setSelectedSiteFallback(normalized);
       })
       .catch((error) => {
         if (controller.signal.aborted || error?.code === 'ERR_CANCELED') return;
-        setSelectedSiteError(error?.message || 'Data site tidak ditemukan.');
+        setSelectedSiteRequest({
+          requestKey: selectedSiteRequestKey,
+          loading: false,
+          error: error?.message || 'Data site tidak ditemukan.',
+        });
       })
       .finally(() => {
-        if (!controller.signal.aborted) setSelectedSiteLoading(false);
+        if (!controller.signal.aborted) {
+          setSelectedSiteRequest((current) => (
+            current.requestKey === selectedSiteRequestKey
+              ? { ...current, loading: false }
+              : current
+          ));
+        }
       });
 
     return () => controller.abort();
-  }, [bulan, selectedMarkerSite, selectedSiteFallback, selectedSiteId, tahun]);
+  }, [bulan, selectedSiteId, selectedSiteNeedsFallback, selectedSiteRequestKey, tahun]);
 
   useEffect(() => () => {
     fallbackAbortRef.current?.abort();
@@ -228,44 +225,65 @@ export default function SiteMapPage() {
     if (!siteId) return;
     const normalized = typeof siteOrId === 'string' ? null : normalizeSiteFocusData(siteOrId, siteId);
     if (normalized) setSelectedSiteFallback(normalized);
-    setSelectedSiteError(null);
-    setSelectedSiteId(siteId);
+    updateExplorerState({ site: siteId });
     setSelectedSiteFocusKey((key) => key + 1);
     setResultsOpen(false);
     if (isMobileViewport()) setMobileInspectorOpen(true);
     setLayoutResizeKey((key) => key + 1);
-  }, []);
+  }, [
+    setLayoutResizeKey,
+    setMobileInspectorOpen,
+    setResultsOpen,
+    setSelectedSiteFallback,
+    setSelectedSiteFocusKey,
+    updateExplorerState,
+  ]);
 
   const handleClearSelection = useCallback(() => {
     fallbackAbortRef.current?.abort();
-    setSelectedSiteId(null);
+    updateExplorerState({ site: null });
     setSelectedSiteFallback(null);
-    setSelectedSiteError(null);
-    setSelectedSiteLoading(false);
     setMobileInspectorOpen(false);
     setLayoutResizeKey((key) => key + 1);
-  }, []);
+  }, [
+    setLayoutResizeKey,
+    setMobileInspectorOpen,
+    setSelectedSiteFallback,
+    updateExplorerState,
+  ]);
+
+  const handleQueryChange = useCallback((value) => {
+    const nextParams = new URLSearchParams(searchParams);
+    if (value) nextParams.set('q', value);
+    else nextParams.delete('q');
+    setSearchParams(nextParams, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  const handleFilterChange = useCallback((nextFilters) => {
+    updateExplorerState({
+      kabupaten: nextFilters.kabupaten || null,
+      cluster: nextFilters.cluster || null,
+      kelas: nextFilters.kelas || null,
+    });
+  }, [updateExplorerState]);
 
   const handleResetToolbar = useCallback(() => {
-    setQuery('');
-    setFilters({});
-  }, []);
+    updateExplorerState({ q: null, kabupaten: null, cluster: null, kelas: null });
+  }, [updateExplorerState]);
 
   const handleClearAllFilters = useCallback(() => {
-    setQuery('');
-    setFilters({});
-    setNop(null);
-  }, []);
+    updateExplorerState({ q: null, nop: null, kabupaten: null, cluster: null, kelas: null });
+  }, [updateExplorerState]);
 
   const handleResultsOpenChange = useCallback((nextOpen) => {
     setResultsOpen(nextOpen);
     if (nextOpen && isMobileViewport()) setMobileInspectorOpen(false);
     setLayoutResizeKey((key) => key + 1);
-  }, []);
+  }, [setLayoutResizeKey, setMobileInspectorOpen, setResultsOpen]);
 
   const handleSectorStatusChange = useCallback((nextStatus) => {
     setSectorStatus(nextStatus);
-  }, []);
+  }, [setSectorStatus]);
 
   const handleOpenDetail = useCallback(async (siteId) => {
     siteDetailAbortRef.current?.abort();
@@ -285,7 +303,14 @@ export default function SiteMapPage() {
       if (controller.signal.aborted || error?.code === 'ERR_CANCELED') return;
       console.error('Failed to load site detail:', error);
     }
-  }, [bulan, tahun]);
+  }, [
+    bulan,
+    setShowModal,
+    setSiteDetail,
+    setSiteDetailPerformance,
+    setSiteDetailTrend,
+    tahun,
+  ]);
 
   return (
     <div className="dashboard-canvas flex min-h-[100dvh] flex-col overflow-hidden lg:h-[100dvh]">
@@ -294,18 +319,18 @@ export default function SiteMapPage() {
         tahun={tahun}
         nop={nop}
         nopOptions={filterOptions.nop}
-        onBulanChange={setBulan}
-        onTahunChange={setTahun}
-        onNopChange={setNop}
+        onBulanChange={(value) => updateExplorerState({ bulan: value })}
+        onTahunChange={(value) => updateExplorerState({ tahun: value })}
+        onNopChange={(value) => updateExplorerState({ nop: value })}
       />
       <Breadcrumb />
 
       <main className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2 lg:overflow-hidden">
         <SiteMapToolbar
           q={query}
-          onQueryChange={setQuery}
+          onQueryChange={handleQueryChange}
           filters={filters}
-          onFilterChange={setFilters}
+          onFilterChange={handleFilterChange}
           filterOptions={filterOptions}
           onReset={handleResetToolbar}
         />

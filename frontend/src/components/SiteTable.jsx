@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { RotateCcw } from 'lucide-react';
 
 import { fetchSites } from '../services/api';
@@ -38,29 +38,36 @@ export default function SiteTable({
   const [internalPage, setInternalPage] = useState(1);
   const [internalSortBy, setInternalSortBy] = useState('site_id');
   const [internalSortDir, setInternalSortDir] = useState('asc');
-  const [data, setData] = useState(EMPTY_RESULT);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [requestKey, setRequestKey] = useState(0);
   const page = controlledPage ?? internalPage;
   const sortBy = controlledSortBy ?? internalSortBy;
   const sortDir = controlledSortDir ?? internalSortDir;
+  const queryKey = useMemo(() => JSON.stringify({
+    bulan,
+    tahun,
+    page,
+    filters,
+    q: q.trim(),
+    sortBy,
+    sortDir,
+    requestKey,
+  }), [bulan, filters, page, q, requestKey, sortBy, sortDir, tahun]);
+  const [resultState, setResultState] = useState({
+    queryKey: null,
+    data: EMPTY_RESULT,
+    error: null,
+  });
+  const hasPeriod = Boolean(bulan && tahun);
+  const hasCurrentResult = resultState.queryKey === queryKey;
+  const data = hasPeriod && hasCurrentResult ? resultState.data : EMPTY_RESULT;
+  const error = hasCurrentResult ? resultState.error : null;
+  const loading = hasPeriod && !hasCurrentResult;
 
   useEffect(() => {
     const controller = new AbortController();
 
-    if (!bulan || !tahun) {
-      Promise.resolve().then(() => {
-        if (controller.signal.aborted) return;
-        setData(EMPTY_RESULT);
-        setError(null);
-        setLoading(false);
-      });
-      return () => controller.abort();
-    }
+    if (!bulan || !tahun) return () => controller.abort();
 
-    setLoading(true);
-    setError(null);
     fetchSites({
       bulan,
       tahun,
@@ -73,18 +80,21 @@ export default function SiteTable({
       ...filters,
     })
       .then((nextData) => {
-        if (!controller.signal.aborted) setData(nextData);
+        if (!controller.signal.aborted) {
+          setResultState({ queryKey, data: nextData, error: null });
+        }
       })
       .catch((nextError) => {
         if (controller.signal.aborted || nextError?.code === 'ERR_CANCELED') return;
-        setError(nextError?.message || 'Daftar site gagal dimuat.');
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
+        setResultState({
+          queryKey,
+          data: EMPTY_RESULT,
+          error: nextError?.message || 'Daftar site gagal dimuat.',
+        });
       });
 
     return () => controller.abort();
-  }, [bulan, tahun, page, filters, q, sortBy, sortDir, requestKey]);
+  }, [bulan, tahun, page, filters, q, sortBy, sortDir, queryKey]);
 
   const toggleSort = (column) => {
     const nextDirection = sortBy === column && sortDir === 'asc' ? 'desc' : 'asc';
