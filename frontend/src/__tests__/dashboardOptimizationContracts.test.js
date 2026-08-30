@@ -17,13 +17,14 @@ describe('dashboard loading optimization contracts', () => {
     assert.doesNotMatch(filterPanel, /fetchFilterOptions/);
   });
 
-  it('debounces SiteTable search before fetching paged data', () => {
+  it('keeps SiteTable query controlled and aborts stale paged requests', () => {
     const table = src('components', 'SiteTable.jsx');
 
-    assert.match(table, /useDebouncedValue/);
-    assert.match(table, /300/);
-    assert.match(table, /debouncedSearchTerm/);
-    assert.match(table, /q: debouncedSearchTerm \|\| undefined/);
+    assert.match(table, /q = ''/);
+    assert.match(table, /q: q\.trim\(\) \|\| undefined/);
+    assert.match(table, /new AbortController\(\)/);
+    assert.match(table, /signal: controller\.signal/);
+    assert.doesNotMatch(table, /DashboardSearchInput|useDebouncedValue/);
   });
 
   it('memoizes map GeoJSON and caches popup daily availability', () => {

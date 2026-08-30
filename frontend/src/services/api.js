@@ -145,6 +145,7 @@ export async function fetchSites({
   sortDir,
   page = 1,
   limit = 20,
+  signal,
 } = {}) {
   const { data } = await api.get('/sites', {
     params: {
@@ -161,6 +162,7 @@ export async function fetchSites({
       page,
       limit,
     },
+    signal,
   });
   return data;
 }
