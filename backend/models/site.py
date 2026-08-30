@@ -23,6 +23,13 @@ class SiteMapFeature(BaseModel):
     rca_dominan: Optional[str] = None
 
 
+class SiteMapResponse(BaseModel):
+    """Filtered marker payload with contextual coordinate coverage counts."""
+    data: list[SiteMapFeature] = []
+    total: int = 0
+    with_coordinates: int = 0
+
+
 class SiteListItem(BaseModel):
     """Site summary for table display."""
     site_id: str

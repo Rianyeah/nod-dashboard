@@ -53,19 +53,17 @@ export function setUnauthorizedHandler(handler) {
 
 // ===== Map =====
 
-export async function fetchMapSites(bulan, tahun, nop, signal) {
+export async function fetchMapSites({ bulan, tahun, filters = {}, signal } = {}) {
   const { data } = await api.get('/map/sites', {
-    params: { bulan, tahun, nop: nop || undefined },
-    timeout: 60000,
+    params: { bulan, tahun, ...filters },
     signal,
   });
   return data;
 }
 
-export async function fetchMapSectors({ nop, siteId, signal } = {}) {
+export async function fetchMapSectors({ siteId, signal } = {}) {
   const { data } = await api.get('/map/sectors', {
     params: {
-      nop: nop || undefined,
       site_id: siteId || undefined,
     },
     signal,
@@ -73,9 +71,9 @@ export async function fetchMapSectors({ nop, siteId, signal } = {}) {
   return data;
 }
 
-export async function fetchMapSectorViewport({ bbox, zoom, nop, signal }) {
+export async function fetchMapSectorViewport({ bbox, zoom, filters = {}, signal }) {
   const { data } = await api.get('/map/sectors/viewport', {
-    params: { bbox, zoom, nop: nop || undefined },
+    params: { bbox, zoom, ...filters },
     signal,
   });
   return data;
@@ -133,9 +131,37 @@ export async function fetchWorstSites(bulan, tahun, limit = 10, filters = {}) {
 
 // ===== Sites =====
 
-export async function fetchSites({ bulan, tahun, kabupaten, cluster, status, kelas, nop, q, page = 1, limit = 20 } = {}) {
+export async function fetchSites({
+  bulan,
+  tahun,
+  kabupaten,
+  cluster,
+  status,
+  kelas,
+  nop,
+  q,
+  sortBy,
+  sortDir,
+  page = 1,
+  limit = 20,
+  signal,
+} = {}) {
   const { data } = await api.get('/sites', {
-    params: { bulan, tahun, kabupaten, cluster, status, kelas, nop, q, page, limit },
+    params: {
+      bulan,
+      tahun,
+      kabupaten,
+      cluster,
+      status,
+      kelas,
+      nop,
+      q,
+      sort_by: sortBy,
+      sort_dir: sortDir,
+      page,
+      limit,
+    },
+    signal,
   });
   return data;
 }

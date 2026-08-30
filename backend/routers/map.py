@@ -15,30 +15,45 @@ from map_sectors import (
     parse_viewport_bbox,
 )
 from queries.metrics_cache import ensure_site_month_metrics
-from queries.sql_queries import MAP_SITES_QUERY, POPUP_DETAIL_QUERY
-from models.site import SiteMapFeature, SiteDetail
+from queries.sql_queries import MAP_SITES_COUNT_QUERY, MAP_SITES_QUERY, POPUP_DETAIL_QUERY
+from models.site import SiteMapFeature, SiteDetail, SiteMapResponse
+from site_query import build_site_filters, build_site_search_filter
 
 router = APIRouter(prefix="/map", tags=["Map"])
 
 
-@router.get("/sites", response_model=list[SiteMapFeature])
+@router.get("/sites", response_model=SiteMapResponse)
 async def get_map_sites(
     bulan: int = Query(..., ge=1, le=12, description="Bulan (1-12)"),
     tahun: int = Query(..., ge=2020, description="Tahun"),
     nop: str = Query(None),
+    kabupaten: str = Query(None),
+    cluster: str = Query(None),
+    status: str = Query(None),
+    kelas: str = Query(None),
+    q: str = Query(None),
     session: AsyncSession = Depends(get_session),
 ):
     """Get all sites with avg availability for map markers."""
     await ensure_site_month_metrics(session, bulan, tahun)
 
-    filters = ""
-    params = {"bulan": bulan, "tahun": tahun}
-    if nop:
-        filters = ' AND m."NOP" = :nop'
-        params["nop"] = nop
+    filters, filter_params = build_site_filters(
+        kabupaten=kabupaten,
+        cluster=cluster,
+        status=status,
+        kelas=kelas,
+        nop=nop,
+    )
+    search_filter, search_params = build_site_search_filter(q)
+    params = {
+        "bulan": bulan,
+        "tahun": tahun,
+        **filter_params,
+        **search_params,
+    }
 
     result = await session.execute(
-        text(MAP_SITES_QUERY.format(filters=filters)),
+        text(MAP_SITES_QUERY.format(filters=filters, search_filter=search_filter)),
         params,
     )
     rows = result.mappings().all()
@@ -66,7 +81,17 @@ async def get_map_sites(
             # Skip rows with invalid data
             continue
 
-    return sites
+    count_result = await session.execute(
+        text(MAP_SITES_COUNT_QUERY.format(filters=filters, search_filter=search_filter)),
+        params,
+    )
+    count_row = count_result.mappings().first() or {}
+
+    return SiteMapResponse(
+        data=sites,
+        total=int(count_row.get("total") or 0),
+        with_coordinates=int(count_row.get("with_coordinates") or 0),
+    )
 
 
 @router.get("/sectors")
@@ -89,6 +114,10 @@ async def get_map_sector_viewport(
     bbox: str = Query(..., description="WGS84 west,south,east,north"),
     zoom: float = Query(..., ge=0, le=24),
     nop: str = Query(None),
+    kabupaten: str | None = None,
+    cluster: str | None = None,
+    kelas: str | None = None,
+    q: str | None = None,
     session: AsyncSession = Depends(get_session),
 ):
     """Get spatially bounded sector polygons at a zoom-derived detail level."""
@@ -102,6 +131,10 @@ async def get_map_sector_viewport(
         bbox=parsed_bbox,
         zoom=zoom,
         nop=nop,
+        kabupaten=kabupaten,
+        cluster=cluster,
+        kelas=kelas,
+        q=q,
     )
 
 

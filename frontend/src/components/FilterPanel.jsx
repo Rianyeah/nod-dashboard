@@ -30,8 +30,8 @@ export default function FilterPanel({
         className="hidden xl:flex"
       />
       <DashboardFilterSheet
-        title="Filter daftar site"
-        description="Filter Kabupaten, Cluster, dan Kelas Site diterapkan bersama."
+        title="Filter Site Map"
+        description="Kabupaten, Cluster, dan Kelas Site diterapkan ke map, sector, dan hasil."
         values={filters}
         onApply={onFilterChange}
         onReset={() => ({})}

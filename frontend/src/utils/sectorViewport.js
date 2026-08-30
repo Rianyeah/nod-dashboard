@@ -20,7 +20,7 @@ function finiteCoordinate(value) {
 }
 
 
-export function buildSectorViewportDescriptor(map, nop) {
+export function buildSectorViewportDescriptor(map, filters = {}) {
   if (!map || typeof map.getBounds !== 'function' || typeof map.getZoom !== 'function') {
     throw new TypeError('map with getBounds() and getZoom() is required');
   }
@@ -40,14 +40,21 @@ export function buildSectorViewportDescriptor(map, nop) {
   const bbox = [west, south, east, north]
     .map(value => value.toFixed(6))
     .join(',');
-  const normalizedNop = typeof nop === 'string' && nop.trim() ? nop.trim() : null;
+  const normalizedFilters = ['nop', 'kabupaten', 'cluster', 'kelas', 'q'].reduce((result, key) => {
+    const value = typeof filters?.[key] === 'string' ? filters[key].trim() : '';
+    result[key] = value && value !== '__all__' ? value : null;
+    return result;
+  }, {});
+  const filterIdentity = ['nop', 'kabupaten', 'cluster', 'kelas', 'q']
+    .map(key => normalizedFilters[key] || '')
+    .join('|');
 
   return {
     bbox,
     zoom,
     lod,
-    nop: normalizedNop,
-    key: `${bbox}|${zoom.toFixed(2)}|${normalizedNop || ''}`,
+    ...normalizedFilters,
+    key: `${bbox}|${zoom.toFixed(2)}|${filterIdentity}`,
   };
 }
 
@@ -70,7 +77,7 @@ export function sectorStatusLabel(status = {}) {
       return `${count} sectors · ${lod}`;
     }
     case 'limit':
-      return 'Area too wide — zoom in';
+      return 'Area too wide - zoom in';
     case 'error':
     default:
       return 'Sector layer unavailable';

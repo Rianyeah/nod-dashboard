@@ -100,6 +100,7 @@ function formatSiteLabel(site) {
 }
 
 export default function RfTiltParamForm({
+  initialSiteQuery = null,
   params,
   set,
   targetMode,
@@ -125,8 +126,8 @@ export default function RfTiltParamForm({
   inputSources,
   compatibilityWarning,
 }) {
-  const [siteSearchOpen, setSiteSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [siteSearchOpen, setSiteSearchOpen] = useState(Boolean(initialSiteQuery));
+  const [searchQuery, setSearchQuery] = useState(initialSiteQuery || '');
   const searchInputRef = useRef(null);
   const [modelSearchOpen, setModelSearchOpen] = useState(false);
   const [modelQuery, setModelQuery] = useState('');
@@ -147,6 +148,12 @@ export default function RfTiltParamForm({
   useEffect(() => {
     if (siteSearchOpen && searchInputRef.current) setTimeout(() => searchInputRef.current?.focus(), 100);
   }, [siteSearchOpen]);
+
+  useEffect(() => {
+    if (!initialSiteQuery) return;
+
+    searchSites(initialSiteQuery);
+  }, [initialSiteQuery, searchSites]);
 
   useEffect(() => {
     if (modelSearchOpen && modelSearchInputRef.current) setTimeout(() => modelSearchInputRef.current?.focus(), 100);

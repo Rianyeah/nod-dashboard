@@ -288,21 +288,6 @@
   color: var(--danger);
 }
 
-[data-theme="light"] .nod-neighbor-card-shell {
-  background: rgba(255, 255, 255, 0.92);
-  border-color: rgba(37, 99, 235, 0.22);
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
-  color: var(--text-secondary);
-}
-
-[data-theme="light"] .nod-neighbor-card-id {
-  color: var(--text-primary);
-}
-
-[data-theme="light"] .nod-neighbor-card-label {
-  color: var(--text-muted);
-}
-
 [data-theme="light"] .nod-sector-legend {
   background: rgba(255, 255, 255, 0.9);
   border-color: rgba(0, 0, 0, 0.12);
@@ -402,40 +387,6 @@ html, body, #root {
   border-top-color: var(--bg-surface) !important;
 }
 
-.nod-popup {
-  z-index: 40 !important;
-}
-
-.nod-neighbor-card {
-  position: relative;
-  z-index: 12;
-}
-
-.nod-neighbor-card-shell {
-  width: 118px;
-  padding: 8px 9px;
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  background: var(--bg-glass);
-  box-shadow: var(--shadow-md);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  color: var(--text-primary);
-  font-family: Inter, sans-serif;
-  font-size: 10px;
-  line-height: 1.25;
-  pointer-events: none;
-}
-
-.nod-neighbor-card-id {
-  font-size: 10px;
-  color: var(--text-primary);
-}
-
-.nod-neighbor-card-label {
-  color: var(--text-muted);
-}
-
 .nod-sector-legend {
   border: 1px solid var(--border-strong);
   border-radius: 8px;
@@ -505,21 +456,6 @@ html, body, #root {
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-}
-
-.nod-popup-shell {
-  will-change: transform;
-}
-
-.nod-popup-drag-handle {
-  cursor: grab;
-  user-select: none;
-  touch-action: none;
-}
-
-.nod-popup-dragging .nod-popup-drag-handle,
-.nod-popup-drag-handle:active {
-  cursor: grabbing;
 }
 
 .mapboxgl-popup-close-button {

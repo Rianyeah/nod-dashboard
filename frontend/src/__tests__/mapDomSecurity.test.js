@@ -28,7 +28,8 @@ describe('map DOM security', () => {
     for (const source of [map, rf]) {
       assert.doesNotMatch(source, /setHTML\(/);
       assert.doesNotMatch(source, /\.innerHTML\s*=/);
-      assert.match(source, /setDOMContent/);
     }
+    assert.doesNotMatch(map, /setDOMContent|mapboxgl\.Popup|safeMapDom/);
+    assert.match(rf, /setDOMContent/);
   });
 });

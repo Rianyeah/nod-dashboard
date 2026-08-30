@@ -3,9 +3,10 @@ import {
   useDeferredValue,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Battery,
@@ -57,6 +58,7 @@ import DataPotensiSiteTable from '../features/data-potensi/DataPotensiSiteTable'
 import { dataPotensiChartConfig } from '../features/data-potensi/dataPotensiChartConfig';
 import { DATA_POTENSI_ADVANCED_FILTERS } from '../features/data-potensi/dataPotensiFilters';
 import DataPotensiInsightCarousel from '../features/data-potensi/DataPotensiInsightCarousel';
+import { normalizedDeepLinkSite } from '../features/site-map/siteDeepLinks';
 
 /* ─── Constants ────────────────────────────────────────── */
 
@@ -354,6 +356,9 @@ function TpDistributionChart({ data }) {
 
 export default function DataPotensiPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const deepLinkedSite = normalizedDeepLinkSite(searchParams.get('site'));
+  const lastDeepLinkedSiteRef = useRef(null);
 
   const [nopOptions, setNopOptions] = useState([]);
   const [statusOptions, setStatusOptions] = useState([]);
@@ -522,6 +527,13 @@ export default function DataPotensiPage() {
       console.error('Failed to load site detail:', err);
     }
   }, []);
+
+  useEffect(() => {
+    if (!deepLinkedSite || lastDeepLinkedSiteRef.current === deepLinkedSite) return;
+
+    lastDeepLinkedSiteRef.current = deepLinkedSite;
+    handleSiteClick(deepLinkedSite);
+  }, [deepLinkedSite, handleSiteClick]);
 
   // Site class donut color function matching Reporting page
   const siteClassColorFn = useCallback((label) => {

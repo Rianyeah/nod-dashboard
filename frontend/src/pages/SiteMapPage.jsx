@@ -1,22 +1,29 @@
-import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+
 import Header from '../components/Header';
-import SummaryCards from '../components/SummaryCards';
 import MapboxMap from '../components/MapboxMap';
-import SiteTable from '../components/SiteTable';
-import FilterPanel from '../components/FilterPanel';
 import SiteDetailModal from '../components/SiteDetailModal';
 import Breadcrumb from '../components/Breadcrumb';
+import SiteMapToolbar from '../features/site-map/SiteMapToolbar';
+import SiteMapContextStrip from '../features/site-map/SiteMapContextStrip';
+import SiteMapInspector from '../features/site-map/SiteMapInspector';
+import SiteMapResultsDrawer from '../features/site-map/SiteMapResultsDrawer';
+import { resolveMobileSiteMapSurfaces } from '../features/site-map/siteMapMobileSurfaces';
+import { nearbySites } from '../features/site-map/siteMapSpatial';
+import {
+  normalizeSiteMapFilters,
+  parseSiteMapSearchParams,
+  writeSiteMapSearchParams,
+} from '../features/site-map/siteMapState';
 import { useMapData } from '../hooks/useMapData';
 import { fetchFilterOptions, fetchLatestPeriod, fetchSiteDetail } from '../services/api';
 import { fetchSiteDetailBundle } from '../services/siteDetailBundle';
-import { ChevronDown, ChevronUp, GripHorizontal } from 'lucide-react';
-
-const EMPTY_FILTERS = {};
 
 function normalizeSiteFocusData(site, siteId) {
   if (!site) return null;
   return {
-    site_id: site.site_id || site.Siteid || siteId,
+    site_id: String(site.site_id || site.Siteid || siteId || '').toUpperCase(),
     site_name: site.site_name || site['Site Name'] || '',
     latitude: site.latitude ?? site.Latitude,
     longitude: site.longitude ?? site.Longitude,
@@ -34,121 +41,276 @@ function normalizeSiteFocusData(site, siteId) {
 }
 
 function hasCoordinates(site) {
-  return Number.isFinite(Number(site?.latitude)) && Number.isFinite(Number(site?.longitude));
+  if (site?.latitude == null || site?.longitude == null) return false;
+  return Number.isFinite(Number(site.latitude)) && Number.isFinite(Number(site.longitude));
+}
+
+function useMobileViewport() {
+  const [isMobile, setIsMobile] = useState(() => (
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches
+  ));
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 1023px)');
+    const handleChange = (event) => setIsMobile(event.matches);
+    media.addEventListener('change', handleChange);
+    return () => media.removeEventListener('change', handleChange);
+  }, []);
+
+  return isMobile;
 }
 
 export default function SiteMapPage() {
-  const siteFocusAbortRef = useRef(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const explorerState = useMemo(
+    () => parseSiteMapSearchParams(searchParams),
+    [searchParams],
+  );
+  const updateExplorerState = useCallback((updates) => {
+    const nextParams = writeSiteMapSearchParams(searchParams, {
+      ...explorerState,
+      ...updates,
+    });
+    if (nextParams.toString() !== searchParams.toString()) {
+      setSearchParams(nextParams, { replace: true });
+    }
+  }, [explorerState, searchParams, setSearchParams]);
+
+  const bulan = explorerState.bulan || null;
+  const tahun = explorerState.tahun || null;
+  const nop = explorerState.nop || null;
+  const query = explorerState.q || '';
+  const selectedSiteId = explorerState.site || null;
+  const filters = useMemo(() => ({
+    ...(explorerState.kabupaten ? { kabupaten: explorerState.kabupaten } : {}),
+    ...(explorerState.cluster ? { cluster: explorerState.cluster } : {}),
+    ...(explorerState.kelas ? { kelas: explorerState.kelas } : {}),
+  }), [explorerState.cluster, explorerState.kabupaten, explorerState.kelas]);
+
+  const fallbackAbortRef = useRef(null);
   const siteDetailAbortRef = useRef(null);
-  const [bulan, setBulan] = useState(() => Number(import.meta.env.VITE_DEFAULT_BULAN) || null);
-  const [tahun, setTahun] = useState(() => Number(import.meta.env.VITE_DEFAULT_TAHUN) || null);
-  const [nop, setNop] = useState(null);
-  const [selectedSiteId, setSelectedSiteId] = useState(null);
   const [selectedSiteFocusKey, setSelectedSiteFocusKey] = useState(0);
   const [selectedSiteFallback, setSelectedSiteFallback] = useState(null);
+  const [selectedSiteRequest, setSelectedSiteRequest] = useState({
+    requestKey: null,
+    loading: false,
+    error: null,
+  });
+  const [mobileInspectorState, setMobileInspectorState] = useState(() => ({
+    siteId: selectedSiteId,
+    open: Boolean(selectedSiteId),
+  }));
+  const [resultsOpen, setResultsOpen] = useState(false);
+  const [layoutResizeKey, setLayoutResizeKey] = useState(0);
+  const [sectorStatus, setSectorStatus] = useState({ kind: 'off', count: 0, lod: 'none' });
   const [siteDetail, setSiteDetail] = useState(null);
   const [siteDetailTrend, setSiteDetailTrend] = useState([]);
   const [siteDetailPerformance, setSiteDetailPerformance] = useState(null);
   const [showModal, setShowModal] = useState(false);
-  const [filters, setFilters] = useState({});
   const [filterOptions, setFilterOptions] = useState({ kabupaten: [], cluster: [], kelas: [], nop: [] });
+  const isMobile = useMobileViewport();
+  const mobileSurfaces = resolveMobileSiteMapSurfaces({
+    isMobile,
+    selectedSiteId,
+    inspectorState: mobileInspectorState,
+    resultsOpen,
+  });
 
-  // Resizable layout state
-  const [sidebarWidth, setSidebarWidth] = useState(272);
-  const [tableHeight, setTableHeight] = useState(28); // percentage
-  const [isTableCollapsed, setIsTableCollapsed] = useState(false);
-  const [isDraggingSidebar, setIsDraggingSidebar] = useState(false);
-  const [isDraggingTable, setIsDraggingTable] = useState(false);
-  const [layoutResizeKey, setLayoutResizeKey] = useState(0);
-
-  const bumpLayoutResizeKey = useCallback(() => {
-    setLayoutResizeKey(key => key + 1);
-  }, []);
+  const mapFilters = useMemo(() => normalizeSiteMapFilters({
+    ...filters,
+    nop,
+    q: query,
+  }), [filters, nop, query]);
 
   const {
     sites,
+    total,
+    withCoordinates,
     loading: mapLoading,
     error: mapDataError,
     refetch: refetchMapData,
-  } = useMapData(bulan, tahun, nop);
+  } = useMapData(bulan, tahun, mapFilters);
+
+  const selectedMarkerSite = useMemo(
+    () => sites.find((site) => site.site_id === selectedSiteId) || null,
+    [selectedSiteId, sites],
+  );
+  const selectedSite = selectedMarkerSite
+    || (selectedSiteFallback?.site_id === selectedSiteId ? selectedSiteFallback : null);
+  const selectedNearbySites = useMemo(
+    () => nearbySites(selectedSite, sites),
+    [selectedSite, sites],
+  );
+  const selectedOutsideFilters = Boolean(selectedSiteId && selectedSite && !selectedMarkerSite);
+  const selectedSiteNeedsFallback = Boolean(selectedSiteId && !selectedMarkerSite && !(
+    selectedSiteFallback?.site_id === selectedSiteId && hasCoordinates(selectedSiteFallback)
+  ));
+  const selectedSiteRequestKey = selectedSiteId
+    ? `${selectedSiteId}:${bulan || 'none'}:${tahun || 'none'}`
+    : null;
+  const hasCurrentSelectedSiteRequest = selectedSiteRequest.requestKey === selectedSiteRequestKey;
+  const selectedSiteLoading = selectedSiteNeedsFallback
+    && (!hasCurrentSelectedSiteRequest || selectedSiteRequest.loading);
+  const selectedSiteError = selectedSiteNeedsFallback && hasCurrentSelectedSiteRequest
+    ? selectedSiteRequest.error
+    : null;
 
   useEffect(() => {
     let cancelled = false;
-
     fetchFilterOptions()
       .then((options) => {
         if (!cancelled) setFilterOptions(options);
       })
-      .catch((err) => {
-        console.error('Failed to load filter options:', err);
+      .catch((error) => {
+        console.error('Failed to load filter options:', error);
         if (!cancelled) setFilterOptions({ kabupaten: [], cluster: [], kelas: [], nop: [] });
       });
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
+    if (bulan && tahun) return undefined;
 
+    let cancelled = false;
     fetchLatestPeriod()
       .then((period) => {
         if (cancelled || !period?.bulan || !period?.tahun) return;
-        setBulan(Number(period.bulan));
-        setTahun(Number(period.tahun));
+        updateExplorerState({
+          bulan: bulan || Number(period.bulan),
+          tahun: tahun || Number(period.tahun),
+        });
       })
-      .catch((err) => {
-        console.error('Failed to load latest availability period:', err);
-        if (!cancelled) {
-          const fallbackDate = new Date();
-          setBulan(fallbackDate.getMonth() + 1);
-          setTahun(fallbackDate.getFullYear());
+      .catch((error) => {
+        console.error('Failed to load latest availability period:', error);
+        if (cancelled) return;
+        const fallbackDate = new Date();
+        updateExplorerState({
+          bulan: bulan || fallbackDate.getMonth() + 1,
+          tahun: tahun || fallbackDate.getFullYear(),
+        });
+      });
+    return () => { cancelled = true; };
+  }, [bulan, tahun, updateExplorerState]);
+
+  useEffect(() => {
+    fallbackAbortRef.current?.abort();
+    if (!selectedSiteNeedsFallback) return undefined;
+
+    const controller = new AbortController();
+    fallbackAbortRef.current = controller;
+    Promise.resolve()
+      .then(() => {
+        if (controller.signal.aborted) return null;
+        setSelectedSiteRequest({
+          requestKey: selectedSiteRequestKey,
+          loading: true,
+          error: null,
+        });
+        return fetchSiteDetail(selectedSiteId, bulan, tahun, controller.signal);
+      })
+      .then((detail) => {
+        if (controller.signal.aborted || !detail) return;
+        const normalized = normalizeSiteFocusData(detail, selectedSiteId);
+        if (!hasCoordinates(normalized)) throw new Error('Koordinat site tidak ditemukan.');
+        setSelectedSiteFallback(normalized);
+      })
+      .catch((error) => {
+        if (controller.signal.aborted || error?.code === 'ERR_CANCELED') return;
+        setSelectedSiteRequest({
+          requestKey: selectedSiteRequestKey,
+          loading: false,
+          error: error?.message || 'Data site tidak ditemukan.',
+        });
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setSelectedSiteRequest((current) => (
+            current.requestKey === selectedSiteRequestKey
+              ? { ...current, loading: false }
+              : current
+          ));
         }
       });
 
-    return () => {
-      cancelled = true;
-    };
+    return () => controller.abort();
+  }, [bulan, selectedSiteId, selectedSiteNeedsFallback, selectedSiteRequestKey, tahun]);
+
+  useEffect(() => () => {
+    fallbackAbortRef.current?.abort();
+    siteDetailAbortRef.current?.abort();
   }, []);
 
-  const handleSiteClick = useCallback((siteId) => {
-    setSelectedSiteId(siteId);
-  }, []);
-
-  const handleTableSiteSelect = useCallback(async (siteOrId) => {
-    const siteId = typeof siteOrId === 'string' ? siteOrId : siteOrId?.site_id;
+  const handleSelectSite = useCallback((siteOrId) => {
+    const siteId = String(typeof siteOrId === 'string' ? siteOrId : siteOrId?.site_id || '').toUpperCase();
     if (!siteId) return;
+    const normalized = typeof siteOrId === 'string' ? null : normalizeSiteFocusData(siteOrId, siteId);
+    if (normalized) setSelectedSiteFallback(normalized);
+    updateExplorerState({ site: siteId });
+    setSelectedSiteFocusKey((key) => key + 1);
+    setResultsOpen(false);
+    if (isMobile) setMobileInspectorState({ siteId, open: true });
+    setLayoutResizeKey((key) => key + 1);
+  }, [
+    isMobile,
+    setLayoutResizeKey,
+    setMobileInspectorState,
+    setResultsOpen,
+    setSelectedSiteFallback,
+    setSelectedSiteFocusKey,
+    updateExplorerState,
+  ]);
 
-    setShowModal(false);
-    setSiteDetail(null);
-    setSiteDetailTrend([]);
-    setSiteDetailPerformance(null);
+  const handleClearSelection = useCallback(() => {
+    fallbackAbortRef.current?.abort();
+    updateExplorerState({ site: null });
+    setSelectedSiteFallback(null);
+    setMobileInspectorState({ siteId: null, open: false });
+    setLayoutResizeKey((key) => key + 1);
+  }, [
+    setLayoutResizeKey,
+    setMobileInspectorState,
+    setSelectedSiteFallback,
+    updateExplorerState,
+  ]);
 
-    let focusFallback = normalizeSiteFocusData(
-      typeof siteOrId === 'string' ? null : siteOrId,
-      siteId,
-    );
+  const handleQueryChange = useCallback((value) => {
+    updateExplorerState({ q: value || null });
+  }, [updateExplorerState]);
 
-    if (!hasCoordinates(focusFallback)) {
-      siteFocusAbortRef.current?.abort();
-      const controller = new AbortController();
-      siteFocusAbortRef.current = controller;
-      try {
-        const detail = await fetchSiteDetail(siteId, bulan, tahun, controller.signal);
-        focusFallback = normalizeSiteFocusData(detail, siteId);
-      } catch (err) {
-        if (controller.signal.aborted || err?.code === 'ERR_CANCELED') return;
-        console.error('Failed to load site coordinate fallback:', err);
-      }
+  const handleFilterChange = useCallback((nextFilters) => {
+    updateExplorerState({
+      kabupaten: nextFilters.kabupaten || null,
+      cluster: nextFilters.cluster || null,
+      kelas: nextFilters.kelas || null,
+    });
+  }, [updateExplorerState]);
+
+  const handleResetToolbar = useCallback(() => {
+    updateExplorerState({ q: null, kabupaten: null, cluster: null, kelas: null });
+  }, [updateExplorerState]);
+
+  const handleClearAllFilters = useCallback(() => {
+    updateExplorerState({ q: null, nop: null, kabupaten: null, cluster: null, kelas: null });
+  }, [updateExplorerState]);
+
+  const handleResultsOpenChange = useCallback((nextOpen) => {
+    setResultsOpen(nextOpen);
+    if (nextOpen && isMobile) {
+      setMobileInspectorState({ siteId: selectedSiteId, open: false });
     }
+    setLayoutResizeKey((key) => key + 1);
+  }, [isMobile, selectedSiteId, setLayoutResizeKey, setMobileInspectorState, setResultsOpen]);
 
-    setSelectedSiteFallback(hasCoordinates(focusFallback) ? focusFallback : null);
-    setSelectedSiteId(siteId);
-    setSelectedSiteFocusKey(key => key + 1);
-  }, [bulan, tahun]);
+  const handleMobileInspectorOpenChange = useCallback((nextOpen) => {
+    if (nextOpen && isMobile) setResultsOpen(false);
+    setMobileInspectorState({ siteId: selectedSiteId, open: nextOpen });
+  }, [isMobile, selectedSiteId, setMobileInspectorState, setResultsOpen]);
 
-  const handleSiteSelect = useCallback(async (siteId) => {
+  const handleSectorStatusChange = useCallback((nextStatus) => {
+    setSectorStatus(nextStatus);
+  }, [setSectorStatus]);
+
+  const handleOpenDetail = useCallback(async (siteId) => {
     siteDetailAbortRef.current?.abort();
     const controller = new AbortController();
     siteDetailAbortRef.current = controller;
@@ -162,194 +324,96 @@ export default function SiteMapPage() {
       setSiteDetailTrend(bundle.trendData);
       setSiteDetailPerformance(bundle.performanceData);
       setShowModal(true);
-      setSelectedSiteId(siteId);
-    } catch (err) {
-      if (controller.signal.aborted || err?.code === 'ERR_CANCELED') return;
-      console.error('Failed to load site detail:', err);
+    } catch (error) {
+      if (controller.signal.aborted || error?.code === 'ERR_CANCELED') return;
+      console.error('Failed to load site detail:', error);
     }
-  }, [bulan, tahun]);
-
-  useEffect(() => () => {
-    siteFocusAbortRef.current?.abort();
-    siteDetailAbortRef.current?.abort();
-  }, [bulan, nop, tahun]);
-
-  // Listen for custom event from Mapbox popup button
-  useEffect(() => {
-    const handler = (e) => handleSiteSelect(e.detail);
-    window.addEventListener('open-site-detail', handler);
-    return () => window.removeEventListener('open-site-detail', handler);
-  }, [handleSiteSelect]);
-
-  // Merge NOP into table filters
-  const tableFilters = useMemo(() => {
-    const f = { ...filters };
-    if (nop) f.nop = nop;
-    return f;
-  }, [filters, nop]);
-
-  const sidebarFilters = useMemo(() => (nop ? { nop } : EMPTY_FILTERS), [nop]);
-
-  const tableKey = useMemo(
-    () => `${bulan || 'none'}-${tahun || 'none'}-${JSON.stringify(tableFilters)}`,
-    [bulan, tahun, tableFilters],
-  );
-
-  // Handle Sidebar Resize
-  useEffect(() => {
-    const handleMouseMove = (e) => {
-      if (!isDraggingSidebar) return;
-      const newWidth = Math.max(252, Math.min(e.clientX, 380));
-      setSidebarWidth(newWidth);
-    };
-    const handleMouseUp = () => {
-      setIsDraggingSidebar(false);
-      bumpLayoutResizeKey();
-    };
-
-    if (isDraggingSidebar) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-    }
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isDraggingSidebar, bumpLayoutResizeKey]);
-
-  // Handle Table Resize
-  useEffect(() => {
-    const handleMouseMove = (e) => {
-      if (!isDraggingTable || isTableCollapsed) return;
-      const windowHeight = window.innerHeight;
-      const newHeightPx = windowHeight - e.clientY;
-      const newHeightPercent = Math.max(24, Math.min((newHeightPx / windowHeight) * 100, 45));
-      setTableHeight(newHeightPercent);
-    };
-    const handleMouseUp = () => {
-      setIsDraggingTable(false);
-      bumpLayoutResizeKey();
-    };
-
-    if (isDraggingTable) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-    }
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isDraggingTable, isTableCollapsed, bumpLayoutResizeKey]);
+  }, [
+    bulan,
+    setShowModal,
+    setSiteDetail,
+    setSiteDetailPerformance,
+    setSiteDetailTrend,
+    tahun,
+  ]);
 
   return (
-    <div className="dashboard-canvas h-screen flex flex-col overflow-hidden">
+    <div className="dashboard-canvas flex min-h-[100dvh] flex-col overflow-hidden lg:h-[100dvh]">
       <Header
         bulan={bulan}
         tahun={tahun}
         nop={nop}
         nopOptions={filterOptions.nop}
-        onBulanChange={setBulan}
-        onTahunChange={setTahun}
-        onNopChange={setNop}
+        onBulanChange={(value) => updateExplorerState({ bulan: value })}
+        onTahunChange={(value) => updateExplorerState({ tahun: value })}
+        onNopChange={(value) => updateExplorerState({ nop: value })}
       />
       <Breadcrumb />
 
-      <main className="flex-1 flex overflow-hidden p-2 gap-1.5 min-h-0">
-        {/* Left Sidebar */}
-        <aside
-          className="shrink-0 rounded-[var(--noc-radius-lg)] border border-[var(--border-strong)] bg-[var(--bg-glass)] shadow-[var(--shadow-sm)] flex flex-col overflow-hidden"
-          style={{ width: sidebarWidth }}
-        >
-          <div className="p-2.5 overflow-y-auto flex-1 flex flex-col gap-2.5">
-            <SummaryCards bulan={bulan} tahun={tahun} filters={sidebarFilters} />
-          </div>
-        </aside>
-
-        {/* Sidebar Resizer */}
-        <div
-          className="w-1 cursor-col-resize rounded-full bg-transparent hover:bg-[var(--primary)]/50 transition-colors shrink-0 z-10"
-          onMouseDown={(e) => { e.preventDefault(); setIsDraggingSidebar(true); }}
+      <main className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2 lg:overflow-hidden">
+        <SiteMapToolbar
+          q={query}
+          onQueryChange={handleQueryChange}
+          filters={filters}
+          onFilterChange={handleFilterChange}
+          filterOptions={filterOptions}
+          onReset={handleResetToolbar}
         />
 
-        {/* Main Content */}
-        <div className="flex-1 flex flex-col overflow-hidden gap-1.5 min-w-0">
-          {/* Map */}
-          <div className="flex-1 min-h-0">
+        <SiteMapContextStrip
+          total={total}
+          withCoordinates={withCoordinates}
+          selectedSiteId={selectedSiteId}
+          sectorStatus={sectorStatus}
+        />
+
+        <div className="grid min-h-[480px] flex-1 gap-2 lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_minmax(300px,340px)]">
+          <div className="min-h-[420px] min-w-0 lg:min-h-0">
             <MapboxMap
               sites={sites}
               loading={mapLoading}
-              onSiteClick={handleSiteClick}
+              error={mapDataError}
+              onRetry={refetchMapData}
+              onSiteSelect={handleSelectSite}
+              onSectorStatusChange={handleSectorStatusChange}
               selectedSiteId={selectedSiteId}
               selectedSiteFocusKey={selectedSiteFocusKey}
               selectedSiteFallback={selectedSiteFallback}
-              error={mapDataError}
-              onRetry={refetchMapData}
-              bulan={bulan}
-              tahun={tahun}
-              nop={nop}
+              filters={mapFilters}
               layoutResizeKey={layoutResizeKey}
             />
           </div>
 
-          {/* Table Resizer */}
-          <div
-            className="relative flex h-4 shrink-0 cursor-row-resize items-center justify-center rounded-full bg-transparent transition-colors hover:bg-[var(--primary)]/10"
-            onMouseDown={(e) => { e.preventDefault(); setIsDraggingTable(true); }}
-          >
-            <button
-              type="button"
-              onMouseDown={(e) => e.stopPropagation()}
-              onClick={() => {
-                setIsTableCollapsed(value => !value);
-                bumpLayoutResizeKey();
-              }}
-              className={`nod-map-toggle nod-map-toggle--compact ${isTableCollapsed ? 'nod-map-toggle--active' : ''}`}
-              aria-label={isTableCollapsed ? 'Expand daftar site table' : 'Collapse daftar site table'}
-            >
-              <GripHorizontal className="h-3 w-3" />
-              {isTableCollapsed ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-              Table
-            </button>
-          </div>
-
-          {/* Bottom Table */}
-          <div
-            className={`overflow-hidden flex flex-col rounded-[var(--noc-radius-lg)] border border-[var(--border-strong)] bg-[var(--bg-glass)] shadow-[var(--shadow-sm)] transition-[height,min-height] duration-300 ${isTableCollapsed ? 'min-h-[42px] p-1.5' : 'min-h-[228px] p-2'}`}
-            style={{ height: isTableCollapsed ? '42px' : `${tableHeight}%` }}
-            onTransitionEnd={(event) => {
-              if (event.propertyName === 'height' || event.propertyName === 'min-height') {
-                bumpLayoutResizeKey();
-              }
-            }}
-          >
-            {isTableCollapsed ? (
-              <button
-                type="button"
-                onClick={() => setIsTableCollapsed(false)}
-                className="flex h-full items-center justify-between rounded-lg px-3 text-left text-[10px] uppercase tracking-widest text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-hover)]"
-              >
-                <span className="font-semibold">Daftar Site</span>
-                <span className="font-mono text-[var(--text-muted)]">{sites.length.toLocaleString()} markers</span>
-              </button>
-            ) : (
-              <div className="flex-1 overflow-hidden">
-                <SiteTable
-                  key={tableKey}
-                  bulan={bulan}
-                  tahun={tahun}
-                  filters={tableFilters}
-                  onSiteSelect={handleTableSiteSelect}
-                  siteCount={null}
-                  toolbar={<FilterPanel filters={filters} onFilterChange={setFilters} options={filterOptions} />}
-                />
-              </div>
-            )}
-          </div>
+          <SiteMapInspector
+            site={selectedSite}
+            nearby={selectedNearbySites}
+            outsideFilters={selectedOutsideFilters}
+            loading={selectedSiteLoading}
+            error={selectedSiteError}
+            onClearSelection={handleClearSelection}
+            onClearFilters={handleClearAllFilters}
+            onOpenDetail={handleOpenDetail}
+            onSelectNearby={handleSelectSite}
+            mobileOpen={mobileSurfaces.inspectorOpen}
+            onMobileOpenChange={handleMobileInspectorOpenChange}
+          />
         </div>
+
+        <SiteMapResultsDrawer
+          bulan={bulan}
+          tahun={tahun}
+          filters={mapFilters}
+          q={query}
+          total={total}
+          onSiteSelect={handleSelectSite}
+          open={resultsOpen}
+          mobileOpen={mobileSurfaces.resultsOpen}
+          isMobile={isMobile}
+          onOpenChange={handleResultsOpenChange}
+        />
       </main>
 
-      {/* Site Detail Modal */}
-      {showModal && (
+      {showModal ? (
         <SiteDetailModal
           data={siteDetail}
           trendData={siteDetailTrend}
@@ -361,7 +425,7 @@ export default function SiteMapPage() {
             setSiteDetailPerformance(null);
           }}
         />
-      )}
+      ) : null}
     </div>
   );
 }

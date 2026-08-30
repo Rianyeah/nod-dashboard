@@ -17,32 +17,37 @@ describe('dashboard loading optimization contracts', () => {
     assert.doesNotMatch(filterPanel, /fetchFilterOptions/);
   });
 
-  it('debounces SiteTable search before fetching paged data', () => {
+  it('keeps SiteTable query controlled and aborts stale paged requests', () => {
     const table = src('components', 'SiteTable.jsx');
 
-    assert.match(table, /useDebouncedValue/);
-    assert.match(table, /300/);
-    assert.match(table, /debouncedSearchTerm/);
-    assert.match(table, /q: debouncedSearchTerm \|\| undefined/);
+    assert.match(table, /q = ''/);
+    assert.match(table, /q: q\.trim\(\) \|\| undefined/);
+    assert.match(table, /new AbortController\(\)/);
+    assert.match(table, /signal: controller\.signal/);
+    assert.doesNotMatch(table, /DashboardSearchInput|useDebouncedValue/);
   });
 
-  it('memoizes map GeoJSON and caches popup daily availability', () => {
+  it('memoizes complete marker GeoJSON for the React inspector', () => {
     const map = src('components', 'MapboxMap.jsx');
 
     assert.match(map, /useMemo/);
     assert.match(map, /sitesGeoJson/);
-    assert.match(map, /dailyAvailabilityCache/);
+    assert.match(map, /nop: site\.nop/);
+    assert.match(map, /cluster: site\.cluster/);
+    assert.match(map, /rca_dominan: site\.rca_dominan/);
     assert.match(map, /source\.setData\(sitesGeoJson\)/);
+    assert.doesNotMatch(map, /dailyAvailabilityCache|dailySparklineContent/);
   });
 
-  it('aborts stale map site requests when period or NOP changes', () => {
+  it('aborts stale map site requests when canonical filters change', () => {
     const hook = src('hooks', 'useMapData.js');
     const api = src('services', 'api.js');
 
     assert.match(hook, /new AbortController\(\)/);
-    assert.match(hook, /fetchMapSites\(bulan, tahun, nop, controller\.signal\)/);
+    assert.match(hook, /fetchMapSites\(\{\s*bulan,\s*tahun,\s*filters,\s*signal:\s*controller\.signal/);
     assert.match(hook, /abortControllerRef\.current\?\.abort\(\)/);
-    assert.match(api, /export async function fetchMapSites\(bulan, tahun, nop, signal\)/);
+    assert.match(hook, /withCoordinates/);
+    assert.match(api, /export async function fetchMapSites\(\{ bulan, tahun, filters = \{\}, signal \} = \{\}\)/);
     assert.match(api, /signal/);
   });
 
@@ -65,11 +70,12 @@ describe('dashboard loading optimization contracts', () => {
   it('separates bounded viewport sectors from selected-site full detail', () => {
     const api = src('services', 'api.js');
 
-    assert.match(api, /export async function fetchMapSectorViewport\(\{ bbox, zoom, nop, signal \}\)/);
+    assert.match(api, /export async function fetchMapSectorViewport\(\{ bbox, zoom, filters = \{\}, signal \}\)/);
     assert.match(api, /api\.get\('\/map\/sectors\/viewport'/);
-    assert.match(api, /params:\s*\{\s*bbox,\s*zoom,\s*nop:\s*nop\s*\|\|\s*undefined\s*\}/);
-    assert.match(api, /export async function fetchMapSectors\(\{ nop, siteId, signal \}\s*=\s*\{\}\)/);
+    assert.match(api, /params:\s*\{\s*bbox,\s*zoom,\s*\.\.\.filters\s*\}/);
+    assert.match(api, /export async function fetchMapSectors\(\{ siteId, signal \}\s*=\s*\{\}\)/);
     assert.match(api, /site_id:\s*siteId\s*\|\|\s*undefined/);
+    assert.doesNotMatch(api, /fetchMapSectors\(\{[^}]*\bnop\b/);
   });
 
   it('keeps selected-site radius below sector antenna polygons', () => {
@@ -89,8 +95,8 @@ describe('dashboard loading optimization contracts', () => {
     assert.match(map, /map\.current\.on\('(?:zoomend|moveend)'/);
     assert.match(map, /fetchMapSectorViewport\(\{[\s\S]*?bbox:\s*descriptor\.bbox[\s\S]*?zoom:\s*descriptor\.zoom[\s\S]*?signal:\s*controller\.signal/);
     assert.match(map, /if\s*\(!showSectors\s*\|\|\s*!selectedSiteId\)/);
-    assert.match(map, /fetchMapSectors\(\{\s*nop:\s*normalizedNop,\s*siteId:\s*selectedSiteId,\s*signal:\s*controller\.signal\s*\}\)/);
-    assert.doesNotMatch(map, /fetchMapSectors\(\{\s*nop:\s*[^,}]+,\s*signal:/);
+    assert.match(map, /fetchMapSectors\(\{\s*siteId:\s*selectedSiteId,\s*signal:\s*controller\.signal\s*\}\)/);
+    assert.doesNotMatch(map, /fetchMapSectors\(\{[^}]*nop:/);
   });
 
   it('aborts and clears both sector sources when the layer is disabled', () => {
@@ -140,33 +146,12 @@ describe('dashboard loading optimization contracts', () => {
     assert.match(map, /map\.current\?\.resize\(\)/);
   });
 
-  it('keeps the main popup visible inside the map viewport', () => {
+  it('removes popup DOM and floating neighbor cards from the Mapbox canvas', () => {
     const map = src('components', 'MapboxMap.jsx');
 
-    assert.match(map, /ensurePopupVisible/);
-    assert.match(map, /getBoundingClientRect/);
-    assert.match(map, /panBy/);
-    assert.match(map, /POPUP_SAFE_PADDING/);
-  });
-
-  it('limits neighbor popup cards and avoids covering the main popup', () => {
-    const map = src('components', 'MapboxMap.jsx');
-
-    assert.match(map, /MAX_NEIGHBOR_CARDS/);
-    assert.match(map, /mainPopupRect/);
-    assert.match(map, /rectsIntersect/);
-    assert.match(map, /nod-neighbor-card/);
-  });
-
-  it('supports dragging the main site popup to an adjusted position', () => {
-    const map = src('components', 'MapboxMap.jsx');
-
-    assert.match(map, /enablePopupDrag/);
-    assert.match(map, /popupDragCleanup/);
-    assert.match(map, /popupDragOffset/);
-    assert.match(map, /nod-popup-drag-handle/);
-    assert.match(map, /pointerdown/);
-    assert.match(map, /pointermove/);
+    assert.doesNotMatch(map, /mapboxgl\.Popup|nod-popup|nod-neighbor-card/);
+    assert.doesNotMatch(map, /pointerdown|pointermove|fetchSiteAvailability/);
+    assert.match(map, /onSiteSelect/);
   });
 
   it('keeps the detail site modal compact and information dense', () => {

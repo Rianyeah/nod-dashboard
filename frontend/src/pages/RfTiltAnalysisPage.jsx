@@ -1,4 +1,5 @@
 import { useRef, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { RadioTower } from 'lucide-react';
 import Breadcrumb from '../components/Breadcrumb';
 import { useRfTiltAnalysis } from '../features/rf-tilt/useRfTiltAnalysis';
@@ -9,8 +10,11 @@ import RfTiltResultPanel from '../features/rf-tilt/RfTiltResultPanel';
 import RfTiltExportButton from '../features/rf-tilt/RfTiltExportButton';
 import RfTiltAntennaSpecPanel from '../features/rf-tilt/RfTiltAntennaSpecPanel';
 import RfTiltResultErrorBoundary from '../features/rf-tilt/RfTiltResultErrorBoundary';
+import { normalizedDeepLinkSite } from '../features/site-map/siteDeepLinks';
 
 export default function RfTiltAnalysisPage() {
+  const [searchParams] = useSearchParams();
+  const deepLinkedSite = normalizedDeepLinkSite(searchParams.get('site'));
   const hook = useRfTiltAnalysis();
   const {
     params,
@@ -85,6 +89,8 @@ export default function RfTiltAnalysisPage() {
           {/* Left: form */}
           <div className="space-y-4">
             <RfTiltParamForm
+              key={deepLinkedSite || 'rf-tilt-form'}
+              initialSiteQuery={deepLinkedSite}
               params={params}
               set={set}
               targetMode={targetMode}
