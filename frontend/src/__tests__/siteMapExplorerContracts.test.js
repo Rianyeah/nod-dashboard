@@ -67,11 +67,13 @@ describe('Site Map spatial explorer contracts', () => {
     assert.match(inspector, /\/rf-tilt-analysis\?site=/);
     assert.match(inspector, /outsideFilters/);
     assert.match(page, /mobileInspectorState/);
-    assert.match(page, /mobileInspectorState\.siteId === selectedSiteId/);
+    assert.match(page, /resolveMobileSiteMapSurfaces/);
+    assert.match(page, /mobileOpen=\{mobileSurfaces\.inspectorOpen\}/);
     assert.match(page, /setMobileInspectorState\(\{ siteId, open: true \}\)/);
   });
 
   it('uses a default-collapsed bounded results drawer and server-side sorting', () => {
+    const page = src('pages', 'SiteMapPage.jsx');
     const drawer = src('features', 'site-map', 'SiteMapResultsDrawer.jsx');
     const table = src('components', 'SiteTable.jsx');
 
@@ -84,7 +86,9 @@ describe('Site Map spatial explorer contracts', () => {
     assert.match(drawer, /<SheetContent side="bottom"/);
     assert.match(drawer, /lg:hidden/);
     assert.match(drawer, /hidden[\s\S]*?lg:block/);
-    assert.match(drawer, /useMobileResultsSheet/);
+    assert.match(drawer, /<Sheet open=\{mobileOpen\}/);
+    assert.match(page, /mobileOpen=\{mobileSurfaces\.resultsOpen\}/);
+    assert.match(page, /isMobile=\{isMobile\}/);
     assert.match(table, /fetchSites\(\{[\s\S]*?sortBy,[\s\S]*?sortDir/);
     assert.match(table, /queryKey/);
     assert.doesNotMatch(table, /setLoading\(true\)/);

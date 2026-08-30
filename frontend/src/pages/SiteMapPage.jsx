@@ -9,6 +9,7 @@ import SiteMapToolbar from '../features/site-map/SiteMapToolbar';
 import SiteMapContextStrip from '../features/site-map/SiteMapContextStrip';
 import SiteMapInspector from '../features/site-map/SiteMapInspector';
 import SiteMapResultsDrawer from '../features/site-map/SiteMapResultsDrawer';
+import { resolveMobileSiteMapSurfaces } from '../features/site-map/siteMapMobileSurfaces';
 import { nearbySites } from '../features/site-map/siteMapSpatial';
 import {
   normalizeSiteMapFilters,
@@ -44,8 +45,19 @@ function hasCoordinates(site) {
   return Number.isFinite(Number(site.latitude)) && Number.isFinite(Number(site.longitude));
 }
 
-function isMobileViewport() {
-  return typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches;
+function useMobileViewport() {
+  const [isMobile, setIsMobile] = useState(() => (
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches
+  ));
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 1023px)');
+    const handleChange = (event) => setIsMobile(event.matches);
+    media.addEventListener('change', handleChange);
+    return () => media.removeEventListener('change', handleChange);
+  }, []);
+
+  return isMobile;
 }
 
 export default function SiteMapPage() {
@@ -96,9 +108,13 @@ export default function SiteMapPage() {
   const [siteDetailPerformance, setSiteDetailPerformance] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [filterOptions, setFilterOptions] = useState({ kabupaten: [], cluster: [], kelas: [], nop: [] });
-  const mobileInspectorOpen = Boolean(selectedSiteId) && (
-    mobileInspectorState.siteId === selectedSiteId ? mobileInspectorState.open : true
-  );
+  const isMobile = useMobileViewport();
+  const mobileSurfaces = resolveMobileSiteMapSurfaces({
+    isMobile,
+    selectedSiteId,
+    inspectorState: mobileInspectorState,
+    resultsOpen,
+  });
 
   const mapFilters = useMemo(() => normalizeSiteMapFilters({
     ...filters,
@@ -232,9 +248,10 @@ export default function SiteMapPage() {
     updateExplorerState({ site: siteId });
     setSelectedSiteFocusKey((key) => key + 1);
     setResultsOpen(false);
-    if (isMobileViewport()) setMobileInspectorState({ siteId, open: true });
+    if (isMobile) setMobileInspectorState({ siteId, open: true });
     setLayoutResizeKey((key) => key + 1);
   }, [
+    isMobile,
     setLayoutResizeKey,
     setMobileInspectorState,
     setResultsOpen,
@@ -278,15 +295,16 @@ export default function SiteMapPage() {
 
   const handleResultsOpenChange = useCallback((nextOpen) => {
     setResultsOpen(nextOpen);
-    if (nextOpen && isMobileViewport()) {
+    if (nextOpen && isMobile) {
       setMobileInspectorState({ siteId: selectedSiteId, open: false });
     }
     setLayoutResizeKey((key) => key + 1);
-  }, [selectedSiteId, setLayoutResizeKey, setMobileInspectorState, setResultsOpen]);
+  }, [isMobile, selectedSiteId, setLayoutResizeKey, setMobileInspectorState, setResultsOpen]);
 
   const handleMobileInspectorOpenChange = useCallback((nextOpen) => {
+    if (nextOpen && isMobile) setResultsOpen(false);
     setMobileInspectorState({ siteId: selectedSiteId, open: nextOpen });
-  }, [selectedSiteId, setMobileInspectorState]);
+  }, [isMobile, selectedSiteId, setMobileInspectorState, setResultsOpen]);
 
   const handleSectorStatusChange = useCallback((nextStatus) => {
     setSectorStatus(nextStatus);
@@ -376,7 +394,7 @@ export default function SiteMapPage() {
             onClearFilters={handleClearAllFilters}
             onOpenDetail={handleOpenDetail}
             onSelectNearby={handleSelectSite}
-            mobileOpen={mobileInspectorOpen}
+            mobileOpen={mobileSurfaces.inspectorOpen}
             onMobileOpenChange={handleMobileInspectorOpenChange}
           />
         </div>
@@ -389,6 +407,8 @@ export default function SiteMapPage() {
           total={total}
           onSiteSelect={handleSelectSite}
           open={resultsOpen}
+          mobileOpen={mobileSurfaces.resultsOpen}
+          isMobile={isMobile}
           onOpenChange={handleResultsOpenChange}
         />
       </main>

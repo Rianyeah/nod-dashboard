@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronUp, ListFilter } from 'lucide-react';
 
 import SiteTable from '../../components/SiteTable';
@@ -10,21 +10,6 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '../../components/ui/sheet';
-
-function useMobileResultsSheet() {
-  const [isMobile, setIsMobile] = useState(() => (
-    typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches
-  ));
-
-  useEffect(() => {
-    const media = window.matchMedia('(max-width: 1023px)');
-    const handleChange = (event) => setIsMobile(event.matches);
-    media.addEventListener('change', handleChange);
-    return () => media.removeEventListener('change', handleChange);
-  }, []);
-
-  return isMobile;
-}
 
 function ResultsHandle({ open, total, onClick, controls, ...props }) {
   return (
@@ -57,12 +42,13 @@ export default function SiteMapResultsDrawer({
   onSiteSelect,
   onOpenChange,
   open: controlledOpen,
+  mobileOpen = false,
+  isMobile = false,
 }) {
   const [internalOpen, setInternalOpen] = useState(false);
   const [pagination, setPagination] = useState({ scopeKey: null, page: 1 });
   const [sortBy, setSortBy] = useState('site_id');
   const [sortDir, setSortDir] = useState('asc');
-  const isMobile = useMobileResultsSheet();
   const open = controlledOpen ?? internalOpen;
   const scopeKey = useMemo(
     () => JSON.stringify({ bulan, tahun, filters, q }),
@@ -117,7 +103,7 @@ export default function SiteMapResultsDrawer({
         </div>
       </section>
 
-      <Sheet open={isMobile && open} onOpenChange={setDrawerOpen}>
+      <Sheet open={mobileOpen} onOpenChange={setDrawerOpen}>
         <section
           aria-label="Hasil site terfilter"
           className="min-h-[42px] overflow-hidden rounded-[var(--noc-radius-lg)] border border-[var(--border-strong)] bg-[var(--bg-surface)] shadow-[var(--shadow-sm)] lg:hidden"
