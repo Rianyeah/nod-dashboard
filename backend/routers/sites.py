@@ -32,6 +32,7 @@ from models.site import (
     SiteSearchResult,
     SiteFilterOptions,
 )
+from site_query import build_site_filters, build_site_order, build_site_search_filter
 
 router = APIRouter(prefix="/sites", tags=["Sites"])
 
@@ -51,41 +52,6 @@ async def resolve_site_detail_period(
         raise HTTPException(status_code=404, detail="No availability period found")
 
     return int(row["bulan"]), int(row["tahun"])
-
-
-def _build_filters(kabupaten=None, cluster=None, status=None, kelas=None, nop=None):
-    """Build dynamic WHERE clause fragments."""
-    filters = ""
-    params = {}
-    if kabupaten:
-        filters += ' AND m."Kabupaten/KOTA" = :kabupaten'
-        params["kabupaten"] = kabupaten
-    if cluster:
-        filters += ' AND m."New Cluster" = :cluster'
-        params["cluster"] = cluster
-    if status:
-        filters += ' AND m."Status Site" = :status'
-        params["status"] = status
-    if kelas:
-        filters += ' AND m."Site Class" = :kelas'
-        params["kelas"] = kelas
-    if nop:
-        filters += ' AND m."NOP" = :nop'
-        params["nop"] = nop
-    return filters, params
-
-
-def _build_search_filter(q=None):
-    """Build search filter across table-visible identity/location columns."""
-    if not q:
-        return "", {}
-
-    return (
-        ' AND (m."Siteid" ILIKE :q'
-        ' OR m."Site Name" ILIKE :q'
-        ' OR m."Kabupaten/KOTA" ILIKE :q)',
-        {"q": f"%{q}%"},
-    )
 
 
 @router.get("/filters/options", response_model=SiteFilterOptions)
@@ -192,6 +158,8 @@ async def list_sites(
     kelas: str = Query(None),
     nop: str = Query(None),
     q: str = Query(None, description="Search by Site ID, site name, or Kabupaten"),
+    sort_by: str = Query("site_id"),
+    sort_dir: str = Query("asc"),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     session: AsyncSession = Depends(get_session),
@@ -206,8 +174,14 @@ async def list_sites(
 
     await ensure_site_month_metrics(session, bulan, tahun)
 
-    filters, filter_params = _build_filters(kabupaten, cluster, status, kelas, nop)
-    search_filter, search_params = _build_search_filter(q)
+    filters, filter_params = build_site_filters(
+        kabupaten=kabupaten,
+        cluster=cluster,
+        status=status,
+        kelas=kelas,
+        nop=nop,
+    )
+    search_filter, search_params = build_site_search_filter(q)
     offset = (page - 1) * limit
 
     # Get total count
@@ -219,7 +193,11 @@ async def list_sites(
     total = count_result.scalar() or 0
 
     # Get paginated data
-    list_query = SITES_LIST_QUERY.format(filters=filters, search_filter=search_filter)
+    list_query = SITES_LIST_QUERY.format(
+        filters=filters,
+        search_filter=search_filter,
+        order_by=build_site_order(sort_by, sort_dir),
+    )
     params = {
         "bulan": bulan,
         "tahun": tahun,

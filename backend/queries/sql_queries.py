@@ -119,6 +119,24 @@ JOIN site_month_metrics agg
 WHERE NULLIF(NULLIF(m."Latitude", '#N/A'), '') IS NOT NULL
   AND NULLIF(NULLIF(m."Longitude", '#N/A'), '') IS NOT NULL
 {{filters}}
+{{search_filter}}
+"""
+
+MAP_SITES_COUNT_QUERY = """
+SELECT
+    COUNT(DISTINCT m."Siteid")::integer AS total,
+    COUNT(DISTINCT m."Siteid") FILTER (
+        WHERE NULLIF(NULLIF(m."Latitude", '#N/A'), '') IS NOT NULL
+          AND NULLIF(NULLIF(m."Longitude", '#N/A'), '') IS NOT NULL
+    )::integer AS with_coordinates
+FROM data_site_master m
+JOIN site_month_metrics agg
+  ON agg.site_id = m."Siteid"
+ AND agg.tahun = :tahun
+ AND agg.bulan = :bulan
+WHERE 1=1
+{filters}
+{search_filter}
 """
 
 # Query - Sector antenna polygons
@@ -416,7 +434,7 @@ JOIN site_month_metrics agg
 WHERE 1=1
 {{filters}}
 {{search_filter}}
-ORDER BY m."Siteid"
+ORDER BY {{order_by}}
 LIMIT :limit_val OFFSET :offset_val
 """
 

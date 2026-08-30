@@ -30,6 +30,7 @@ from models.availability import (
     AvailabilityTrendItem,
     WorstSite,
 )
+from site_query import build_site_filters
 
 router = APIRouter(prefix="/availability", tags=["Availability"])
 
@@ -84,8 +85,13 @@ async def get_summary(
     """Summary card: total sites, avg availability, total outage."""
     await ensure_site_month_metrics(session, bulan, tahun)
 
-    from routers.sites import _build_filters
-    filters, filter_params = _build_filters(kabupaten, cluster, status, kelas, nop)
+    filters, filter_params = build_site_filters(
+        kabupaten=kabupaten,
+        cluster=cluster,
+        status=status,
+        kelas=kelas,
+        nop=nop,
+    )
 
     query = SUMMARY_CARD_QUERY.format(filters=filters)
     params = {"bulan": bulan, "tahun": tahun, **filter_params}
@@ -201,8 +207,7 @@ async def get_worst_sites(
     """Sites with worst availability."""
     await ensure_site_month_metrics(session, bulan, tahun)
 
-    from routers.sites import _build_filters
-    filters, filter_params = _build_filters(nop=nop)
+    filters, filter_params = build_site_filters(nop=nop)
 
     result = await session.execute(
         text(WORST_SITES_QUERY.format(filters=filters)),
