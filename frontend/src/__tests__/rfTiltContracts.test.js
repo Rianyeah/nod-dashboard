@@ -179,11 +179,13 @@ describe('RF Tilt site selection contracts', () => {
 
     assert.match(page, /useSearchParams/);
     assert.match(page, /normalizedDeepLinkSite/);
+    assert.match(page, /key=\{deepLinkedSite \|\| 'rf-tilt-form'\}/);
     assert.match(page, /initialSiteQuery=\{deepLinkedSite\}/);
-    assert.match(form, /lastInitialSiteQueryRef/);
-    assert.match(form, /setSearchQuery\(initialSiteQuery\)/);
+    assert.match(form, /useState\(Boolean\(initialSiteQuery\)\)/);
+    assert.match(form, /useState\(initialSiteQuery \|\| ''\)/);
     assert.match(form, /searchSites\(initialSiteQuery\)/);
     assert.doesNotMatch(form, /selectSite\(initialSiteQuery\)/);
+    assert.doesNotMatch(form, /lastInitialSiteQueryRef/);
   });
 
   it('renders Antenna Specification immediately above Result Summary', () => {

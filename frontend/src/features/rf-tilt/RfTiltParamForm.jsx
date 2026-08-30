@@ -126,10 +126,9 @@ export default function RfTiltParamForm({
   inputSources,
   compatibilityWarning,
 }) {
-  const [siteSearchOpen, setSiteSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [siteSearchOpen, setSiteSearchOpen] = useState(Boolean(initialSiteQuery));
+  const [searchQuery, setSearchQuery] = useState(initialSiteQuery || '');
   const searchInputRef = useRef(null);
-  const lastInitialSiteQueryRef = useRef(null);
   const [modelSearchOpen, setModelSearchOpen] = useState(false);
   const [modelQuery, setModelQuery] = useState('');
   const [previewedAntennaModelId, setPreviewedAntennaModelId] = useState(null);
@@ -151,11 +150,8 @@ export default function RfTiltParamForm({
   }, [siteSearchOpen]);
 
   useEffect(() => {
-    if (!initialSiteQuery || lastInitialSiteQueryRef.current === initialSiteQuery) return;
+    if (!initialSiteQuery) return;
 
-    lastInitialSiteQueryRef.current = initialSiteQuery;
-    setSearchQuery(initialSiteQuery);
-    setSiteSearchOpen(true);
     searchSites(initialSiteQuery);
   }, [initialSiteQuery, searchSites]);
 

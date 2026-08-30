@@ -89,6 +89,7 @@ export default function RfTiltAnalysisPage() {
           {/* Left: form */}
           <div className="space-y-4">
             <RfTiltParamForm
+              key={deepLinkedSite || 'rf-tilt-form'}
               initialSiteQuery={deepLinkedSite}
               params={params}
               set={set}
