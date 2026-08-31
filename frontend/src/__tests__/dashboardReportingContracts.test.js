@@ -41,146 +41,70 @@ describe('dashboard and reporting visual/data contracts', () => {
     assert.doesNotMatch(filterPanel, /<select/);
   });
 
-  it('wires reporting NOP filter through scorecards, chart, and tables', () => {
+  it('uses consolidated reporting endpoints and the Regional Jatim scope', () => {
     const page = src('pages', 'NetworkReportingPage.jsx');
     const api = src('services', 'api.js');
 
-    assert.match(page, /fetchFilterOptions/);
-    assert.match(page, /selectedNop/);
-    assert.match(page, /id="reporting-nop"/);
-    assert.match(page, /fetchReportingScorecards\(selectedPeriod,\s*selectedNop\)/);
-    assert.match(page, /fetchRevenueByKabupaten\(selectedPeriod,\s*selectedNop\)/);
-    assert.match(page, /fetchSiteClassByKabupaten\(selectedPeriod,\s*selectedNop\)/);
-    assert.match(page, /fetchRevenueTrend\(selectedPeriod,\s*selectedNop\)/);
-    assert.match(api, /fetchReportingScorecards\(period,\s*nop/);
-    assert.match(api, /fetchRevenueTrend\(period,\s*nop/);
-    assert.match(api, /params:\s*\{[\s\S]*nop:\s*nop\s*\|\|\s*undefined/);
-  });
-
-  it('renames the chart and uses dynamic revenue and payload domains', () => {
-    const page = src('pages', 'NetworkReportingPage.jsx');
-
-    assert.match(page, /Performance Chart|Performance Trend/);
-    assert.doesNotMatch(page, />Revenue Trend</);
-    assert.match(page, /getPaddedDomain/);
-    assert.match(page, /revenueDomain/);
-    assert.match(page, /payloadDomain/);
-    assert.match(page, /domain=\{revenueDomain\}/);
-    assert.match(page, /domain=\{payloadDomain\}/);
-  });
-
-  it('uses Rupiah-friendly reporting icons and compact right-side chart axes', () => {
-    const page = src('pages', 'NetworkReportingPage.jsx');
-
-    assert.match(page, /Banknote/);
-    assert.doesNotMatch(page, /DollarSign/);
-    assert.match(page, /formatPayloadAxisTick/);
-    assert.match(page, /formatAvailabilityAxisTick/);
-    assert.match(page, /tickFormatter=\{formatPayloadAxisTick\}/);
-    assert.match(page, /tickFormatter=\{formatAvailabilityAxisTick\}/);
-  });
-
-  it('shows previous-month deltas on scorecards and key revenue table metrics', () => {
-    const page = src('pages', 'NetworkReportingPage.jsx');
-
-    assert.match(page, /previousPeriod/);
-    assert.match(page, /fetchReportingScorecards\(previousPeriod,\s*selectedNop\)/);
-    assert.match(page, /fetchRevenueByKabupaten\(previousPeriod,\s*selectedNop\)/);
-    assert.match(page, /DeltaValue/);
-    assert.match(page, /getDelta/);
-    assert.match(page, /getRelativeChange/);
-    assert.match(page, /formatter=\{formatRevenueShort\}/);
-    assert.match(page, /formatter=\{formatPayload\}/);
-    assert.match(page, /formatter=\{formatPercent\}/);
-  });
-
-  it('defaults Reporting to SIDOARJO and renders site composition, relative MoM, and YTD metadata', () => {
-    const page = src('pages', 'NetworkReportingPage.jsx');
-
-    assert.match(page, /relative z-10 px-3 py-3 flex flex-col gap-3 xl:px-6 xl:flex-row xl:items-center xl:justify-between/);
-    assert.match(page, /reporting-header-controls flex w-full flex-wrap/);
-    assert.match(page, /REPORTING_DEFAULT_NOP\s*=\s*'SIDOARJO'/);
-    assert.match(page, /normalizeReportingNop/);
-    assert.match(page, /setSelectedNop/);
-    assert.match(page, /const \[filtersReady, setFiltersReady\] = useState\(false\)/);
-    assert.match(page, /if \(!resolvedPeriod \|\| !filtersReady\) return/);
-    assert.match(page, /epm_sites/);
-    assert.match(page, /non_epm_sites/);
-    assert.match(page, /revenue_ytd/);
-    assert.match(page, /payload_ytd/);
-    assert.match(page, /getRelativeChange/);
-    assert.match(page, /formatRelativePercent/);
-    assert.match(page, /EPM/);
-    assert.match(page, /Site \(non EPM\)/);
-    assert.match(page, /YTD/);
-    assert.doesNotMatch(page, /site dengan data traktor/);
-    assert.doesNotMatch(page, /subtitle="total data usage"/);
-    assert.doesNotMatch(page, /subtitle="rata-rata availability jaringan"/);
-  });
-
-  it('keeps revenue detail columns collapsed behind a table toggle after availability', () => {
-    const page = src('pages', 'NetworkReportingPage.jsx');
-
-    assert.match(page, /showRevenueDetails/);
-    assert.match(page, /setShowRevenueDetails/);
-    assert.match(page, /aria-expanded=\{showRevenueDetails\}/);
-    assert.match(page, /Detail Revenue/);
-    assert.match(page, /showRevenueDetails\s*&&[\s\S]*Rev Voice/);
-    assert.match(page, /Availability[\s\S]*showRevenueDetails\s*&&[\s\S]*Rev Voice/);
-  });
-
-  it('renders ticket, Proker, and BPS backup metrics without the Battery Type surface', () => {
-    const page = src('pages', 'NetworkReportingPage.jsx');
-    const api = src('services', 'api.js');
-
-    assert.match(page, /Performance Table/);
-    assert.doesNotMatch(page, /Revenue & Payload by Kabupaten\/Kota/);
-    for (const contract of [
-      'Ticket SWFM',
-      'ticket_swfm_bps',
-      'ticket_swfm_ts',
-      'Proker Activity',
-      'proker_open',
-      'proker_closed',
-      'Backup Sukses',
-      'backup_sukses_bps',
-      'backup_sukses_rate',
-      'formatPercent',
-    ]) {
-      assert.match(page, new RegExp(contract));
+    assert.match(page, /fetchReportingOverview\(selectedPeriod, selectedNop/);
+    assert.match(page, /fetchReportingAreas\(selectedPeriod, selectedNop/);
+    assert.match(page, /allLabel="Regional Jatim"/);
+    assert.doesNotMatch(page, /fetchSiteClassByKabupaten/);
+    for (const endpoint of ['/reporting/overview', '/reporting/areas', '/reporting/pivot']) {
+      assert.match(api, new RegExp(endpoint));
     }
-
-    assert.doesNotMatch(page, /Battery Type/);
-    assert.doesNotMatch(page, /batteryData|batteryTotals|fetchBatteryByKabupaten/);
-    assert.doesNotMatch(api, /export async function fetchBatteryByKabupaten/);
-    assert.match(page, /min-w-\[.*\].*text-left/);
-    assert.match(api, /fetchRevenueByKabupaten/);
   });
 
-  it('adds an executive insight band above the performance chart', () => {
+  it('keeps the reporting overview compact and separates reusable analysis surfaces', () => {
     const page = src('pages', 'NetworkReportingPage.jsx');
+    const chartConfig = src('features', 'reporting', 'reportingChartConfig.js');
 
-    assert.match(page, /Executive Insight/);
-    assert.match(page, /performanceInsights/);
-    assert.match(page, /reporting-executive-insight/);
-    assert.match(page, /insight-card-grid/);
-    assert.match(page, /<ExecutiveInsightPanel insights=\{performanceInsights\} \/>[\s\S]*\{\/\* Performance Trend Chart \*\/\}/);
-    assert.doesNotMatch(page, /<h2[^>]*>Performance Trend<\/h2>[\s\S]*<ExecutiveInsightPanel insights=\{performanceInsights\} \/>/);
-    assert.doesNotMatch(page, /lg:grid-cols-\[3fr_1fr\]/);
-    assert.match(page, /InsightCard/);
-    assert.match(page, /Auto-generated dari data/);
-    assert.match(page, /Revenue melampaui target|Revenue di bawah target/);
-    assert.match(page, /Availability turun/);
-    assert.match(page, /Payload.*tertinggi/);
-    assert.match(page, /getRevenueContributorInsight/);
-    assert.match(page, /getAvailabilityTrendInsight/);
-    assert.match(page, /getPayloadPeakInsight/);
-    assert.match(page, /REVENUE_TARGET/);
-    assert.match(page, /summary/);
-    assert.match(page, /detail/);
-    assert.match(page, /summaryText: 'text-slate-900 dark:text-(emerald|amber|blue)-100'/);
-    assert.match(page, /detailText: 'text-slate-700 dark:text-(emerald|amber|blue)-200\/70'/);
-    assert.match(page, /labelText: 'text-slate-600 dark:text-(emerald|amber|blue)-400\/80'/);
+    for (const component of ['ReportingCoverageStrip', 'ReportingExecutiveInsights', 'ReportingPerformanceTrend', 'ReportingAreaTable', 'ReportingPivot', 'ReportingSiteDrilldown']) {
+      assert.match(page, new RegExp(component));
+    }
+    assert.match(chartConfig, /Revenue/);
+    assert.match(chartConfig, /Payload/);
+    assert.match(chartConfig, /Availability/);
+    assert.doesNotMatch(page, /Site Class by Kabupaten|fetchSiteClassByKabupaten/);
+  });
+
+  it('shows coverage, source refresh, target status, and numeric contribution without AI filler', () => {
+    const coverage = src('features', 'reporting', 'ReportingCoverageStrip.jsx');
+    const insights = src('features', 'reporting', 'reportingInsights.js');
+    const feature = `${coverage}\n${insights}`;
+
+    for (const contract of ['last_refreshed_at', 'latest_data_period', 'missing_periods', 'Revenue', 'Availability', 'Payload', 'contribution_pct', 'difference_pp', 'outage']) {
+      assert.match(feature, new RegExp(contract));
+    }
+    assert.doesNotMatch(feature, /Auto-generated|\bAI\b|kapasitas|headroom|saturation/i);
+    assert.doesNotMatch(feature, /REVENUE_TARGET/);
+  });
+
+  it('supports Kabupaten to site drill-down, ranking, SLA, site class, and mobile cards', () => {
+    const areaTable = src('features', 'reporting', 'ReportingAreaTable.jsx');
+    const drilldown = src('features', 'reporting', 'ReportingSiteDrilldown.jsx');
+
+    assert.match(areaTable, /Top 10/);
+    assert.match(areaTable, /Bottom 10/);
+    assert.match(areaTable, /md:hidden/);
+    assert.match(drilldown, /reporting-site-class/);
+    assert.match(drilldown, /data-\[side=right\]:w-full data-\[side=right\]:sm:max-w-4xl/);
+    assert.match(drilldown, /site_class/);
+    assert.match(drilldown, /sla_status/);
+    assert.match(drilldown, /md:hidden/);
+    assert.match(drilldown, /fetchReportingSites/);
+  });
+
+  it('provides a guarded dynamic pivot with two rows, one column, and three values', () => {
+    const pivot = src('features', 'reporting', 'ReportingPivot.jsx');
+    const state = src('features', 'reporting', 'reportingPivotState.js');
+
+    assert.match(pivot, /pivot-row-primary/);
+    assert.match(pivot, /pivot-row-secondary/);
+    assert.match(pivot, /pivot-column/);
+    assert.match(pivot, /Nilai \(maks\. 3\)/);
+    assert.match(pivot, /Terapkan Pivot/);
+    assert.match(state, /Maksimal 2 baris, 1 kolom, dan 3 nilai/);
+    assert.match(pivot, /pivot_too_large/);
   });
 
   it('adds a print-to-PDF export action for the reporting page', () => {
@@ -211,8 +135,9 @@ describe('dashboard and reporting visual/data contracts', () => {
     assert.match(page, /buildMonthRange/);
     assert.match(page, /formatMonthRangeLabel/);
     assert.match(page, /comparisonLabel/);
-    assert.match(page, /missing_months_by_source/);
-    assert.match(page, /ReferenceArea/);
+    assert.match(page, /ReportingCoverageStrip/);
+    assert.match(page, /ReportingSiteDrilldown/);
+    assert.match(page, /ReportingPivot/);
     assert.match(api, /period_start:\s*period\?\.start/);
     assert.match(api, /period_end:\s*period\?\.end/);
   });
@@ -361,10 +286,12 @@ describe('dashboard and reporting visual/data contracts', () => {
 
   it('uses the graphite reporting chart language', () => {
     const page = src('pages', 'NetworkReportingPage.jsx');
+    const trend = src('features', 'reporting', 'ReportingPerformanceTrend.jsx');
+    const chartConfig = src('features', 'reporting', 'reportingChartConfig.js');
 
-    assert.doesNotMatch(page, /text-cyan-|bg-cyan-|border-cyan-|#22D3EE|#0EA5E9|#38BDF8/i);
-    assert.doesNotMatch(page, /shadow-\[0_0_|blur-sm/);
-    assert.match(page, /DashboardChartPanel|DashboardTableShell/);
-    assert.match(page, /reportingChartConfig/);
+    assert.doesNotMatch(`${page}\n${trend}`, /text-cyan-|bg-cyan-|border-cyan-|#22D3EE|#0EA5E9|#38BDF8/i);
+    assert.doesNotMatch(`${page}\n${trend}`, /shadow-\[0_0_|blur-sm/);
+    assert.match(trend, /DashboardChartPanel/);
+    assert.match(`${trend}\n${chartConfig}`, /reportingChartConfig/);
   });
 });

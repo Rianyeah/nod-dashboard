@@ -222,6 +222,35 @@ function monthPeriodParams(period) {
   };
 }
 
+export async function fetchReportingOverview(period, nop, signal) {
+  const { data } = await api.get('/reporting/overview', {
+    params: { ...monthPeriodParams(period), nop: nop || undefined },
+    signal,
+  });
+  return data;
+}
+
+export async function fetchReportingAreas(period, nop, signal) {
+  const { data } = await api.get('/reporting/areas', {
+    params: { ...monthPeriodParams(period), nop: nop || undefined },
+    signal,
+  });
+  return data;
+}
+
+export async function fetchReportingSites(areaKey, { period, nop, ...query } = {}, signal) {
+  const { data } = await api.get(`/reporting/areas/${encodeURIComponent(areaKey)}/sites`, {
+    params: { ...monthPeriodParams(period), nop: nop || undefined, ...query },
+    signal,
+  });
+  return data;
+}
+
+export async function fetchReportingPivot(specification, signal) {
+  const { data } = await api.post('/reporting/pivot', specification, { signal });
+  return data;
+}
+
 export async function fetchReportingScorecards(period, nop) {
   const { data } = await api.get('/reporting/scorecards', {
     params: { ...monthPeriodParams(period), nop: nop || undefined },

@@ -23,8 +23,18 @@ from models.reporting import (
     BatteryByKabupaten,
     RevenueTrendItem,
     SitePerformance,
+    ReportingAreaRow,
+    ReportingOverview,
+    ReportingSitePage,
+    ReportingSiteQuery,
+    ReportingPivotRequest,
+    ReportingPivotResponse,
 )
 from periods import build_period_meta, resolve_month_period
+from queries.reporting_foundation import canonical_nop, load_revenue_target_version
+from services.reporting_overview import load_reporting_areas, load_reporting_overview
+from services.reporting_drilldown import load_reporting_sites
+from services.reporting_pivot import execute_reporting_pivot, normalize_pivot_spec
 
 router = APIRouter(prefix="/reporting", tags=["Reporting"])
 
@@ -471,6 +481,166 @@ async def get_available_months(
     result = await session.execute(text(AVAILABLE_MONTHS_QUERY))
     rows = result.mappings().all()
     payload = [row["trx_month"] for row in rows]
+    if cache_status == "MISS":
+        await redis_cache.set_json(cache_key, payload)
+    if response is not None:
+        response.headers["X-Cache"] = cache_status
+    return payload
+
+
+@router.get("/overview", response_model=ReportingOverview)
+async def get_reporting_overview(
+    trx_month: str | None = Query(None, description="Legacy period in YYYY-MM format"),
+    period_start: str | None = Query(None, description="Inclusive period start in YYYY-MM format"),
+    period_end: str | None = Query(None, description="Inclusive period end in YYYY-MM format"),
+    nop: str | None = Query(None),
+    session: AsyncSession = Depends(get_session),
+    response: Response = None,
+):
+    """Return the canonical selected and Regional Reporting facts."""
+    period = resolve_reporting_period(trx_month, period_start, period_end)
+    nop_key = canonical_nop(nop)
+    target_version = "bypass"
+    if redis_cache.enabled:
+        target_version = await load_revenue_target_version(session, nop=nop_key)
+    cache_key = redis_cache.make_key(
+        "reporting",
+        "overview-v3",
+        period_start=period.period_start,
+        period_end=period.period_end,
+        nop=nop_key or "",
+        target_version=target_version,
+    )
+    cache_status, cached_value = await redis_cache.get_json(cache_key)
+    if cache_status == "HIT":
+        if response is not None:
+            response.headers["X-Cache"] = cache_status
+        return cached_value
+
+    payload = await load_reporting_overview(session, period, nop_key)
+    if cache_status == "MISS":
+        await redis_cache.set_json(cache_key, payload)
+    if response is not None:
+        response.headers["X-Cache"] = cache_status
+    return payload
+
+
+@router.get("/areas", response_model=list[ReportingAreaRow])
+async def get_reporting_areas(
+    trx_month: str | None = Query(None, description="Legacy period in YYYY-MM format"),
+    period_start: str | None = Query(None, description="Inclusive period start in YYYY-MM format"),
+    period_end: str | None = Query(None, description="Inclusive period end in YYYY-MM format"),
+    nop: str | None = Query(None),
+    session: AsyncSession = Depends(get_session),
+    response: Response = None,
+):
+    """Return reconciled Kabupaten and unmapped area rows."""
+    period = resolve_reporting_period(trx_month, period_start, period_end)
+    nop_key = canonical_nop(nop)
+    cache_key = redis_cache.make_key(
+        "reporting",
+        "areas-v3",
+        period_start=period.period_start,
+        period_end=period.period_end,
+        nop=nop_key or "",
+    )
+    cache_status, cached_value = await redis_cache.get_json(cache_key)
+    if cache_status == "HIT":
+        if response is not None:
+            response.headers["X-Cache"] = cache_status
+        return cached_value
+
+    payload = await load_reporting_areas(session, period, nop_key)
+    if cache_status == "MISS":
+        await redis_cache.set_json(cache_key, payload)
+    if response is not None:
+        response.headers["X-Cache"] = cache_status
+    return payload
+
+
+@router.get("/areas/{area_key}/sites", response_model=ReportingSitePage)
+async def get_reporting_sites(
+    area_key: str,
+    trx_month: str | None = Query(None, description="Legacy period in YYYY-MM format"),
+    period_start: str | None = Query(None),
+    period_end: str | None = Query(None),
+    nop: str | None = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(25, ge=1, le=100),
+    sort_by: str = Query("revenue"),
+    sort_dir: str = Query("desc"),
+    rank: str = Query("all"),
+    rank_limit: int = Query(10, ge=1, le=100),
+    rank_metric: str = Query("revenue"),
+    sla: str = Query("all"),
+    site_class: str | None = Query(None),
+    q: str | None = Query(None),
+    session: AsyncSession = Depends(get_session),
+    response: Response = None,
+):
+    """Return one server-sorted page of sites for an area row."""
+    period = resolve_reporting_period(trx_month, period_start, period_end)
+    nop_key = canonical_nop(nop)
+    query = ReportingSiteQuery(
+        page=page,
+        page_size=page_size,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
+        rank=rank,
+        rank_limit=rank_limit,
+        rank_metric=rank_metric,
+        sla=sla,
+        site_class=site_class,
+        q=q,
+    )
+    cache_key = redis_cache.make_key(
+        "reporting",
+        "site-drilldown-v1",
+        area=area_key.strip().upper(),
+        period_start=period.period_start,
+        period_end=period.period_end,
+        nop=nop_key or "",
+        **query.model_dump(),
+    )
+    cache_status, cached_value = await redis_cache.get_json(cache_key)
+    if cache_status == "HIT":
+        if response is not None:
+            response.headers["X-Cache"] = cache_status
+        return cached_value
+
+    payload = await load_reporting_sites(
+        session,
+        period=period,
+        nop=nop_key,
+        area_key=area_key,
+        query=query,
+    )
+    if cache_status == "MISS":
+        await redis_cache.set_json(cache_key, payload)
+    if response is not None:
+        response.headers["X-Cache"] = cache_status
+    return payload
+
+
+@router.post("/pivot", response_model=ReportingPivotResponse)
+async def get_reporting_pivot(
+    request: ReportingPivotRequest,
+    session: AsyncSession = Depends(get_session),
+    response: Response = None,
+):
+    """Execute one validated, server-owned Pivot specification."""
+    cache_key = redis_cache.make_key(
+        "reporting",
+        "pivot-v1",
+        specification=normalize_pivot_spec(request),
+    )
+    cache_status, cached_value = await redis_cache.get_json(cache_key)
+    if cache_status == "HIT":
+        if response is not None:
+            response.headers["X-Cache"] = cache_status
+        return cached_value
+
+    payload = await execute_reporting_pivot(session, request)
     if cache_status == "MISS":
         await redis_cache.set_json(cache_key, payload)
     if response is not None:

@@ -59,9 +59,11 @@ async def lifespan(app: FastAPI):
     else:
         print("[NOD] Redis cache is disabled.")
 
+    reporting_foundation_error = None
     try:
         from database import engine as database_engine
         from management_schema import management_schema_statements
+        from queries.reporting_foundation import ensure_reporting_foundation
         from queries.metrics_cache import (
             BOOTSTRAP_SITE_MONTH_METRICS_STATEMENTS,
             REFRESH_SITE_MONTH_DELETE_QUERY,
@@ -80,6 +82,12 @@ async def lifespan(app: FastAPI):
             for statement in management_schema_statements():
                 await session.execute(text(statement))
             await session.commit()
+
+            try:
+                await ensure_reporting_foundation(session)
+            except Exception as exc:
+                reporting_foundation_error = exc
+                raise
 
             for statement in BOOTSTRAP_SITE_MONTH_METRICS_STATEMENTS:
                 await session.execute(text(statement))
@@ -105,6 +113,8 @@ async def lifespan(app: FastAPI):
                 await session.execute(text(REFRESH_SITE_MONTH_INSERT_QUERY), params)
             await session.commit()
     except Exception as exc:
+        if reporting_foundation_error is not None:
+            raise RuntimeError("Reporting target foundation failed") from reporting_foundation_error
         print(f"[NOD] WARNING: Auto-refresh metrics cache failed: {exc}")
 
     try:
