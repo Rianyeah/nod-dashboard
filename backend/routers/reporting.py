@@ -35,6 +35,7 @@ from queries.reporting_foundation import canonical_nop, load_revenue_target_vers
 from services.reporting_overview import load_reporting_areas, load_reporting_overview
 from services.reporting_drilldown import load_reporting_sites
 from services.reporting_pivot import execute_reporting_pivot, normalize_pivot_spec
+from services.reporting_thresholds import load_metric_threshold_version
 
 router = APIRouter(prefix="/reporting", tags=["Reporting"])
 
@@ -501,15 +502,18 @@ async def get_reporting_overview(
     period = resolve_reporting_period(trx_month, period_start, period_end)
     nop_key = canonical_nop(nop)
     target_version = "bypass"
+    threshold_version = "bypass"
     if redis_cache.enabled:
         target_version = await load_revenue_target_version(session, nop=nop_key)
+        threshold_version = await load_metric_threshold_version(session, period.period_end)
     cache_key = redis_cache.make_key(
         "reporting",
-        "overview-v3",
+        "overview-v4",
         period_start=period.period_start,
         period_end=period.period_end,
         nop=nop_key or "",
         target_version=target_version,
+        threshold_version=threshold_version,
     )
     cache_status, cached_value = await redis_cache.get_json(cache_key)
     if cache_status == "HIT":

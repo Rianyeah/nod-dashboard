@@ -108,6 +108,13 @@ class ReportingRedisCacheTest(unittest.IsolatedAsyncioTestCase):
             source,
         )
 
+    def test_overview_cache_tracks_effective_metric_threshold_version(self):
+        source = REPORTING_ROUTER.read_text(encoding="utf-8")
+
+        self.assertIn("load_metric_threshold_version", source)
+        self.assertIn('"overview-v4"', source)
+        self.assertIn("threshold_version=threshold_version", source)
+
 
 if __name__ == "__main__":
     unittest.main()

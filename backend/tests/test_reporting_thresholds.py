@@ -185,6 +185,20 @@ async def test_resolve_threshold_snapshot_uses_latest_values_at_requested_month(
 
 
 @pytest.mark.asyncio
+async def test_threshold_version_changes_with_effective_configuration():
+    from services.reporting_thresholds import load_metric_threshold_version
+
+    session = ThresholdSession(
+        [{"row_count": 8, "updated_at": "2026-09-01T10:15:00+00:00"}]
+    )
+    version = await load_metric_threshold_version(session, "2026-09")
+
+    assert version == "8:2026-09-01T10:15:00+00:00"
+    assert session.calls[0][1] == {"requested_month": "2026-09"}
+    assert "effective_month <= :requested_month" in session.calls[0][0]
+
+
+@pytest.mark.asyncio
 async def test_save_threshold_version_writes_all_rows_and_commits_once():
     from models.reporting_thresholds import ThresholdVersionInput
     from services.reporting_thresholds import save_threshold_version

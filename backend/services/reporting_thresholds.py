@@ -186,6 +186,32 @@ async def resolve_threshold_snapshot(
     return build_threshold_snapshot(rows, period.period_start)
 
 
+async def load_metric_threshold_version(
+    session: AsyncSession,
+    requested_month: str,
+) -> str:
+    """Return a compact cache version for thresholds effective by the month."""
+    period = resolve_month_period(
+        period_start=requested_month,
+        period_end=requested_month,
+    )
+    result = await session.execute(
+        text(
+            """
+            SELECT
+                COUNT(*)::bigint AS row_count,
+                MAX(updated_at) AS updated_at
+            FROM public.reporting_metric_thresholds
+            WHERE effective_month <= :requested_month
+            """
+        ),
+        {"requested_month": period.period_start},
+    )
+    rows = [dict(row) for row in result.mappings().all()]
+    row = rows[0] if rows else {}
+    return f"{int(row.get('row_count') or 0)}:{row.get('updated_at') or ''}"
+
+
 async def save_threshold_version(
     session: AsyncSession,
     effective_month: str,

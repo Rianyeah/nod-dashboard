@@ -7,6 +7,7 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field, model_validator
 
 from models.period import MonthPeriodMeta
+from models.reporting_thresholds import ReportingThresholdSnapshot
 
 
 class ReportingScorecard(BaseModel):
@@ -138,8 +139,12 @@ class ReportingSourceCoverage(BaseModel):
 
 class ReportingOverviewScorecards(BaseModel):
     total_sites: int = 0
+    epm_sites: int = 0
+    non_epm_sites: int = 0
     total_revenue: int = 0
     total_payload: int = 0
+    revenue_ytd: int = 0
+    payload_ytd: int = 0
     avg_availability: float | None = None
 
 
@@ -183,6 +188,7 @@ class ReportingOverview(BaseModel):
     revenue: ReportingRevenueFact
     payload: ReportingMetricFact
     availability: ReportingMetricFact
+    thresholds: ReportingThresholdSnapshot | None = None
     coverage: list[ReportingSourceCoverage] = Field(default_factory=list)
     trend: list[RevenueTrendItem] = Field(default_factory=list)
     period_meta: MonthPeriodMeta
