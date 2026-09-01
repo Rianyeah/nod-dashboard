@@ -44,3 +44,10 @@ class ReportingThresholdSnapshot(BaseModel):
     version: str = "unconfigured"
     updated_by: str | None = None
     updated_at: datetime | None = None
+
+
+class RevenueTargetInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    target_revenue: int = Field(ge=0)
+    note: str | None = Field(default=None, max_length=500)

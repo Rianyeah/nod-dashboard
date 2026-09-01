@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
-from models.reporting_thresholds import ReportingThresholdSnapshot, ThresholdVersionInput
+from models.reporting_thresholds import (
+    ReportingThresholdSnapshot,
+    RevenueTargetInput,
+    ThresholdVersionInput,
+)
 from periods import resolve_month_period
+from queries.reporting_foundation import canonical_nop
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -222,3 +227,101 @@ async def save_threshold_version(
     )
     await session.commit()
     return build_threshold_snapshot(rows, rows[0]["effective_month"])
+
+
+def _canonical_month(value: str | None) -> str | None:
+    if value is None:
+        return None
+    return resolve_month_period(period_start=value, period_end=value).period_start
+
+
+async def list_revenue_targets(
+    session: AsyncSession,
+    *,
+    nop: str | None = None,
+    month_from: str | None = None,
+    month_to: str | None = None,
+    limit: int = 100,
+) -> list[dict]:
+    params = {
+        "nop_key": canonical_nop(nop),
+        "month_from": _canonical_month(month_from),
+        "month_to": _canonical_month(month_to),
+        "limit": max(1, min(int(limit), 200)),
+    }
+    result = await session.execute(
+        text(
+            """
+            SELECT
+                nop_key,
+                trx_month,
+                target_revenue,
+                note,
+                updated_by,
+                updated_at
+            FROM public.reporting_revenue_targets
+            WHERE (CAST(:nop_key AS text) IS NULL OR nop_key = :nop_key)
+              AND (CAST(:month_from AS text) IS NULL OR trx_month >= :month_from)
+              AND (CAST(:month_to AS text) IS NULL OR trx_month <= :month_to)
+            ORDER BY trx_month DESC, nop_key
+            LIMIT :limit
+            """
+        ),
+        params,
+    )
+    rows = [dict(row) for row in result.mappings().all()]
+    for row in rows:
+        row["target_revenue"] = int(row.get("target_revenue") or 0)
+    return rows
+
+
+async def upsert_revenue_target(
+    session: AsyncSession,
+    *,
+    nop: str,
+    trx_month: str,
+    payload: RevenueTargetInput,
+    actor: str,
+) -> dict:
+    nop_key = canonical_nop(nop)
+    if nop_key is None:
+        raise ValueError("NOP wajib dipilih untuk target revenue")
+    month = _canonical_month(trx_month)
+    result = await session.execute(
+        text(
+            """
+            INSERT INTO public.reporting_revenue_targets (
+                nop_key,
+                trx_month,
+                target_revenue,
+                note,
+                updated_by,
+                updated_at
+            ) VALUES (
+                :nop_key,
+                :trx_month,
+                :target_revenue,
+                :note,
+                :updated_by,
+                now()
+            )
+            ON CONFLICT (nop_key, trx_month) DO UPDATE SET
+                target_revenue = EXCLUDED.target_revenue,
+                note = EXCLUDED.note,
+                updated_by = EXCLUDED.updated_by,
+                updated_at = now()
+            RETURNING nop_key, trx_month, target_revenue, note, updated_by, updated_at
+            """
+        ),
+        {
+            "nop_key": nop_key,
+            "trx_month": month,
+            "target_revenue": payload.target_revenue,
+            "note": payload.note,
+            "updated_by": actor,
+        },
+    )
+    await session.commit()
+    row = dict(result.mappings().one())
+    row["target_revenue"] = int(row.get("target_revenue") or 0)
+    return row

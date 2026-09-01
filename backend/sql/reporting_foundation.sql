@@ -3,9 +3,13 @@ CREATE TABLE IF NOT EXISTS public.reporting_revenue_targets (
     trx_month text NOT NULL CHECK (trx_month ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'),
     target_revenue numeric(20, 0) NOT NULL CHECK (target_revenue >= 0),
     note text,
+    updated_by text,
     updated_at timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (nop_key, trx_month)
 );
+-- statement-breakpoint
+ALTER TABLE public.reporting_revenue_targets
+ADD COLUMN IF NOT EXISTS updated_by text;
 -- statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_reporting_revenue_targets_month
 ON public.reporting_revenue_targets (trx_month);
