@@ -58,7 +58,7 @@ describe('dashboard and reporting visual/data contracts', () => {
     const page = src('pages', 'NetworkReportingPage.jsx');
     const chartConfig = src('features', 'reporting', 'reportingChartConfig.js');
 
-    for (const component of ['ReportingCoverageStrip', 'ReportingExecutiveInsights', 'ReportingPerformanceTrend', 'ReportingAreaTable', 'ReportingPivot', 'ReportingSiteDrilldown']) {
+    for (const component of ['ReportingScorecards', 'ReportingCoverageStrip', 'ReportingExecutiveInsights', 'ReportingPerformanceTrend', 'ReportingAreaTable', 'ReportingPivot', 'ReportingSiteDrilldown']) {
       assert.match(page, new RegExp(component));
     }
     assert.match(chartConfig, /Revenue/);
@@ -293,5 +293,20 @@ describe('dashboard and reporting visual/data contracts', () => {
     assert.doesNotMatch(`${page}\n${trend}`, /shadow-\[0_0_|blur-sm/);
     assert.match(trend, /DashboardChartPanel/);
     assert.match(`${trend}\n${chartConfig}`, /reportingChartConfig/);
+  });
+
+  it('restores the approved scorecard hierarchy, insight panel, and smooth trend', () => {
+    const scorecards = src('features', 'reporting', 'ReportingScorecards.jsx');
+    const insights = src('features', 'reporting', 'ReportingExecutiveInsights.jsx');
+    const trend = src('features', 'reporting', 'ReportingPerformanceTrend.jsx');
+
+    assert.match(scorecards, /EPM/);
+    assert.match(scorecards, /Site \(non EPM\)/);
+    assert.match(scorecards, /YTD/);
+    assert.match(scorecards, /Kontribusi NOP/);
+    assert.match(insights, /Executive Insight/);
+    assert.doesNotMatch(insights, /Auto-generated|AI generated/i);
+    assert.match(trend, /type="monotone"/);
+    assert.match(trend, /linearGradient/);
   });
 });

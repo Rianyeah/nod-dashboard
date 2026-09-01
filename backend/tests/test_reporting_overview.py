@@ -162,6 +162,21 @@ def test_availability_contribution_uses_outage_share_and_percentage_point_differ
     assert contribution.contribution_pct == pytest.approx(50.0)
 
 
+def test_availability_insight_severity_uses_trend_not_retired_global_sla():
+    from services.reporting_overview import availability_insight_severity
+
+    assert availability_insight_severity(98.5, []) == "success"
+    assert availability_insight_severity(
+        99.7,
+        [
+            {"avg_availability": 99.9},
+            {"avg_availability": 99.8},
+            {"avg_availability": 99.7},
+        ],
+    ) == "warning"
+    assert availability_insight_severity(None, []) == "unavailable"
+
+
 @pytest.mark.parametrize(
     ("availability", "expected"),
     [(99.5, "met"), (99.4999, "missed"), (None, "unavailable")],
@@ -259,7 +274,7 @@ def test_overview_builder_uses_regional_baseline_and_complete_monthly_target():
     assert overview.availability.value == pytest.approx(98.5)
     assert overview.availability.contribution.difference_pp == pytest.approx(0.5)
     assert overview.availability.contribution.contribution_pct == pytest.approx(50.0)
-    assert overview.availability.severity == "warning"
+    assert overview.availability.severity == "success"
 
 
 @pytest.mark.asyncio

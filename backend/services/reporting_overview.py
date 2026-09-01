@@ -559,6 +559,13 @@ def _continuing_availability_decline(trend: list) -> bool:
     return len(values) == 3 and values[0] > values[1] > values[2]
 
 
+def availability_insight_severity(value: float | None, trend: list) -> str:
+    """Classify insight urgency without applying one global site-class SLA."""
+    if value is None:
+        return "unavailable"
+    return "warning" if _continuing_availability_decline(trend) else "success"
+
+
 def build_reporting_overview(
     *,
     selected: dict,
@@ -607,13 +614,7 @@ def build_reporting_overview(
     if target.complete:
         revenue_severity = "success" if selected_revenue >= target.target_revenue else "warning"
 
-    availability_severity = "unavailable"
-    if selected_availability is not None:
-        availability_severity = (
-            "warning"
-            if selected_availability < AVAILABILITY_SLA or _continuing_availability_decline(trend)
-            else "success"
-        )
+    availability_severity = availability_insight_severity(selected_availability, trend)
 
     return ReportingOverview(
         scope_label=scope_label,

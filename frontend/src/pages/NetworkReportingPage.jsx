@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Activity, ArrowLeft, Banknote, BarChart3, FileDown, Grid3X3, HardDrive, MapPinned, Radio } from 'lucide-react';
+import { ArrowLeft, BarChart3, FileDown, Grid3X3, MapPinned } from 'lucide-react';
 
 import Breadcrumb from '../components/Breadcrumb.jsx';
 import SiteDetailModal from '../components/SiteDetailModal.jsx';
@@ -14,12 +14,12 @@ import {
   formatMonthRangeLabel,
   getPeriodComparisonLabel,
 } from '../components/dashboard-filters/periodRange.js';
-import { DashboardKpiCard } from '../components/ui/DashboardPrimitives.jsx';
 import ReportingAreaTable from '../features/reporting/ReportingAreaTable.jsx';
 import ReportingCoverageStrip from '../features/reporting/ReportingCoverageStrip.jsx';
 import ReportingExecutiveInsights from '../features/reporting/ReportingExecutiveInsights.jsx';
 import ReportingPerformanceTrend from '../features/reporting/ReportingPerformanceTrend.jsx';
 import ReportingPivot from '../features/reporting/ReportingPivot.jsx';
+import ReportingScorecards from '../features/reporting/ReportingScorecards.jsx';
 import ReportingSiteDrilldown from '../features/reporting/ReportingSiteDrilldown.jsx';
 import { useDashboardThemeTokens } from '../hooks/useDashboardThemeTokens.js';
 import {
@@ -29,7 +29,6 @@ import {
   fetchReportingOverview,
 } from '../services/api.js';
 import { fetchSiteDetailBundle } from '../services/siteDetailBundle.js';
-import { formatNumber, formatPayload, formatPercent, formatRevenue } from '../utils/formatters.js';
 
 
 const REPORTING_DEFAULT_NOP = 'SIDOARJO';
@@ -37,24 +36,6 @@ const REPORTING_DEFAULT_NOP = 'SIDOARJO';
 
 function normalizeReportingNop(value) {
   return String(value || '').trim().replace(/^NOP\s+/i, '').toUpperCase();
-}
-
-
-function formatSigned(value, digits = 1, suffix = '%') {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return '-';
-  const sign = number > 0 ? '+' : number < 0 ? '-' : '';
-  return `${sign}${Math.abs(number).toFixed(digits).replace('.', ',')}${suffix}`;
-}
-
-
-function MetricCard({ title, value, note, icon: Icon, tone = 'info' }) {
-  return (
-    <DashboardKpiCard title={title} icon={Icon} tone={tone}>
-      <p className="mt-2 font-mono text-[27px] font-bold leading-none tabular-nums tracking-tight text-[var(--text-primary)]">{value}</p>
-      <p className="mt-2 min-h-4 text-[10px] font-medium text-[var(--text-muted)]">{note}</p>
-    </DashboardKpiCard>
-  );
 }
 
 
@@ -171,8 +152,6 @@ export default function NetworkReportingPage() {
     });
   }, [selectedNop, selectedPeriod]);
 
-  const scorecards = overview?.scorecards;
-  const performanceCoverage = overview?.coverage?.find((source) => source.source_key === 'traktor_data');
   const scopeLabel = overview?.scope_label || (selectedNop ? normalizeReportingNop(selectedNop) : 'Regional Jatim');
 
   return (
@@ -206,16 +185,7 @@ export default function NetworkReportingPage() {
         {overviewError && <p className="rounded-lg border border-[var(--danger)]/20 bg-[var(--danger)]/8 px-3 py-2 text-xs text-[var(--danger)]">{overviewError}</p>}
         {overview?.coverage?.length > 0 && <ReportingCoverageStrip sources={overview.coverage} />}
 
-        <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Scorecard Reporting">
-          {overviewLoading && !overview ? [1, 2, 3, 4].map((key) => <div key={key} className="skeleton h-[102px] rounded-xl" />) : (
-            <>
-              <MetricCard title="Total Site" value={formatNumber(scorecards?.total_sites)} note={performanceCoverage?.total_sites == null ? scopeLabel : `Mapping ${formatNumber(performanceCoverage.mapped_sites)} / ${formatNumber(performanceCoverage.total_sites)}`} icon={Radio} />
-              <MetricCard title="Revenue" value={formatRevenue(scorecards?.total_revenue)} note={`${formatSigned(overview?.revenue?.delta_pct)} ${comparisonLabel}`} icon={Banknote} tone={overview?.revenue?.severity === 'success' ? 'success' : overview?.revenue?.severity === 'warning' ? 'warning' : 'neutral'} />
-              <MetricCard title="Payload" value={formatPayload(scorecards?.total_payload)} note={`${formatSigned(overview?.payload?.delta_pct)} ${comparisonLabel}`} icon={HardDrive} />
-              <MetricCard title="Availability" value={formatPercent(scorecards?.avg_availability)} note={`${formatSigned(overview?.availability?.delta_pct, 2, ' pp')} ${comparisonLabel}`} icon={Activity} tone={scorecards?.avg_availability == null ? 'neutral' : scorecards.avg_availability >= 99.5 ? 'success' : 'warning'} />
-            </>
-          )}
-        </section>
+        <ReportingScorecards overview={overview} comparisonLabel={comparisonLabel} loading={overviewLoading} />
 
         {overview && <ReportingExecutiveInsights overview={overview} comparisonLabel={comparisonLabel} />}
         <ReportingPerformanceTrend rows={overview?.trend || []} selectedPeriod={selectedPeriod} themeTokens={themeTokens} />
