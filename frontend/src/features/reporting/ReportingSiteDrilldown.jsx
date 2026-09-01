@@ -98,6 +98,13 @@ export default function ReportingSiteDrilldown({ area, open, onOpenChange, perio
     sort_by: field,
     sort_dir: current.sort_by === field && current.sort_dir === 'desc' ? 'asc' : 'desc',
     rank_metric: field,
+    rank: 'all',
+    page: 1,
+  }));
+  const handleRank = (value) => setQuery((current) => ({
+    ...current,
+    rank: value,
+    sort_dir: value === 'bottom' ? 'asc' : value === 'top' ? 'desc' : current.sort_dir,
     page: 1,
   }));
   const totalPages = Math.max(1, Math.ceil(Number(result?.total || 0) / Number(result?.page_size || 25)));
@@ -114,7 +121,7 @@ export default function ReportingSiteDrilldown({ area, open, onOpenChange, perio
           <DashboardCombobox id="reporting-site-target" label="Target Achieved" value={query.target_status} onChange={(value) => update('target_status', value)} options={TARGET_STATUS_OPTIONS} />
           <DashboardCombobox id="reporting-site-class" label="Site Class" value={query.site_class} onChange={(value) => update('site_class', value)} options={(result?.site_classes || []).map((value) => ({ value, label: value }))} allLabel="Semua Class" />
           <div className="flex items-end gap-1 sm:col-span-2 xl:col-span-3">
-            {['all', 'top', 'bottom'].map((value) => <button key={value} type="button" onClick={() => update('rank', value)} className={`rounded-md border px-3 py-1.5 text-[11px] font-semibold ${query.rank === value ? 'border-[var(--primary)]/30 bg-[var(--primary)]/15 text-[var(--primary-light)]' : 'border-[var(--border)] text-[var(--text-muted)]'}`}>{value === 'all' ? 'Semua' : value === 'top' ? 'Top 10' : 'Bottom 10'}</button>)}
+            {['all', 'top', 'bottom'].map((value) => <button key={value} type="button" onClick={() => handleRank(value)} className={`rounded-md border px-3 py-1.5 text-[11px] font-semibold ${query.rank === value ? 'border-[var(--primary)]/30 bg-[var(--primary)]/15 text-[var(--primary-light)]' : 'border-[var(--border)] text-[var(--text-muted)]'}`}>{value === 'all' ? 'Semua' : value === 'top' ? 'Top 10' : 'Bottom 10'}</button>)}
           </div>
         </div>
 

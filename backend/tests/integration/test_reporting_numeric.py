@@ -319,6 +319,33 @@ async def test_site_target_boundaries_are_evaluated_before_pagination(reporting_
 
 
 @pytest.mark.asyncio
+async def test_multi_month_site_target_marks_missing_month_or_value_unavailable(reporting_db_session):
+    from models.reporting import ReportingSiteQuery
+    from periods import resolve_month_period
+    from services.reporting_drilldown import load_reporting_sites
+
+    await _seed_numeric_facts(reporting_db_session)
+    await reporting_db_session.execute(
+        text("DELETE FROM public.traktor_data WHERE trx_month = '2026-07' AND site_id = 'BBB001'")
+    )
+    await reporting_db_session.execute(
+        text("UPDATE public.traktor_data SET rev = NULL WHERE trx_month = '2026-07' AND site_id = 'AAA001'")
+    )
+    await reporting_db_session.commit()
+
+    unavailable = await load_reporting_sites(
+        reporting_db_session,
+        period=resolve_month_period(period_start="2026-06", period_end="2026-07"),
+        nop="SIDOARJO",
+        area_key="SIDOARJO",
+        query=ReportingSiteQuery(target_status="unavailable", sort_by="site_id", sort_dir="asc"),
+    )
+
+    assert [item.site_id for item in unavailable.items] == ["AAA001", "BBB001"]
+    assert all(item.overall_target_status == "unavailable" for item in unavailable.items)
+
+
+@pytest.mark.asyncio
 async def test_reporting_availability_falls_back_to_raw_log_when_cache_row_is_missing(reporting_db_session):
     from periods import resolve_month_period
     from services.reporting_overview import load_reporting_overview

@@ -203,7 +203,16 @@ async def test_save_threshold_version_writes_all_rows_and_commits_once():
     from models.reporting_thresholds import ThresholdVersionInput
     from services.reporting_thresholds import save_threshold_version
 
-    session = ThresholdSession()
+    persisted_rows = [
+        {
+            **row,
+            "effective_month": "2026-09",
+            "updated_by": "data-admin",
+            "updated_at": "2026-09-01T10:15:00+00:00",
+        }
+        for row in threshold_rows()
+    ]
+    session = ThresholdSession(persisted_rows)
     snapshot = await save_threshold_version(
         session,
         "2026-09",
@@ -211,10 +220,12 @@ async def test_save_threshold_version_writes_all_rows_and_commits_once():
         "data-admin",
     )
 
-    assert len(session.calls) == 1
+    assert len(session.calls) == 2
     assert len(session.calls[0][1]) == 8
     assert "ON CONFLICT (metric, threshold_key, site_class, effective_month)" in session.calls[0][0]
+    assert session.calls[1][1] == {"requested_month": "2026-09"}
     assert session.commits == 1
     assert snapshot.complete is True
     assert snapshot.effective_month == "2026-09"
     assert snapshot.updated_by == "data-admin"
+    assert str(snapshot.updated_at) == "2026-09-01 10:15:00+00:00"

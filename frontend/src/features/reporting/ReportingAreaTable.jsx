@@ -29,16 +29,26 @@ export default function ReportingAreaTable({ rows = [], loading = false, error, 
     limit: 10,
   }), [rank, rows, sort]);
 
-  const handleSort = (field) => setSort((current) => ({
-    field,
-    direction: current.field === field && current.direction === 'desc' ? 'asc' : 'desc',
-  }));
+  const handleSort = (field) => {
+    setRank('all');
+    setSort((current) => ({
+      field,
+      direction: current.field === field && current.direction === 'desc' ? 'asc' : 'desc',
+    }));
+  };
+
+  const handleRank = (value) => {
+    setRank(value);
+    if (value !== 'all') {
+      setSort((current) => ({ ...current, direction: value === 'bottom' ? 'asc' : 'desc' }));
+    }
+  };
 
   const action = (
     <div className="reporting-no-print flex flex-wrap items-end gap-2">
       <div className="flex rounded-lg border border-[var(--border)] bg-[var(--surface-soft)] p-0.5">
         {['all', 'top', 'bottom'].map((value) => (
-          <button key={value} type="button" onClick={() => setRank(value)} className={`rounded-md px-2.5 py-1.5 text-[11px] font-semibold ${rank === value ? 'bg-[var(--primary)]/15 text-[var(--primary-light)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}>
+          <button key={value} type="button" onClick={() => handleRank(value)} className={`rounded-md px-2.5 py-1.5 text-[11px] font-semibold ${rank === value ? 'bg-[var(--primary)]/15 text-[var(--primary-light)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}>
             {value === 'all' ? 'Semua' : value === 'top' ? 'Top 10' : 'Bottom 10'}
           </button>
         ))}

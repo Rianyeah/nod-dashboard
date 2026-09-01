@@ -78,6 +78,16 @@ def test_period_row_displays_latest_effective_target_but_keeps_monthly_statuses(
     assert "bool_and(overall_target_status = 'achieved')" in normalized
 
 
+def test_every_selected_month_is_evaluated_and_missing_performance_is_unavailable():
+    from services.reporting_drilldown import SITE_FACTS_CTE
+
+    normalized = " ".join(SITE_FACTS_CTE.lower().split())
+    assert "generate_series(" in normalized
+    assert "from active_sites s cross join active_months m" in normalized
+    assert "when revenue is null" in normalized
+    assert "when payload is null" in normalized
+
+
 class _Rows:
     def __init__(self, rows):
         self.rows = rows

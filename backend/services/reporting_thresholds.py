@@ -252,7 +252,7 @@ async def save_threshold_version(
         rows,
     )
     await session.commit()
-    return build_threshold_snapshot(rows, rows[0]["effective_month"])
+    return await resolve_threshold_snapshot(session, rows[0]["effective_month"])
 
 
 def _canonical_month(value: str | None) -> str | None:

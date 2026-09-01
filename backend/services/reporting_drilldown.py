@@ -59,17 +59,42 @@ WITH master AS (
     WHERE NULLIF(TRIM(d."Siteid"), '') IS NOT NULL
     ORDER BY UPPER(TRIM(d."Siteid")), d.row_number DESC NULLS LAST
 ),
-active_monthly AS (
+active_performance AS (
     SELECT
         t.trx_month,
         UPPER(TRIM(t.site_id)) AS site_key,
         MIN(t.site_id) AS source_site_id,
-        SUM(COALESCE(t.rev, 0))::bigint AS revenue,
-        SUM(COALESCE(t.payload, 0))::bigint AS payload
+        SUM(t.rev)::bigint AS revenue,
+        SUM(t.payload)::bigint AS payload
     FROM public.traktor_data t
     WHERE t.trx_month BETWEEN :period_start AND :period_end
       AND NULLIF(TRIM(t.site_id), '') IS NOT NULL
     GROUP BY 1, 2
+),
+active_sites AS (
+    SELECT site_key, MIN(source_site_id) AS source_site_id
+    FROM active_performance
+    GROUP BY site_key
+),
+active_months AS (
+    SELECT TO_CHAR(month_value, 'YYYY-MM') AS trx_month
+    FROM GENERATE_SERIES(
+        TO_DATE(:period_start, 'YYYY-MM'),
+        TO_DATE(:period_end, 'YYYY-MM'),
+        INTERVAL '1 month'
+    ) AS month_series(month_value)
+),
+active_monthly AS (
+    SELECT
+        m.trx_month,
+        s.site_key,
+        s.source_site_id,
+        p.revenue,
+        p.payload
+    FROM active_sites s
+    CROSS JOIN active_months m
+    LEFT JOIN active_performance p
+      ON p.site_key = s.site_key AND p.trx_month = m.trx_month
 ),
 previous AS (
     SELECT
@@ -168,18 +193,18 @@ monthly_status AS (
             ELSE 'not_achieved'
         END AS availability_target_status,
         CASE
-            WHEN revenue_u30_upper IS NULL OR revenue_u60_upper IS NULL THEN 'unavailable'
+            WHEN revenue IS NULL OR revenue_u30_upper IS NULL OR revenue_u60_upper IS NULL THEN 'unavailable'
             WHEN revenue < revenue_u30_upper THEN 'u30'
             WHEN revenue < revenue_u60_upper THEN 'u60'
             ELSE 'achieved'
         END AS revenue_band,
         CASE
-            WHEN revenue_u60_upper IS NULL THEN 'unavailable'
+            WHEN revenue IS NULL OR revenue_u60_upper IS NULL THEN 'unavailable'
             WHEN revenue >= revenue_u60_upper THEN 'achieved'
             ELSE 'not_achieved'
         END AS revenue_target_status,
         CASE
-            WHEN payload_target_tb IS NULL THEN 'unavailable'
+            WHEN payload IS NULL OR payload_target_tb IS NULL THEN 'unavailable'
             WHEN payload >= payload_target_tb * 1048576.0 THEN 'achieved'
             ELSE 'not_achieved'
         END AS payload_target_status

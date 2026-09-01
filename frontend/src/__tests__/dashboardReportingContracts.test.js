@@ -75,6 +75,7 @@ describe('dashboard and reporting visual/data contracts', () => {
     for (const contract of ['last_refreshed_at', 'latest_data_period', 'missing_periods', 'Revenue', 'Availability', 'Payload', 'contribution_pct', 'difference_pp', 'outage']) {
       assert.match(feature, new RegExp(contract));
     }
+    assert.match(coverage, /source\.mapped_sites != null && source\.total_sites != null/);
     assert.doesNotMatch(feature, /Auto-generated|\bAI\b|kapasitas|headroom|saturation/i);
     assert.doesNotMatch(feature, /REVENUE_TARGET/);
   });
@@ -97,6 +98,10 @@ describe('dashboard and reporting visual/data contracts', () => {
     for (const field of ['traffic', 'ticket_backup', 'proker']) {
       assert.match(areaTable, new RegExp(`SortHeader field="${field}"`));
     }
+    assert.match(areaTable, /const handleSort = \(field\) => \{[\s\S]*setRank\('all'\)/);
+    assert.match(areaTable, /const handleRank = \(value\)/);
+    assert.match(drilldown, /const handleSort = \(field\) => setQuery\([\s\S]*rank: 'all'/);
+    assert.match(drilldown, /const handleRank = \(value\)/);
     for (const field of ['site_id', 'site_class', 'status_site', 'revenue', 'revenue_mom', 'payload', 'payload_mom', 'availability']) {
       assert.match(drilldown, new RegExp(`SortHeader field="${field}"`));
     }
