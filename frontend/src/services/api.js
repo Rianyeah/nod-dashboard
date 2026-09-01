@@ -505,6 +505,38 @@ export async function updateDashboardUser(userId, payload) {
   return data;
 }
 
+export async function fetchReportingThresholds(effectiveMonth, signal) {
+  const { data } = await api.get('/management-data/reporting-thresholds', {
+    params: { effective_month: effectiveMonth },
+    signal,
+  });
+  return data;
+}
+
+export async function saveReportingThresholds(effectiveMonth, payload) {
+  const { data } = await api.put(
+    `/management-data/reporting-thresholds/${encodeURIComponent(effectiveMonth)}`,
+    payload,
+  );
+  return data;
+}
+
+export async function fetchReportingRevenueTargets(params = {}, signal) {
+  const { data } = await api.get('/management-data/reporting-revenue-targets', {
+    params,
+    signal,
+  });
+  return data;
+}
+
+export async function saveReportingRevenueTarget(nop, trxMonth, payload) {
+  const { data } = await api.put(
+    `/management-data/reporting-revenue-targets/${encodeURIComponent(nop)}/${encodeURIComponent(trxMonth)}`,
+    payload,
+  );
+  return data;
+}
+
 // ===== Data Potensi =====
 
 export async function fetchDataPotensiDashboard(params) {

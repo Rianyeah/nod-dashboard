@@ -42,4 +42,25 @@ describe('Management Data contracts', () => {
     assert.match(api, /FormData/);
     assert.match(page, /users:manage/);
   });
+
+  it('provides effective-dated Reporting threshold and NOP revenue target editors', () => {
+    const page = src('pages', 'ManagementDataPage.jsx');
+    const editor = src('features', 'management-data', 'ReportingThresholdConfiguration.jsx');
+    const api = src('services', 'api.js');
+
+    assert.match(page, /Threshold Configuration/);
+    assert.match(page, /ReportingThresholdConfiguration/);
+    for (const label of [
+      'Bulan efektif', 'Diamond', 'Platinum', 'Gold', 'Silver', 'Bronze',
+      'U30', 'U60', 'Payload', 'NOP', 'Target revenue',
+    ]) {
+      assert.match(editor, new RegExp(label));
+    }
+    for (const functionName of [
+      'fetchReportingThresholds', 'saveReportingThresholds',
+      'fetchReportingRevenueTargets', 'saveReportingRevenueTarget',
+    ]) {
+      assert.match(api, new RegExp(`export async function ${functionName}`));
+    }
+  });
 });
