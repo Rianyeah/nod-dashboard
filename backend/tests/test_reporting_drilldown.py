@@ -26,6 +26,29 @@ def test_site_order_is_allowlisted_and_uses_site_id_as_tie_breaker():
     assert build_site_order(query) == "avg_availability DESC NULLS LAST, site_key ASC"
 
 
+@pytest.mark.parametrize(
+    ("sort_by", "expression"),
+    [
+        ("site_id", "site_key"),
+        ("site_class", "site_class"),
+        ("status_site", "status_site"),
+        ("transport_type", "transport_type"),
+        ("revenue", "revenue"),
+        ("revenue_mom", "revenue_mom_pct"),
+        ("payload", "payload"),
+        ("payload_mom", "payload_mom_pct"),
+        ("availability", "avg_availability"),
+    ],
+)
+def test_every_visible_site_header_has_an_allowlisted_server_sort(sort_by, expression):
+    from models.reporting import ReportingSiteQuery
+    from services.reporting_drilldown import build_site_order
+
+    query = ReportingSiteQuery(sort_by=sort_by, sort_dir="asc")
+
+    assert build_site_order(query) == f"{expression} ASC NULLS LAST, site_key ASC"
+
+
 def test_unmapped_area_is_based_on_missing_master_row_not_blank_nop():
     from services.reporting_drilldown import SITE_FACTS_CTE
 
@@ -34,14 +57,35 @@ def test_unmapped_area_is_based_on_missing_master_row_not_blank_nop():
     assert ":area_key = :unmapped_key and not is_mapped" in normalized
 
 
-@pytest.mark.parametrize(
-    ("availability", "expected"),
-    [(99.5, True), (99.49, False), (None, False)],
-)
-def test_sla_filter_uses_exact_approved_threshold(availability, expected):
-    from services.reporting_drilldown import matches_sla
+def test_target_filter_is_evaluated_inside_filtered_cte_before_pagination():
+    from services.reporting_drilldown import SITE_FACTS_CTE, _target_sql_filter
 
-    assert matches_sla(availability, "met") is expected
+    normalized = " ".join(SITE_FACTS_CTE.lower().split())
+    assert "monthly_facts" in normalized
+    assert "overall_target_status" in normalized
+    assert "{target_status_filter}" in SITE_FACTS_CTE
+    assert _target_sql_filter("achieved") == "AND overall_target_status = 'achieved'"
+    assert _target_sql_filter("not_achieved") == "AND overall_target_status = 'not_achieved'"
+    assert _target_sql_filter("unavailable") == "AND overall_target_status = 'unavailable'"
+
+
+def test_period_row_displays_latest_effective_target_but_keeps_monthly_statuses():
+    from services.reporting_drilldown import SITE_FACTS_CTE
+
+    normalized = " ".join(SITE_FACTS_CTE.lower().split())
+    assert "array_agg(availability_target order by trx_month desc)" in normalized
+    assert "array_agg(payload_target_tb order by trx_month desc)" in normalized
+    assert "bool_and(overall_target_status = 'achieved')" in normalized
+
+
+def test_every_selected_month_is_evaluated_and_missing_performance_is_unavailable():
+    from services.reporting_drilldown import SITE_FACTS_CTE
+
+    normalized = " ".join(SITE_FACTS_CTE.lower().split())
+    assert "generate_series(" in normalized
+    assert "from active_sites s cross join active_months m" in normalized
+    assert "when revenue is null" in normalized
+    assert "when payload is null" in normalized
 
 
 class _Rows:
@@ -82,6 +126,13 @@ class FakeSiteSession:
                         "previous_payload": 8,
                         "total_time_minutes": 1000,
                         "outage_minutes": 30,
+                        "availability_target": None,
+                        "availability_target_status": "unavailable",
+                        "revenue_band": "u30",
+                        "revenue_target_status": "not_achieved",
+                        "payload_target_tb": 15,
+                        "payload_target_status": "not_achieved",
+                        "overall_target_status": "unavailable",
                         "total_count": 1,
                     }
                 ]
@@ -111,4 +162,7 @@ async def test_unmapped_drilldown_returns_performance_site_without_master_fields
     assert result.items[0].site_id == "ZZZ001"
     assert result.items[0].site_class is None
     assert result.items[0].avg_availability == pytest.approx(97.0)
-    assert result.items[0].sla_status == "missed"
+    assert result.items[0].availability_target_status == "unavailable"
+    assert result.items[0].revenue_band == "u30"
+    assert result.items[0].payload_target_status == "not_achieved"
+    assert result.items[0].overall_target_status == "unavailable"

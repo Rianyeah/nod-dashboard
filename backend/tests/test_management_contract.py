@@ -28,6 +28,19 @@ def test_non_inap_schema_adds_nullable_location_columns_idempotently():
     assert "ADD COLUMN IF NOT EXISTS kabupaten TEXT" in schema
 
 
+def test_management_router_exposes_allowlisted_reporting_configuration_routes():
+    source = (BACKEND / "routers" / "management_data.py").read_text(encoding="utf-8")
+
+    for route in (
+        '"/reporting-thresholds"',
+        '"/reporting-thresholds/{effective_month}"',
+        '"/reporting-revenue-targets"',
+        '"/reporting-revenue-targets/{nop}/{trx_month}"',
+    ):
+        assert route in source
+    assert source.count('require_permission("management_data:write")') >= 8
+
+
 def test_takeover_ranking_unions_fault_center_and_non_inap_by_type():
     source = (BACKEND / "routers" / "ticketing.py").read_text(encoding="utf-8")
     model = (BACKEND / "models" / "ticketing.py").read_text(encoding="utf-8")

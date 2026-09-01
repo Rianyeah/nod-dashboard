@@ -24,6 +24,7 @@ from queries.reporting_foundation import (
     load_revenue_target,
 )
 from services.reporting_availability import AVAILABILITY_FACTS_CTES
+from services.reporting_thresholds import resolve_threshold_snapshot
 
 
 AVAILABILITY_SLA = 99.5
@@ -105,6 +106,8 @@ previous_facts AS (
 SELECT
     'regional' AS scope,
     COUNT(DISTINCT site_key)::bigint AS total_sites,
+    COUNT(DISTINCT site_key) FILTER (WHERE site_key LIKE 'EPM%')::bigint AS epm_sites,
+    COUNT(DISTINCT site_key) FILTER (WHERE site_key NOT LIKE 'EPM%')::bigint AS non_epm_sites,
     COALESCE(SUM(revenue), 0)::bigint AS revenue,
     COALESCE(SUM(payload), 0)::bigint AS payload,
     COALESCE(SUM(total_time_minutes), 0)::double precision AS total_time_minutes,
@@ -114,6 +117,8 @@ UNION ALL
 SELECT
     'selected',
     COUNT(DISTINCT site_key)::bigint,
+    COUNT(DISTINCT site_key) FILTER (WHERE site_key LIKE 'EPM%')::bigint,
+    COUNT(DISTINCT site_key) FILTER (WHERE site_key NOT LIKE 'EPM%')::bigint,
     COALESCE(SUM(revenue), 0)::bigint,
     COALESCE(SUM(payload), 0)::bigint,
     COALESCE(SUM(total_time_minutes), 0)::double precision,
@@ -124,6 +129,8 @@ UNION ALL
 SELECT
     'previous',
     COUNT(DISTINCT site_key)::bigint,
+    COUNT(DISTINCT site_key) FILTER (WHERE site_key LIKE 'EPM%')::bigint,
+    COUNT(DISTINCT site_key) FILTER (WHERE site_key NOT LIKE 'EPM%')::bigint,
     COALESCE(SUM(revenue), 0)::bigint,
     COALESCE(SUM(payload), 0)::bigint,
     COALESCE(SUM(total_time_minutes), 0)::double precision,
@@ -131,6 +138,34 @@ SELECT
 FROM previous_facts
 WHERE CAST(:nop_key AS text) IS NULL OR nop_key = :nop_key
 """.format(availability_facts_ctes=AVAILABILITY_FACTS_CTES)
+
+
+OVERVIEW_YTD_QUERY = """
+/* reporting_ytd_aggregates */
+WITH master AS (
+    SELECT DISTINCT ON (UPPER(TRIM(d."Siteid")))
+        UPPER(TRIM(d."Siteid")) AS site_key,
+        REGEXP_REPLACE(UPPER(TRIM(d."NOP")), '^NOP[[:space:]]+', '') AS nop_key
+    FROM public.data_site_master d
+    WHERE NULLIF(TRIM(d."Siteid"), '') IS NOT NULL
+    ORDER BY UPPER(TRIM(d."Siteid")), d.row_number DESC NULLS LAST
+), ytd AS (
+    SELECT
+        UPPER(TRIM(t.site_id)) AS site_key,
+        SUM(COALESCE(t.rev, 0)) AS revenue,
+        SUM(COALESCE(t.payload, 0)) AS payload
+    FROM public.traktor_data t
+    WHERE t.trx_month BETWEEN :year_start AND :period_end
+      AND NULLIF(TRIM(t.site_id), '') IS NOT NULL
+    GROUP BY 1
+)
+SELECT
+    COALESCE(SUM(y.revenue), 0)::bigint AS revenue_ytd,
+    COALESCE(SUM(y.payload), 0)::bigint AS payload_ytd
+FROM ytd y
+LEFT JOIN master m ON m.site_key = y.site_key
+WHERE CAST(:nop_key AS text) IS NULL OR m.nop_key = :nop_key
+"""
 
 
 TREND_QUERY = """
@@ -274,6 +309,27 @@ FROM public.reporting_revenue_targets t
 LEFT JOIN refresh r ON r.source_key = 'reporting_revenue_targets'
 WHERE (CAST(:nop_key AS text) IS NOT NULL AND t.nop_key = :nop_key)
   AND t.trx_month BETWEEN :period_start AND :period_end
+UNION ALL
+SELECT
+    'reporting_metric_thresholds',
+    MAX(t.effective_month),
+    COUNT(*)::bigint,
+    NULL::bigint,
+    NULL::bigint,
+    CASE WHEN COUNT(DISTINCT (t.metric, t.threshold_key, t.site_class)) >= 8 THEN
+        ARRAY(
+            SELECT TO_CHAR(month_value, 'YYYY-MM')
+            FROM GENERATE_SERIES(
+                TO_DATE(:period_start, 'YYYY-MM'),
+                TO_DATE(:period_end, 'YYYY-MM'),
+                INTERVAL '1 month'
+            ) AS month_series(month_value)
+        )
+    ELSE ARRAY[]::text[] END,
+    MAX(r.last_refreshed_at)
+FROM public.reporting_metric_thresholds t
+LEFT JOIN refresh r ON r.source_key = 'reporting_metric_thresholds'
+WHERE t.effective_month <= :period_end
 """.format(availability_facts_ctes=AVAILABILITY_FACTS_CTES)
 
 
@@ -284,6 +340,7 @@ SOURCE_LABELS = {
     "proker_enom_jatim_2026": "Proker",
     "data_site_master": "Site Master",
     "reporting_revenue_targets": "Revenue Target",
+    "reporting_metric_thresholds": "Performance Threshold",
 }
 
 
@@ -502,6 +559,13 @@ def _continuing_availability_decline(trend: list) -> bool:
     return len(values) == 3 and values[0] > values[1] > values[2]
 
 
+def availability_insight_severity(value: float | None, trend: list) -> str:
+    """Classify insight urgency without applying one global site-class SLA."""
+    if value is None:
+        return "unavailable"
+    return "warning" if _continuing_availability_decline(trend) else "success"
+
+
 def build_reporting_overview(
     *,
     selected: dict,
@@ -512,6 +576,8 @@ def build_reporting_overview(
     period_meta,
     coverage: list,
     trend: list,
+    ytd: dict | None = None,
+    thresholds=None,
 ) -> ReportingOverview:
     """Build the typed response from independently aggregated numeric facts."""
     selected_revenue = int(_number(selected, "revenue"))
@@ -524,6 +590,7 @@ def build_reporting_overview(
     previous_availability = _availability_from(previous)
     regional_availability = _availability_from(regional)
     is_regional = scope_label == "Regional Jatim"
+    ytd = ytd or {}
 
     revenue_contribution = 100.0 if is_regional and regional_revenue else safe_share(
         selected_revenue, regional_revenue
@@ -547,20 +614,18 @@ def build_reporting_overview(
     if target.complete:
         revenue_severity = "success" if selected_revenue >= target.target_revenue else "warning"
 
-    availability_severity = "unavailable"
-    if selected_availability is not None:
-        availability_severity = (
-            "warning"
-            if selected_availability < AVAILABILITY_SLA or _continuing_availability_decline(trend)
-            else "success"
-        )
+    availability_severity = availability_insight_severity(selected_availability, trend)
 
     return ReportingOverview(
         scope_label=scope_label,
         scorecards=ReportingOverviewScorecards(
             total_sites=int(selected.get("total_sites") or 0),
+            epm_sites=int(selected.get("epm_sites") or 0),
+            non_epm_sites=int(selected.get("non_epm_sites") or 0),
             total_revenue=selected_revenue,
             total_payload=selected_payload,
+            revenue_ytd=int(ytd.get("revenue_ytd") or 0),
+            payload_ytd=int(ytd.get("payload_ytd") or 0),
             avg_availability=selected_availability,
         ),
         revenue=ReportingRevenueFact(
@@ -603,6 +668,7 @@ def build_reporting_overview(
             contribution=availability_contribution,
             severity=availability_severity,
         ),
+        thresholds=thresholds,
         coverage=coverage,
         trend=trend,
         period_meta=period_meta,
@@ -671,15 +737,28 @@ async def load_reporting_overview(session, period, nop: str | None) -> Reporting
         period_start=period.period_start,
         period_end=period.period_end,
     )
+    thresholds = await resolve_threshold_snapshot(session, period.period_end)
     scope_rows = _row_dicts(await session.execute(text(SCOPE_AGGREGATES_QUERY), params))
     scopes = {str(row["scope"]): row for row in scope_rows}
     zero_scope = {
         "total_sites": 0,
+        "epm_sites": 0,
+        "non_epm_sites": 0,
         "revenue": 0,
         "payload": 0,
         "total_time_minutes": 0,
         "outage_minutes": 0,
     }
+    ytd_rows = _row_dicts(
+        await session.execute(
+            text(OVERVIEW_YTD_QUERY),
+            {
+                **params,
+                "year_start": f"{period.period_end[:4]}-01",
+            },
+        )
+    )
+    ytd = ytd_rows[0] if ytd_rows else {"revenue_ytd": 0, "payload_ytd": 0}
     trend_rows = _row_dicts(await session.execute(text(TREND_QUERY), params))
     trend = [RevenueTrendItem(**row) for row in trend_rows]
     coverage_rows = _row_dicts(await session.execute(text(COVERAGE_QUERY), params))
@@ -701,6 +780,8 @@ async def load_reporting_overview(session, period, nop: str | None) -> Reporting
         period_meta=period_meta,
         coverage=coverage,
         trend=trend,
+        ytd=ytd,
+        thresholds=thresholds,
     )
 
 

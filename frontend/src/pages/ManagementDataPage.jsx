@@ -8,6 +8,7 @@ import {
   LoaderCircle,
   RefreshCw,
   ShieldCheck,
+  SlidersHorizontal,
   Trash2,
   Upload,
   Users,
@@ -45,10 +46,12 @@ import {
   validateManagementImport,
 } from '../services/api';
 import { formatNumber } from '../utils/formatters';
+import ReportingThresholdConfiguration from '../features/management-data/ReportingThresholdConfiguration';
 
 const TABS = [
   { key: 'imports', label: 'Imports', icon: FileSpreadsheet },
   { key: 'aliases', label: 'PIC Aliases', icon: KeyRound },
+  { key: 'thresholds', label: 'Threshold Configuration', icon: SlidersHorizontal },
   { key: 'users', label: 'Users & Roles', icon: Users, permission: 'users:manage' },
 ];
 
@@ -421,6 +424,7 @@ export default function ManagementDataPage() {
         {loading ? <div className="glass-card flex min-h-56 items-center justify-center text-sm text-[var(--text-muted)]"><LoaderCircle className="mr-2 size-4 animate-spin" /> Memuat data...</div> : null}
         {!loading && activeTab === 'imports' ? <ImportsPanel targets={targets} history={history} onRefresh={refreshImports} /> : null}
         {!loading && activeTab === 'aliases' ? <AliasesPanel aliases={aliases} onRefresh={refreshAliases} /> : null}
+        {!loading && activeTab === 'thresholds' ? <ReportingThresholdConfiguration /> : null}
         {!loading && activeTab === 'users' && hasPermission('users:manage') ? <UsersPanel users={users} onRefresh={refreshUsers} /> : null}
       </div>
     </main>

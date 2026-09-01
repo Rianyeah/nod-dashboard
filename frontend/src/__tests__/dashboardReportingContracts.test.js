@@ -58,7 +58,7 @@ describe('dashboard and reporting visual/data contracts', () => {
     const page = src('pages', 'NetworkReportingPage.jsx');
     const chartConfig = src('features', 'reporting', 'reportingChartConfig.js');
 
-    for (const component of ['ReportingCoverageStrip', 'ReportingExecutiveInsights', 'ReportingPerformanceTrend', 'ReportingAreaTable', 'ReportingPivot', 'ReportingSiteDrilldown']) {
+    for (const component of ['ReportingScorecards', 'ReportingCoverageStrip', 'ReportingExecutiveInsights', 'ReportingPerformanceTrend', 'ReportingAreaTable', 'ReportingPivot', 'ReportingSiteDrilldown']) {
       assert.match(page, new RegExp(component));
     }
     assert.match(chartConfig, /Revenue/);
@@ -75,11 +75,12 @@ describe('dashboard and reporting visual/data contracts', () => {
     for (const contract of ['last_refreshed_at', 'latest_data_period', 'missing_periods', 'Revenue', 'Availability', 'Payload', 'contribution_pct', 'difference_pp', 'outage']) {
       assert.match(feature, new RegExp(contract));
     }
+    assert.match(coverage, /source\.mapped_sites != null && source\.total_sites != null/);
     assert.doesNotMatch(feature, /Auto-generated|\bAI\b|kapasitas|headroom|saturation/i);
     assert.doesNotMatch(feature, /REVENUE_TARGET/);
   });
 
-  it('supports Kabupaten to site drill-down, ranking, SLA, site class, and mobile cards', () => {
+  it('supports all-header Kabupaten and site sorting with Target Achieved filtering', () => {
     const areaTable = src('features', 'reporting', 'ReportingAreaTable.jsx');
     const drilldown = src('features', 'reporting', 'ReportingSiteDrilldown.jsx');
 
@@ -89,7 +90,21 @@ describe('dashboard and reporting visual/data contracts', () => {
     assert.match(drilldown, /reporting-site-class/);
     assert.match(drilldown, /data-\[side=right\]:w-full data-\[side=right\]:sm:max-w-4xl/);
     assert.match(drilldown, /site_class/);
-    assert.match(drilldown, /sla_status/);
+    assert.match(drilldown, /Target Achieved/);
+    for (const status of ['all', 'achieved', 'not_achieved', 'unavailable']) {
+      assert.match(drilldown, new RegExp(`value: '${status}'`));
+    }
+    assert.doesNotMatch(`${areaTable}\n${drilldown}`, /SlaBadge|sla_status|reporting-rank-metric|reporting-site-sort/);
+    for (const field of ['traffic', 'ticket_backup', 'proker']) {
+      assert.match(areaTable, new RegExp(`SortHeader field="${field}"`));
+    }
+    assert.match(areaTable, /const handleSort = \(field\) => \{[\s\S]*setRank\('all'\)/);
+    assert.match(areaTable, /const handleRank = \(value\)/);
+    assert.match(drilldown, /const handleSort = \(field\) => setQuery\([\s\S]*rank: 'all'/);
+    assert.match(drilldown, /const handleRank = \(value\)/);
+    for (const field of ['site_id', 'site_class', 'status_site', 'revenue', 'revenue_mom', 'payload', 'payload_mom', 'availability']) {
+      assert.match(drilldown, new RegExp(`SortHeader field="${field}"`));
+    }
     assert.match(drilldown, /md:hidden/);
     assert.match(drilldown, /fetchReportingSites/);
   });
@@ -105,6 +120,8 @@ describe('dashboard and reporting visual/data contracts', () => {
     assert.match(pivot, /Terapkan Pivot/);
     assert.match(state, /Maksimal 2 baris, 1 kolom, dan 3 nilai/);
     assert.match(pivot, /pivot_too_large/);
+    assert.match(pivot, /PivotSortHeader/);
+    assert.match(state, /sortPivotRows/);
   });
 
   it('adds a print-to-PDF export action for the reporting page', () => {
@@ -293,5 +310,20 @@ describe('dashboard and reporting visual/data contracts', () => {
     assert.doesNotMatch(`${page}\n${trend}`, /shadow-\[0_0_|blur-sm/);
     assert.match(trend, /DashboardChartPanel/);
     assert.match(`${trend}\n${chartConfig}`, /reportingChartConfig/);
+  });
+
+  it('restores the approved scorecard hierarchy, insight panel, and smooth trend', () => {
+    const scorecards = src('features', 'reporting', 'ReportingScorecards.jsx');
+    const insights = src('features', 'reporting', 'ReportingExecutiveInsights.jsx');
+    const trend = src('features', 'reporting', 'ReportingPerformanceTrend.jsx');
+
+    assert.match(scorecards, /EPM/);
+    assert.match(scorecards, /Site \(non EPM\)/);
+    assert.match(scorecards, /YTD/);
+    assert.match(scorecards, /Kontribusi NOP/);
+    assert.match(insights, /Executive Insight/);
+    assert.doesNotMatch(insights, /Auto-generated|AI generated/i);
+    assert.match(trend, /type="monotone"/);
+    assert.match(trend, /linearGradient/);
   });
 });

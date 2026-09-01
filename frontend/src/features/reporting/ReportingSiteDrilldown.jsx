@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Search, Server } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Search, Server } from 'lucide-react';
 
 import { DashboardCombobox } from '../../components/dashboard-filters/DashboardFilters.jsx';
 import {
@@ -13,20 +13,24 @@ import { fetchReportingSites } from '../../services/api.js';
 import { formatPayload, formatPercent, formatRevenueShort } from '../../utils/formatters.js';
 
 
-const SORT_OPTIONS = [
-  { value: 'revenue', label: 'Revenue' },
-  { value: 'payload', label: 'Payload' },
-  { value: 'availability', label: 'Availability' },
-  { value: 'revenue_mom', label: 'Revenue MoM' },
-  { value: 'payload_mom', label: 'Payload MoM' },
-  { value: 'site_id', label: 'Site ID' },
+const TARGET_STATUS_OPTIONS = [
+  { value: 'all', label: 'Semua status' },
+  { value: 'achieved', label: 'Achieved' },
+  { value: 'not_achieved', label: 'Not achieved' },
+  { value: 'unavailable', label: 'Data belum lengkap' },
 ];
-const SLA_OPTIONS = [
-  { value: 'all', label: 'Semua SLA' },
-  { value: 'met', label: 'SLA tercapai' },
-  { value: 'missed', label: 'SLA tidak tercapai' },
-  { value: 'unavailable', label: 'Tanpa data' },
-];
+
+
+function SortHeader({ field, label, active, direction, onSort, align = 'right' }) {
+  const Icon = direction === 'asc' ? ArrowUp : ArrowDown;
+  return (
+    <th className={`bg-[var(--bg-elevated)] px-3 py-2 ${align === 'left' ? 'text-left' : 'text-right'} whitespace-nowrap text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]`}>
+      <button type="button" onClick={() => onSort(field)} className="inline-flex items-center gap-1 hover:text-[var(--text-primary)]">
+        {label}{active ? <Icon className="size-3" /> : null}
+      </button>
+    </th>
+  );
+}
 
 
 function SiteRow({ item, onOpenSite, mobile = false }) {
@@ -35,14 +39,13 @@ function SiteRow({ item, onOpenSite, mobile = false }) {
       <button type="button" onClick={() => onOpenSite(item.site_id)} className="block w-full px-4 py-3 text-left hover:bg-[var(--bg-hover)]">
         <div className="flex items-start justify-between gap-3">
           <div><strong className="text-sm text-[var(--text-primary)]">{item.site_id}</strong><p className="text-xs text-[var(--text-muted)]">{item.site_name || 'Nama site belum terpetakan'}</p></div>
-          <span className={`rounded-md px-2 py-0.5 text-[10px] font-semibold ${item.sla_status === 'met' ? 'bg-[var(--success)]/10 text-[var(--success)]' : item.sla_status === 'missed' ? 'bg-[var(--warning)]/10 text-[var(--warning)]' : 'bg-[var(--surface-soft)] text-[var(--text-muted)]'}`}>{item.sla_status === 'met' ? 'SLA' : item.sla_status === 'missed' ? 'Miss' : 'N/A'}</span>
         </div>
         <div className="mt-3 grid grid-cols-3 gap-2 text-[11px]">
           <span><small className="block text-[var(--text-muted)]">Revenue</small>{formatRevenueShort(item.revenue)}</span>
           <span><small className="block text-[var(--text-muted)]">Payload</small>{formatPayload(item.payload)}</span>
           <span><small className="block text-[var(--text-muted)]">Availability</small>{formatPercent(item.avg_availability)}</span>
         </div>
-        <p className="mt-2 text-[10px] text-[var(--text-muted)]">{item.site_class || 'Site Class belum tersedia'} · {item.status_site || 'Status belum tersedia'} · {item.transport_type || 'Transport belum tersedia'}</p>
+        <p className="mt-2 text-[10px] text-[var(--text-muted)]">{item.site_class || 'Site Class belum tersedia'} / {item.status_site || 'Status belum tersedia'} / {item.transport_type || 'Transport belum tersedia'}</p>
       </button>
     );
   }
@@ -62,7 +65,7 @@ function SiteRow({ item, onOpenSite, mobile = false }) {
 
 
 export default function ReportingSiteDrilldown({ area, open, onOpenChange, period, nop, onOpenSite }) {
-  const [query, setQuery] = useState({ page: 1, page_size: 25, sort_by: 'revenue', sort_dir: 'desc', rank: 'all', rank_limit: 10, rank_metric: 'revenue', sla: 'all', site_class: '', q: '' });
+  const [query, setQuery] = useState({ page: 1, page_size: 25, sort_by: 'revenue', sort_dir: 'desc', rank: 'all', rank_limit: 10, rank_metric: 'revenue', target_status: 'all', site_class: '', q: '' });
   const [requestState, setRequestState] = useState({ requestKey: '', result: null, error: '' });
   const requestQuery = useMemo(() => ({
     ...query,
@@ -90,6 +93,20 @@ export default function ReportingSiteDrilldown({ area, open, onOpenChange, perio
   }, [area, nop, period, requestKey, requestQuery]);
 
   const update = (key, value) => setQuery((current) => ({ ...current, [key]: value, page: 1 }));
+  const handleSort = (field) => setQuery((current) => ({
+    ...current,
+    sort_by: field,
+    sort_dir: current.sort_by === field && current.sort_dir === 'desc' ? 'asc' : 'desc',
+    rank_metric: field,
+    rank: 'all',
+    page: 1,
+  }));
+  const handleRank = (value) => setQuery((current) => ({
+    ...current,
+    rank: value,
+    sort_dir: value === 'bottom' ? 'asc' : value === 'top' ? 'desc' : current.sort_dir,
+    page: 1,
+  }));
   const totalPages = Math.max(1, Math.ceil(Number(result?.total || 0) / Number(result?.page_size || 25)));
 
   return (
@@ -99,13 +116,12 @@ export default function ReportingSiteDrilldown({ area, open, onOpenChange, perio
           <SheetTitle className="flex items-center gap-2"><Server className="size-4 text-[var(--primary-light)]" />{area?.kabupaten || 'Detail site'}</SheetTitle>
           <SheetDescription>{result ? `${Number(result.total).toLocaleString('id-ID')} site sesuai filter` : 'Kabupaten ke site'}</SheetDescription>
         </SheetHeader>
-        <div className="reporting-no-print grid gap-2 border-b border-[var(--border)] p-4 sm:grid-cols-2 xl:grid-cols-4">
-          <label className="relative sm:col-span-2 xl:col-span-1"><span className="mb-1 block text-[10px] font-semibold text-[var(--text-muted)]">Cari site</span><Search className="absolute bottom-2.5 left-3 size-3.5 text-[var(--text-muted)]" /><input value={query.q} onChange={(event) => update('q', event.target.value)} placeholder="Site ID atau nama" className="h-9 w-full rounded-lg border border-[var(--border)] bg-[var(--surface-soft)] pl-9 pr-3 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--primary)]" /></label>
-          <DashboardCombobox id="reporting-site-sort" label="Urutkan" value={query.sort_by} onChange={(value) => setQuery((current) => ({ ...current, sort_by: value, rank_metric: value, page: 1 }))} options={SORT_OPTIONS} />
-          <DashboardCombobox id="reporting-site-sla" label="SLA" value={query.sla} onChange={(value) => update('sla', value)} options={SLA_OPTIONS} />
+        <div className="reporting-no-print grid gap-2 border-b border-[var(--border)] p-4 sm:grid-cols-2 xl:grid-cols-3">
+          <label className="relative"><span className="mb-1 block text-[10px] font-semibold text-[var(--text-muted)]">Cari site</span><Search className="absolute bottom-2.5 left-3 size-3.5 text-[var(--text-muted)]" /><input value={query.q} onChange={(event) => update('q', event.target.value)} placeholder="Site ID atau nama" className="h-9 w-full rounded-lg border border-[var(--border)] bg-[var(--surface-soft)] pl-9 pr-3 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--primary)]" /></label>
+          <DashboardCombobox id="reporting-site-target" label="Target Achieved" value={query.target_status} onChange={(value) => update('target_status', value)} options={TARGET_STATUS_OPTIONS} />
           <DashboardCombobox id="reporting-site-class" label="Site Class" value={query.site_class} onChange={(value) => update('site_class', value)} options={(result?.site_classes || []).map((value) => ({ value, label: value }))} allLabel="Semua Class" />
-          <div className="flex items-end gap-1 sm:col-span-2 xl:col-span-4">
-            {['all', 'top', 'bottom'].map((value) => <button key={value} type="button" onClick={() => update('rank', value)} className={`rounded-md border px-3 py-1.5 text-[11px] font-semibold ${query.rank === value ? 'border-[var(--primary)]/30 bg-[var(--primary)]/15 text-[var(--primary-light)]' : 'border-[var(--border)] text-[var(--text-muted)]'}`}>{value === 'all' ? 'Semua' : value === 'top' ? 'Top 10' : 'Bottom 10'}</button>)}
+          <div className="flex items-end gap-1 sm:col-span-2 xl:col-span-3">
+            {['all', 'top', 'bottom'].map((value) => <button key={value} type="button" onClick={() => handleRank(value)} className={`rounded-md border px-3 py-1.5 text-[11px] font-semibold ${query.rank === value ? 'border-[var(--primary)]/30 bg-[var(--primary)]/15 text-[var(--primary-light)]' : 'border-[var(--border)] text-[var(--text-muted)]'}`}>{value === 'all' ? 'Semua' : value === 'top' ? 'Top 10' : 'Bottom 10'}</button>)}
           </div>
         </div>
 
@@ -115,7 +131,16 @@ export default function ReportingSiteDrilldown({ area, open, onOpenChange, perio
             <>
               <div className="hidden overflow-x-auto md:block">
                 <table className="min-w-[940px] w-full text-xs">
-                  <thead><tr className="bg-[var(--bg-elevated)] text-[10px] uppercase tracking-wider text-[var(--text-muted)]"><th className="px-3 py-2 text-left">Site</th><th className="px-3 py-2 text-left">Class</th><th className="px-3 py-2 text-left">Status</th><th className="px-3 py-2 text-right">Revenue</th><th className="px-3 py-2 text-right">MoM</th><th className="px-3 py-2 text-right">Payload</th><th className="px-3 py-2 text-right">MoM</th><th className="px-3 py-2 text-right">Availability</th></tr></thead>
+                  <thead><tr>
+                    <SortHeader field="site_id" label="Site" active={query.sort_by === 'site_id'} direction={query.sort_dir} onSort={handleSort} align="left" />
+                    <SortHeader field="site_class" label="Class" active={query.sort_by === 'site_class'} direction={query.sort_dir} onSort={handleSort} align="left" />
+                    <SortHeader field="status_site" label="Status" active={query.sort_by === 'status_site'} direction={query.sort_dir} onSort={handleSort} align="left" />
+                    <SortHeader field="revenue" label="Revenue" active={query.sort_by === 'revenue'} direction={query.sort_dir} onSort={handleSort} />
+                    <SortHeader field="revenue_mom" label="Revenue MoM" active={query.sort_by === 'revenue_mom'} direction={query.sort_dir} onSort={handleSort} />
+                    <SortHeader field="payload" label="Payload" active={query.sort_by === 'payload'} direction={query.sort_dir} onSort={handleSort} />
+                    <SortHeader field="payload_mom" label="Payload MoM" active={query.sort_by === 'payload_mom'} direction={query.sort_dir} onSort={handleSort} />
+                    <SortHeader field="availability" label="Availability" active={query.sort_by === 'availability'} direction={query.sort_dir} onSort={handleSort} />
+                  </tr></thead>
                   <tbody className="divide-y divide-[var(--border)]">{result.items.map((item) => <SiteRow key={item.site_id} item={item} onOpenSite={onOpenSite} />)}</tbody>
                 </table>
               </div>

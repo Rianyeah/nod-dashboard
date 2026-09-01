@@ -29,14 +29,29 @@ class _QueryResult:
 class FakeOverviewSession:
     async def execute(self, query, params=None):
         sql = str(query)
+        if "reporting_metric_thresholds" in sql and "DISTINCT ON" in sql:
+            return _QueryResult(
+                [
+                    {"metric": "availability", "threshold_key": "target", "site_class": "DIAMOND", "threshold_value": 99.87, "effective_month": "2026-01", "updated_by": "admin", "updated_at": "2026-01-01T00:00:00+00:00"},
+                    {"metric": "availability", "threshold_key": "target", "site_class": "PLATINUM", "threshold_value": 99.73, "effective_month": "2026-01", "updated_by": "admin", "updated_at": "2026-01-01T00:00:00+00:00"},
+                    {"metric": "availability", "threshold_key": "target", "site_class": "GOLD", "threshold_value": 99.68, "effective_month": "2026-01", "updated_by": "admin", "updated_at": "2026-01-01T00:00:00+00:00"},
+                    {"metric": "availability", "threshold_key": "target", "site_class": "SILVER", "threshold_value": 99.67, "effective_month": "2026-01", "updated_by": "admin", "updated_at": "2026-01-01T00:00:00+00:00"},
+                    {"metric": "availability", "threshold_key": "target", "site_class": "BRONZE", "threshold_value": 99.73, "effective_month": "2026-01", "updated_by": "admin", "updated_at": "2026-01-01T00:00:00+00:00"},
+                    {"metric": "revenue", "threshold_key": "u30_upper", "site_class": "*", "threshold_value": 30_000_000, "effective_month": "2026-01", "updated_by": "admin", "updated_at": "2026-01-01T00:00:00+00:00"},
+                    {"metric": "revenue", "threshold_key": "u60_upper", "site_class": "*", "threshold_value": 60_000_000, "effective_month": "2026-01", "updated_by": "admin", "updated_at": "2026-01-01T00:00:00+00:00"},
+                    {"metric": "payload", "threshold_key": "target", "site_class": "*", "threshold_value": 15, "effective_month": "2026-01", "updated_by": "admin", "updated_at": "2026-01-01T00:00:00+00:00"},
+                ]
+            )
         if "reporting_scope_aggregates" in sql:
             return _QueryResult(
                 [
-                    {"scope": "regional", "total_sites": 3, "revenue": 400, "payload": 40, "total_time_minutes": 3000, "outage_minutes": 60},
-                    {"scope": "selected", "total_sites": 2, "revenue": 300, "payload": 30, "total_time_minutes": 2000, "outage_minutes": 30},
-                    {"scope": "previous", "total_sites": 2, "revenue": 250, "payload": 25, "total_time_minutes": 2000, "outage_minutes": 20},
+                    {"scope": "regional", "total_sites": 3, "epm_sites": 1, "non_epm_sites": 2, "revenue": 400, "payload": 40, "total_time_minutes": 3000, "outage_minutes": 60},
+                    {"scope": "selected", "total_sites": 2, "epm_sites": 1, "non_epm_sites": 1, "revenue": 300, "payload": 30, "total_time_minutes": 2000, "outage_minutes": 30},
+                    {"scope": "previous", "total_sites": 2, "epm_sites": 1, "non_epm_sites": 1, "revenue": 250, "payload": 25, "total_time_minutes": 2000, "outage_minutes": 20},
                 ]
             )
+        if "reporting_ytd_aggregates" in sql:
+            return _QueryResult([{"revenue_ytd": 900, "payload_ytd": 90}])
         if "reporting_trend" in sql:
             return _QueryResult(
                 [{"trx_month": "2026-07", "total_revenue": 300, "total_payload": 30, "total_traffic": 12, "avg_availability": 98.5}]
@@ -46,6 +61,7 @@ class FakeOverviewSession:
                 [
                     {"source_key": "traktor_data", "latest_data_period": "2026-07", "record_count": 3, "mapped_sites": 2, "total_sites": 3, "last_refreshed_at": None},
                     {"source_key": "site_month_metrics", "latest_data_period": "2026-07", "record_count": 3, "mapped_sites": 2, "total_sites": 3, "last_refreshed_at": None},
+                    {"source_key": "reporting_metric_thresholds", "latest_data_period": "2026-01", "record_count": 8, "mapped_sites": None, "total_sites": None, "available_periods": ["2026-07"], "last_refreshed_at": None},
                 ]
             )
         if "reporting_revenue_targets" in sql:
@@ -117,6 +133,12 @@ def test_reporting_queries_fall_back_to_raw_availability_for_missing_cache_rows(
         assert "availability_facts" in query
 
 
+def test_threshold_coverage_generates_scalar_month_values():
+    from services.reporting_overview import COVERAGE_QUERY
+
+    assert "AS month_series(month_value)" in COVERAGE_QUERY
+
+
 def test_safe_share_returns_none_for_missing_or_zero_regional_value():
     from services.reporting_overview import safe_share
 
@@ -138,6 +160,21 @@ def test_availability_contribution_uses_outage_share_and_percentage_point_differ
     assert contribution.regional_value == pytest.approx(98.0)
     assert contribution.difference_pp == pytest.approx(0.5)
     assert contribution.contribution_pct == pytest.approx(50.0)
+
+
+def test_availability_insight_severity_uses_trend_not_retired_global_sla():
+    from services.reporting_overview import availability_insight_severity
+
+    assert availability_insight_severity(98.5, []) == "success"
+    assert availability_insight_severity(
+        99.7,
+        [
+            {"avg_availability": 99.9},
+            {"avg_availability": 99.8},
+            {"avg_availability": 99.7},
+        ],
+    ) == "warning"
+    assert availability_insight_severity(None, []) == "unavailable"
 
 
 @pytest.mark.parametrize(
@@ -187,6 +224,8 @@ def test_overview_builder_uses_regional_baseline_and_complete_monthly_target():
     overview = build_reporting_overview(
         selected={
             "total_sites": 2,
+            "epm_sites": 1,
+            "non_epm_sites": 1,
             "revenue": 300,
             "payload": 30,
             "total_time_minutes": 2_000,
@@ -217,9 +256,14 @@ def test_overview_builder_uses_regional_baseline_and_complete_monthly_target():
         period_meta=build_period_meta(period, {"performance": ["2026-07"]}),
         coverage=[],
         trend=[],
+        ytd={"revenue_ytd": 900, "payload_ytd": 90},
     )
 
     assert overview.scorecards.total_sites == 2
+    assert overview.scorecards.epm_sites == 1
+    assert overview.scorecards.non_epm_sites == 1
+    assert overview.scorecards.revenue_ytd == 900
+    assert overview.scorecards.payload_ytd == 90
     assert overview.revenue.value == 300
     assert overview.revenue.contribution.contribution_pct == pytest.approx(75.0)
     assert overview.revenue.delta_pct == pytest.approx(20.0)
@@ -230,7 +274,7 @@ def test_overview_builder_uses_regional_baseline_and_complete_monthly_target():
     assert overview.availability.value == pytest.approx(98.5)
     assert overview.availability.contribution.difference_pp == pytest.approx(0.5)
     assert overview.availability.contribution.contribution_pct == pytest.approx(50.0)
-    assert overview.availability.severity == "warning"
+    assert overview.availability.severity == "success"
 
 
 @pytest.mark.asyncio
@@ -246,10 +290,27 @@ async def test_overview_loader_returns_typed_numeric_contract_from_one_scope_que
 
     assert overview.scope_label == "SIDOARJO"
     assert overview.scorecards.total_sites == 2
+    assert overview.scorecards.epm_sites == 1
+    assert overview.scorecards.non_epm_sites == 1
+    assert overview.scorecards.revenue_ytd == 900
+    assert overview.scorecards.payload_ytd == 90
+    assert overview.thresholds.complete is True
+    assert overview.thresholds.availability["DIAMOND"] == pytest.approx(99.87)
     assert overview.revenue.contribution.contribution_pct == pytest.approx(75.0)
     assert overview.availability.value == pytest.approx(98.5)
     assert overview.coverage[0].status == "complete"
     assert overview.coverage[0].latest_data_period == "2026-07"
+
+
+def test_overview_queries_keep_scorecard_breakdown_and_ytd_in_the_same_scope():
+    from services.reporting_overview import OVERVIEW_YTD_QUERY, SCOPE_AGGREGATES_QUERY
+
+    assert "LIKE 'EPM%'" in SCOPE_AGGREGATES_QUERY
+    assert "epm_sites" in SCOPE_AGGREGATES_QUERY
+    assert "non_epm_sites" in SCOPE_AGGREGATES_QUERY
+    assert "reporting_ytd_aggregates" in OVERVIEW_YTD_QUERY
+    assert ":year_start" in OVERVIEW_YTD_QUERY
+    assert ":period_end" in OVERVIEW_YTD_QUERY
 
 
 @pytest.mark.asyncio

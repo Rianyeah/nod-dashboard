@@ -13,6 +13,29 @@ function contributionPercent(value) {
   return Number.isFinite(number) ? `${number.toFixed(1).replace('.', ',')}%` : '-';
 }
 
+function nopLabel(scopeLabel) {
+  const normalized = String(scopeLabel || '').trim().replace(/^NOP\s+/i, '').toUpperCase();
+  return normalized ? `NOP ${normalized}` : 'NOP';
+}
+
+function availabilityTargetDetail(thresholds = {}) {
+  const values = Object.values(thresholds.availability || {})
+    .map(Number)
+    .filter(Number.isFinite);
+  if (!values.length) return 'Target availability Site Class belum tersedia.';
+  const minimum = Math.min(...values).toFixed(2).replace('.', ',');
+  const maximum = Math.max(...values).toFixed(2).replace('.', ',');
+  return minimum === maximum
+    ? `Target availability Site Class ${minimum}%.`
+    : `Target availability Site Class ${minimum}%-${maximum}%.`;
+}
+
+function payloadTargetDetail(thresholds = {}) {
+  const value = Number(thresholds.payload_target_tb);
+  if (!Number.isFinite(value)) return 'Target payload site belum tersedia.';
+  return `Target site ${String(value).replace('.', ',')} TB per bulan.`;
+}
+
 
 function targetDetail(target = {}) {
   if (!target.complete) {
@@ -32,6 +55,7 @@ export function buildReportingInsights(overview = {}, comparisonLabel = 'vs peri
   const revenue = overview.revenue || {};
   const availability = overview.availability || {};
   const payload = overview.payload || {};
+  const thresholds = overview.thresholds || {};
   const regionalLabel = 'Regional Jatim';
 
   return [
@@ -39,33 +63,37 @@ export function buildReportingInsights(overview = {}, comparisonLabel = 'vs peri
       key: 'revenue',
       label: 'Revenue',
       title: revenue.severity === 'success' ? 'Target tercapai' : revenue.severity === 'warning' ? 'Di bawah target' : 'Target belum tersedia',
-      summary: `${formatRevenue(revenue.value)} · ${formatSigned(revenue.delta_pct)} ${comparisonLabel}`,
+      summary: `${formatRevenue(revenue.value)} | ${formatSigned(revenue.delta_pct)} ${comparisonLabel}`,
       detail: targetDetail(revenue.target),
       contribution: regional
-        ? regionalLabel
-        : `${formatRevenue(revenue.value)} · ${contributionPercent(revenue.contribution?.contribution_pct)} dari ${regionalLabel}`,
+        ? null
+        : `Kontribusi ${nopLabel(overview.scope_label)} ${formatRevenue(revenue.value)} / ${contributionPercent(revenue.contribution?.contribution_pct)} pada ${regionalLabel}.`,
       tone: revenue.severity || 'unavailable',
     },
     {
       key: 'availability',
       label: 'Availability',
-      title: availability.severity === 'success' ? 'SLA tercapai' : availability.value == null ? 'Data belum tersedia' : 'Di bawah SLA',
-      summary: `${formatPercent(availability.value)} · ${formatSigned(availability.delta_pct, 2, ' pp')} ${comparisonLabel}`,
-      detail: availability.value == null ? 'Availability belum tersedia.' : 'SLA 99,50%.',
+      title: availability.value == null
+        ? 'Data belum tersedia'
+        : Number(availability.delta_pct) < 0 ? 'Availability menurun' : 'Availability terjaga',
+      summary: `${formatPercent(availability.value)} | ${formatSigned(availability.delta_pct, 2, ' pp')} ${comparisonLabel}`,
+      detail: availability.value == null ? 'Availability belum tersedia.' : availabilityTargetDetail(thresholds),
       contribution: regional
-        ? regionalLabel
-        : `${formatPercent(availability.value)} · ${formatSigned(availability.contribution?.difference_pp, 2, ' pp')} vs ${regionalLabel} · ${contributionPercent(availability.contribution?.contribution_pct)} outage`,
+        ? null
+        : `Kontribusi ${nopLabel(overview.scope_label)}: ${formatPercent(availability.value)}, ${formatSigned(availability.contribution?.difference_pp, 2, ' pp')} terhadap ${regionalLabel}; kontribusi outage ${contributionPercent(availability.contribution?.contribution_pct)}.`,
       tone: availability.severity || 'unavailable',
     },
     {
       key: 'payload',
       label: 'Payload',
-      title: payload.value == null ? 'Data belum tersedia' : 'Pergerakan payload',
-      summary: `${formatPayload(payload.value)} · ${formatSigned(payload.delta_pct)} ${comparisonLabel}`,
-      detail: null,
+      title: payload.value == null
+        ? 'Data belum tersedia'
+        : Number(payload.delta_pct) < 0 ? 'Payload menurun' : Number(payload.delta_pct) > 0 ? 'Payload meningkat' : 'Payload stabil',
+      summary: `${formatPayload(payload.value)} | ${formatSigned(payload.delta_pct)} ${comparisonLabel}`,
+      detail: payloadTargetDetail(thresholds),
       contribution: regional
-        ? regionalLabel
-        : `${formatPayload(payload.value)} · ${contributionPercent(payload.contribution?.contribution_pct)} dari ${regionalLabel}`,
+        ? null
+        : `Kontribusi ${nopLabel(overview.scope_label)} ${formatPayload(payload.value)} / ${contributionPercent(payload.contribution?.contribution_pct)} pada ${regionalLabel}.`,
       tone: payload.severity || 'info',
     },
   ];

@@ -53,14 +53,28 @@ function TrendTooltip({ active, payload, label }) {
 }
 
 
+function TrendLegend() {
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-3 text-[10px] text-[var(--text-muted)]" aria-label="Legenda Performance Trend">
+      {Object.entries(reportingChartConfig).map(([key, item]) => (
+        <span key={key} className="inline-flex items-center gap-1.5">
+          <span className="w-3 border-t-2" style={{ borderColor: item.color }} />
+          {item.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+
 export default function ReportingPerformanceTrend({ rows = [], selectedPeriod, themeTokens }) {
   const revenueDomain = useMemo(() => paddedDomain(rows, 'total_revenue'), [rows]);
   const payloadDomain = useMemo(() => paddedDomain(rows, 'total_payload'), [rows]);
   if (!rows.length) return null;
 
   return (
-    <DashboardChartPanel title="Performance Trend" icon={TrendingUp}>
-      <ResponsiveContainer width="100%" height={230}>
+    <DashboardChartPanel title="Performance Trend" icon={TrendingUp} action={<TrendLegend />}>
+      <ResponsiveContainer width="100%" height={250}>
         <ComposedChart data={rows} margin={{ top: 4, right: 58, left: 6, bottom: 0 }}>
           <defs>
             <linearGradient id="reportingRevenue" x1="0" y1="0" x2="0" y2="1">
@@ -79,9 +93,9 @@ export default function ReportingPerformanceTrend({ rows = [], selectedPeriod, t
           <YAxis yAxisId="payload" orientation="right" domain={payloadDomain} tickFormatter={(value) => formatPayload(value).replace(/\s/g, '')} tick={{ fontSize: 10, fill: themeTokens.axisTick }} width={42} tickLine={false} axisLine={false} />
           <YAxis yAxisId="availability" orientation="right" domain={['dataMin - 0.2', 100]} hide />
           <Tooltip content={<TrendTooltip />} />
-          <Area yAxisId="revenue" dataKey="total_revenue" stroke={reportingChartConfig.total_revenue.color} strokeWidth={2} fill="url(#reportingRevenue)" isAnimationActive={false} />
-          <Area yAxisId="payload" dataKey="total_payload" stroke={reportingChartConfig.total_payload.color} strokeWidth={2} fill="url(#reportingPayload)" isAnimationActive={false} />
-          <Line yAxisId="availability" dataKey="avg_availability" stroke={reportingChartConfig.avg_availability.color} strokeWidth={3} dot={{ r: 2 }} connectNulls isAnimationActive={false} />
+          <Area type="monotone" yAxisId="revenue" dataKey="total_revenue" stroke={reportingChartConfig.total_revenue.color} strokeWidth={2} strokeLinecap="round" fill="url(#reportingRevenue)" isAnimationActive={false} />
+          <Area type="monotone" yAxisId="payload" dataKey="total_payload" stroke={reportingChartConfig.total_payload.color} strokeWidth={2} strokeLinecap="round" fill="url(#reportingPayload)" isAnimationActive={false} />
+          <Line type="monotone" yAxisId="availability" dataKey="avg_availability" stroke={reportingChartConfig.avg_availability.color} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" dot={{ r: 2 }} activeDot={{ r: 4 }} connectNulls isAnimationActive={false} />
         </ComposedChart>
       </ResponsiveContainer>
     </DashboardChartPanel>

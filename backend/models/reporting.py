@@ -7,6 +7,7 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field, model_validator
 
 from models.period import MonthPeriodMeta
+from models.reporting_thresholds import ReportingThresholdSnapshot
 
 
 class ReportingScorecard(BaseModel):
@@ -138,8 +139,12 @@ class ReportingSourceCoverage(BaseModel):
 
 class ReportingOverviewScorecards(BaseModel):
     total_sites: int = 0
+    epm_sites: int = 0
+    non_epm_sites: int = 0
     total_revenue: int = 0
     total_payload: int = 0
+    revenue_ytd: int = 0
+    payload_ytd: int = 0
     avg_availability: float | None = None
 
 
@@ -183,6 +188,7 @@ class ReportingOverview(BaseModel):
     revenue: ReportingRevenueFact
     payload: ReportingMetricFact
     availability: ReportingMetricFact
+    thresholds: ReportingThresholdSnapshot | None = None
     coverage: list[ReportingSourceCoverage] = Field(default_factory=list)
     trend: list[RevenueTrendItem] = Field(default_factory=list)
     period_meta: MonthPeriodMeta
@@ -193,6 +199,9 @@ class ReportingSiteQuery(BaseModel):
     page_size: int = Field(default=25, ge=1, le=100)
     sort_by: Literal[
         "site_id",
+        "site_class",
+        "status_site",
+        "transport_type",
         "revenue",
         "payload",
         "availability",
@@ -203,9 +212,17 @@ class ReportingSiteQuery(BaseModel):
     rank: Literal["all", "top", "bottom"] = "all"
     rank_limit: int = Field(default=10, ge=1, le=100)
     rank_metric: Literal[
-        "revenue", "payload", "availability", "revenue_mom", "payload_mom"
+        "site_id",
+        "site_class",
+        "status_site",
+        "transport_type",
+        "revenue",
+        "payload",
+        "availability",
+        "revenue_mom",
+        "payload_mom",
     ] = "revenue"
-    sla: Literal["all", "met", "missed", "unavailable"] = "all"
+    target_status: Literal["all", "achieved", "not_achieved", "unavailable"] = "all"
     site_class: str | None = Field(default=None, max_length=80)
     q: str | None = Field(default=None, max_length=100)
 
@@ -227,6 +244,13 @@ class ReportingSiteRow(BaseModel):
     avg_availability: float | None = None
     outage_minutes: float = 0
     sla_status: Literal["met", "missed", "unavailable"]
+    availability_target: float | None = None
+    availability_target_status: Literal["achieved", "not_achieved", "unavailable"] = "unavailable"
+    revenue_band: Literal["u30", "u60", "achieved", "unavailable"] = "unavailable"
+    revenue_target_status: Literal["achieved", "not_achieved", "unavailable"] = "unavailable"
+    payload_target_tb: float | None = None
+    payload_target_status: Literal["achieved", "not_achieved", "unavailable"] = "unavailable"
+    overall_target_status: Literal["achieved", "not_achieved", "unavailable"] = "unavailable"
 
 
 class ReportingSitePage(BaseModel):

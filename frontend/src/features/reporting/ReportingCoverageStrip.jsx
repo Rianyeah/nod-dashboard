@@ -45,8 +45,8 @@ export default function ReportingCoverageStrip({ sources = [] }) {
               <strong className="text-xs text-[var(--text-primary)]">{source.label}</strong>
               <span>{source.record_count == null ? '-' : Number(source.record_count).toLocaleString('id-ID')} baris</span>
             </div>
-            {source.total_sites != null && (
-              <p><Database className="mr-1 inline size-3" />Mapping {Number(source.mapped_sites || 0).toLocaleString('id-ID')} / {Number(source.total_sites).toLocaleString('id-ID')} site</p>
+            {source.mapped_sites != null && source.total_sites != null && (
+              <p><Database className="mr-1 inline size-3" />Mapping {Number(source.mapped_sites).toLocaleString('id-ID')} / {Number(source.total_sites).toLocaleString('id-ID')} site</p>
             )}
             <p><Clock3 className="mr-1 inline size-3" />{formatRefresh(source.last_refreshed_at)}</p>
             {source.missing_periods?.length > 0 && <p className="text-[var(--warning)]">Kurang: {source.missing_periods.join(', ')}</p>}

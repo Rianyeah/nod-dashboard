@@ -9,6 +9,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import exc, text
 
 from database import async_session
+from models.reporting_thresholds import RevenueTargetInput, ThresholdVersionInput
+from periods import resolve_month_period
+from queries.reporting_foundation import canonical_nop
 from security import require_permission
 from services.management_imports import (
     TARGETS,
@@ -18,6 +21,12 @@ from services.management_imports import (
     normalize_pic_key,
     normalize_text,
     validate_import,
+)
+from services.reporting_thresholds import (
+    list_revenue_targets,
+    resolve_threshold_snapshot,
+    save_threshold_version,
+    upsert_revenue_target,
 )
 from user_store import AppUser, ROLES
 
@@ -45,6 +54,67 @@ class UserUpdateInput(BaseModel):
 @router.get("/targets")
 async def get_targets(_: AppUser = Depends(require_permission("management_data:write"))):
     return [dict(key=key, **definition) for key, definition in TARGETS.items()]
+
+
+@router.get("/reporting-thresholds")
+async def get_reporting_thresholds(
+    effective_month: str = Query(..., pattern=r"^[0-9]{4}-(0[1-9]|1[0-2])$"),
+    _: AppUser = Depends(require_permission("management_data:write")),
+):
+    month = resolve_month_period(
+        period_start=effective_month,
+        period_end=effective_month,
+    ).period_start
+    async with async_session() as session:
+        return await resolve_threshold_snapshot(session, month)
+
+
+@router.put("/reporting-thresholds/{effective_month}")
+async def put_reporting_thresholds(
+    effective_month: str,
+    payload: ThresholdVersionInput,
+    actor: AppUser = Depends(require_permission("management_data:write")),
+):
+    async with async_session() as session:
+        return await save_threshold_version(session, effective_month, payload, actor.username)
+
+
+@router.get("/reporting-revenue-targets")
+async def get_reporting_revenue_targets(
+    nop: str | None = Query(default=None, max_length=80),
+    month_from: str | None = Query(default=None, pattern=r"^[0-9]{4}-(0[1-9]|1[0-2])$"),
+    month_to: str | None = Query(default=None, pattern=r"^[0-9]{4}-(0[1-9]|1[0-2])$"),
+    limit: int = Query(default=100, ge=1, le=200),
+    _: AppUser = Depends(require_permission("management_data:write")),
+):
+    async with async_session() as session:
+        return await list_revenue_targets(
+            session,
+            nop=canonical_nop(nop),
+            month_from=month_from,
+            month_to=month_to,
+            limit=limit,
+        )
+
+
+@router.put("/reporting-revenue-targets/{nop}/{trx_month}")
+async def put_reporting_revenue_target(
+    nop: str,
+    trx_month: str,
+    payload: RevenueTargetInput,
+    actor: AppUser = Depends(require_permission("management_data:write")),
+):
+    async with async_session() as session:
+        try:
+            return await upsert_revenue_target(
+                session,
+                nop=nop,
+                trx_month=trx_month,
+                payload=payload,
+                actor=actor.username,
+            )
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
 
 
 @router.post("/imports/validate", status_code=status.HTTP_201_CREATED)

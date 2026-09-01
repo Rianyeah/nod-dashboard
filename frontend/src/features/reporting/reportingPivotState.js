@@ -57,3 +57,31 @@ export function buildPivotGrid(response = {}) {
 
   return { columns: columnKeys, rows, totals, grandTotal };
 }
+
+
+export function sortPivotRows(grid = {}, sort = {}) {
+  const direction = sort.direction === 'desc' ? 'desc' : 'asc';
+  const valueFor = (row) => {
+    if (sort.key === 'cell') return row.cells?.[sort.index] ?? null;
+    if (sort.key === 'total') return row.total ?? null;
+    return row.label ?? '';
+  };
+  return [...(grid.rows || [])].sort((left, right) => {
+    const leftValue = valueFor(left);
+    const rightValue = valueFor(right);
+    const leftMissing = leftValue == null || (typeof leftValue === 'number' && !Number.isFinite(leftValue));
+    const rightMissing = rightValue == null || (typeof rightValue === 'number' && !Number.isFinite(rightValue));
+    if (leftMissing && rightMissing) return String(left.label).localeCompare(String(right.label), 'id');
+    if (leftMissing) return 1;
+    if (rightMissing) return -1;
+
+    let comparison;
+    if (sort.key === 'label') {
+      comparison = String(leftValue).localeCompare(String(rightValue), 'id', { numeric: true });
+    } else {
+      comparison = Number(leftValue) - Number(rightValue);
+    }
+    if (comparison === 0) return String(left.label).localeCompare(String(right.label), 'id');
+    return direction === 'desc' ? -comparison : comparison;
+  });
+}

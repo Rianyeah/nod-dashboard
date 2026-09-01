@@ -37,6 +37,13 @@ def test_viewer_cannot_open_management_data(security_settings):
     assert response.status_code == 403
     assert response.json() == {"detail": "Insufficient permission"}
 
+    thresholds = client.get(
+        "/api/v1/management-data/reporting-thresholds",
+        params={"effective_month": "2026-08"},
+    )
+    assert thresholds.status_code == 403
+    assert thresholds.json() == {"detail": "Insufficient permission"}
+
 
 def test_data_admin_can_import_but_cannot_manage_users(security_settings):
     client, _ = build_client(security_settings, "data_admin")
