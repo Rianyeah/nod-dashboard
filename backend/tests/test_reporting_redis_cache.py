@@ -115,6 +115,12 @@ class ReportingRedisCacheTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn('"overview-v4"', source)
         self.assertIn("threshold_version=threshold_version", source)
 
+    def test_site_drilldown_cache_tracks_effective_metric_threshold_version(self):
+        source = REPORTING_ROUTER.read_text(encoding="utf-8")
+
+        self.assertIn('"site-drilldown-v2"', source)
+        self.assertGreaterEqual(source.count("threshold_version=threshold_version"), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

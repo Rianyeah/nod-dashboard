@@ -576,7 +576,7 @@ async def get_reporting_sites(
     rank: str = Query("all"),
     rank_limit: int = Query(10, ge=1, le=100),
     rank_metric: str = Query("revenue"),
-    sla: str = Query("all"),
+    target_status: str = Query("all"),
     site_class: str | None = Query(None),
     q: str | None = Query(None),
     session: AsyncSession = Depends(get_session),
@@ -593,17 +593,21 @@ async def get_reporting_sites(
         rank=rank,
         rank_limit=rank_limit,
         rank_metric=rank_metric,
-        sla=sla,
+        target_status=target_status,
         site_class=site_class,
         q=q,
     )
+    threshold_version = "bypass"
+    if redis_cache.enabled:
+        threshold_version = await load_metric_threshold_version(session, period.period_end)
     cache_key = redis_cache.make_key(
         "reporting",
-        "site-drilldown-v1",
+        "site-drilldown-v2",
         area=area_key.strip().upper(),
         period_start=period.period_start,
         period_end=period.period_end,
         nop=nop_key or "",
+        threshold_version=threshold_version,
         **query.model_dump(),
     )
     cache_status, cached_value = await redis_cache.get_json(cache_key)

@@ -101,7 +101,7 @@ async def test_site_drilldown_route_builds_validated_query(monkeypatch):
         rank="bottom",
         rank_limit=5,
         rank_metric="payload",
-        sla="missed",
+        target_status="not_achieved",
         site_class="Gold",
         q="AAA",
     )
@@ -111,6 +111,7 @@ async def test_site_drilldown_route_builds_validated_query(monkeypatch):
     assert captured["area_key"] == "sidoarjo"
     assert captured["query"].rank == "bottom"
     assert captured["query"].rank_limit == 5
+    assert captured["query"].target_status == "not_achieved"
     assert response.headers["X-Cache"] == "BYPASS"
 
 

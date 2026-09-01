@@ -55,6 +55,7 @@ SOURCE_DDL = (
 
 
 DROP_OBJECTS = (
+    "public.reporting_metric_thresholds",
     "public.reporting_revenue_targets",
     "public.reporting_source_refresh",
     "public.proker_enom_jatim_2026",
@@ -171,6 +172,25 @@ async def _seed_numeric_facts(session):
             '''
         )
     )
+    await session.execute(
+        text(
+            '''
+            INSERT INTO public.reporting_metric_thresholds
+                (metric, threshold_key, site_class, effective_month, threshold_value, unit, updated_by)
+            VALUES
+                ('availability', 'target', 'DIAMOND', '2026-01', 99.87, 'percent', 'integration'),
+                ('availability', 'target', 'PLATINUM', '2026-01', 99.73, 'percent', 'integration'),
+                ('availability', 'target', 'GOLD', '2026-01', 99.68, 'percent', 'integration'),
+                ('availability', 'target', 'SILVER', '2026-01', 99.67, 'percent', 'integration'),
+                ('availability', 'target', 'BRONZE', '2026-01', 99.73, 'percent', 'integration'),
+                ('revenue', 'u30_upper', '*', '2026-01', 30000000, 'idr', 'integration'),
+                ('revenue', 'u60_upper', '*', '2026-01', 60000000, 'idr', 'integration'),
+                ('payload', 'target', '*', '2026-01', 15, 'tb', 'integration')
+            ON CONFLICT (metric, threshold_key, site_class, effective_month) DO UPDATE
+            SET threshold_value = EXCLUDED.threshold_value, updated_at = now()
+            '''
+        )
+    )
     await session.commit()
 
 
@@ -206,7 +226,11 @@ async def test_reporting_numbers_reconcile_across_overview_areas_drilldown_and_p
         period=period,
         nop=None,
         area_key="unmapped",
-        query=ReportingSiteQuery(sort_by="availability", sort_dir="asc", sla="missed"),
+        query=ReportingSiteQuery(
+            sort_by="availability",
+            sort_dir="asc",
+            target_status="unavailable",
+        ),
     )
     assert [item.site_id for item in unmapped.items] == ["ZZZ001"]
     assert unmapped.items[0].site_class is None
@@ -239,6 +263,59 @@ async def test_reporting_numbers_reconcile_across_overview_areas_drilldown_and_p
         ),
     )
     assert ticket_pivot.rows[0].values["backup_success_rate"] == pytest.approx(50.0)
+
+
+@pytest.mark.asyncio
+async def test_site_target_boundaries_are_evaluated_before_pagination(reporting_db_session):
+    from models.reporting import ReportingSiteQuery
+    from periods import resolve_month_period
+    from services.reporting_drilldown import load_reporting_sites
+
+    await _seed_numeric_facts(reporting_db_session)
+    await reporting_db_session.execute(
+        text(
+            '''
+            UPDATE public.traktor_data
+            SET rev = 60000000, payload = 15728640
+            WHERE trx_month = '2026-07' AND site_id = 'AAA001'
+            '''
+        )
+    )
+    await reporting_db_session.execute(
+        text(
+            '''
+            UPDATE public.site_month_metrics
+            SET total_outage_menit = 3.2
+            WHERE tahun = 2026 AND bulan = 7 AND site_id = 'AAA001'
+            '''
+        )
+    )
+    await reporting_db_session.commit()
+    period = resolve_month_period(period_start="2026-07", period_end="2026-07")
+
+    achieved = await load_reporting_sites(
+        reporting_db_session,
+        period=period,
+        nop="SIDOARJO",
+        area_key="SIDOARJO",
+        query=ReportingSiteQuery(target_status="achieved", page_size=1),
+    )
+    missed = await load_reporting_sites(
+        reporting_db_session,
+        period=period,
+        nop="SIDOARJO",
+        area_key="SIDOARJO",
+        query=ReportingSiteQuery(target_status="not_achieved", page_size=1),
+    )
+
+    assert achieved.total == 1
+    assert achieved.items[0].site_id == "AAA001"
+    assert achieved.items[0].availability_target_status == "achieved"
+    assert achieved.items[0].revenue_band == "achieved"
+    assert achieved.items[0].payload_target_status == "achieved"
+    assert achieved.items[0].overall_target_status == "achieved"
+    assert missed.total == 1
+    assert missed.items[0].site_id == "BBB001"
 
 
 @pytest.mark.asyncio

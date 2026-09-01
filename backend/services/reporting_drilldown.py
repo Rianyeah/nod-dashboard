@@ -12,7 +12,6 @@ from queries.reporting_foundation import (
 )
 from services.reporting_availability import AVAILABILITY_FACTS_CTES
 from services.reporting_overview import (
-    AVAILABILITY_SLA,
     _delta_pct,
     availability_sla_status,
     weighted_availability,
@@ -21,6 +20,9 @@ from services.reporting_overview import (
 
 SORT_EXPRESSIONS = {
     "site_id": "site_key",
+    "site_class": "site_class",
+    "status_site": "status_site",
+    "transport_type": "transport_type",
     "revenue": "revenue",
     "payload": "payload",
     "availability": "avg_availability",
@@ -41,18 +43,6 @@ def build_site_order(query: ReportingSiteQuery) -> str:
     return f"{expression} {direction} NULLS LAST, site_key ASC"
 
 
-def matches_sla(availability: float | None, requested: str) -> bool:
-    if requested == "all":
-        return True
-    if requested == "unavailable":
-        return availability is None
-    if availability is None:
-        return False
-    if requested == "met":
-        return availability >= AVAILABILITY_SLA
-    return availability < AVAILABILITY_SLA
-
-
 SITE_FACTS_CTE = """
 WITH master AS (
     SELECT DISTINCT ON (UPPER(TRIM(d."Siteid")))
@@ -69,8 +59,9 @@ WITH master AS (
     WHERE NULLIF(TRIM(d."Siteid"), '') IS NOT NULL
     ORDER BY UPPER(TRIM(d."Siteid")), d.row_number DESC NULLS LAST
 ),
-active AS (
+active_monthly AS (
     SELECT
+        t.trx_month,
         UPPER(TRIM(t.site_id)) AS site_key,
         MIN(t.site_id) AS source_site_id,
         SUM(COALESCE(t.rev, 0))::bigint AS revenue,
@@ -78,7 +69,7 @@ active AS (
     FROM public.traktor_data t
     WHERE t.trx_month BETWEEN :period_start AND :period_end
       AND NULLIF(TRIM(t.site_id), '') IS NOT NULL
-    GROUP BY 1
+    GROUP BY 1, 2
 ),
 previous AS (
     SELECT
@@ -94,14 +85,16 @@ previous AS (
 availability AS (
     SELECT
         s.site_key,
+        s.period AS trx_month,
         SUM(COALESCE(s.total_time_minutes, 0))::double precision AS total_time_minutes,
         SUM(COALESCE(s.outage_minutes, 0))::double precision AS outage_minutes
     FROM availability_facts s
     WHERE s.period BETWEEN :period_start AND :period_end
-    GROUP BY 1
+    GROUP BY 1, 2
 ),
-site_facts AS (
+monthly_facts AS (
     SELECT
+        a.trx_month,
         a.site_key,
         COALESCE(m.site_id, a.source_site_id) AS site_id,
         m.site_name,
@@ -113,21 +106,160 @@ site_facts AS (
         m.site_class,
         m.transport_type,
         a.revenue,
-        COALESCE(p.previous_revenue, 0)::bigint AS previous_revenue,
-        CASE WHEN COALESCE(p.previous_revenue, 0) <> 0
-             THEN 100.0 * (a.revenue - p.previous_revenue) / p.previous_revenue END::double precision AS revenue_mom_pct,
         a.payload,
-        COALESCE(p.previous_payload, 0)::bigint AS previous_payload,
-        CASE WHEN COALESCE(p.previous_payload, 0) <> 0
-             THEN 100.0 * (a.payload - p.previous_payload) / p.previous_payload END::double precision AS payload_mom_pct,
         COALESCE(v.total_time_minutes, 0)::double precision AS total_time_minutes,
         COALESCE(v.outage_minutes, 0)::double precision AS outage_minutes,
         CASE WHEN COALESCE(v.total_time_minutes, 0) > 0
-             THEN 100.0 * (v.total_time_minutes - v.outage_minutes) / v.total_time_minutes END::double precision AS avg_availability
-    FROM active a
+             THEN 100.0 * (v.total_time_minutes - v.outage_minutes) / v.total_time_minutes END::double precision AS avg_availability,
+        availability_threshold.threshold_value::double precision AS availability_target,
+        revenue_u30.threshold_value::double precision AS revenue_u30_upper,
+        revenue_u60.threshold_value::double precision AS revenue_u60_upper,
+        payload_threshold.threshold_value::double precision AS payload_target_tb
+    FROM active_monthly a
     LEFT JOIN master m ON m.site_key = a.site_key
-    LEFT JOIN previous p ON p.site_key = a.site_key
-    LEFT JOIN availability v ON v.site_key = a.site_key
+    LEFT JOIN availability v ON v.site_key = a.site_key AND v.trx_month = a.trx_month
+    LEFT JOIN LATERAL (
+        SELECT t.threshold_value
+        FROM public.reporting_metric_thresholds t
+        WHERE t.metric = 'availability'
+          AND t.threshold_key = 'target'
+          AND t.site_class = UPPER(TRIM(m.site_class))
+          AND t.effective_month <= a.trx_month
+        ORDER BY t.effective_month DESC, t.updated_at DESC
+        LIMIT 1
+    ) availability_threshold ON TRUE
+    LEFT JOIN LATERAL (
+        SELECT t.threshold_value
+        FROM public.reporting_metric_thresholds t
+        WHERE t.metric = 'revenue'
+          AND t.threshold_key = 'u30_upper'
+          AND t.site_class = '*'
+          AND t.effective_month <= a.trx_month
+        ORDER BY t.effective_month DESC, t.updated_at DESC
+        LIMIT 1
+    ) revenue_u30 ON TRUE
+    LEFT JOIN LATERAL (
+        SELECT t.threshold_value
+        FROM public.reporting_metric_thresholds t
+        WHERE t.metric = 'revenue'
+          AND t.threshold_key = 'u60_upper'
+          AND t.site_class = '*'
+          AND t.effective_month <= a.trx_month
+        ORDER BY t.effective_month DESC, t.updated_at DESC
+        LIMIT 1
+    ) revenue_u60 ON TRUE
+    LEFT JOIN LATERAL (
+        SELECT t.threshold_value
+        FROM public.reporting_metric_thresholds t
+        WHERE t.metric = 'payload'
+          AND t.threshold_key = 'target'
+          AND t.site_class = '*'
+          AND t.effective_month <= a.trx_month
+        ORDER BY t.effective_month DESC, t.updated_at DESC
+        LIMIT 1
+    ) payload_threshold ON TRUE
+),
+monthly_status AS (
+    SELECT
+        monthly_facts.*,
+        CASE
+            WHEN avg_availability IS NULL OR availability_target IS NULL THEN 'unavailable'
+            WHEN avg_availability >= availability_target THEN 'achieved'
+            ELSE 'not_achieved'
+        END AS availability_target_status,
+        CASE
+            WHEN revenue_u30_upper IS NULL OR revenue_u60_upper IS NULL THEN 'unavailable'
+            WHEN revenue < revenue_u30_upper THEN 'u30'
+            WHEN revenue < revenue_u60_upper THEN 'u60'
+            ELSE 'achieved'
+        END AS revenue_band,
+        CASE
+            WHEN revenue_u60_upper IS NULL THEN 'unavailable'
+            WHEN revenue >= revenue_u60_upper THEN 'achieved'
+            ELSE 'not_achieved'
+        END AS revenue_target_status,
+        CASE
+            WHEN payload_target_tb IS NULL THEN 'unavailable'
+            WHEN payload >= payload_target_tb * 1048576.0 THEN 'achieved'
+            ELSE 'not_achieved'
+        END AS payload_target_status
+    FROM monthly_facts
+),
+monthly_target_status AS (
+    SELECT
+        monthly_status.*,
+        CASE
+            WHEN availability_target_status = 'unavailable'
+              OR revenue_target_status = 'unavailable'
+              OR payload_target_status = 'unavailable' THEN 'unavailable'
+            WHEN availability_target_status = 'achieved'
+              AND revenue_target_status = 'achieved'
+              AND payload_target_status = 'achieved' THEN 'achieved'
+            ELSE 'not_achieved'
+        END AS overall_target_status
+    FROM monthly_status
+),
+period_facts AS (
+    SELECT
+        site_key,
+        MIN(source_site_id) AS source_site_id,
+        MAX(site_id) AS site_id,
+        MAX(site_name) AS site_name,
+        MAX(nop) AS nop,
+        MAX(nop_key) AS nop_key,
+        BOOL_OR(is_mapped) AS is_mapped,
+        MAX(kabupaten) AS kabupaten,
+        MAX(status_site) AS status_site,
+        MAX(site_class) AS site_class,
+        MAX(transport_type) AS transport_type,
+        SUM(revenue)::bigint AS revenue,
+        SUM(payload)::bigint AS payload,
+        SUM(total_time_minutes)::double precision AS total_time_minutes,
+        SUM(outage_minutes)::double precision AS outage_minutes,
+        (ARRAY_AGG(availability_target ORDER BY trx_month DESC))[1]::double precision AS availability_target,
+        CASE
+            WHEN BOOL_OR(availability_target_status = 'unavailable') THEN 'unavailable'
+            WHEN BOOL_AND(availability_target_status = 'achieved') THEN 'achieved'
+            ELSE 'not_achieved'
+        END AS availability_target_status,
+        CASE
+            WHEN BOOL_OR(revenue_band = 'unavailable') THEN 'unavailable'
+            WHEN BOOL_OR(revenue_band = 'u30') THEN 'u30'
+            WHEN BOOL_OR(revenue_band = 'u60') THEN 'u60'
+            ELSE 'achieved'
+        END AS revenue_band,
+        CASE
+            WHEN BOOL_OR(revenue_target_status = 'unavailable') THEN 'unavailable'
+            WHEN BOOL_AND(revenue_target_status = 'achieved') THEN 'achieved'
+            ELSE 'not_achieved'
+        END AS revenue_target_status,
+        (ARRAY_AGG(payload_target_tb ORDER BY trx_month DESC))[1]::double precision AS payload_target_tb,
+        CASE
+            WHEN BOOL_OR(payload_target_status = 'unavailable') THEN 'unavailable'
+            WHEN BOOL_AND(payload_target_status = 'achieved') THEN 'achieved'
+            ELSE 'not_achieved'
+        END AS payload_target_status,
+        CASE
+            WHEN BOOL_OR(overall_target_status = 'unavailable') THEN 'unavailable'
+            WHEN BOOL_AND(overall_target_status = 'achieved') THEN 'achieved'
+            ELSE 'not_achieved'
+        END AS overall_target_status
+    FROM monthly_target_status
+    GROUP BY site_key
+),
+site_facts AS (
+    SELECT
+        f.*,
+        COALESCE(p.previous_revenue, 0)::bigint AS previous_revenue,
+        CASE WHEN COALESCE(p.previous_revenue, 0) <> 0
+             THEN 100.0 * (f.revenue - p.previous_revenue) / p.previous_revenue END::double precision AS revenue_mom_pct,
+        COALESCE(p.previous_payload, 0)::bigint AS previous_payload,
+        CASE WHEN COALESCE(p.previous_payload, 0) <> 0
+             THEN 100.0 * (f.payload - p.previous_payload) / p.previous_payload END::double precision AS payload_mom_pct,
+        CASE WHEN COALESCE(f.total_time_minutes, 0) > 0
+             THEN 100.0 * (f.total_time_minutes - f.outage_minutes) / f.total_time_minutes END::double precision AS avg_availability
+    FROM period_facts f
+    LEFT JOIN previous p ON p.site_key = f.site_key
 ),
 filtered AS (
     SELECT *
@@ -139,17 +271,20 @@ filtered AS (
       )
       AND (CAST(:site_class AS text) IS NULL OR UPPER(TRIM(site_class)) = UPPER(TRIM(:site_class)))
       AND (CAST(:search AS text) IS NULL OR site_key LIKE :search OR UPPER(COALESCE(site_name, '')) LIKE :search)
-      {sla_filter}
+      {target_status_filter}
 )
-""".format(availability_facts_ctes=AVAILABILITY_FACTS_CTES, sla_filter="{sla_filter}")
+""".format(
+    availability_facts_ctes=AVAILABILITY_FACTS_CTES,
+    target_status_filter="{target_status_filter}",
+)
 
 
-def _sla_sql_filter(requested: str) -> str:
+def _target_sql_filter(requested: str) -> str:
     return {
         "all": "",
-        "met": f"AND avg_availability >= {AVAILABILITY_SLA}",
-        "missed": f"AND avg_availability < {AVAILABILITY_SLA}",
-        "unavailable": "AND avg_availability IS NULL",
+        "achieved": "AND overall_target_status = 'achieved'",
+        "not_achieved": "AND overall_target_status = 'not_achieved'",
+        "unavailable": "AND overall_target_status = 'unavailable'",
     }[requested]
 
 
@@ -181,7 +316,9 @@ async def load_reporting_sites(
         "limit": effective_page_size,
         "offset": (effective_page - 1) * effective_page_size,
     }
-    cte = SITE_FACTS_CTE.format(sla_filter=_sla_sql_filter(query.sla))
+    cte = SITE_FACTS_CTE.format(
+        target_status_filter=_target_sql_filter(query.target_status)
+    )
     rows_query = text(
         cte
         + f"""
@@ -231,6 +368,21 @@ async def load_reporting_sites(
                 avg_availability=availability,
                 outage_minutes=float(row.get("outage_minutes") or 0),
                 sla_status=availability_sla_status(availability),
+                availability_target=(
+                    float(row["availability_target"])
+                    if row.get("availability_target") is not None
+                    else None
+                ),
+                availability_target_status=row.get("availability_target_status") or "unavailable",
+                revenue_band=row.get("revenue_band") or "unavailable",
+                revenue_target_status=row.get("revenue_target_status") or "unavailable",
+                payload_target_tb=(
+                    float(row["payload_target_tb"])
+                    if row.get("payload_target_tb") is not None
+                    else None
+                ),
+                payload_target_status=row.get("payload_target_status") or "unavailable",
+                overall_target_status=row.get("overall_target_status") or "unavailable",
             )
         )
 
