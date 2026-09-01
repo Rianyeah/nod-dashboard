@@ -109,6 +109,17 @@ def test_foundation_sql_has_monthly_target_and_statement_refresh_tracking():
     assert "reporting_source_refresh" in normalized
 
 
+def test_foundation_sql_has_effective_dated_metric_thresholds_and_baseline_seed():
+    sql_path = Path(__file__).resolve().parents[1] / "sql" / "reporting_foundation.sql"
+    normalized = " ".join(sql_path.read_text(encoding="utf-8").lower().split())
+
+    assert "create table if not exists public.reporting_metric_thresholds" in normalized
+    assert "primary key (metric, threshold_key, site_class, effective_month)" in normalized
+    assert "reporting_metric_thresholds" in normalized
+    for value in ("99.87", "99.73", "99.68", "99.67", "30000000", "60000000", "15"):
+        assert value in normalized
+
+
 def test_target_foundation_failure_is_fatal_during_startup():
     main_source = (Path(__file__).resolve().parents[1] / "main.py").read_text(encoding="utf-8")
 

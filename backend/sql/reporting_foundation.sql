@@ -10,6 +10,30 @@ CREATE TABLE IF NOT EXISTS public.reporting_revenue_targets (
 CREATE INDEX IF NOT EXISTS idx_reporting_revenue_targets_month
 ON public.reporting_revenue_targets (trx_month);
 -- statement-breakpoint
+CREATE TABLE IF NOT EXISTS public.reporting_metric_thresholds (
+    metric text NOT NULL CHECK (metric IN ('availability', 'revenue', 'payload')),
+    threshold_key text NOT NULL,
+    site_class text NOT NULL,
+    effective_month text NOT NULL CHECK (effective_month ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'),
+    threshold_value numeric(20, 4) NOT NULL CHECK (threshold_value >= 0),
+    unit text NOT NULL CHECK (unit IN ('percent', 'idr', 'tb')),
+    updated_by text,
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (metric, threshold_key, site_class, effective_month),
+    CHECK (
+        (metric = 'availability' AND threshold_key = 'target'
+            AND site_class IN ('DIAMOND', 'PLATINUM', 'GOLD', 'SILVER', 'BRONZE')
+            AND unit = 'percent')
+        OR (metric = 'revenue' AND threshold_key IN ('u30_upper', 'u60_upper')
+            AND site_class = '*' AND unit = 'idr')
+        OR (metric = 'payload' AND threshold_key = 'target'
+            AND site_class = '*' AND unit = 'tb')
+    )
+);
+-- statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_reporting_metric_thresholds_effective_month
+ON public.reporting_metric_thresholds (effective_month);
+-- statement-breakpoint
 CREATE TABLE IF NOT EXISTS public.reporting_source_refresh (
     source_key text PRIMARY KEY,
     last_refreshed_at timestamptz,
@@ -48,7 +72,8 @@ BEGIN
         'data_site_master',
         'ticketing_fault_center',
         'proker_enom_jatim_2026',
-        'reporting_revenue_targets'
+        'reporting_revenue_targets',
+        'reporting_metric_thresholds'
     ]
     LOOP
         IF to_regclass('public.' || source_table) IS NULL THEN
@@ -88,3 +113,41 @@ FROM (
     WHERE trx_month ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'
 ) AS available
 ON CONFLICT (nop_key, trx_month) DO NOTHING;
+-- statement-breakpoint
+WITH baseline AS (
+    SELECT COALESCE(
+        MIN(trx_month) FILTER (WHERE trx_month ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'),
+        TO_CHAR(CURRENT_DATE, 'YYYY-MM')
+    ) AS effective_month
+    FROM public.traktor_data
+), values_to_seed(metric, threshold_key, site_class, threshold_value, unit) AS (
+    VALUES
+        ('availability', 'target', 'DIAMOND', 99.87, 'percent'),
+        ('availability', 'target', 'PLATINUM', 99.73, 'percent'),
+        ('availability', 'target', 'GOLD', 99.68, 'percent'),
+        ('availability', 'target', 'SILVER', 99.67, 'percent'),
+        ('availability', 'target', 'BRONZE', 99.73, 'percent'),
+        ('revenue', 'u30_upper', '*', 30000000, 'idr'),
+        ('revenue', 'u60_upper', '*', 60000000, 'idr'),
+        ('payload', 'target', '*', 15, 'tb')
+)
+INSERT INTO public.reporting_metric_thresholds (
+    metric,
+    threshold_key,
+    site_class,
+    effective_month,
+    threshold_value,
+    unit,
+    updated_by
+)
+SELECT
+    values_to_seed.metric,
+    values_to_seed.threshold_key,
+    values_to_seed.site_class,
+    baseline.effective_month,
+    values_to_seed.threshold_value,
+    values_to_seed.unit,
+    'system:migration'
+FROM baseline
+CROSS JOIN values_to_seed
+ON CONFLICT (metric, threshold_key, site_class, effective_month) DO NOTHING;
