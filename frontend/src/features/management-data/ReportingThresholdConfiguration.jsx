@@ -92,9 +92,6 @@ export default function ReportingThresholdConfiguration() {
 
   useEffect(() => {
     const controller = new AbortController();
-    setThresholdLoading(true);
-    setThresholdError('');
-    setThresholdSuccess('');
     fetchReportingThresholds(effectiveMonth, controller.signal)
       .then((nextSnapshot) => {
         setSnapshot(nextSnapshot);
@@ -111,8 +108,6 @@ export default function ReportingThresholdConfiguration() {
   }, [effectiveMonth]);
 
   const refreshRevenueTargets = useCallback(async (signal) => {
-    setTargetLoading(true);
-    setTargetError('');
     try {
       const rows = await fetchReportingRevenueTargets({ limit: 50 }, signal);
       setRevenueTargets(rows);
@@ -125,11 +120,31 @@ export default function ReportingThresholdConfiguration() {
 
   useEffect(() => {
     const controller = new AbortController();
-    refreshRevenueTargets(controller.signal);
+    fetchReportingRevenueTargets({ limit: 50 }, controller.signal)
+      .then((rows) => setRevenueTargets(rows))
+      .catch((error) => {
+        if (error?.name !== 'CanceledError') setTargetError(requestErrorMessage(error));
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setTargetLoading(false);
+      });
     return () => controller.abort();
-  }, [refreshRevenueTargets]);
+  }, []);
 
   const validation = useMemo(() => validateThresholdDraft(draft), [draft]);
+
+  const changeEffectiveMonth = (value) => {
+    setThresholdLoading(true);
+    setThresholdError('');
+    setThresholdSuccess('');
+    setEffectiveMonth(value);
+  };
+
+  const handleRevenueRefresh = () => {
+    setTargetLoading(true);
+    setTargetError('');
+    refreshRevenueTargets();
+  };
 
   const updateAvailability = (siteClass, value) => {
     setDraft((current) => ({
@@ -185,6 +200,7 @@ export default function ReportingThresholdConfiguration() {
       );
       setTargetSuccess(`Target ${targetForm.nop.trim().toUpperCase()} untuk ${targetForm.trx_month} tersimpan.`);
       setTargetForm((current) => ({ ...current, target_revenue: '', note: '' }));
+      setTargetLoading(true);
       await refreshRevenueTargets();
     } catch (error) {
       setTargetError(requestErrorMessage(error));
@@ -211,7 +227,7 @@ export default function ReportingThresholdConfiguration() {
               id="threshold-effective-month"
               type="month"
               value={effectiveMonth}
-              onChange={(event) => setEffectiveMonth(event.target.value)}
+              onChange={(event) => changeEffectiveMonth(event.target.value)}
               className="mt-1 rounded-xl"
             />
           </div>
@@ -345,7 +361,7 @@ export default function ReportingThresholdConfiguration() {
         <div className="border-t border-[var(--border)]">
           <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-5">
             <h3 className="text-xs font-semibold">Target terbaru</h3>
-            <Button type="button" variant="ghost" size="sm" onClick={() => refreshRevenueTargets()} disabled={targetLoading}>
+            <Button type="button" variant="ghost" size="sm" onClick={handleRevenueRefresh} disabled={targetLoading}>
               <RefreshCw data-icon="inline-start" /> Refresh
             </Button>
           </div>
