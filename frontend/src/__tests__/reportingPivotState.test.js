@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildPivotGrid, validatePivotDraft } from '../features/reporting/reportingPivotState.js';
+import { buildPivotGrid, sortPivotRows, validatePivotDraft } from '../features/reporting/reportingPivotState.js';
 
 
 describe('Reporting Pivot state', () => {
@@ -45,5 +45,20 @@ describe('Reporting Pivot state', () => {
     assert.deepEqual(grid.totals, [30, 150]);
     assert.equal(grid.rows[0].total, null);
     assert.equal(grid.grandTotal, null);
+  });
+
+  it('sorts any pivot result header with null-last and stable labels', () => {
+    const grid = {
+      columns: ['Revenue'],
+      rows: [
+        { label: 'A', cells: [20], total: 20 },
+        { label: 'C', cells: [null], total: null },
+        { label: 'B', cells: [10], total: 10 },
+      ],
+    };
+
+    assert.deepEqual(sortPivotRows(grid, { key: 'cell', index: 0, direction: 'asc' }).map((row) => row.label), ['B', 'A', 'C']);
+    assert.deepEqual(sortPivotRows(grid, { key: 'label', direction: 'desc' }).map((row) => row.label), ['C', 'B', 'A']);
+    assert.deepEqual(grid.rows.map((row) => row.label), ['A', 'C', 'B']);
   });
 });

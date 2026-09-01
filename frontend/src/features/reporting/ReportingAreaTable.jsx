@@ -1,25 +1,9 @@
 import { useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, MapPinned } from 'lucide-react';
 
-import { DashboardCombobox } from '../../components/dashboard-filters/DashboardFilters.jsx';
-import { DashboardStatusBadge, DashboardTableShell } from '../../components/ui/DashboardPrimitives.jsx';
+import { DashboardTableShell } from '../../components/ui/DashboardPrimitives.jsx';
 import { formatNumber, formatPayload, formatPercent, formatRevenue, formatRevenueShort, formatTraffic } from '../../utils/formatters.js';
 import { rankAndSortAreas, toAreaMobileMetric } from './reportingTableState.js';
-
-
-const METRICS = [
-  { value: 'revenue', label: 'Revenue' },
-  { value: 'payload', label: 'Payload' },
-  { value: 'availability', label: 'Availability' },
-  { value: 'total_sites', label: 'Total Site' },
-];
-
-
-function SlaBadge({ status }) {
-  const tone = status === 'met' ? 'success' : status === 'missed' ? 'warning' : 'neutral';
-  const label = status === 'met' ? 'SLA' : status === 'missed' ? 'Miss' : 'N/A';
-  return <DashboardStatusBadge tone={tone}>{label}</DashboardStatusBadge>;
-}
 
 
 function SortHeader({ field, label, active, direction, onSort, align = 'right' }) {
@@ -35,16 +19,15 @@ function SortHeader({ field, label, active, direction, onSort, align = 'right' }
 
 
 export default function ReportingAreaTable({ rows = [], loading = false, error, onSelectArea }) {
-  const [metric, setMetric] = useState('revenue');
   const [rank, setRank] = useState('all');
   const [sort, setSort] = useState({ field: 'revenue', direction: 'desc' });
   const [expanded, setExpanded] = useState(null);
   const visibleRows = useMemo(() => rankAndSortAreas(rows, {
-    metric: rank === 'all' ? sort.field : metric,
+    metric: sort.field,
     rank,
     direction: rank === 'all' ? sort.direction : undefined,
     limit: 10,
-  }), [metric, rank, rows, sort]);
+  }), [rank, rows, sort]);
 
   const handleSort = (field) => setSort((current) => ({
     field,
@@ -53,7 +36,6 @@ export default function ReportingAreaTable({ rows = [], loading = false, error, 
 
   const action = (
     <div className="reporting-no-print flex flex-wrap items-end gap-2">
-      <DashboardCombobox id="reporting-rank-metric" label="Urutkan" value={metric} onChange={setMetric} options={METRICS} allLabel="Revenue" />
       <div className="flex rounded-lg border border-[var(--border)] bg-[var(--surface-soft)] p-0.5">
         {['all', 'top', 'bottom'].map((value) => (
           <button key={value} type="button" onClick={() => setRank(value)} className={`rounded-md px-2.5 py-1.5 text-[11px] font-semibold ${rank === value ? 'bg-[var(--primary)]/15 text-[var(--primary-light)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}>
@@ -82,9 +64,9 @@ export default function ReportingAreaTable({ rows = [], loading = false, error, 
                   <SortHeader field="revenue" label="Revenue" active={sort.field === 'revenue'} direction={sort.direction} onSort={handleSort} />
                   <SortHeader field="payload" label="Payload" active={sort.field === 'payload'} direction={sort.direction} onSort={handleSort} />
                   <SortHeader field="avg_availability" label="Availability" active={sort.field === 'avg_availability'} direction={sort.direction} onSort={handleSort} />
-                  <th className="bg-[var(--bg-elevated)] px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">Traffic</th>
-                  <th className="bg-[var(--bg-elevated)] px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">Ticket / Backup</th>
-                  <th className="bg-[var(--bg-elevated)] px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">Proker</th>
+                  <SortHeader field="traffic" label="Traffic" active={sort.field === 'traffic'} direction={sort.direction} onSort={handleSort} />
+                  <SortHeader field="ticket_backup" label="Ticket / Backup" active={sort.field === 'ticket_backup'} direction={sort.direction} onSort={handleSort} />
+                  <SortHeader field="proker" label="Proker" active={sort.field === 'proker'} direction={sort.direction} onSort={handleSort} />
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
@@ -94,10 +76,10 @@ export default function ReportingAreaTable({ rows = [], loading = false, error, 
                     <td className="px-3 py-3 text-right font-mono tabular-nums">{formatNumber(row.total_sites)}</td>
                     <td className="px-3 py-3 text-right font-mono font-semibold tabular-nums text-[var(--success)]">{formatRevenueShort(row.revenue)}</td>
                     <td className="px-3 py-3 text-right font-mono tabular-nums text-[var(--chart-info)]">{formatPayload(row.payload)}</td>
-                    <td className="px-3 py-3 text-right"><span className="mr-2 font-mono tabular-nums">{formatPercent(row.avg_availability)}</span><SlaBadge status={row.sla_status} /></td>
+                    <td className="px-3 py-3 text-right font-mono tabular-nums">{formatPercent(row.avg_availability)}</td>
                     <td className="px-3 py-3 text-right font-mono tabular-nums text-[var(--text-secondary)]">{formatTraffic(row.traffic)}</td>
-                    <td className="px-3 py-3 text-right text-xs text-[var(--text-secondary)]">BPS {formatNumber(row.ticket_swfm_bps)} · TS {formatNumber(row.ticket_swfm_ts)} · {formatPercent(row.backup_sukses_rate)}</td>
-                    <td className="px-3 py-3 text-right text-xs text-[var(--text-secondary)]">{formatNumber(row.proker_open)} open · {formatNumber(row.proker_closed)} close</td>
+                    <td className="px-3 py-3 text-right text-xs text-[var(--text-secondary)]">BPS {formatNumber(row.ticket_swfm_bps)} / TS {formatNumber(row.ticket_swfm_ts)} / {formatPercent(row.backup_sukses_rate)}</td>
+                    <td className="px-3 py-3 text-right text-xs text-[var(--text-secondary)]">{formatNumber(row.proker_open)} open / {formatNumber(row.proker_closed)} close</td>
                   </tr>
                 ))}
               </tbody>
@@ -125,7 +107,7 @@ export default function ReportingAreaTable({ rows = [], loading = false, error, 
                   <button type="button" onClick={() => setExpanded(open ? null : row.area_key)} className="mt-3 inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--text-muted)]">
                     <ChevronDown className={`size-3.5 transition-transform ${open ? 'rotate-180' : ''}`} /> Detail
                   </button>
-                  {open && <p className="mt-2 text-[11px] leading-5 text-[var(--text-muted)]">Traffic {formatTraffic(row.traffic)} · BPS {formatNumber(row.ticket_swfm_bps)} · Backup {formatPercent(row.backup_sukses_rate)} · Proker {formatNumber(row.proker_open)} open</p>}
+                  {open && <p className="mt-2 text-[11px] leading-5 text-[var(--text-muted)]">Traffic {formatTraffic(row.traffic)} / BPS {formatNumber(row.ticket_swfm_bps)} / Backup {formatPercent(row.backup_sukses_rate)} / Proker {formatNumber(row.proker_open)} open</p>}
                 </article>
               );
             })}

@@ -79,7 +79,7 @@ describe('dashboard and reporting visual/data contracts', () => {
     assert.doesNotMatch(feature, /REVENUE_TARGET/);
   });
 
-  it('supports Kabupaten to site drill-down, ranking, SLA, site class, and mobile cards', () => {
+  it('supports all-header Kabupaten and site sorting with Target Achieved filtering', () => {
     const areaTable = src('features', 'reporting', 'ReportingAreaTable.jsx');
     const drilldown = src('features', 'reporting', 'ReportingSiteDrilldown.jsx');
 
@@ -89,7 +89,17 @@ describe('dashboard and reporting visual/data contracts', () => {
     assert.match(drilldown, /reporting-site-class/);
     assert.match(drilldown, /data-\[side=right\]:w-full data-\[side=right\]:sm:max-w-4xl/);
     assert.match(drilldown, /site_class/);
-    assert.match(drilldown, /sla_status/);
+    assert.match(drilldown, /Target Achieved/);
+    for (const status of ['all', 'achieved', 'not_achieved', 'unavailable']) {
+      assert.match(drilldown, new RegExp(`value: '${status}'`));
+    }
+    assert.doesNotMatch(`${areaTable}\n${drilldown}`, /SlaBadge|sla_status|reporting-rank-metric|reporting-site-sort/);
+    for (const field of ['traffic', 'ticket_backup', 'proker']) {
+      assert.match(areaTable, new RegExp(`SortHeader field="${field}"`));
+    }
+    for (const field of ['site_id', 'site_class', 'status_site', 'revenue', 'revenue_mom', 'payload', 'payload_mom', 'availability']) {
+      assert.match(drilldown, new RegExp(`SortHeader field="${field}"`));
+    }
     assert.match(drilldown, /md:hidden/);
     assert.match(drilldown, /fetchReportingSites/);
   });
@@ -105,6 +115,8 @@ describe('dashboard and reporting visual/data contracts', () => {
     assert.match(pivot, /Terapkan Pivot/);
     assert.match(state, /Maksimal 2 baris, 1 kolom, dan 3 nilai/);
     assert.match(pivot, /pivot_too_large/);
+    assert.match(pivot, /PivotSortHeader/);
+    assert.match(state, /sortPivotRows/);
   });
 
   it('adds a print-to-PDF export action for the reporting page', () => {

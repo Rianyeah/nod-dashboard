@@ -1,11 +1,11 @@
 import { useMemo, useRef, useState } from 'react';
-import { Grid3X3, Play } from 'lucide-react';
+import { ArrowDown, ArrowUp, Grid3X3, Play } from 'lucide-react';
 
 import { DashboardCombobox } from '../../components/dashboard-filters/DashboardFilters.jsx';
 import { DashboardTableShell } from '../../components/ui/DashboardPrimitives.jsx';
 import { fetchReportingPivot } from '../../services/api.js';
 import { formatNumber, formatPayload, formatPercent, formatRevenue } from '../../utils/formatters.js';
-import { buildPivotGrid, validatePivotDraft } from './reportingPivotState.js';
+import { buildPivotGrid, sortPivotRows, validatePivotDraft } from './reportingPivotState.js';
 
 
 const DATASETS = {
@@ -43,14 +43,40 @@ function formatValue(value, field) {
 }
 
 
+function PivotSortHeader({ sortKey, index, label: headerLabel, sort, onSort, align = 'right', sticky = false }) {
+  const active = sort.key === sortKey && (sortKey !== 'cell' || sort.index === index);
+  const Icon = sort.direction === 'asc' ? ArrowUp : ArrowDown;
+  return (
+    <th className={`${sticky ? 'sticky left-0 z-10 bg-[var(--bg-elevated)]' : ''} px-3 py-2.5 ${align === 'left' ? 'text-left' : 'text-right'} whitespace-nowrap`}>
+      <button type="button" onClick={() => onSort({ key: sortKey, index })} className="inline-flex items-center gap-1 hover:text-[var(--text-primary)]">
+        {headerLabel}{active ? <Icon className="size-3" /> : null}
+      </button>
+    </th>
+  );
+}
+
+
 export default function ReportingPivot({ period, nop }) {
   const [draft, setDraft] = useState({ dataset: 'performance', rows: ['kabupaten'], column: 'period', values: ['revenue'] });
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [sort, setSort] = useState({ key: 'label', direction: 'asc' });
   const controllerRef = useRef(null);
   const config = DATASETS[draft.dataset];
   const grid = useMemo(() => buildPivotGrid(result || {}), [result]);
+  const sortedRows = useMemo(() => sortPivotRows(grid, sort), [grid, sort]);
+
+  const handleSort = ({ key, index }) => setSort((current) => {
+    const sameColumn = current.key === key && (key !== 'cell' || current.index === index);
+    return {
+      key,
+      index,
+      direction: sameColumn
+        ? (current.direction === 'desc' ? 'asc' : 'desc')
+        : key === 'label' ? 'asc' : 'desc',
+    };
+  });
 
   const setDataset = (dataset) => {
     const next = DATASETS[dataset];
@@ -97,6 +123,7 @@ export default function ReportingPivot({ period, nop }) {
         filters: [],
       }, controller.signal);
       setResult(response);
+      setSort({ key: 'label', direction: 'asc' });
     } catch (requestError) {
       if (requestError?.code === 'ERR_CANCELED') return;
       const detail = requestError?.response?.data?.detail;
@@ -140,8 +167,12 @@ export default function ReportingPivot({ period, nop }) {
       ) : (
         <div className="max-w-full overflow-x-auto overscroll-x-contain">
           <table className="min-w-max w-full text-xs">
-            <thead><tr className="bg-[var(--bg-elevated)] text-[10px] uppercase tracking-wider text-[var(--text-muted)]"><th className="sticky left-0 z-10 bg-[var(--bg-elevated)] px-3 py-2.5 text-left">{result.row_dimensions.map(label).join(' · ')}</th>{grid.columns.map((column) => <th key={column} className="px-3 py-2.5 text-right">{column}</th>)}<th className="px-3 py-2.5 text-right">Total</th></tr></thead>
-            <tbody className="divide-y divide-[var(--border)]">{grid.rows.map((row) => <tr key={row.label}><th className="sticky left-0 bg-[var(--bg-surface)] px-3 py-2.5 text-left font-semibold text-[var(--text-primary)]">{row.label}</th>{row.cells.map((value, index) => { const field = grid.columns[index].split(' · ').at(-1); return <td key={grid.columns[index]} className="px-3 py-2.5 text-right font-mono tabular-nums text-[var(--text-secondary)]">{formatValue(value, field)}</td>; })}<td className="px-3 py-2.5 text-right font-mono font-semibold text-[var(--text-primary)]">{row.total == null ? '-' : formatValue(row.total, result.value_fields[0])}</td></tr>)}</tbody>
+            <thead><tr className="bg-[var(--bg-elevated)] text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
+              <PivotSortHeader sortKey="label" label={result.row_dimensions.map(label).join(' / ')} sort={sort} onSort={handleSort} align="left" sticky />
+              {grid.columns.map((column, index) => <PivotSortHeader key={column} sortKey="cell" index={index} label={column} sort={sort} onSort={handleSort} />)}
+              <PivotSortHeader sortKey="total" label="Total" sort={sort} onSort={handleSort} />
+            </tr></thead>
+            <tbody className="divide-y divide-[var(--border)]">{sortedRows.map((row) => <tr key={row.label}><th className="sticky left-0 bg-[var(--bg-surface)] px-3 py-2.5 text-left font-semibold text-[var(--text-primary)]">{row.label}</th>{row.cells.map((value, index) => { const field = grid.columns[index].split(' · ').at(-1); return <td key={grid.columns[index]} className="px-3 py-2.5 text-right font-mono tabular-nums text-[var(--text-secondary)]">{formatValue(value, field)}</td>; })}<td className="px-3 py-2.5 text-right font-mono font-semibold text-[var(--text-primary)]">{row.total == null ? '-' : formatValue(row.total, result.value_fields[0])}</td></tr>)}</tbody>
             {grid.rows.length > 0 && <tfoot><tr className="border-t border-[var(--border-strong)] bg-[var(--bg-elevated)]"><th className="sticky left-0 bg-[var(--bg-elevated)] px-3 py-2.5 text-left">Total</th>{grid.totals.map((value, index) => { const field = grid.columns[index].split(' · ').at(-1); return <td key={grid.columns[index]} className="px-3 py-2.5 text-right font-mono font-semibold">{value == null ? '-' : formatValue(value, field)}</td>; })}<td className="px-3 py-2.5 text-right font-mono font-semibold">{grid.grandTotal == null ? '-' : formatValue(grid.grandTotal, result.value_fields[0])}</td></tr></tfoot>}
           </table>
         </div>
