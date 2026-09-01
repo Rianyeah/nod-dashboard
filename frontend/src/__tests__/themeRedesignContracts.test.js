@@ -167,10 +167,14 @@ describe('global dashboard theme redesign contracts', () => {
     assert.doesNotMatch(homeTrend, /ResponsiveContainer|useDashboardThemeTokens/);
 
     const reportingPage = src('pages', 'NetworkReportingPage.jsx');
-    assert.match(reportingPage, /DashboardKpiCard|DashboardChartPanel|DashboardStatusBadge|DashboardChartTooltip/);
+    const reportingTrend = src('features', 'reporting', 'ReportingPerformanceTrend.jsx');
+    assert.match(reportingPage, /ReportingScorecards/);
+    assert.match(reportingPage, /ReportingPerformanceTrend/);
+    assert.match(reportingTrend, /DashboardChartPanel/);
+    assert.match(reportingTrend, /DashboardChartTooltip/);
     assert.match(reportingPage, /useDashboardThemeTokens/);
 
-    for (const surface of [homePage + homeTrend, reportingPage]) {
+    for (const surface of [homePage + homeTrend, reportingPage + reportingTrend]) {
       assert.doesNotMatch(surface, /stroke="rgba\(148,163,184,0\.16\)"/);
       assert.doesNotMatch(surface, /tick=\{\{\s*fontSize:\s*10,\s*fill:\s*'#94A3B8'\s*\}\}/);
     }
