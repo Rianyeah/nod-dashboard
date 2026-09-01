@@ -121,6 +121,7 @@ monthly_facts AS (
     SELECT
         a.trx_month,
         a.site_key,
+        a.source_site_id,
         COALESCE(m.site_id, a.source_site_id) AS site_id,
         m.site_name,
         m.nop,
