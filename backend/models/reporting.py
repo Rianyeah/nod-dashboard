@@ -292,7 +292,7 @@ class ReportingSiteGrandTotal(BaseModel):
     avg_availability: float | None = None
     previous_total_time_minutes: float = 0
     previous_outage_minutes: float = 0
-    previous_availability: float | None = None
+    previous_avg_availability: float | None = None
     availability_delta_pct: float | None = None
 
 

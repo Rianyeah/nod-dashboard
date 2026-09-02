@@ -126,6 +126,8 @@ class FakeSiteSession:
                         "previous_payload": 8,
                         "total_time_minutes": 1000,
                         "outage_minutes": 30,
+                        "previous_total_time_minutes": 1000,
+                        "previous_outage_minutes": 20,
                         "availability_target": None,
                         "availability_target_status": "unavailable",
                         "revenue_band": "u30",
@@ -138,7 +140,22 @@ class FakeSiteSession:
                 ]
             )
         if "reporting_site_facets" in sql:
-            return _Result([{"site_classes": [], "total_sites": 1}])
+            return _Result(
+                [
+                    {
+                        "site_classes": [],
+                        "total_sites": 1,
+                        "revenue": 100,
+                        "previous_revenue": 80,
+                        "payload": 10,
+                        "previous_payload": 8,
+                        "total_time_minutes": 1000,
+                        "outage_minutes": 30,
+                        "previous_total_time_minutes": 1000,
+                        "previous_outage_minutes": 20,
+                    }
+                ]
+            )
         raise AssertionError(f"Unexpected query: {sql[:100]}")
 
 
@@ -162,7 +179,28 @@ async def test_unmapped_drilldown_returns_performance_site_without_master_fields
     assert result.items[0].site_id == "ZZZ001"
     assert result.items[0].site_class is None
     assert result.items[0].avg_availability == pytest.approx(97.0)
+    assert result.items[0].previous_availability == pytest.approx(98.0)
+    assert result.items[0].availability_delta_pct == pytest.approx(-1.0)
     assert result.items[0].availability_target_status == "unavailable"
     assert result.items[0].revenue_band == "u30"
     assert result.items[0].payload_target_status == "not_achieved"
     assert result.items[0].overall_target_status == "unavailable"
+    assert result.grand_total.total_sites == 1
+    assert result.grand_total.revenue == 100
+    assert result.grand_total.revenue_mom_pct == pytest.approx(25.0)
+    assert result.grand_total.avg_availability == pytest.approx(97.0)
+    assert result.grand_total.previous_avg_availability == pytest.approx(98.0)
+    assert result.grand_total.availability_delta_pct == pytest.approx(-1.0)
+
+
+def test_site_facet_query_aggregates_the_full_filtered_universe_without_page_controls():
+    from services.reporting_drilldown import SITE_FACETS_QUERY_SUFFIX
+
+    normalized = " ".join(SITE_FACETS_QUERY_SUFFIX.lower().split())
+    assert "reporting_site_facets" in normalized
+    assert "sum(previous_total_time_minutes)" in normalized
+    assert "from filtered" in normalized
+    after_filtered = normalized.split("from filtered", 1)[1]
+    assert " limit " not in f" {after_filtered} "
+    assert " offset " not in f" {after_filtered} "
+    assert " order by " not in f" {after_filtered} "

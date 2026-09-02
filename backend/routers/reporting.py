@@ -602,7 +602,7 @@ async def get_reporting_sites(
         threshold_version = await load_metric_threshold_version(session, period.period_end)
     cache_key = redis_cache.make_key(
         "reporting",
-        "site-drilldown-v2",
+        "site-drilldown-v3",
         area=area_key.strip().upper(),
         period_start=period.period_start,
         period_end=period.period_end,

@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from sqlalchemy import text
 
-from models.reporting import ReportingSitePage, ReportingSiteQuery, ReportingSiteRow
+from models.reporting import (
+    ReportingSiteGrandTotal,
+    ReportingSitePage,
+    ReportingSiteQuery,
+    ReportingSiteRow,
+)
 from queries.reporting_foundation import (
     UNMAPPED_AREA_KEY,
     UNMAPPED_AREA_LABEL,
@@ -96,7 +101,7 @@ active_monthly AS (
     LEFT JOIN active_performance p
       ON p.site_key = s.site_key AND p.trx_month = m.trx_month
 ),
-previous AS (
+previous_performance AS (
     SELECT
         UPPER(TRIM(t.site_id)) AS site_key,
         SUM(COALESCE(t.rev, 0))::bigint AS previous_revenue,
@@ -116,6 +121,15 @@ availability AS (
     FROM availability_facts s
     WHERE s.period BETWEEN :period_start AND :period_end
     GROUP BY 1, 2
+),
+previous_availability AS (
+    SELECT
+        s.site_key,
+        SUM(COALESCE(s.total_time_minutes, 0))::double precision AS previous_total_time_minutes,
+        SUM(COALESCE(s.outage_minutes, 0))::double precision AS previous_outage_minutes
+    FROM availability_facts s
+    WHERE s.period BETWEEN :comparison_start AND :comparison_end
+    GROUP BY 1
 ),
 monthly_facts AS (
     SELECT
@@ -282,10 +296,16 @@ site_facts AS (
         COALESCE(p.previous_payload, 0)::bigint AS previous_payload,
         CASE WHEN COALESCE(p.previous_payload, 0) <> 0
              THEN 100.0 * (f.payload - p.previous_payload) / p.previous_payload END::double precision AS payload_mom_pct,
+        COALESCE(pv.previous_total_time_minutes, 0)::double precision AS previous_total_time_minutes,
+        COALESCE(pv.previous_outage_minutes, 0)::double precision AS previous_outage_minutes,
         CASE WHEN COALESCE(f.total_time_minutes, 0) > 0
-             THEN 100.0 * (f.total_time_minutes - f.outage_minutes) / f.total_time_minutes END::double precision AS avg_availability
+             THEN 100.0 * (f.total_time_minutes - f.outage_minutes) / f.total_time_minutes END::double precision AS avg_availability,
+        CASE WHEN COALESCE(pv.previous_total_time_minutes, 0) > 0
+             THEN 100.0 * (pv.previous_total_time_minutes - pv.previous_outage_minutes)
+                  / pv.previous_total_time_minutes END::double precision AS previous_availability
     FROM period_facts f
-    LEFT JOIN previous p ON p.site_key = f.site_key
+    LEFT JOIN previous_performance p ON p.site_key = f.site_key
+    LEFT JOIN previous_availability pv ON pv.site_key = f.site_key
 ),
 filtered AS (
     SELECT *
@@ -303,6 +323,24 @@ filtered AS (
     availability_facts_ctes=AVAILABILITY_FACTS_CTES,
     target_status_filter="{target_status_filter}",
 )
+
+
+SITE_FACETS_QUERY_SUFFIX = """
+/* reporting_site_facets */
+SELECT
+    COALESCE(ARRAY_AGG(DISTINCT site_class ORDER BY site_class)
+             FILTER (WHERE site_class IS NOT NULL), ARRAY[]::text[]) AS site_classes,
+    COUNT(*)::bigint AS total_sites,
+    COALESCE(SUM(revenue), 0)::bigint AS revenue,
+    COALESCE(SUM(previous_revenue), 0)::bigint AS previous_revenue,
+    COALESCE(SUM(payload), 0)::bigint AS payload,
+    COALESCE(SUM(previous_payload), 0)::bigint AS previous_payload,
+    COALESCE(SUM(total_time_minutes), 0)::double precision AS total_time_minutes,
+    COALESCE(SUM(outage_minutes), 0)::double precision AS outage_minutes,
+    COALESCE(SUM(previous_total_time_minutes), 0)::double precision AS previous_total_time_minutes,
+    COALESCE(SUM(previous_outage_minutes), 0)::double precision AS previous_outage_minutes
+FROM filtered
+"""
 
 
 def _target_sql_filter(requested: str) -> str:
@@ -332,7 +370,7 @@ async def load_reporting_sites(
         "period_end": period.period_end,
         "comparison_start": period.comparison_start,
         "comparison_end": period.comparison_end,
-        "availability_start": period.period_start,
+        "availability_start": period.comparison_start,
         "availability_end": period.period_end,
         "nop_key": canonical_nop(nop),
         "area_key": normalized_area,
@@ -355,17 +393,7 @@ async def load_reporting_sites(
         LIMIT :limit OFFSET :offset
         """
     )
-    facet_query = text(
-        cte
-        + """
-        /* reporting_site_facets */
-        SELECT
-            COALESCE(ARRAY_AGG(DISTINCT site_class ORDER BY site_class)
-                     FILTER (WHERE site_class IS NOT NULL), ARRAY[]::text[]) AS site_classes,
-            COUNT(*)::bigint AS total_sites
-        FROM filtered
-        """
-    )
+    facet_query = text(cte + SITE_FACETS_QUERY_SUFFIX)
     row_values = [dict(row) for row in (await session.execute(rows_query, params)).mappings().all()]
     facet_values = [dict(row) for row in (await session.execute(facet_query, params)).mappings().all()]
     facet = facet_values[0] if facet_values else {"site_classes": [], "total_sites": 0}
@@ -373,9 +401,42 @@ async def load_reporting_sites(
     if query.rank != "all":
         total = min(total, query.rank_limit)
 
+    grand_availability = weighted_availability(
+        facet.get("total_time_minutes"),
+        facet.get("outage_minutes"),
+    )
+    previous_grand_availability = weighted_availability(
+        facet.get("previous_total_time_minutes"),
+        facet.get("previous_outage_minutes"),
+    )
+    grand_total = ReportingSiteGrandTotal(
+        total_sites=int(facet.get("total_sites") or 0),
+        revenue=int(facet.get("revenue") or 0),
+        previous_revenue=int(facet.get("previous_revenue") or 0),
+        revenue_mom_pct=_delta_pct(facet.get("revenue"), facet.get("previous_revenue")),
+        payload=int(facet.get("payload") or 0),
+        previous_payload=int(facet.get("previous_payload") or 0),
+        payload_mom_pct=_delta_pct(facet.get("payload"), facet.get("previous_payload")),
+        total_time_minutes=float(facet.get("total_time_minutes") or 0),
+        outage_minutes=float(facet.get("outage_minutes") or 0),
+        avg_availability=grand_availability,
+        previous_total_time_minutes=float(facet.get("previous_total_time_minutes") or 0),
+        previous_outage_minutes=float(facet.get("previous_outage_minutes") or 0),
+        previous_avg_availability=previous_grand_availability,
+        availability_delta_pct=(
+            grand_availability - previous_grand_availability
+            if grand_availability is not None and previous_grand_availability is not None
+            else None
+        ),
+    )
+
     items: list[ReportingSiteRow] = []
     for row in row_values:
         availability = weighted_availability(row.get("total_time_minutes"), row.get("outage_minutes"))
+        previous_availability = weighted_availability(
+            row.get("previous_total_time_minutes"),
+            row.get("previous_outage_minutes"),
+        )
         items.append(
             ReportingSiteRow(
                 site_id=str(row.get("site_id") or row["site_key"]),
@@ -391,8 +452,17 @@ async def load_reporting_sites(
                 payload=int(row.get("payload") or 0),
                 previous_payload=int(row.get("previous_payload") or 0),
                 payload_mom_pct=_delta_pct(row.get("payload"), row.get("previous_payload")),
+                total_time_minutes=float(row.get("total_time_minutes") or 0),
                 avg_availability=availability,
                 outage_minutes=float(row.get("outage_minutes") or 0),
+                previous_total_time_minutes=float(row.get("previous_total_time_minutes") or 0),
+                previous_outage_minutes=float(row.get("previous_outage_minutes") or 0),
+                previous_availability=previous_availability,
+                availability_delta_pct=(
+                    availability - previous_availability
+                    if availability is not None and previous_availability is not None
+                    else None
+                ),
                 sla_status=availability_sla_status(availability),
                 availability_target=(
                     float(row["availability_target"])
@@ -422,4 +492,5 @@ async def load_reporting_sites(
         site_classes=[str(value) for value in (facet.get("site_classes") or [])],
         rank=query.rank,
         rank_metric=query.rank_metric,
+        grand_total=grand_total,
     )
