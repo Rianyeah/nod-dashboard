@@ -123,6 +123,10 @@ class FakeAreaSession:
                     "kabupaten": "SIDOARJO",
                     "is_unmapped": False,
                     "total_sites": 2,
+                    "u30_sites": 12,
+                    "previous_u30_sites": 10,
+                    "u60_sites": 6,
+                    "previous_u60_sites": 8,
                     "revenue": 300,
                     "previous_revenue": 250,
                     "payload": 30,
@@ -143,6 +147,10 @@ class FakeAreaSession:
                     "kabupaten": "Belum Terpetakan",
                     "is_unmapped": True,
                     "total_sites": 1,
+                    "u30_sites": 2,
+                    "previous_u30_sites": 0,
+                    "u60_sites": 1,
+                    "previous_u60_sites": 1,
                     "revenue": 100,
                     "previous_revenue": 80,
                     "payload": 10,
@@ -397,6 +405,13 @@ async def test_area_loader_keeps_unmapped_sites_and_computes_ratio_metrics():
     assert sum(row.revenue for row in rows) == 400
     assert sum(row.previous_revenue for row in rows) == 330
     assert sum(row.previous_payload for row in rows) == 33
+    assert rows[0].u30_sites == 12
+    assert rows[0].previous_u30_sites == 10
+    assert rows[0].u30_mom_pct == pytest.approx(20.0)
+    assert rows[0].u60_sites == 6
+    assert rows[0].previous_u60_sites == 8
+    assert rows[0].u60_mom_pct == pytest.approx(-25.0)
+    assert rows[1].u30_mom_pct is None
     assert rows[0].avg_availability == pytest.approx(98.5)
     assert rows[0].previous_availability == pytest.approx(99.0)
     assert rows[0].availability_delta_pct == pytest.approx(-0.5)

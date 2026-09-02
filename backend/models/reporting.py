@@ -170,6 +170,12 @@ class ReportingAreaRow(BaseModel):
     kabupaten: str
     is_unmapped: bool = False
     total_sites: int = 0
+    u30_sites: int = 0
+    previous_u30_sites: int = 0
+    u30_mom_pct: float | None = None
+    u60_sites: int = 0
+    previous_u60_sites: int = 0
+    u60_mom_pct: float | None = None
     revenue: int = 0
     previous_revenue: int = 0
     rev_voice: int = 0
