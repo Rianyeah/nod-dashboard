@@ -149,3 +149,66 @@ async def test_pivot_route_keeps_request_isolated_from_other_reporting_sections(
     assert result == {"dataset": "performance", "rows": []}
     assert captured["request"] is request
     assert response.headers["X-Cache"] == "BYPASS"
+
+
+@pytest.mark.asyncio
+async def test_area_export_route_streams_a_real_xlsx_attachment(monkeypatch):
+    from routers import reporting
+
+    async def fake_areas(session, period, nop):
+        return []
+
+    async def fake_sites(session, *, period, nop):
+        return []
+
+    monkeypatch.setattr(reporting, "load_reporting_areas", fake_areas)
+    monkeypatch.setattr(reporting, "load_reporting_site_export_rows", fake_sites, raising=False)
+    monkeypatch.setattr(reporting, "build_area_workbook", lambda **kwargs: b"PK-area", raising=False)
+
+    response = await reporting.export_reporting_areas(
+        trx_month=None,
+        period_start="2026-05",
+        period_end="2026-08",
+        nop="NOP SIDOARJO",
+        session=object(),
+    )
+    payload = b"".join([chunk async for chunk in response.body_iterator])
+
+    assert response.media_type == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    assert "network-reporting-sidoarjo-2026-05-2026-08.xlsx" in response.headers["content-disposition"]
+    assert payload == b"PK-area"
+
+
+@pytest.mark.asyncio
+async def test_pivot_export_route_reuses_the_validated_pivot_result(monkeypatch):
+    from models.reporting import ReportingPivotRequest
+    from routers import reporting
+
+    request = ReportingPivotRequest(
+        dataset="performance",
+        period_start="2026-07",
+        period_end="2026-07",
+        rows=["kabupaten"],
+        values=[{"field": "revenue", "aggregation": "sum"}],
+    )
+    pivot_result = {"dataset": "performance", "rows": []}
+    captured = {}
+
+    async def fake_execute(session, received):
+        assert received is request
+        return pivot_result
+
+    def fake_build(*, request, result):
+        captured["request"] = request
+        captured["result"] = result
+        return b"PK-pivot"
+
+    monkeypatch.setattr(reporting, "execute_reporting_pivot", fake_execute)
+    monkeypatch.setattr(reporting, "build_pivot_workbook", fake_build, raising=False)
+
+    response = await reporting.export_reporting_pivot(request=request, session=object())
+    payload = b"".join([chunk async for chunk in response.body_iterator])
+
+    assert captured == {"request": request, "result": pivot_result}
+    assert "network-reporting-pivot-performance-2026-07-2026-07.xlsx" in response.headers["content-disposition"]
+    assert payload == b"PK-pivot"

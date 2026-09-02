@@ -183,6 +183,46 @@ class FakeSiteSession:
         raise AssertionError(f"Unexpected query: {sql[:100]}")
 
 
+class FakeSiteExportSession:
+    async def execute(self, query, params):
+        sql = str(query)
+        assert "reporting_site_export_rows" in sql
+        assert "LIMIT :limit" not in sql
+        assert "OFFSET :offset" not in sql
+        assert params["area_key"] is None
+        assert "limit" not in params
+        assert "offset" not in params
+        return _Result(
+            [
+                {
+                    "site_key": "AAA001",
+                    "site_id": "AAA001",
+                    "site_name": "Alpha",
+                    "nop": "NOP SIDOARJO",
+                    "kabupaten": "SIDOARJO",
+                    "status_site": "Active",
+                    "site_class": "GOLD",
+                    "transport_type": "FO",
+                    "revenue": 20_000_000,
+                    "previous_revenue": 25_000_000,
+                    "payload": 15_728_640,
+                    "previous_payload": 14_000_000,
+                    "total_time_minutes": 1000,
+                    "outage_minutes": 3.2,
+                    "previous_total_time_minutes": 1000,
+                    "previous_outage_minutes": 4,
+                    "availability_target": 99.68,
+                    "availability_target_status": "achieved",
+                    "revenue_band": "u30",
+                    "revenue_target_status": "not_achieved",
+                    "payload_target_tb": 15,
+                    "payload_target_status": "achieved",
+                    "overall_target_status": "not_achieved",
+                }
+            ]
+        )
+
+
 @pytest.mark.asyncio
 async def test_unmapped_drilldown_returns_performance_site_without_master_fields():
     from models.reporting import ReportingSiteQuery
@@ -215,6 +255,22 @@ async def test_unmapped_drilldown_returns_performance_site_without_master_fields
     assert result.grand_total.avg_availability == pytest.approx(97.0)
     assert result.grand_total.previous_avg_availability == pytest.approx(98.0)
     assert result.grand_total.availability_delta_pct == pytest.approx(-1.0)
+
+
+@pytest.mark.asyncio
+async def test_site_export_loader_returns_the_full_unpaginated_scope():
+    from periods import resolve_month_period
+    from services.reporting_drilldown import load_reporting_site_export_rows
+
+    rows = await load_reporting_site_export_rows(
+        FakeSiteExportSession(),
+        period=resolve_month_period(period_start="2026-07", period_end="2026-07"),
+        nop="SIDOARJO",
+    )
+
+    assert [row.site_id for row in rows] == ["AAA001"]
+    assert rows[0].revenue_band == "u30"
+    assert rows[0].revenue_mom_pct == pytest.approx(-20.0)
 
 
 def test_site_facet_query_aggregates_the_full_filtered_universe_without_page_controls():

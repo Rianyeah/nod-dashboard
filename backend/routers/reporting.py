@@ -9,7 +9,10 @@ GET /reporting/battery-by-kabupaten    — Battery type cross-tab
 GET /reporting/trend                   — Monthly revenue trend
 GET /reporting/available-months        — List of trx_month values
 """
+from io import BytesIO
+
 from fastapi import APIRouter, Depends, Query, Response
+from fastapi.responses import StreamingResponse
 import runtime_compat  # noqa: F401
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
@@ -33,7 +36,13 @@ from models.reporting import (
 from periods import build_period_meta, resolve_month_period
 from queries.reporting_foundation import canonical_nop, load_revenue_target_version
 from services.reporting_overview import load_reporting_areas, load_reporting_overview
-from services.reporting_drilldown import load_reporting_sites
+from services.reporting_drilldown import load_reporting_site_export_rows, load_reporting_sites
+from services.reporting_export import (
+    XLSX_MEDIA_TYPE,
+    build_area_workbook,
+    build_pivot_workbook,
+    build_xlsx_filename,
+)
 from services.reporting_pivot import execute_reporting_pivot, normalize_pivot_spec
 from services.reporting_thresholds import load_metric_threshold_version
 
@@ -567,6 +576,43 @@ async def get_reporting_areas(
     return payload
 
 
+@router.get("/export/areas.xlsx")
+async def export_reporting_areas(
+    trx_month: str | None = Query(None, description="Legacy period in YYYY-MM format"),
+    period_start: str | None = Query(None),
+    period_end: str | None = Query(None),
+    nop: str | None = Query(None),
+    session: AsyncSession = Depends(get_session),
+):
+    """Export every Kabupaten and site row for the canonical Reporting scope."""
+    period = resolve_reporting_period(trx_month, period_start, period_end)
+    nop_key = canonical_nop(nop)
+    areas = await load_reporting_areas(session, period, nop_key)
+    sites = await load_reporting_site_export_rows(
+        session,
+        period=period,
+        nop=nop_key,
+    )
+    payload = build_area_workbook(
+        period_start=period.period_start,
+        period_end=period.period_end,
+        scope_label=nop_key or "Regional Jatim",
+        areas=areas,
+        sites=sites,
+    )
+    filename = build_xlsx_filename(
+        "network-reporting",
+        nop_key or "regional-jatim",
+        period.period_start,
+        period.period_end,
+    )
+    return StreamingResponse(
+        BytesIO(payload),
+        media_type=XLSX_MEDIA_TYPE,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.get("/areas/{area_key}/sites", response_model=ReportingSitePage)
 async def get_reporting_sites(
     area_key: str,
@@ -661,6 +707,27 @@ async def get_reporting_pivot(
     if response is not None:
         response.headers["X-Cache"] = cache_status
     return payload
+
+
+@router.post("/export/pivot.xlsx")
+async def export_reporting_pivot(
+    request: ReportingPivotRequest,
+    session: AsyncSession = Depends(get_session),
+):
+    """Export the same validated Pivot result rendered by the web analysis."""
+    result = await execute_reporting_pivot(session, request)
+    payload = build_pivot_workbook(request=request, result=result)
+    filename = build_xlsx_filename(
+        "network-reporting-pivot",
+        request.dataset,
+        request.period_start,
+        request.period_end,
+    )
+    return StreamingResponse(
+        BytesIO(payload),
+        media_type=XLSX_MEDIA_TYPE,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/scorecards", response_model=ReportingScorecard)

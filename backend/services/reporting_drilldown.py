@@ -313,7 +313,8 @@ filtered AS (
     FROM site_facts
     WHERE (CAST(:nop_key AS text) IS NULL OR nop_key = :nop_key)
       AND (
-        (:area_key = :unmapped_key AND NOT is_mapped)
+        CAST(:area_key AS text) IS NULL
+        OR (:area_key = :unmapped_key AND NOT is_mapped)
         OR (:area_key <> :unmapped_key AND UPPER(TRIM(kabupaten)) = :area_key)
       )
       AND (CAST(:site_class AS text) IS NULL OR UPPER(TRIM(site_class)) = UPPER(TRIM(:site_class)))
@@ -365,6 +366,96 @@ def _revenue_band_sql_filter(requested: str) -> str:
     }[requested]
 
 
+def _site_row_from_mapping(row: dict) -> ReportingSiteRow:
+    availability = weighted_availability(row.get("total_time_minutes"), row.get("outage_minutes"))
+    previous_availability = weighted_availability(
+        row.get("previous_total_time_minutes"),
+        row.get("previous_outage_minutes"),
+    )
+    return ReportingSiteRow(
+        site_id=str(row.get("site_id") or row["site_key"]),
+        site_name=row.get("site_name"),
+        nop=row.get("nop"),
+        kabupaten=row.get("kabupaten"),
+        status_site=row.get("status_site"),
+        site_class=row.get("site_class"),
+        transport_type=row.get("transport_type"),
+        revenue=int(row.get("revenue") or 0),
+        previous_revenue=int(row.get("previous_revenue") or 0),
+        revenue_mom_pct=_delta_pct(row.get("revenue"), row.get("previous_revenue")),
+        payload=int(row.get("payload") or 0),
+        previous_payload=int(row.get("previous_payload") or 0),
+        payload_mom_pct=_delta_pct(row.get("payload"), row.get("previous_payload")),
+        total_time_minutes=float(row.get("total_time_minutes") or 0),
+        avg_availability=availability,
+        outage_minutes=float(row.get("outage_minutes") or 0),
+        previous_total_time_minutes=float(row.get("previous_total_time_minutes") or 0),
+        previous_outage_minutes=float(row.get("previous_outage_minutes") or 0),
+        previous_availability=previous_availability,
+        availability_delta_pct=(
+            availability - previous_availability
+            if availability is not None and previous_availability is not None
+            else None
+        ),
+        sla_status=availability_sla_status(availability),
+        availability_target=(
+            float(row["availability_target"])
+            if row.get("availability_target") is not None
+            else None
+        ),
+        availability_target_status=row.get("availability_target_status") or "unavailable",
+        revenue_band=row.get("revenue_band") or "unavailable",
+        revenue_target_status=row.get("revenue_target_status") or "unavailable",
+        payload_target_tb=(
+            float(row["payload_target_tb"])
+            if row.get("payload_target_tb") is not None
+            else None
+        ),
+        payload_target_status=row.get("payload_target_status") or "unavailable",
+        overall_target_status=row.get("overall_target_status") or "unavailable",
+    )
+
+
+def _site_query_params(*, period, nop: str | None, area_key: str | None = None) -> dict:
+    return {
+        "period_start": period.period_start,
+        "period_end": period.period_end,
+        "comparison_start": period.comparison_start,
+        "comparison_end": period.comparison_end,
+        "availability_start": period.comparison_start,
+        "availability_end": period.period_end,
+        "nop_key": canonical_nop(nop),
+        "area_key": area_key,
+        "unmapped_key": UNMAPPED_AREA_KEY,
+    }
+
+
+async def load_reporting_site_export_rows(
+    session,
+    *,
+    period,
+    nop: str | None,
+) -> list[ReportingSiteRow]:
+    """Return the complete canonical site universe without UI pagination."""
+    params = {
+        **_site_query_params(period=period, nop=nop),
+        "site_class": None,
+        "search": None,
+    }
+    cte = SITE_FACTS_CTE.format(target_status_filter="", revenue_band_filter="")
+    query = text(
+        cte
+        + """
+        /* reporting_site_export_rows */
+        SELECT *
+        FROM filtered
+        ORDER BY UPPER(COALESCE(kabupaten, '')), site_key
+        """
+    )
+    rows = [dict(row) for row in (await session.execute(query, params)).mappings().all()]
+    return [_site_row_from_mapping(row) for row in rows]
+
+
 async def load_reporting_sites(
     session,
     *,
@@ -379,15 +470,7 @@ async def load_reporting_sites(
     effective_page = 1 if query.rank != "all" else query.page
     effective_page_size = min(query.page_size, query.rank_limit) if query.rank != "all" else query.page_size
     params = {
-        "period_start": period.period_start,
-        "period_end": period.period_end,
-        "comparison_start": period.comparison_start,
-        "comparison_end": period.comparison_end,
-        "availability_start": period.comparison_start,
-        "availability_end": period.period_end,
-        "nop_key": canonical_nop(nop),
-        "area_key": normalized_area,
-        "unmapped_key": UNMAPPED_AREA_KEY,
+        **_site_query_params(period=period, nop=nop, area_key=normalized_area),
         "site_class": query.site_class.strip() if query.site_class else None,
         "search": f"%{query.q.strip().upper()}%" if query.q and query.q.strip() else None,
         "limit": effective_page_size,
@@ -444,57 +527,7 @@ async def load_reporting_sites(
         ),
     )
 
-    items: list[ReportingSiteRow] = []
-    for row in row_values:
-        availability = weighted_availability(row.get("total_time_minutes"), row.get("outage_minutes"))
-        previous_availability = weighted_availability(
-            row.get("previous_total_time_minutes"),
-            row.get("previous_outage_minutes"),
-        )
-        items.append(
-            ReportingSiteRow(
-                site_id=str(row.get("site_id") or row["site_key"]),
-                site_name=row.get("site_name"),
-                nop=row.get("nop"),
-                kabupaten=row.get("kabupaten"),
-                status_site=row.get("status_site"),
-                site_class=row.get("site_class"),
-                transport_type=row.get("transport_type"),
-                revenue=int(row.get("revenue") or 0),
-                previous_revenue=int(row.get("previous_revenue") or 0),
-                revenue_mom_pct=_delta_pct(row.get("revenue"), row.get("previous_revenue")),
-                payload=int(row.get("payload") or 0),
-                previous_payload=int(row.get("previous_payload") or 0),
-                payload_mom_pct=_delta_pct(row.get("payload"), row.get("previous_payload")),
-                total_time_minutes=float(row.get("total_time_minutes") or 0),
-                avg_availability=availability,
-                outage_minutes=float(row.get("outage_minutes") or 0),
-                previous_total_time_minutes=float(row.get("previous_total_time_minutes") or 0),
-                previous_outage_minutes=float(row.get("previous_outage_minutes") or 0),
-                previous_availability=previous_availability,
-                availability_delta_pct=(
-                    availability - previous_availability
-                    if availability is not None and previous_availability is not None
-                    else None
-                ),
-                sla_status=availability_sla_status(availability),
-                availability_target=(
-                    float(row["availability_target"])
-                    if row.get("availability_target") is not None
-                    else None
-                ),
-                availability_target_status=row.get("availability_target_status") or "unavailable",
-                revenue_band=row.get("revenue_band") or "unavailable",
-                revenue_target_status=row.get("revenue_target_status") or "unavailable",
-                payload_target_tb=(
-                    float(row["payload_target_tb"])
-                    if row.get("payload_target_tb") is not None
-                    else None
-                ),
-                payload_target_status=row.get("payload_target_status") or "unavailable",
-                overall_target_status=row.get("overall_target_status") or "unavailable",
-            )
-        )
+    items = [_site_row_from_mapping(row) for row in row_values]
 
     return ReportingSitePage(
         area_key=normalized_area,
