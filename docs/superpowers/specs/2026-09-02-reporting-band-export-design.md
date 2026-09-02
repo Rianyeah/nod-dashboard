@@ -1,7 +1,7 @@
 # Network Reporting Revenue Band and XLSX Export Design
 
-**Date:** 2026-09-02  
-**Status:** Approved for implementation  
+**Date:** 2026-09-02
+**Status:** Approved for implementation
 **Scope:** Network Reporting only
 
 ## Objective
@@ -128,4 +128,3 @@ introduced.
   typed cells, filters, frozen panes, and full unpaginated site rows.
 - Browser QA covers desktop and mobile Reporting, Semester 1, U30/U60 shortcuts,
   sorting, and both downloads.
-
