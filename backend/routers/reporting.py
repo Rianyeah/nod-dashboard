@@ -543,7 +543,7 @@ async def get_reporting_areas(
     nop_key = canonical_nop(nop)
     cache_key = redis_cache.make_key(
         "reporting",
-        "areas-v3",
+        "areas-v4",
         period_start=period.period_start,
         period_end=period.period_end,
         nop=nop_key or "",

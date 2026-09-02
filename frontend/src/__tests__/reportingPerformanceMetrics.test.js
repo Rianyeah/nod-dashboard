@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  buildRevenueTotals,
+  buildAreaGrandTotal,
   calculateBackupSuksesRate,
 } from '../features/reporting/reportingPerformanceMetrics.js';
 
@@ -15,33 +15,43 @@ describe('Reporting Performance Table metrics', () => {
     assert.equal(calculateBackupSuksesRate(5, 20), 25);
   });
 
-  it('calculates Total from summed counts instead of averaging row percentages', () => {
-    const total = buildRevenueTotals([
+  it('builds the grand total from additive facts and duration-weighted availability', () => {
+    const total = buildAreaGrandTotal([
       {
         total_sites: 2,
-        avg_availability: 99,
+        revenue: 300,
+        previous_revenue: 250,
+        payload: 30,
+        previous_payload: 25,
+        total_time_minutes: 2_000,
+        outage_minutes: 30,
+        previous_total_time_minutes: 2_000,
+        previous_outage_minutes: 20,
         ticket_swfm_bps: 10,
         backup_sukses_bps: 5,
-        backup_sukses_rate: 50,
-        proker_open: 2,
-        proker_closed: 1,
       },
       {
-        total_sites: 8,
-        avg_availability: 100,
+        total_sites: 1,
+        revenue: 100,
+        previous_revenue: 80,
+        payload: 10,
+        previous_payload: 8,
+        total_time_minutes: 1_000,
+        outage_minutes: 30,
+        previous_total_time_minutes: 1_000,
+        previous_outage_minutes: 20,
         ticket_swfm_bps: 30,
         backup_sukses_bps: 3,
-        backup_sukses_rate: 10,
-        proker_open: 4,
-        proker_closed: 3,
       },
     ]);
 
-    assert.equal(total.backup_sukses_bps, 8);
-    assert.equal(total.ticket_swfm_bps, 40);
+    assert.equal(total.revenue, 400);
+    assert.equal(total.revenue_delta_pct, ((400 - 330) / 330) * 100);
+    assert.equal(total.payload, 40);
+    assert.equal(total.payload_delta_pct, ((40 - 33) / 33) * 100);
+    assert.equal(total.avg_availability, 98);
+    assert.equal(total.previous_avg_availability, 98.66666666666667);
+    assert.equal(total.availability_delta_pct, 98 - 98.66666666666667);
     assert.equal(total.backup_sukses_rate, 20);
-    assert.equal(total.proker_open, 6);
-    assert.equal(total.proker_closed, 4);
-    assert.equal(total.avg_availability, 99.8);
   });
 });

@@ -113,6 +113,7 @@ class ReportingRedisCacheTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertIn("load_metric_threshold_version", source)
         self.assertIn('"overview-v5"', source)
+        self.assertIn('"areas-v4"', source)
         self.assertIn("threshold_version=threshold_version", source)
 
     def test_site_drilldown_cache_tracks_effective_metric_threshold_version(self):

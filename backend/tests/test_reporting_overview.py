@@ -124,10 +124,14 @@ class FakeAreaSession:
                     "is_unmapped": False,
                     "total_sites": 2,
                     "revenue": 300,
+                    "previous_revenue": 250,
                     "payload": 30,
+                    "previous_payload": 25,
                     "traffic": 12,
                     "total_time_minutes": 2000,
                     "outage_minutes": 30,
+                    "previous_total_time_minutes": 2000,
+                    "previous_outage_minutes": 20,
                     "ticket_swfm_bps": 2,
                     "ticket_swfm_ts": 1,
                     "backup_sukses_bps": 1,
@@ -140,10 +144,14 @@ class FakeAreaSession:
                     "is_unmapped": True,
                     "total_sites": 1,
                     "revenue": 100,
+                    "previous_revenue": 80,
                     "payload": 10,
+                    "previous_payload": 8,
                     "traffic": 4,
                     "total_time_minutes": 1000,
                     "outage_minutes": 30,
+                    "previous_total_time_minutes": 1000,
+                    "previous_outage_minutes": 40,
                     "ticket_swfm_bps": 0,
                     "ticket_swfm_ts": 0,
                     "backup_sukses_bps": 0,
@@ -388,6 +396,9 @@ async def test_area_loader_keeps_unmapped_sites_and_computes_ratio_metrics():
     assert sum(row.total_sites for row in rows) == 3
     assert sum(row.revenue for row in rows) == 400
     assert rows[0].avg_availability == pytest.approx(98.5)
+    assert rows[0].previous_availability == pytest.approx(99.0)
+    assert rows[0].availability_delta_pct == pytest.approx(-0.5)
     assert rows[0].backup_sukses_rate == pytest.approx(50.0)
     assert rows[0].sla_status == "missed"
     assert rows[1].is_unmapped is True
+    assert rows[1].availability_delta_pct == pytest.approx(1.0)

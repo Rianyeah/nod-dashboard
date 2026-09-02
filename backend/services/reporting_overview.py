@@ -571,13 +571,22 @@ previous_performance AS (
     GROUP BY 1
 ),
 {availability_facts_ctes},
-availability AS (
+active_availability AS (
     SELECT
         s.site_key,
         SUM(COALESCE(s.total_time_minutes, 0)) AS total_time_minutes,
         SUM(COALESCE(s.outage_minutes, 0)) AS outage_minutes
     FROM availability_facts s
     WHERE s.period BETWEEN :period_start AND :period_end
+    GROUP BY 1
+),
+previous_availability AS (
+    SELECT
+        s.site_key,
+        SUM(COALESCE(s.total_time_minutes, 0)) AS previous_total_time_minutes,
+        SUM(COALESCE(s.outage_minutes, 0)) AS previous_outage_minutes
+    FROM availability_facts s
+    WHERE s.period BETWEEN :comparison_start AND :comparison_end
     GROUP BY 1
 ),
 facts AS (
@@ -591,16 +600,19 @@ facts AS (
         COALESCE(a.outage_minutes, 0) AS outage_minutes
     FROM active_performance p
     LEFT JOIN master m ON m.site_key = p.site_key
-    LEFT JOIN availability a ON a.site_key = p.site_key
+    LEFT JOIN active_availability a ON a.site_key = p.site_key
     WHERE CAST(:nop_key AS text) IS NULL OR m.nop_key = :nop_key
 ),
 previous_facts AS (
     SELECT
         COALESCE(UPPER(TRIM(m.kabupaten)), :unmapped_key) AS area_key,
-        SUM(p.revenue) AS revenue,
-        SUM(p.payload) AS payload
+        SUM(COALESCE(p.revenue, 0)) AS revenue,
+        SUM(COALESCE(p.payload, 0)) AS payload,
+        SUM(COALESCE(a.previous_total_time_minutes, 0)) AS previous_total_time_minutes,
+        SUM(COALESCE(a.previous_outage_minutes, 0)) AS previous_outage_minutes
     FROM previous_performance p
-    LEFT JOIN master m ON m.site_key = p.site_key
+    FULL OUTER JOIN previous_availability a ON a.site_key = p.site_key
+    LEFT JOIN master m ON m.site_key = COALESCE(p.site_key, a.site_key)
     WHERE CAST(:nop_key AS text) IS NULL OR m.nop_key = :nop_key
     GROUP BY 1
 ),
@@ -660,6 +672,8 @@ SELECT
     a.*,
     previous.revenue AS previous_revenue,
     previous.payload AS previous_payload,
+    COALESCE(previous.previous_total_time_minutes, 0)::double precision AS previous_total_time_minutes,
+    COALESCE(previous.previous_outage_minutes, 0)::double precision AS previous_outage_minutes,
     COALESCE(t.ticket_swfm_bps, 0)::bigint AS ticket_swfm_bps,
     COALESCE(t.ticket_swfm_ts, 0)::bigint AS ticket_swfm_ts,
     COALESCE(t.backup_sukses_bps, 0)::bigint AS backup_sukses_bps,
@@ -1080,7 +1094,7 @@ async def load_reporting_areas(session, period, nop: str | None) -> list[Reporti
         "period_end": period.period_end,
         "comparison_start": period.comparison_start,
         "comparison_end": period.comparison_end,
-        "availability_start": period.period_start,
+        "availability_start": period.comparison_start,
         "availability_end": period.period_end,
         "start_date": period.start_date,
         "end_date_exclusive": period.end_date_exclusive,
@@ -1118,6 +1132,10 @@ async def load_reporting_areas(session, period, nop: str | None) -> list[Reporti
         availability = weighted_availability(
             row.get("total_time_minutes"), row.get("outage_minutes")
         )
+        previous_availability = weighted_availability(
+            row.get("previous_total_time_minutes"),
+            row.get("previous_outage_minutes"),
+        )
         response.append(
             ReportingAreaRow(
                 area_key=str(row["area_key"]),
@@ -1127,6 +1145,14 @@ async def load_reporting_areas(session, period, nop: str | None) -> list[Reporti
                 total_time_minutes=float(row.get("total_time_minutes") or 0),
                 outage_minutes=float(row.get("outage_minutes") or 0),
                 avg_availability=availability,
+                previous_total_time_minutes=float(row.get("previous_total_time_minutes") or 0),
+                previous_outage_minutes=float(row.get("previous_outage_minutes") or 0),
+                previous_availability=previous_availability,
+                availability_delta_pct=(
+                    availability - previous_availability
+                    if availability is not None and previous_availability is not None
+                    else None
+                ),
                 sla_status=availability_sla_status(availability),
                 backup_sukses_rate=safe_share(
                     row.get("backup_sukses_bps"), row.get("ticket_swfm_bps")
