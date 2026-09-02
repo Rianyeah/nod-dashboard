@@ -17,6 +17,15 @@ def test_site_query_rejects_unknown_sort_and_oversized_page():
         ReportingSiteQuery(sort_by="revenue", page_size=101)
 
 
+def test_site_query_validates_revenue_band_filter():
+    from models.reporting import ReportingSiteQuery
+
+    assert ReportingSiteQuery(revenue_band="u30").revenue_band == "u30"
+    assert ReportingSiteQuery(revenue_band="achieved").revenue_band == "achieved"
+    with pytest.raises(ValidationError):
+        ReportingSiteQuery(revenue_band="active")
+
+
 def test_site_order_is_allowlisted_and_uses_site_id_as_tie_breaker():
     from models.reporting import ReportingSiteQuery
     from services.reporting_drilldown import build_site_order
@@ -32,6 +41,10 @@ def test_site_order_is_allowlisted_and_uses_site_id_as_tie_breaker():
         ("site_id", "site_key"),
         ("site_class", "site_class"),
         ("status_site", "status_site"),
+        (
+            "revenue_band",
+            "CASE revenue_band WHEN 'u30' THEN 1 WHEN 'u60' THEN 2 WHEN 'achieved' THEN 3 ELSE 4 END",
+        ),
         ("transport_type", "transport_type"),
         ("revenue", "revenue"),
         ("revenue_mom", "revenue_mom_pct"),
@@ -67,6 +80,17 @@ def test_target_filter_is_evaluated_inside_filtered_cte_before_pagination():
     assert _target_sql_filter("achieved") == "AND overall_target_status = 'achieved'"
     assert _target_sql_filter("not_achieved") == "AND overall_target_status = 'not_achieved'"
     assert _target_sql_filter("unavailable") == "AND overall_target_status = 'unavailable'"
+
+
+def test_revenue_band_filter_is_independent_and_applied_before_pagination():
+    from services.reporting_drilldown import SITE_FACTS_CTE, _revenue_band_sql_filter
+
+    assert "{revenue_band_filter}" in SITE_FACTS_CTE
+    assert _revenue_band_sql_filter("all") == ""
+    assert _revenue_band_sql_filter("u30") == "AND revenue_band = 'u30'"
+    assert _revenue_band_sql_filter("u60") == "AND revenue_band = 'u60'"
+    assert _revenue_band_sql_filter("achieved") == "AND revenue_band = 'achieved'"
+    assert _revenue_band_sql_filter("unavailable") == "AND revenue_band = 'unavailable'"
 
 
 def test_period_row_displays_latest_effective_target_but_keeps_monthly_statuses():

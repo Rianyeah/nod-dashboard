@@ -582,6 +582,7 @@ async def get_reporting_sites(
     rank_limit: int = Query(10, ge=1, le=100),
     rank_metric: str = Query("revenue"),
     target_status: str = Query("all"),
+    revenue_band: str = Query("all"),
     site_class: str | None = Query(None),
     q: str | None = Query(None),
     session: AsyncSession = Depends(get_session),
@@ -599,6 +600,7 @@ async def get_reporting_sites(
         rank_limit=rank_limit,
         rank_metric=rank_metric,
         target_status=target_status,
+        revenue_band=revenue_band,
         site_class=site_class,
         q=q,
     )

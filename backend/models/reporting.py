@@ -230,6 +230,7 @@ class ReportingSiteQuery(BaseModel):
         "site_id",
         "site_class",
         "status_site",
+        "revenue_band",
         "transport_type",
         "revenue",
         "payload",
@@ -244,6 +245,7 @@ class ReportingSiteQuery(BaseModel):
         "site_id",
         "site_class",
         "status_site",
+        "revenue_band",
         "transport_type",
         "revenue",
         "payload",
@@ -252,6 +254,7 @@ class ReportingSiteQuery(BaseModel):
         "payload_mom",
     ] = "revenue"
     target_status: Literal["all", "achieved", "not_achieved", "unavailable"] = "all"
+    revenue_band: Literal["all", "u30", "u60", "achieved", "unavailable"] = "all"
     site_class: str | None = Field(default=None, max_length=80)
     q: str | None = Field(default=None, max_length=100)
 

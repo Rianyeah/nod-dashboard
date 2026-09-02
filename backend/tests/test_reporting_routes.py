@@ -104,6 +104,7 @@ async def test_site_drilldown_route_builds_validated_query(monkeypatch):
         rank_limit=5,
         rank_metric="payload",
         target_status="not_achieved",
+        revenue_band="u60",
         site_class="Gold",
         q="AAA",
     )
@@ -114,6 +115,7 @@ async def test_site_drilldown_route_builds_validated_query(monkeypatch):
     assert captured["query"].rank == "bottom"
     assert captured["query"].rank_limit == 5
     assert captured["query"].target_status == "not_achieved"
+    assert captured["query"].revenue_band == "u60"
     assert response.headers["X-Cache"] == "BYPASS"
 
 

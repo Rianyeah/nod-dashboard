@@ -91,6 +91,10 @@ describe('dashboard and reporting visual/data contracts', () => {
     assert.match(drilldown, /data-\[side=right\]:w-full data-\[side=right\]:sm:max-w-4xl/);
     assert.match(drilldown, /site_class/);
     assert.match(drilldown, /Target Achieved/);
+    assert.match(drilldown, /toggleRevenueBand/);
+    assert.match(drilldown, /revenue_band/);
+    assert.match(drilldown, />U30</);
+    assert.match(drilldown, />U60</);
     for (const status of ['all', 'achieved', 'not_achieved', 'unavailable']) {
       assert.match(drilldown, new RegExp(`value: '${status}'`));
     }
@@ -102,7 +106,7 @@ describe('dashboard and reporting visual/data contracts', () => {
     assert.match(areaTable, /const handleRank = \(value\)/);
     assert.match(drilldown, /const handleSort = \(field\) => setQuery\([\s\S]*rank: 'all'/);
     assert.match(drilldown, /const handleRank = \(value\)/);
-    for (const field of ['site_id', 'site_class', 'status_site', 'revenue', 'payload', 'availability']) {
+    for (const field of ['site_id', 'site_class', 'revenue_band', 'revenue', 'payload', 'availability']) {
       assert.match(drilldown, new RegExp(`SortHeader field="${field}"`));
     }
     assert.match(areaTable, /ReportingMetricValue/);

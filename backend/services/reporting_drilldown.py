@@ -27,6 +27,7 @@ SORT_EXPRESSIONS = {
     "site_id": "site_key",
     "site_class": "site_class",
     "status_site": "status_site",
+    "revenue_band": "CASE revenue_band WHEN 'u30' THEN 1 WHEN 'u60' THEN 2 WHEN 'achieved' THEN 3 ELSE 4 END",
     "transport_type": "transport_type",
     "revenue": "revenue",
     "payload": "payload",
@@ -318,10 +319,12 @@ filtered AS (
       AND (CAST(:site_class AS text) IS NULL OR UPPER(TRIM(site_class)) = UPPER(TRIM(:site_class)))
       AND (CAST(:search AS text) IS NULL OR site_key LIKE :search OR UPPER(COALESCE(site_name, '')) LIKE :search)
       {target_status_filter}
+      {revenue_band_filter}
 )
 """.format(
     availability_facts_ctes=AVAILABILITY_FACTS_CTES,
     target_status_filter="{target_status_filter}",
+    revenue_band_filter="{revenue_band_filter}",
 )
 
 
@@ -349,6 +352,16 @@ def _target_sql_filter(requested: str) -> str:
         "achieved": "AND overall_target_status = 'achieved'",
         "not_achieved": "AND overall_target_status = 'not_achieved'",
         "unavailable": "AND overall_target_status = 'unavailable'",
+    }[requested]
+
+
+def _revenue_band_sql_filter(requested: str) -> str:
+    return {
+        "all": "",
+        "u30": "AND revenue_band = 'u30'",
+        "u60": "AND revenue_band = 'u60'",
+        "achieved": "AND revenue_band = 'achieved'",
+        "unavailable": "AND revenue_band = 'unavailable'",
     }[requested]
 
 
@@ -381,7 +394,8 @@ async def load_reporting_sites(
         "offset": (effective_page - 1) * effective_page_size,
     }
     cte = SITE_FACTS_CTE.format(
-        target_status_filter=_target_sql_filter(query.target_status)
+        target_status_filter=_target_sql_filter(query.target_status),
+        revenue_band_filter=_revenue_band_sql_filter(query.revenue_band),
     )
     rows_query = text(
         cte
