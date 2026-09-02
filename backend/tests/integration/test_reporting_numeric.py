@@ -319,6 +319,59 @@ async def test_site_target_boundaries_are_evaluated_before_pagination(reporting_
 
 
 @pytest.mark.asyncio
+async def test_area_revenue_bands_use_conservative_equal_length_windows(reporting_db_session):
+    from periods import resolve_month_period
+    from services.reporting_overview import load_reporting_areas
+
+    await _seed_numeric_facts(reporting_db_session)
+    await reporting_db_session.execute(
+        text(
+            '''
+            UPDATE public.traktor_data
+            SET rev = CASE
+                WHEN site_id = 'AAA001' AND trx_month = '2026-06' THEN 65000000
+                WHEN site_id = 'AAA001' AND trx_month = '2026-07' THEN 20000000
+                WHEN site_id = 'BBB001' AND trx_month = '2026-06' THEN 65000000
+                WHEN site_id = 'BBB001' AND trx_month = '2026-07' THEN 45000000
+                ELSE rev
+            END
+            WHERE site_id IN ('AAA001', 'BBB001')
+              AND trx_month BETWEEN '2026-06' AND '2026-07'
+            '''
+        )
+    )
+    await reporting_db_session.execute(
+        text(
+            '''
+            INSERT INTO public.traktor_data
+                (trx_month, site_id, rev, traffic, payload, rev_voice, rev_bb, rev_dig, rev_sms, rev_ir,
+                 pld_2g, pld_3g, pld_4g, pld_5g, trf_2g, trf_3g, trf_4g)
+            VALUES
+                ('2026-04', 'AAA001', 20000000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+                ('2026-04', 'BBB001', 45000000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+                ('2026-05', 'AAA001', 65000000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+                ('2026-05', 'BBB001', 45000000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+            '''
+        )
+    )
+    await reporting_db_session.commit()
+
+    rows = await load_reporting_areas(
+        reporting_db_session,
+        resolve_month_period(period_start="2026-06", period_end="2026-07"),
+        "SIDOARJO",
+    )
+
+    sidoarjo = next(row for row in rows if row.area_key == "SIDOARJO")
+    assert sidoarjo.u30_sites == 1
+    assert sidoarjo.u60_sites == 1
+    assert sidoarjo.previous_u30_sites == 1
+    assert sidoarjo.previous_u60_sites == 1
+    assert sidoarjo.u30_mom_pct == pytest.approx(0.0)
+    assert sidoarjo.u60_mom_pct == pytest.approx(0.0)
+
+
+@pytest.mark.asyncio
 async def test_multi_month_site_target_marks_missing_month_or_value_unavailable(reporting_db_session):
     from models.reporting import ReportingSiteQuery
     from periods import resolve_month_period

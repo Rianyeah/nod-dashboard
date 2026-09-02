@@ -1,4 +1,5 @@
 from pathlib import Path
+import asyncio
 import sys
 
 import pytest
@@ -123,6 +124,10 @@ class FakeAreaSession:
                     "kabupaten": "SIDOARJO",
                     "is_unmapped": False,
                     "total_sites": 2,
+                    "u30_sites": 12,
+                    "previous_u30_sites": 10,
+                    "u60_sites": 6,
+                    "previous_u60_sites": 8,
                     "revenue": 300,
                     "previous_revenue": 250,
                     "payload": 30,
@@ -143,6 +148,10 @@ class FakeAreaSession:
                     "kabupaten": "Belum Terpetakan",
                     "is_unmapped": True,
                     "total_sites": 1,
+                    "u30_sites": 2,
+                    "previous_u30_sites": 0,
+                    "u60_sites": 1,
+                    "previous_u60_sites": 1,
                     "revenue": 100,
                     "previous_revenue": 80,
                     "payload": 10,
@@ -160,6 +169,43 @@ class FakeAreaSession:
                 },
             ]
         )
+
+
+class _SessionContext:
+    def __init__(self, session):
+        self.session = session
+
+    async def __aenter__(self):
+        return self.session
+
+    async def __aexit__(self, exc_type, exc, traceback):
+        return False
+
+
+class _ConcurrentOverviewSession(FakeOverviewSession):
+    def __init__(self, tracker):
+        self.tracker = tracker
+
+    async def execute(self, query, params=None):
+        self.tracker["active"] += 1
+        self.tracker["max_active"] = max(
+            self.tracker["max_active"], self.tracker["active"]
+        )
+        await asyncio.sleep(0.01)
+        try:
+            return await super().execute(query, params)
+        finally:
+            self.tracker["active"] -= 1
+
+
+class _OverviewSessionFactory:
+    def __init__(self):
+        self.tracker = {"active": 0, "max_active": 0}
+        self.created = 0
+
+    def __call__(self):
+        self.created += 1
+        return _SessionContext(_ConcurrentOverviewSession(self.tracker))
 
 
 def test_weighted_availability_uses_ratio_of_summed_minutes():
@@ -180,6 +226,19 @@ def test_reporting_queries_fall_back_to_raw_availability_for_missing_cache_rows(
     assert '"outgage (menit)"' in normalized
     for query in (SCOPE_AGGREGATES_QUERY, TREND_QUERY, AREA_AGGREGATES_QUERY, COVERAGE_QUERY):
         assert "availability_facts" in query
+
+
+def test_revenue_band_bindings_are_isolated_to_the_area_query():
+    from sqlalchemy import text
+
+    from services.reporting_overview import AREA_AGGREGATES_QUERY, SCOPE_AGGREGATES_QUERY
+
+    scope_params = set(text(SCOPE_AGGREGATES_QUERY).compile().params)
+    area_params = set(text(AREA_AGGREGATES_QUERY).compile().params)
+
+    assert "unmapped_key" not in scope_params
+    assert "unmapped_label" not in scope_params
+    assert {"unmapped_key", "unmapped_label"} <= area_params
 
 
 def test_trend_query_classifies_each_month_with_its_effective_threshold_version():
@@ -370,6 +429,25 @@ async def test_overview_loader_returns_typed_numeric_contract_from_one_scope_que
     assert overview.coverage[0].latest_data_period == "2026-07"
 
 
+@pytest.mark.asyncio
+async def test_overview_loader_uses_independent_sessions_for_concurrent_facts():
+    from periods import resolve_month_period
+    from services.reporting_overview import load_reporting_overview
+
+    factory = _OverviewSessionFactory()
+    overview = await load_reporting_overview(
+        FakeOverviewSession(),
+        resolve_month_period(period_start="2026-01", period_end="2026-06"),
+        "NOP SIDOARJO",
+        session_factory=factory,
+    )
+
+    assert overview.scope_label == "SIDOARJO"
+    assert overview.scorecards.total_sites == 2
+    assert factory.created == 7
+    assert factory.tracker["max_active"] > 1
+
+
 def test_overview_queries_keep_scorecard_breakdown_and_ytd_in_the_same_scope():
     from services.reporting_overview import OVERVIEW_YTD_QUERY, SCOPE_AGGREGATES_QUERY
 
@@ -397,6 +475,13 @@ async def test_area_loader_keeps_unmapped_sites_and_computes_ratio_metrics():
     assert sum(row.revenue for row in rows) == 400
     assert sum(row.previous_revenue for row in rows) == 330
     assert sum(row.previous_payload for row in rows) == 33
+    assert rows[0].u30_sites == 12
+    assert rows[0].previous_u30_sites == 10
+    assert rows[0].u30_mom_pct == pytest.approx(20.0)
+    assert rows[0].u60_sites == 6
+    assert rows[0].previous_u60_sites == 8
+    assert rows[0].u60_mom_pct == pytest.approx(-25.0)
+    assert rows[1].u30_mom_pct is None
     assert rows[0].avg_availability == pytest.approx(98.5)
     assert rows[0].previous_availability == pytest.approx(99.0)
     assert rows[0].availability_delta_pct == pytest.approx(-0.5)

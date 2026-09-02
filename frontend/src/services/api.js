@@ -4,6 +4,7 @@
  */
 import axios from 'axios';
 import { withTransportRetry } from './transportQualityRequest.js';
+import { filenameFromDisposition } from '../utils/downloadFile.js';
 
 const API_BASE_URL = '/api/v1';
 
@@ -226,6 +227,7 @@ export async function fetchReportingOverview(period, nop, signal) {
   const { data } = await api.get('/reporting/overview', {
     params: { ...monthPeriodParams(period), nop: nop || undefined },
     signal,
+    timeout: 60_000,
   });
   return data;
 }
@@ -234,6 +236,7 @@ export async function fetchReportingAreas(period, nop, signal) {
   const { data } = await api.get('/reporting/areas', {
     params: { ...monthPeriodParams(period), nop: nop || undefined },
     signal,
+    timeout: 60_000,
   });
   return data;
 }
@@ -242,6 +245,7 @@ export async function fetchReportingSites(areaKey, { period, nop, ...query } = {
   const { data } = await api.get(`/reporting/areas/${encodeURIComponent(areaKey)}/sites`, {
     params: { ...monthPeriodParams(period), nop: nop || undefined, ...query },
     signal,
+    timeout: 60_000,
   });
   return data;
 }
@@ -249,6 +253,35 @@ export async function fetchReportingSites(areaKey, { period, nop, ...query } = {
 export async function fetchReportingPivot(specification, signal) {
   const { data } = await api.post('/reporting/pivot', specification, { signal });
   return data;
+}
+
+export async function fetchReportingAreaExport(period, nop) {
+  const response = await api.get('/reporting/export/areas.xlsx', {
+    params: { ...monthPeriodParams(period), nop: nop || undefined },
+    responseType: 'blob',
+    timeout: 120_000,
+  });
+  return {
+    blob: response.data,
+    filename: filenameFromDisposition(
+      response.headers?.['content-disposition'],
+      'network-reporting.xlsx',
+    ),
+  };
+}
+
+export async function fetchReportingPivotExport(specification) {
+  const response = await api.post('/reporting/export/pivot.xlsx', specification, {
+    responseType: 'blob',
+    timeout: 120_000,
+  });
+  return {
+    blob: response.data,
+    filename: filenameFromDisposition(
+      response.headers?.['content-disposition'],
+      'network-reporting-pivot.xlsx',
+    ),
+  };
 }
 
 export async function fetchReportingScorecards(period, nop) {

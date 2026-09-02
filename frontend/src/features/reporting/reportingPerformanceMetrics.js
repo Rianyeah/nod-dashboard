@@ -1,5 +1,9 @@
 const SUM_FIELDS = [
   'total_sites',
+  'u30_sites',
+  'previous_u30_sites',
+  'u60_sites',
+  'previous_u60_sites',
   'revenue',
   'previous_revenue',
   'rev_voice',
@@ -53,6 +57,8 @@ export function buildAreaGrandTotal(rows = []) {
   }
 
   totals.revenue_delta_pct = relativeChange(totals.revenue, totals.previous_revenue);
+  totals.u30_mom_pct = relativeChange(totals.u30_sites, totals.previous_u30_sites);
+  totals.u60_mom_pct = relativeChange(totals.u60_sites, totals.previous_u60_sites);
   totals.payload_delta_pct = relativeChange(totals.payload, totals.previous_payload);
   totals.avg_availability = weightedAvailability(
     totals.total_time_minutes,

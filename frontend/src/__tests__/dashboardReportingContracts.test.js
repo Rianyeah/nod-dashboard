@@ -86,11 +86,19 @@ describe('dashboard and reporting visual/data contracts', () => {
 
     assert.match(areaTable, /Top 10/);
     assert.match(areaTable, /Bottom 10/);
+    assert.match(areaTable, /Download XLSX/);
+    assert.match(areaTable, /formatReportingPeriodTitle/);
+    assert.match(areaTable, /SortHeader field="u30_sites" label="U30"/);
+    assert.match(areaTable, /SortHeader field="u60_sites" label="U60"/);
     assert.match(areaTable, /md:hidden/);
     assert.match(drilldown, /reporting-site-class/);
     assert.match(drilldown, /data-\[side=right\]:w-full data-\[side=right\]:sm:max-w-4xl/);
     assert.match(drilldown, /site_class/);
     assert.match(drilldown, /Target Achieved/);
+    assert.match(drilldown, /toggleRevenueBand/);
+    assert.match(drilldown, /revenue_band/);
+    assert.match(drilldown, />U30</);
+    assert.match(drilldown, />U60</);
     for (const status of ['all', 'achieved', 'not_achieved', 'unavailable']) {
       assert.match(drilldown, new RegExp(`value: '${status}'`));
     }
@@ -102,7 +110,7 @@ describe('dashboard and reporting visual/data contracts', () => {
     assert.match(areaTable, /const handleRank = \(value\)/);
     assert.match(drilldown, /const handleSort = \(field\) => setQuery\([\s\S]*rank: 'all'/);
     assert.match(drilldown, /const handleRank = \(value\)/);
-    for (const field of ['site_id', 'site_class', 'status_site', 'revenue', 'payload', 'availability']) {
+    for (const field of ['site_id', 'site_class', 'revenue_band', 'revenue', 'payload', 'availability']) {
       assert.match(drilldown, new RegExp(`SortHeader field="${field}"`));
     }
     assert.match(areaTable, /ReportingMetricValue/);
@@ -129,6 +137,8 @@ describe('dashboard and reporting visual/data contracts', () => {
     assert.match(state, /Maksimal 2 baris, 1 kolom, dan 3 nilai/);
     assert.match(pivot, /pivot_too_large/);
     assert.match(pivot, /PivotSortHeader/);
+    assert.match(pivot, /Download XLSX/);
+    assert.match(pivot, /fetchReportingPivotExport/);
     assert.match(state, /sortPivotRows/);
   });
 
@@ -165,6 +175,19 @@ describe('dashboard and reporting visual/data contracts', () => {
     assert.match(page, /ReportingPivot/);
     assert.match(api, /period_start:\s*period\?\.start/);
     assert.match(api, /period_end:\s*period\?\.end/);
+    assert.match(api, /\/reporting\/overview[\s\S]*timeout:\s*60_000/);
+    assert.match(api, /\/reporting\/areas[\s\S]*timeout:\s*60_000/);
+    assert.match(api, /encodeURIComponent\(areaKey\)[\s\S]*timeout:\s*60_000/);
+  });
+
+  it('uses the full Network Reporting sidebar label and backend XLSX exports', () => {
+    const sidebar = src('components', 'DashboardSidebar.jsx');
+    const api = src('services', 'api.js');
+
+    assert.match(sidebar, /to: '\/reporting', label: 'Network Reporting'/);
+    assert.match(api, /\/reporting\/export\/areas\.xlsx/);
+    assert.match(api, /\/reporting\/export\/pivot\.xlsx/);
+    assert.match(api, /responseType:\s*'blob'/);
   });
 
   it('wires the Impact Service route, navigation, global filters, and API params', () => {

@@ -1,9 +1,10 @@
 import { useMemo, useRef, useState } from 'react';
-import { ArrowDown, ArrowUp, Grid3X3, Play } from 'lucide-react';
+import { ArrowDown, ArrowUp, Download, Grid3X3, Play } from 'lucide-react';
 
 import { DashboardCombobox } from '../../components/dashboard-filters/DashboardFilters.jsx';
 import { DashboardTableShell } from '../../components/ui/DashboardPrimitives.jsx';
-import { fetchReportingPivot } from '../../services/api.js';
+import { fetchReportingPivot, fetchReportingPivotExport } from '../../services/api.js';
+import { triggerBlobDownload } from '../../utils/downloadFile.js';
 import { formatNumber, formatPayload, formatPercent, formatRevenue } from '../../utils/formatters.js';
 import { buildPivotGrid, sortPivotRows, validatePivotDraft } from './reportingPivotState.js';
 
@@ -59,8 +60,11 @@ function PivotSortHeader({ sortKey, index, label: headerLabel, sort, onSort, ali
 export default function ReportingPivot({ period, nop }) {
   const [draft, setDraft] = useState({ dataset: 'performance', rows: ['kabupaten'], column: 'period', values: ['revenue'] });
   const [result, setResult] = useState(null);
+  const [appliedSpec, setAppliedSpec] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState('');
+  const [exportError, setExportError] = useState('');
   const [sort, setSort] = useState({ key: 'label', direction: 'asc' });
   const controllerRef = useRef(null);
   const config = DATASETS[draft.dataset];
@@ -81,7 +85,10 @@ export default function ReportingPivot({ period, nop }) {
   const setDataset = (dataset) => {
     const next = DATASETS[dataset];
     setDraft({ dataset, rows: ['kabupaten'], column: 'period', values: [Object.keys(next.measures)[0]] });
+    setResult(null);
+    setAppliedSpec(null);
     setError('');
+    setExportError('');
   };
   const setRow = (index, value) => setDraft((current) => {
     const nextRows = [...current.rows];
@@ -112,7 +119,7 @@ export default function ReportingPivot({ period, nop }) {
     setLoading(true);
     setError('');
     try {
-      const response = await fetchReportingPivot({
+      const specification = {
         dataset: draft.dataset,
         period_start: period.start,
         period_end: period.end,
@@ -121,8 +128,10 @@ export default function ReportingPivot({ period, nop }) {
         columns: draft.column ? [draft.column] : [],
         values: draft.values.map((field) => ({ field, aggregation: config.measures[field] })),
         filters: [],
-      }, controller.signal);
+      };
+      const response = await fetchReportingPivot(specification, controller.signal);
       setResult(response);
+      setAppliedSpec(specification);
       setSort({ key: 'label', direction: 'asc' });
     } catch (requestError) {
       if (requestError?.code === 'ERR_CANCELED') return;
@@ -135,9 +144,32 @@ export default function ReportingPivot({ period, nop }) {
     }
   };
 
+  const handleExport = async () => {
+    if (!appliedSpec || !result || exporting) return;
+    setExporting(true);
+    setExportError('');
+    try {
+      const { blob, filename } = await fetchReportingPivotExport(appliedSpec);
+      triggerBlobDownload(blob, filename);
+    } catch {
+      setExportError('File XLSX Pivot tidak dapat dibuat.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const dimensionOptions = config.dimensions.map((value) => ({ value, label: label(value) }));
   return (
-    <DashboardTableShell title="Analisis Pivot" icon={Grid3X3} description="Susun analisis singkat; data tetap diagregasi di server.">
+    <DashboardTableShell
+      title="Analisis Pivot"
+      icon={Grid3X3}
+      description="Susun analisis singkat; data tetap diagregasi di server."
+      action={(
+        <button type="button" onClick={handleExport} disabled={!result || !appliedSpec || exporting} className="reporting-no-print inline-flex h-8 items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface-soft)] px-2.5 text-[11px] font-semibold text-[var(--text-secondary)] hover:text-[var(--primary-light)] disabled:opacity-50">
+          <Download className="size-3.5" />{exporting ? 'Menyiapkan' : 'Download XLSX'}
+        </button>
+      )}
+    >
       <div className="reporting-no-print border-b border-[var(--border)] p-4">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           <DashboardCombobox id="pivot-dataset" label="Dataset" value={draft.dataset} onChange={setDataset} options={Object.entries(DATASETS).map(([value, item]) => ({ value, label: item.label }))} />
@@ -160,6 +192,7 @@ export default function ReportingPivot({ period, nop }) {
         </button>
       </div>
       {error && <p className="border-b border-[var(--danger)]/20 bg-[var(--danger)]/8 px-4 py-3 text-xs text-[var(--danger)]">{error}</p>}
+      {exportError && <p className="border-b border-[var(--danger)]/20 bg-[var(--danger)]/8 px-4 py-3 text-xs text-[var(--danger)]">{exportError}</p>}
       {!result && !loading ? (
         <p className="px-4 py-12 text-center text-sm text-[var(--text-muted)]">Pilih susunan lalu terapkan.</p>
       ) : loading ? (

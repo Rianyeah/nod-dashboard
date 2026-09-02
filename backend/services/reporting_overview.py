@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from sqlalchemy import text
 
 from models.reporting import (
@@ -570,6 +572,118 @@ previous_performance AS (
       AND NULLIF(TRIM(t.site_id), '') IS NOT NULL
     GROUP BY 1
 ),
+band_months AS (
+    SELECT
+        'selected'::text AS window_key,
+        TO_CHAR(month_value, 'YYYY-MM') AS trx_month
+    FROM GENERATE_SERIES(
+        TO_DATE(:period_start, 'YYYY-MM'),
+        TO_DATE(:period_end, 'YYYY-MM'),
+        INTERVAL '1 month'
+    ) AS selected_months(month_value)
+    UNION ALL
+    SELECT
+        'previous'::text AS window_key,
+        TO_CHAR(month_value, 'YYYY-MM') AS trx_month
+    FROM GENERATE_SERIES(
+        TO_DATE(:comparison_start, 'YYYY-MM'),
+        TO_DATE(:comparison_end, 'YYYY-MM'),
+        INTERVAL '1 month'
+    ) AS previous_months(month_value)
+),
+band_performance AS (
+    SELECT
+        t.trx_month,
+        UPPER(TRIM(t.site_id)) AS site_key,
+        SUM(t.rev)::bigint AS revenue
+    FROM public.traktor_data t
+    WHERE t.trx_month BETWEEN :comparison_start AND :period_end
+      AND NULLIF(TRIM(t.site_id), '') IS NOT NULL
+    GROUP BY 1, 2
+),
+band_window_sites AS (
+    SELECT DISTINCT months.window_key, performance.site_key
+    FROM band_months months
+    JOIN band_performance performance ON performance.trx_month = months.trx_month
+),
+band_monthly AS (
+    SELECT
+        sites.window_key,
+        months.trx_month,
+        sites.site_key,
+        performance.revenue,
+        revenue_u30.threshold_value::double precision AS u30_upper,
+        revenue_u60.threshold_value::double precision AS u60_upper
+    FROM band_window_sites sites
+    JOIN band_months months ON months.window_key = sites.window_key
+    LEFT JOIN band_performance performance
+      ON performance.site_key = sites.site_key
+     AND performance.trx_month = months.trx_month
+    LEFT JOIN LATERAL (
+        SELECT threshold.threshold_value
+        FROM public.reporting_metric_thresholds threshold
+        WHERE threshold.metric = 'revenue'
+          AND threshold.threshold_key = 'u30_upper'
+          AND threshold.site_class = '*'
+          AND threshold.effective_month <= months.trx_month
+        ORDER BY threshold.effective_month DESC, threshold.updated_at DESC
+        LIMIT 1
+    ) revenue_u30 ON TRUE
+    LEFT JOIN LATERAL (
+        SELECT threshold.threshold_value
+        FROM public.reporting_metric_thresholds threshold
+        WHERE threshold.metric = 'revenue'
+          AND threshold.threshold_key = 'u60_upper'
+          AND threshold.site_class = '*'
+          AND threshold.effective_month <= months.trx_month
+        ORDER BY threshold.effective_month DESC, threshold.updated_at DESC
+        LIMIT 1
+    ) revenue_u60 ON TRUE
+),
+band_monthly_status AS (
+    SELECT
+        *,
+        CASE
+            WHEN revenue IS NULL OR u30_upper IS NULL OR u60_upper IS NULL THEN 'unavailable'
+            WHEN revenue < u30_upper THEN 'u30'
+            WHEN revenue < u60_upper THEN 'u60'
+            ELSE 'achieved'
+        END AS revenue_band
+    FROM band_monthly
+),
+band_site_status AS (
+    SELECT
+        window_key,
+        site_key,
+        CASE
+            WHEN BOOL_OR(revenue_band = 'unavailable') THEN 'unavailable'
+            WHEN BOOL_OR(revenue_band = 'u30') THEN 'u30'
+            WHEN BOOL_OR(revenue_band = 'u60') THEN 'u60'
+            ELSE 'achieved'
+        END AS revenue_band
+    FROM band_monthly_status
+    GROUP BY 1, 2
+),
+band_area AS (
+    SELECT
+        COALESCE(UPPER(TRIM(master.kabupaten)), :unmapped_key) AS area_key,
+        COUNT(*) FILTER (
+            WHERE status.window_key = 'selected' AND status.revenue_band = 'u30'
+        )::bigint AS u30_sites,
+        COUNT(*) FILTER (
+            WHERE status.window_key = 'previous' AND status.revenue_band = 'u30'
+        )::bigint AS previous_u30_sites,
+        COUNT(*) FILTER (
+            WHERE status.window_key = 'selected' AND status.revenue_band = 'u60'
+        )::bigint AS u60_sites,
+        COUNT(*) FILTER (
+            WHERE status.window_key = 'previous' AND status.revenue_band = 'u60'
+        )::bigint AS previous_u60_sites
+    FROM band_site_status status
+    LEFT JOIN master ON master.site_key = status.site_key
+    WHERE CAST(:nop_key AS text) IS NULL OR master.nop_key = :nop_key
+    GROUP BY 1
+),
 {availability_facts_ctes},
 active_availability AS (
     SELECT
@@ -670,6 +784,10 @@ proker AS (
 )
 SELECT
     a.*,
+    COALESCE(bands.u30_sites, 0)::bigint AS u30_sites,
+    COALESCE(bands.previous_u30_sites, 0)::bigint AS previous_u30_sites,
+    COALESCE(bands.u60_sites, 0)::bigint AS u60_sites,
+    COALESCE(bands.previous_u60_sites, 0)::bigint AS previous_u60_sites,
     previous.revenue AS previous_revenue,
     previous.payload AS previous_payload,
     COALESCE(previous.previous_total_time_minutes, 0)::double precision AS previous_total_time_minutes,
@@ -680,6 +798,7 @@ SELECT
     COALESCE(p.proker_open, 0)::bigint AS proker_open,
     COALESCE(p.proker_closed, 0)::bigint AS proker_closed
 FROM area a
+LEFT JOIN band_area bands ON bands.area_key = a.area_key
 LEFT JOIN previous_facts previous ON previous.area_key = a.area_key
 LEFT JOIN tickets t ON t.area_key = a.area_key
 LEFT JOIN proker p ON p.area_key = a.area_key
@@ -1008,7 +1127,18 @@ def _coverage_from_rows(rows: list[dict], active_months: tuple[str, ...]) -> lis
     return coverage
 
 
-async def load_reporting_overview(session, period, nop: str | None) -> ReportingOverview:
+async def _run_overview_fact(session_factory, loader):
+    async with session_factory() as fact_session:
+        return await loader(fact_session)
+
+
+async def load_reporting_overview(
+    session,
+    period,
+    nop: str | None,
+    *,
+    session_factory=None,
+) -> ReportingOverview:
     """Load selected, Regional, comparison, trend, target, and coverage facts."""
     nop_key = canonical_nop(nop)
     params = {
@@ -1023,14 +1153,64 @@ async def load_reporting_overview(session, period, nop: str | None) -> Reporting
         "end_date_exclusive": period.end_date_exclusive,
         "nop_key": nop_key,
     }
-    target = await load_revenue_target(
-        session,
-        nop=nop_key,
-        period_start=period.period_start,
-        period_end=period.period_end,
-    )
-    thresholds = await resolve_threshold_snapshot(session, period.period_end)
-    scope_rows = _row_dicts(await session.execute(text(SCOPE_AGGREGATES_QUERY), params))
+    async def target_loader(fact_session):
+        return await load_revenue_target(
+            fact_session,
+            nop=nop_key,
+            period_start=period.period_start,
+            period_end=period.period_end,
+        )
+
+    async def threshold_loader(fact_session):
+        return await resolve_threshold_snapshot(fact_session, period.period_end)
+
+    async def query_rows(fact_session, query, query_params):
+        return _row_dicts(await fact_session.execute(text(query), query_params))
+
+    ytd_params = {**params, "year_start": f"{period.period_end[:4]}-01"}
+    driver_params = {**params, "availability_start": period.comparison_start}
+
+    if session_factory is None:
+        target = await target_loader(session)
+        thresholds = await threshold_loader(session)
+        scope_rows = await query_rows(session, SCOPE_AGGREGATES_QUERY, params)
+        ytd_rows = await query_rows(session, OVERVIEW_YTD_QUERY, ytd_params)
+        trend_rows = await query_rows(session, TREND_QUERY, params)
+        driver_rows = await query_rows(session, SITE_DRIVER_CANDIDATES_QUERY, driver_params)
+        coverage_rows = await query_rows(session, COVERAGE_QUERY, params)
+    else:
+        (
+            target,
+            thresholds,
+            scope_rows,
+            ytd_rows,
+            trend_rows,
+            driver_rows,
+            coverage_rows,
+        ) = await asyncio.gather(
+            _run_overview_fact(session_factory, target_loader),
+            _run_overview_fact(session_factory, threshold_loader),
+            _run_overview_fact(
+                session_factory,
+                lambda fact_session: query_rows(fact_session, SCOPE_AGGREGATES_QUERY, params),
+            ),
+            _run_overview_fact(
+                session_factory,
+                lambda fact_session: query_rows(fact_session, OVERVIEW_YTD_QUERY, ytd_params),
+            ),
+            _run_overview_fact(
+                session_factory,
+                lambda fact_session: query_rows(fact_session, TREND_QUERY, params),
+            ),
+            _run_overview_fact(
+                session_factory,
+                lambda fact_session: query_rows(fact_session, SITE_DRIVER_CANDIDATES_QUERY, driver_params),
+            ),
+            _run_overview_fact(
+                session_factory,
+                lambda fact_session: query_rows(fact_session, COVERAGE_QUERY, params),
+            ),
+        )
     scopes = {str(row["scope"]): row for row in scope_rows}
     zero_scope = {
         "total_sites": 0,
@@ -1041,28 +1221,8 @@ async def load_reporting_overview(session, period, nop: str | None) -> Reporting
         "total_time_minutes": 0,
         "outage_minutes": 0,
     }
-    ytd_rows = _row_dicts(
-        await session.execute(
-            text(OVERVIEW_YTD_QUERY),
-            {
-                **params,
-                "year_start": f"{period.period_end[:4]}-01",
-            },
-        )
-    )
     ytd = ytd_rows[0] if ytd_rows else {"revenue_ytd": 0, "payload_ytd": 0}
-    trend_rows = _row_dicts(await session.execute(text(TREND_QUERY), params))
     trend = [RevenueTrendItem(**row) for row in trend_rows]
-    driver_rows = _row_dicts(
-        await session.execute(
-            text(SITE_DRIVER_CANDIDATES_QUERY),
-            {
-                **params,
-                "availability_start": period.comparison_start,
-            },
-        )
-    )
-    coverage_rows = _row_dicts(await session.execute(text(COVERAGE_QUERY), params))
     coverage = _coverage_from_rows(coverage_rows, period.active_months)
     period_meta = build_period_meta(
         period,
@@ -1105,6 +1265,10 @@ async def load_reporting_areas(session, period, nop: str | None) -> list[Reporti
     rows = _row_dicts(await session.execute(text(AREA_AGGREGATES_QUERY), params))
     integer_fields = (
         "total_sites",
+        "u30_sites",
+        "previous_u30_sites",
+        "u60_sites",
+        "previous_u60_sites",
         "revenue",
         "previous_revenue",
         "rev_voice",
@@ -1159,6 +1323,8 @@ async def load_reporting_areas(session, period, nop: str | None) -> list[Reporti
                 backup_sukses_rate=safe_share(
                     row.get("backup_sukses_bps"), row.get("ticket_swfm_bps")
                 ),
+                u30_mom_pct=_delta_pct(row.get("u30_sites"), row.get("previous_u30_sites")),
+                u60_mom_pct=_delta_pct(row.get("u60_sites"), row.get("previous_u60_sites")),
                 revenue_delta_pct=_delta_pct(row.get("revenue"), row.get("previous_revenue")),
                 payload_delta_pct=_delta_pct(row.get("payload"), row.get("previous_payload")),
             )

@@ -28,7 +28,7 @@ const SIDEBAR_STORAGE_KEY = 'nod_sidebar_collapsed';
 const NAV_ITEMS = [
   { to: '/home', label: 'Home', icon: Home },
   { to: '/site-map', label: 'Site Map', icon: Map },
-  { to: '/reporting', label: 'Reporting', icon: BarChart3 },
+  { to: '/reporting', label: 'Network Reporting', icon: BarChart3 },
   { to: '/impact-service', label: 'Impact Service', icon: AlertTriangle },
   { to: '/activity-enom', label: 'Activity ENOM', icon: ClipboardList },
   { to: '/transport-quality', label: 'Transport Quality', icon: Activity },

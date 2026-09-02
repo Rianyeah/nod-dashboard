@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 
 import {
   buildMonthRange,
+  formatReportingPeriodTitle,
   formatMonthRangeLabel,
   getSemesterRange,
 } from '../components/dashboard-filters/periodRange.js';
@@ -39,5 +40,12 @@ describe('month period range helpers', () => {
     assert.equal(formatMonthRangeLabel('2026-06', '2026-06'), 'Jun 2026');
     assert.equal(formatMonthRangeLabel('2026-01', '2026-06'), 'Semester 1 2026');
     assert.equal(formatMonthRangeLabel('2025-11', '2026-02'), 'Nov 2025-Feb 2026');
+  });
+
+  it('formats the Reporting table title with full Indonesian month names', () => {
+    assert.equal(formatReportingPeriodTitle('2026-08', '2026-08'), 'Agustus 2026');
+    assert.equal(formatReportingPeriodTitle('2026-05', '2026-08'), 'Mei - Agustus 2026');
+    assert.equal(formatReportingPeriodTitle('2026-01', '2026-06'), 'Januari - Juni 2026');
+    assert.equal(formatReportingPeriodTitle('2025-11', '2026-02'), 'November 2025 - Februari 2026');
   });
 });

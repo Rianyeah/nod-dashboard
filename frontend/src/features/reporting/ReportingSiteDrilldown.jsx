@@ -12,6 +12,7 @@ import {
 import { fetchReportingSites } from '../../services/api.js';
 import { formatPayload, formatPercent, formatRevenueShort } from '../../utils/formatters.js';
 import ReportingMetricValue from './ReportingMetricValue.jsx';
+import { revenueBandPresentation, toggleRevenueBand } from './reportingSiteState.js';
 
 
 const TARGET_STATUS_OPTIONS = [
@@ -34,19 +35,26 @@ function SortHeader({ field, label, active, direction, onSort, align = 'right' }
 }
 
 
+function RevenueBandBadge({ value }) {
+  const presentation = revenueBandPresentation(value);
+  return <span className={`inline-flex rounded-md border px-2 py-0.5 text-[10px] font-semibold ${presentation.className}`}>{presentation.label}</span>;
+}
+
+
 function SiteRow({ item, onOpenSite, mobile = false }) {
   if (mobile) {
     return (
       <button type="button" onClick={() => onOpenSite(item.site_id)} className="block w-full px-4 py-3 text-left hover:bg-[var(--bg-hover)]">
         <div className="flex items-start justify-between gap-3">
           <div><strong className="text-sm text-[var(--text-primary)]">{item.site_id}</strong><p className="text-xs text-[var(--text-muted)]">{item.site_name || 'Nama site belum terpetakan'}</p></div>
+          <RevenueBandBadge value={item.revenue_band} />
         </div>
         <div className="mt-3 grid grid-cols-3 gap-2 text-[11px]">
           <span><small className="block text-[var(--text-muted)]">Revenue</small><ReportingMetricValue value={item.revenue} delta={item.revenue_mom_pct} formatValue={formatRevenueShort} valueClassName="text-[var(--success)]" /></span>
           <span><small className="block text-[var(--text-muted)]">Payload</small><ReportingMetricValue value={item.payload} delta={item.payload_mom_pct} formatValue={formatPayload} valueClassName="text-[var(--chart-info)]" /></span>
           <span><small className="block text-[var(--text-muted)]">Availability</small><ReportingMetricValue value={item.avg_availability} delta={item.availability_delta_pct} formatValue={formatPercent} digits={2} valueClassName="text-[var(--text-primary)]" /></span>
         </div>
-        <p className="mt-2 text-[10px] text-[var(--text-muted)]">{item.site_class || 'Site Class belum tersedia'} / {item.status_site || 'Status belum tersedia'} / {item.transport_type || 'Transport belum tersedia'}</p>
+        <p className="mt-2 text-[10px] text-[var(--text-muted)]">{item.site_class || 'Site Class belum tersedia'} / {item.transport_type || 'Transport belum tersedia'}</p>
       </button>
     );
   }
@@ -54,7 +62,7 @@ function SiteRow({ item, onOpenSite, mobile = false }) {
     <tr onClick={() => onOpenSite(item.site_id)} className="cursor-pointer hover:bg-[var(--bg-hover)]/60">
       <td className="px-3 py-2.5"><strong className="block text-[var(--text-primary)]">{item.site_id}</strong><span className="text-[11px] text-[var(--text-muted)]">{item.site_name || '-'}</span></td>
       <td className="px-3 py-2.5 text-[var(--text-secondary)]">{item.site_class || '-'}</td>
-      <td className="px-3 py-2.5 text-[var(--text-secondary)]">{item.status_site || '-'}</td>
+      <td className="px-3 py-2.5"><RevenueBandBadge value={item.revenue_band} /></td>
       <td className="px-3 py-2.5 text-right"><ReportingMetricValue value={item.revenue} delta={item.revenue_mom_pct} formatValue={formatRevenueShort} valueClassName="text-[var(--success)]" /></td>
       <td className="px-3 py-2.5 text-right"><ReportingMetricValue value={item.payload} delta={item.payload_mom_pct} formatValue={formatPayload} valueClassName="text-[var(--chart-info)]" /></td>
       <td className="px-3 py-2.5 text-right"><ReportingMetricValue value={item.avg_availability} delta={item.availability_delta_pct} formatValue={formatPercent} digits={2} valueClassName="text-[var(--text-primary)]" /></td>
@@ -64,7 +72,7 @@ function SiteRow({ item, onOpenSite, mobile = false }) {
 
 
 export default function ReportingSiteDrilldown({ area, open, onOpenChange, period, nop, onOpenSite }) {
-  const [query, setQuery] = useState({ page: 1, page_size: 25, sort_by: 'revenue', sort_dir: 'desc', rank: 'all', rank_limit: 10, rank_metric: 'revenue', target_status: 'all', site_class: '', q: '' });
+  const [query, setQuery] = useState({ page: 1, page_size: 25, sort_by: 'revenue', sort_dir: 'desc', rank: 'all', rank_limit: 10, rank_metric: 'revenue', target_status: 'all', revenue_band: 'all', site_class: '', q: '' });
   const [requestState, setRequestState] = useState({ requestKey: '', result: null, error: '' });
   const requestQuery = useMemo(() => ({
     ...query,
@@ -106,6 +114,11 @@ export default function ReportingSiteDrilldown({ area, open, onOpenChange, perio
     sort_dir: value === 'bottom' ? 'asc' : value === 'top' ? 'desc' : current.sort_dir,
     page: 1,
   }));
+  const handleRevenueBand = (value) => setQuery((current) => ({
+    ...current,
+    revenue_band: toggleRevenueBand(current.revenue_band, value),
+    page: 1,
+  }));
   const totalPages = Math.max(1, Math.ceil(Number(result?.total || 0) / Number(result?.page_size || 25)));
   const showGrandTotal = !loading && !error && result?.items?.length > 0 && result?.grand_total;
 
@@ -122,6 +135,9 @@ export default function ReportingSiteDrilldown({ area, open, onOpenChange, perio
           <DashboardCombobox id="reporting-site-class" label="Site Class" value={query.site_class} onChange={(value) => update('site_class', value)} options={(result?.site_classes || []).map((value) => ({ value, label: value }))} allLabel="Semua Class" />
           <div className="flex items-end gap-1 sm:col-span-2 xl:col-span-3">
             {['all', 'top', 'bottom'].map((value) => <button key={value} type="button" onClick={() => handleRank(value)} className={`rounded-md border px-3 py-1.5 text-[11px] font-semibold ${query.rank === value ? 'border-[var(--primary)]/30 bg-[var(--primary)]/15 text-[var(--primary-light)]' : 'border-[var(--border)] text-[var(--text-muted)]'}`}>{value === 'all' ? 'Semua' : value === 'top' ? 'Top 10' : 'Bottom 10'}</button>)}
+            <span className="mx-1 h-6 w-px bg-[var(--border)]" aria-hidden="true" />
+            <button type="button" onClick={() => handleRevenueBand('u30')} className={`rounded-md border px-3 py-1.5 text-[11px] font-semibold ${query.revenue_band === 'u30' ? 'border-[var(--danger)]/30 bg-[var(--danger)]/10 text-[var(--danger)]' : 'border-[var(--border)] text-[var(--text-muted)]'}`}>U30</button>
+            <button type="button" onClick={() => handleRevenueBand('u60')} className={`rounded-md border px-3 py-1.5 text-[11px] font-semibold ${query.revenue_band === 'u60' ? 'border-[var(--warning)]/30 bg-[var(--warning)]/10 text-[var(--warning)]' : 'border-[var(--border)] text-[var(--text-muted)]'}`}>U60</button>
           </div>
         </div>
 
@@ -134,7 +150,7 @@ export default function ReportingSiteDrilldown({ area, open, onOpenChange, perio
                   <thead><tr>
                     <SortHeader field="site_id" label="Site" active={query.sort_by === 'site_id'} direction={query.sort_dir} onSort={handleSort} align="left" />
                     <SortHeader field="site_class" label="Class" active={query.sort_by === 'site_class'} direction={query.sort_dir} onSort={handleSort} align="left" />
-                    <SortHeader field="status_site" label="Status" active={query.sort_by === 'status_site'} direction={query.sort_dir} onSort={handleSort} align="left" />
+                    <SortHeader field="revenue_band" label="Status" active={query.sort_by === 'revenue_band'} direction={query.sort_dir} onSort={handleSort} align="left" />
                     <SortHeader field="revenue" label="Revenue" active={query.sort_by === 'revenue'} direction={query.sort_dir} onSort={handleSort} />
                     <SortHeader field="payload" label="Payload" active={query.sort_by === 'payload'} direction={query.sort_dir} onSort={handleSort} />
                     <SortHeader field="availability" label="Availability" active={query.sort_by === 'availability'} direction={query.sort_dir} onSort={handleSort} />

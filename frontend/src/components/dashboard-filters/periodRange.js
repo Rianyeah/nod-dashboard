@@ -1,5 +1,6 @@
 const MONTH_PATTERN = /^(\d{4})-(0[1-9]|1[0-2])$/;
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des'];
+const FULL_MONTH_NAMES = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 
 function parseMonth(value) {
   const match = MONTH_PATTERN.exec(value || '');
@@ -49,6 +50,15 @@ export function formatMonthRangeLabel(periodStart, periodEnd) {
   if (startYear === endYear && startMonth === 7 && endMonth === 12) return `Semester 2 ${startYear}`;
   if (startYear === endYear) return `${MONTH_NAMES[startMonth - 1]}-${MONTH_NAMES[endMonth - 1]} ${startYear}`;
   return `${MONTH_NAMES[startMonth - 1]} ${startYear}-${MONTH_NAMES[endMonth - 1]} ${endYear}`;
+}
+
+export function formatReportingPeriodTitle(periodStart, periodEnd) {
+  buildMonthRange(periodStart, periodEnd);
+  const [startYear, startMonth] = periodStart.split('-').map(Number);
+  const [endYear, endMonth] = periodEnd.split('-').map(Number);
+  if (periodStart === periodEnd) return `${FULL_MONTH_NAMES[startMonth - 1]} ${startYear}`;
+  if (startYear === endYear) return `${FULL_MONTH_NAMES[startMonth - 1]} - ${FULL_MONTH_NAMES[endMonth - 1]} ${startYear}`;
+  return `${FULL_MONTH_NAMES[startMonth - 1]} ${startYear} - ${FULL_MONTH_NAMES[endMonth - 1]} ${endYear}`;
 }
 
 export function getPeriodComparisonLabel(periodStart, periodEnd) {

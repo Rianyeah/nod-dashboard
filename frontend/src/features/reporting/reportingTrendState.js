@@ -6,19 +6,17 @@ function finiteCount(value) {
 
 
 export function enrichRevenueBandTrend(rows = []) {
-  let previousAtRisk = null;
+  let previousAchieved = null;
   return rows.map((source, index) => {
-    const u30 = finiteCount(source?.u30_sites);
-    const u60 = finiteCount(source?.u60_sites);
-    const atRisk = u30 != null && u60 != null ? u30 + u60 : null;
-    const delta = index > 0 && atRisk != null && previousAtRisk != null
-      ? atRisk - previousAtRisk
+    const achieved = finiteCount(source?.achieved_sites);
+    const delta = index > 0 && achieved != null && previousAchieved != null
+      ? achieved - previousAchieved
       : null;
-    previousAtRisk = atRisk;
+    previousAchieved = achieved;
     return {
       ...source,
-      at_risk_sites: atRisk,
-      at_risk_delta: delta,
+      achieved_sites: achieved,
+      achieved_delta: delta,
     };
   });
 }

@@ -1,7 +1,10 @@
 import { useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, MapPinned } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Download, MapPinned } from 'lucide-react';
 
+import { formatReportingPeriodTitle } from '../../components/dashboard-filters/periodRange.js';
 import { DashboardTableShell } from '../../components/ui/DashboardPrimitives.jsx';
+import { fetchReportingAreaExport } from '../../services/api.js';
+import { triggerBlobDownload } from '../../utils/downloadFile.js';
 import { formatNumber, formatPayload, formatPercent, formatRevenue, formatRevenueShort, formatTraffic } from '../../utils/formatters.js';
 import ReportingMetricValue from './ReportingMetricValue.jsx';
 import { buildAreaGrandTotal } from './reportingPerformanceMetrics.js';
@@ -20,10 +23,12 @@ function SortHeader({ field, label, active, direction, onSort, align = 'right' }
 }
 
 
-export default function ReportingAreaTable({ rows = [], loading = false, error, onSelectArea }) {
+export default function ReportingAreaTable({ rows = [], loading = false, error, onSelectArea, period, nop }) {
   const [rank, setRank] = useState('all');
   const [sort, setSort] = useState({ field: 'revenue', direction: 'desc' });
   const [expanded, setExpanded] = useState(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState('');
   const grandTotal = useMemo(
     () => (!loading && !error ? buildAreaGrandTotal(rows) : null),
     [error, loading, rows],
@@ -50,6 +55,24 @@ export default function ReportingAreaTable({ rows = [], loading = false, error, 
     }
   };
 
+  const handleExport = async () => {
+    if (!period?.start || !period?.end || exporting) return;
+    setExporting(true);
+    setExportError('');
+    try {
+      const { blob, filename } = await fetchReportingAreaExport(period, nop);
+      triggerBlobDownload(blob, filename);
+    } catch {
+      setExportError('File XLSX Kabupaten & Site tidak dapat dibuat.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const periodTitle = period?.start && period?.end
+    ? formatReportingPeriodTitle(period.start, period.end)
+    : '';
+
   const action = (
     <div className="reporting-no-print flex flex-wrap items-end gap-2">
       <div className="flex rounded-lg border border-[var(--border)] bg-[var(--surface-soft)] p-0.5">
@@ -59,12 +82,16 @@ export default function ReportingAreaTable({ rows = [], loading = false, error, 
           </button>
         ))}
       </div>
+      <button type="button" onClick={handleExport} disabled={exporting || !period?.start || loading} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface-soft)] px-2.5 text-[11px] font-semibold text-[var(--text-secondary)] hover:text-[var(--primary-light)] disabled:opacity-50">
+        <Download className="size-3.5" />{exporting ? 'Menyiapkan' : 'Download XLSX'}
+      </button>
     </div>
   );
 
   return (
-    <DashboardTableShell title="Kabupaten & Site" icon={MapPinned} count={visibleRows.length} action={action}>
+    <DashboardTableShell title={`Kabupaten & Site${periodTitle ? ` ${periodTitle}` : ''}`} icon={MapPinned} count={visibleRows.length} action={action}>
       {error && <p className="border-b border-[var(--danger)]/20 bg-[var(--danger)]/8 px-4 py-3 text-xs text-[var(--danger)]">{error}</p>}
+      {exportError && <p className="border-b border-[var(--danger)]/20 bg-[var(--danger)]/8 px-4 py-3 text-xs text-[var(--danger)]">{exportError}</p>}
       {loading ? (
         <div className="space-y-2 p-4">{[1, 2, 3, 4].map((key) => <div key={key} className="skeleton h-12 rounded-lg" />)}</div>
       ) : visibleRows.length === 0 ? (
@@ -72,11 +99,13 @@ export default function ReportingAreaTable({ rows = [], loading = false, error, 
       ) : (
         <>
           <div className="hidden max-w-full overflow-x-auto md:block">
-            <table className="min-w-[1060px] w-full text-left">
+            <table className="min-w-[1240px] w-full text-left">
               <thead>
                 <tr>
                   <SortHeader field="kabupaten" label="Kabupaten/Kota" active={sort.field === 'kabupaten'} direction={sort.direction} onSort={handleSort} align="left" />
                   <SortHeader field="total_sites" label="Site" active={sort.field === 'total_sites'} direction={sort.direction} onSort={handleSort} />
+                  <SortHeader field="u30_sites" label="U30" active={sort.field === 'u30_sites'} direction={sort.direction} onSort={handleSort} />
+                  <SortHeader field="u60_sites" label="U60" active={sort.field === 'u60_sites'} direction={sort.direction} onSort={handleSort} />
                   <SortHeader field="revenue" label="Revenue" active={sort.field === 'revenue'} direction={sort.direction} onSort={handleSort} />
                   <SortHeader field="payload" label="Payload" active={sort.field === 'payload'} direction={sort.direction} onSort={handleSort} />
                   <SortHeader field="avg_availability" label="Availability" active={sort.field === 'avg_availability'} direction={sort.direction} onSort={handleSort} />
@@ -90,6 +119,8 @@ export default function ReportingAreaTable({ rows = [], loading = false, error, 
                   <tr key={row.area_key} onClick={() => onSelectArea(row)} className="cursor-pointer hover:bg-[var(--bg-hover)]/60 focus-within:bg-[var(--bg-hover)]/60">
                     <td className="px-3 py-3 font-semibold text-[var(--text-primary)]"><button type="button" className="flex items-center gap-2 text-left"><ChevronRight className="size-3.5 text-[var(--primary-light)]" />{row.kabupaten}</button></td>
                     <td className="px-3 py-3 text-right font-mono tabular-nums">{formatNumber(row.total_sites)}</td>
+                    <td className="px-3 py-3 text-right"><ReportingMetricValue value={row.u30_sites} delta={row.u30_mom_pct} formatValue={formatNumber} valueClassName="text-[var(--danger)]" /></td>
+                    <td className="px-3 py-3 text-right"><ReportingMetricValue value={row.u60_sites} delta={row.u60_mom_pct} formatValue={formatNumber} valueClassName="text-[var(--warning)]" /></td>
                     <td className="px-3 py-3 text-right"><ReportingMetricValue value={row.revenue} delta={row.revenue_delta_pct} formatValue={formatRevenueShort} valueClassName="text-[var(--success)]" /></td>
                     <td className="px-3 py-3 text-right"><ReportingMetricValue value={row.payload} delta={row.payload_delta_pct} formatValue={formatPayload} valueClassName="text-[var(--chart-info)]" /></td>
                     <td className="px-3 py-3 text-right"><ReportingMetricValue value={row.avg_availability} delta={row.availability_delta_pct} formatValue={formatPercent} digits={2} valueClassName="text-[var(--text-primary)]" /></td>
@@ -104,6 +135,8 @@ export default function ReportingAreaTable({ rows = [], loading = false, error, 
                   <tr className="border-t-2 border-[var(--border-strong)] bg-[var(--surface-soft)]">
                     <td className="px-3 py-3 font-semibold text-[var(--text-primary)]">Grand Total</td>
                     <td className="px-3 py-3 text-right font-mono font-semibold tabular-nums">{formatNumber(grandTotal.total_sites)}</td>
+                    <td className="px-3 py-3 text-right"><ReportingMetricValue value={grandTotal.u30_sites} delta={grandTotal.u30_mom_pct} formatValue={formatNumber} valueClassName="text-[var(--danger)]" /></td>
+                    <td className="px-3 py-3 text-right"><ReportingMetricValue value={grandTotal.u60_sites} delta={grandTotal.u60_mom_pct} formatValue={formatNumber} valueClassName="text-[var(--warning)]" /></td>
                     <td className="px-3 py-3 text-right"><ReportingMetricValue value={grandTotal.revenue} delta={grandTotal.revenue_delta_pct} formatValue={formatRevenueShort} valueClassName="text-[var(--success)]" /></td>
                     <td className="px-3 py-3 text-right"><ReportingMetricValue value={grandTotal.payload} delta={grandTotal.payload_delta_pct} formatValue={formatPayload} valueClassName="text-[var(--chart-info)]" /></td>
                     <td className="px-3 py-3 text-right"><ReportingMetricValue value={grandTotal.avg_availability} delta={grandTotal.availability_delta_pct} formatValue={formatPercent} digits={2} valueClassName="text-[var(--text-primary)]" /></td>
@@ -126,6 +159,7 @@ export default function ReportingAreaTable({ rows = [], loading = false, error, 
                     <div>
                       <h3 className="font-semibold text-[var(--text-primary)]">{item.identity}</h3>
                       <p className="mt-1 text-xs text-[var(--text-muted)]">{formatNumber(item.sites)} site</p>
+                      <div className="mt-1 flex gap-3 text-[10px]"><span className="text-[var(--danger)]">U30 <ReportingMetricValue value={item.u30.value} delta={item.u30.delta} formatValue={formatNumber} /></span><span className="text-[var(--warning)]">U60 <ReportingMetricValue value={item.u60.value} delta={item.u60.delta} formatValue={formatNumber} /></span></div>
                     </div>
                     <ChevronRight className="mt-1 size-4 text-[var(--primary-light)]" />
                   </button>
@@ -147,6 +181,7 @@ export default function ReportingAreaTable({ rows = [], loading = false, error, 
                   <h3 className="font-semibold text-[var(--text-primary)]">Grand Total</h3>
                   <span className="text-xs text-[var(--text-muted)]">{formatNumber(grandTotal.total_sites)} site</span>
                 </div>
+                <div className="mt-2 flex gap-4 text-[11px]"><span className="text-[var(--danger)]">U30 <ReportingMetricValue value={grandTotal.u30_sites} delta={grandTotal.u30_mom_pct} formatValue={formatNumber} /></span><span className="text-[var(--warning)]">U60 <ReportingMetricValue value={grandTotal.u60_sites} delta={grandTotal.u60_mom_pct} formatValue={formatNumber} /></span></div>
                 <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
                   <div><p className="text-[10px] text-[var(--text-muted)]">Revenue</p><ReportingMetricValue value={grandTotal.revenue} delta={grandTotal.revenue_delta_pct} formatValue={formatRevenue} valueClassName="text-[var(--success)]" /></div>
                   <div><p className="text-[10px] text-[var(--text-muted)]">Payload</p><ReportingMetricValue value={grandTotal.payload} delta={grandTotal.payload_delta_pct} formatValue={formatPayload} valueClassName="text-[var(--text-primary)]" /></div>
