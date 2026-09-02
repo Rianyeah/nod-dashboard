@@ -196,7 +196,7 @@ export default function NetworkReportingPage() {
         </div>
 
         {activeTab === 'areas'
-          ? <ReportingAreaTable rows={areas} loading={areasLoading} error={areasError} onSelectArea={setSelectedArea} />
+          ? <ReportingAreaTable rows={areas} loading={areasLoading} error={areasError} onSelectArea={setSelectedArea} period={selectedPeriod} nop={selectedNop} />
           : <ReportingPivot period={selectedPeriod} nop={selectedNop} />}
       </main>
 

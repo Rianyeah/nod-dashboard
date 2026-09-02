@@ -4,6 +4,8 @@ const METRICS = new Set([
   'traffic',
   'avg_availability',
   'total_sites',
+  'u30_sites',
+  'u60_sites',
   'ticket_backup',
   'proker',
 ]);
@@ -55,5 +57,7 @@ export function toAreaMobileMetric(row = {}) {
     payload: { value: row.payload ?? 0, delta: row.payload_delta_pct ?? null },
     availability: { value: row.avg_availability ?? null, delta: row.availability_delta_pct ?? null },
     sites: row.total_sites ?? 0,
+    u30: { value: row.u30_sites ?? 0, delta: row.u30_mom_pct ?? null },
+    u60: { value: row.u60_sites ?? 0, delta: row.u60_mom_pct ?? null },
   };
 }

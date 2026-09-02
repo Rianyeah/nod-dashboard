@@ -64,7 +64,7 @@ function TrendTooltip({ active, payload, label }) {
 function RevenueBandTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   const row = payload[0]?.payload || {};
-  const delta = row.at_risk_delta;
+  const delta = row.achieved_delta;
   return (
     <DashboardChartTooltip
       active={active}
@@ -72,12 +72,12 @@ function RevenueBandTooltip({ active, payload, label }) {
       payload={[
         { dataKey: 'u30_sites', name: 'U30', value: row.u30_sites ?? '-', color: REVENUE_BAND_COLORS.u30 },
         { dataKey: 'u60_sites', name: 'U60', value: row.u60_sites ?? '-', color: REVENUE_BAND_COLORS.u60 },
-        { dataKey: 'at_risk_sites', name: 'At risk', value: row.at_risk_sites ?? '-', color: 'var(--text-primary)' },
+        { dataKey: 'achieved_sites', name: 'Achieved', value: row.achieved_sites ?? '-', color: 'var(--success)' },
         {
-          dataKey: 'at_risk_delta',
-          name: 'MoM site',
+          dataKey: 'achieved_delta',
+          name: 'Achieved MoM',
           value: delta == null ? '-' : `${delta > 0 ? '+' : ''}${delta}`,
-          color: delta > 0 ? 'var(--danger)' : delta < 0 ? 'var(--success)' : 'var(--text-muted)',
+          color: delta > 0 ? 'var(--success)' : delta < 0 ? 'var(--danger)' : 'var(--text-muted)',
         },
       ]}
     />
