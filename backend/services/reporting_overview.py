@@ -24,6 +24,12 @@ from queries.reporting_foundation import (
     load_revenue_target,
 )
 from services.reporting_availability import AVAILABILITY_FACTS_CTES
+from services.reporting_insights import (
+    build_metric_recommendation,
+    metric_direction,
+    select_additive_driver,
+    select_availability_driver,
+)
 from services.reporting_thresholds import resolve_threshold_snapshot
 
 
@@ -168,9 +174,114 @@ WHERE CAST(:nop_key AS text) IS NULL OR m.nop_key = :nop_key
 """
 
 
+SITE_DRIVER_CANDIDATES_QUERY = """
+/* reporting_site_driver_candidates */
+WITH master AS (
+    SELECT DISTINCT ON (UPPER(TRIM(d."Siteid")))
+        UPPER(TRIM(d."Siteid")) AS site_key,
+        d."Siteid" AS site_id,
+        d."Site Name" AS site_name,
+        REGEXP_REPLACE(UPPER(TRIM(d."NOP")), '^NOP[[:space:]]+', '') AS nop_key
+    FROM public.data_site_master d
+    WHERE NULLIF(TRIM(d."Siteid"), '') IS NOT NULL
+    ORDER BY UPPER(TRIM(d."Siteid")), d.row_number DESC NULLS LAST
+),
+active_performance AS (
+    SELECT
+        UPPER(TRIM(t.site_id)) AS site_key,
+        SUM(COALESCE(t.rev, 0))::bigint AS revenue,
+        SUM(COALESCE(t.payload, 0))::bigint AS payload
+    FROM public.traktor_data t
+    WHERE t.trx_month BETWEEN :period_start AND :period_end
+      AND NULLIF(TRIM(t.site_id), '') IS NOT NULL
+    GROUP BY 1
+),
+previous_performance AS (
+    SELECT
+        UPPER(TRIM(t.site_id)) AS site_key,
+        SUM(COALESCE(t.rev, 0))::bigint AS previous_revenue,
+        SUM(COALESCE(t.payload, 0))::bigint AS previous_payload
+    FROM public.traktor_data t
+    WHERE t.trx_month BETWEEN :comparison_start AND :comparison_end
+      AND NULLIF(TRIM(t.site_id), '') IS NOT NULL
+    GROUP BY 1
+),
+{availability_facts_ctes},
+active_availability AS (
+    SELECT
+        a.site_key,
+        SUM(COALESCE(a.total_time_minutes, 0))::double precision AS total_time_minutes,
+        SUM(COALESCE(a.outage_minutes, 0))::double precision AS outage_minutes
+    FROM availability_facts a
+    WHERE a.period BETWEEN :period_start AND :period_end
+    GROUP BY 1
+),
+previous_availability AS (
+    SELECT
+        a.site_key,
+        SUM(COALESCE(a.total_time_minutes, 0))::double precision AS previous_total_time_minutes,
+        SUM(COALESCE(a.outage_minutes, 0))::double precision AS previous_outage_minutes
+    FROM availability_facts a
+    WHERE a.period BETWEEN :comparison_start AND :comparison_end
+    GROUP BY 1
+),
+active AS (
+    SELECT
+        COALESCE(p.site_key, a.site_key) AS site_key,
+        p.revenue,
+        p.payload,
+        a.total_time_minutes,
+        a.outage_minutes
+    FROM active_performance p
+    FULL OUTER JOIN active_availability a ON a.site_key = p.site_key
+),
+previous AS (
+    SELECT
+        COALESCE(p.site_key, a.site_key) AS site_key,
+        p.previous_revenue,
+        p.previous_payload,
+        a.previous_total_time_minutes,
+        a.previous_outage_minutes
+    FROM previous_performance p
+    FULL OUTER JOIN previous_availability a ON a.site_key = p.site_key
+)
+SELECT
+    COALESCE(active.site_key, previous.site_key) AS site_key,
+    COALESCE(master.site_id, active.site_key, previous.site_key) AS site_id,
+    master.site_name,
+    active.revenue,
+    previous.previous_revenue,
+    active.payload,
+    previous.previous_payload,
+    active.total_time_minutes,
+    active.outage_minutes,
+    previous.previous_total_time_minutes,
+    previous.previous_outage_minutes,
+    CASE WHEN active.total_time_minutes > 0 THEN
+        100.0 * (active.total_time_minutes - active.outage_minutes) / active.total_time_minutes
+    END::double precision AS availability,
+    CASE WHEN previous.previous_total_time_minutes > 0 THEN
+        100.0 * (previous.previous_total_time_minutes - previous.previous_outage_minutes)
+        / previous.previous_total_time_minutes
+    END::double precision AS previous_availability
+FROM active
+FULL OUTER JOIN previous ON previous.site_key = active.site_key
+LEFT JOIN master ON master.site_key = COALESCE(active.site_key, previous.site_key)
+WHERE CAST(:nop_key AS text) IS NULL OR master.nop_key = :nop_key
+""".format(availability_facts_ctes=AVAILABILITY_FACTS_CTES)
+
+
 TREND_QUERY = """
 /* reporting_trend */
-WITH master AS (
+WITH context_months AS (
+    SELECT TO_CHAR(month_value, 'YYYY-MM') AS trx_month
+    FROM GENERATE_SERIES(
+        TO_DATE(:context_start, 'YYYY-MM'),
+        TO_DATE(:period_end, 'YYYY-MM'),
+        INTERVAL '1 month'
+    ) AS month_series(month_value)
+),
+master AS (
     SELECT DISTINCT ON (UPPER(TRIM(d."Siteid")))
         UPPER(TRIM(d."Siteid")) AS site_key,
         REGEXP_REPLACE(UPPER(TRIM(d."NOP")), '^NOP[[:space:]]+', '') AS nop_key
@@ -182,12 +293,24 @@ performance AS (
     SELECT
         t.trx_month,
         UPPER(TRIM(t.site_id)) AS site_key,
-        SUM(COALESCE(t.rev, 0)) AS revenue,
-        SUM(COALESCE(t.payload, 0)) AS payload,
-        SUM(COALESCE(t.traffic, 0)) AS traffic
+        SUM(t.rev)::bigint AS revenue,
+        SUM(COALESCE(t.payload, 0))::bigint AS payload,
+        SUM(COALESCE(t.traffic, 0))::bigint AS traffic
     FROM public.traktor_data t
     WHERE t.trx_month BETWEEN :context_start AND :period_end
+      AND NULLIF(TRIM(t.site_id), '') IS NOT NULL
     GROUP BY 1, 2
+),
+context_sites AS (
+    SELECT DISTINCT p.site_key
+    FROM performance p
+    LEFT JOIN master m ON m.site_key = p.site_key
+    WHERE CAST(:nop_key AS text) IS NULL OR m.nop_key = :nop_key
+),
+site_months AS (
+    SELECT month.trx_month, site.site_key
+    FROM context_months month
+    CROSS JOIN context_sites site
 ),
 {availability_facts_ctes},
 availability AS (
@@ -199,23 +322,82 @@ availability AS (
     FROM availability_facts smm
     WHERE smm.period BETWEEN :context_start AND :period_end
     GROUP BY 1, 2
+),
+classified AS (
+    SELECT
+        sm.trx_month,
+        sm.site_key,
+        p.revenue,
+        p.payload,
+        p.traffic,
+        a.total_time_minutes,
+        a.outage_minutes,
+        u30.revenue_u30_upper,
+        u60.revenue_u60_upper
+    FROM site_months sm
+    LEFT JOIN performance p
+      ON p.site_key = sm.site_key AND p.trx_month = sm.trx_month
+    LEFT JOIN availability a
+      ON a.site_key = sm.site_key AND a.trx_month = sm.trx_month
+    LEFT JOIN LATERAL (
+        SELECT threshold.threshold_value AS revenue_u30_upper
+        FROM public.reporting_metric_thresholds threshold
+        WHERE threshold.metric = 'revenue'
+          AND threshold.threshold_key = 'u30_upper'
+          AND threshold.site_class = '*'
+          AND threshold.effective_month <= sm.trx_month
+        ORDER BY threshold.effective_month DESC, threshold.updated_at DESC
+        LIMIT 1
+    ) u30 ON TRUE
+    LEFT JOIN LATERAL (
+        SELECT threshold.threshold_value AS revenue_u60_upper
+        FROM public.reporting_metric_thresholds threshold
+        WHERE threshold.metric = 'revenue'
+          AND threshold.threshold_key = 'u60_upper'
+          AND threshold.site_class = '*'
+          AND threshold.effective_month <= sm.trx_month
+        ORDER BY threshold.effective_month DESC, threshold.updated_at DESC
+        LIMIT 1
+    ) u60 ON TRUE
 )
 SELECT
-    p.trx_month,
-    COALESCE(SUM(p.revenue), 0)::bigint AS total_revenue,
-    COALESCE(SUM(p.payload), 0)::bigint AS total_payload,
-    COALESCE(SUM(p.traffic), 0)::bigint AS total_traffic,
-    CASE WHEN SUM(COALESCE(a.total_time_minutes, 0)) > 0 THEN
+    c.trx_month,
+    COALESCE(SUM(c.revenue), 0)::bigint AS total_revenue,
+    COALESCE(SUM(c.payload), 0)::bigint AS total_payload,
+    COALESCE(SUM(c.traffic), 0)::bigint AS total_traffic,
+    CASE WHEN SUM(COALESCE(c.total_time_minutes, 0)) > 0 THEN
         100.0 * (
-            SUM(COALESCE(a.total_time_minutes, 0)) - SUM(COALESCE(a.outage_minutes, 0))
-        ) / SUM(COALESCE(a.total_time_minutes, 0))
-    END::double precision AS avg_availability
-FROM performance p
-LEFT JOIN master m ON m.site_key = p.site_key
-LEFT JOIN availability a ON a.site_key = p.site_key AND a.trx_month = p.trx_month
-WHERE CAST(:nop_key AS text) IS NULL OR m.nop_key = :nop_key
-GROUP BY p.trx_month
-ORDER BY p.trx_month
+            SUM(COALESCE(c.total_time_minutes, 0)) - SUM(COALESCE(c.outage_minutes, 0))
+        ) / SUM(COALESCE(c.total_time_minutes, 0))
+    END::double precision AS avg_availability,
+    CASE WHEN MAX(c.revenue_u30_upper) IS NULL OR MAX(c.revenue_u60_upper) IS NULL
+         THEN NULL
+         ELSE COUNT(*) FILTER (
+             WHERE c.revenue IS NOT NULL AND c.revenue < c.revenue_u30_upper
+         )
+    END::bigint AS u30_sites,
+    CASE WHEN MAX(c.revenue_u30_upper) IS NULL OR MAX(c.revenue_u60_upper) IS NULL
+         THEN NULL
+         ELSE COUNT(*) FILTER (
+             WHERE c.revenue IS NOT NULL
+               AND c.revenue >= c.revenue_u30_upper
+               AND c.revenue < c.revenue_u60_upper
+         )
+    END::bigint AS u60_sites,
+    CASE WHEN MAX(c.revenue_u60_upper) IS NULL
+         THEN NULL
+         ELSE COUNT(*) FILTER (
+             WHERE c.revenue IS NOT NULL AND c.revenue >= c.revenue_u60_upper
+         )
+    END::bigint AS achieved_sites,
+    COUNT(*) FILTER (
+        WHERE c.revenue IS NULL
+           OR c.revenue_u30_upper IS NULL
+           OR c.revenue_u60_upper IS NULL
+    )::bigint AS unavailable_sites
+FROM classified c
+GROUP BY c.trx_month
+ORDER BY c.trx_month
 """.format(availability_facts_ctes=AVAILABILITY_FACTS_CTES)
 
 
@@ -550,6 +732,27 @@ def _availability_from(row: dict) -> float | None:
     )
 
 
+def _coverage_complete(coverage: list, required_sources: set[str]) -> bool:
+    status_by_source = {
+        str(item.get("source_key") if isinstance(item, dict) else item.source_key):
+        str(item.get("status") if isinstance(item, dict) else item.status)
+        for item in coverage
+    }
+    return all(status_by_source.get(source) == "complete" for source in required_sources)
+
+
+def _risk_site_delta(trend: list) -> int | None:
+    totals: list[int] = []
+    for item in trend:
+        u30 = item.get("u30_sites") if isinstance(item, dict) else item.u30_sites
+        u60 = item.get("u60_sites") if isinstance(item, dict) else item.u60_sites
+        if u30 is not None and u60 is not None:
+            totals.append(int(u30) + int(u60))
+    if len(totals) < 2:
+        return None
+    return totals[-1] - totals[-2]
+
+
 def _continuing_availability_decline(trend: list) -> bool:
     values = []
     for item in trend[-3:]:
@@ -578,6 +781,7 @@ def build_reporting_overview(
     trend: list,
     ytd: dict | None = None,
     thresholds=None,
+    driver_rows: list[dict] | None = None,
 ) -> ReportingOverview:
     """Build the typed response from independently aggregated numeric facts."""
     selected_revenue = int(_number(selected, "revenue"))
@@ -591,6 +795,40 @@ def build_reporting_overview(
     regional_availability = _availability_from(regional)
     is_regional = scope_label == "Regional Jatim"
     ytd = ytd or {}
+    driver_rows = driver_rows or []
+
+    revenue_delta = selected_revenue - previous_revenue
+    payload_delta = selected_payload - previous_payload
+    availability_delta = (
+        selected_availability - previous_availability
+        if selected_availability is not None and previous_availability is not None
+        else None
+    )
+    aggregate_outage_delta = (
+        _number(selected, "outage_minutes") - _number(previous, "outage_minutes")
+        if selected_availability is not None and previous_availability is not None
+        else None
+    )
+    revenue_driver = select_additive_driver(
+        driver_rows,
+        metric="revenue",
+        aggregate_delta=revenue_delta,
+    )
+    payload_driver = select_additive_driver(
+        driver_rows,
+        metric="payload",
+        aggregate_delta=payload_delta,
+    )
+    availability_driver = select_availability_driver(
+        driver_rows,
+        aggregate_availability_delta=availability_delta,
+        aggregate_outage_delta=aggregate_outage_delta,
+    )
+    directions = {
+        "revenue": metric_direction(_delta_pct(selected_revenue, previous_revenue)),
+        "payload": metric_direction(_delta_pct(selected_payload, previous_payload)),
+        "availability": metric_direction(availability_delta),
+    }
 
     revenue_contribution = 100.0 if is_regional and regional_revenue else safe_share(
         selected_revenue, regional_revenue
@@ -615,6 +853,44 @@ def build_reporting_overview(
         revenue_severity = "success" if selected_revenue >= target.target_revenue else "warning"
 
     availability_severity = availability_insight_severity(selected_availability, trend)
+    revenue_target_status = None
+    if target.complete:
+        revenue_target_status = "achieved" if selected_revenue >= target.target_revenue else "not_achieved"
+    revenue_recommendation = build_metric_recommendation(
+        "revenue",
+        direction=directions["revenue"],
+        driver=revenue_driver,
+        comparison_available=_delta_pct(selected_revenue, previous_revenue) is not None,
+        evidence_complete=_coverage_complete(
+            coverage,
+            {"traktor_data", "reporting_revenue_targets", "reporting_metric_thresholds"},
+        ),
+        target_status=revenue_target_status,
+        related_directions=directions,
+        risk_site_delta=_risk_site_delta(trend),
+    )
+    payload_recommendation = build_metric_recommendation(
+        "payload",
+        direction=directions["payload"],
+        driver=payload_driver,
+        comparison_available=_delta_pct(selected_payload, previous_payload) is not None,
+        evidence_complete=_coverage_complete(
+            coverage,
+            {"traktor_data", "reporting_metric_thresholds"},
+        ),
+        related_directions=directions,
+    )
+    availability_recommendation = build_metric_recommendation(
+        "availability",
+        direction=directions["availability"],
+        driver=availability_driver,
+        comparison_available=availability_delta is not None,
+        evidence_complete=_coverage_complete(
+            coverage,
+            {"site_month_metrics", "data_site_master", "reporting_metric_thresholds"},
+        ),
+        related_directions=directions,
+    )
 
     return ReportingOverview(
         scope_label=scope_label,
@@ -646,6 +922,8 @@ def build_reporting_overview(
                 attainment_pct=target_attainment,
             ),
             severity=revenue_severity,
+            driver=revenue_driver,
+            recommendation=revenue_recommendation,
         ),
         payload=ReportingMetricFact(
             value=selected_payload,
@@ -656,17 +934,17 @@ def build_reporting_overview(
                 contribution_pct=payload_contribution,
             ),
             severity="info" if selected_payload or regional_payload else "unavailable",
+            driver=payload_driver,
+            recommendation=payload_recommendation,
         ),
         availability=ReportingMetricFact(
             value=selected_availability,
             previous_value=previous_availability,
-            delta_pct=(
-                selected_availability - previous_availability
-                if selected_availability is not None and previous_availability is not None
-                else None
-            ),
+            delta_pct=availability_delta,
             contribution=availability_contribution,
             severity=availability_severity,
+            driver=availability_driver,
+            recommendation=availability_recommendation,
         ),
         thresholds=thresholds,
         coverage=coverage,
@@ -761,6 +1039,15 @@ async def load_reporting_overview(session, period, nop: str | None) -> Reporting
     ytd = ytd_rows[0] if ytd_rows else {"revenue_ytd": 0, "payload_ytd": 0}
     trend_rows = _row_dicts(await session.execute(text(TREND_QUERY), params))
     trend = [RevenueTrendItem(**row) for row in trend_rows]
+    driver_rows = _row_dicts(
+        await session.execute(
+            text(SITE_DRIVER_CANDIDATES_QUERY),
+            {
+                **params,
+                "availability_start": period.comparison_start,
+            },
+        )
+    )
     coverage_rows = _row_dicts(await session.execute(text(COVERAGE_QUERY), params))
     coverage = _coverage_from_rows(coverage_rows, period.active_months)
     period_meta = build_period_meta(
@@ -782,6 +1069,7 @@ async def load_reporting_overview(session, period, nop: str | None) -> Reporting
         trend=trend,
         ytd=ytd,
         thresholds=thresholds,
+        driver_rows=driver_rows,
     )
 
 

@@ -508,7 +508,7 @@ async def get_reporting_overview(
         threshold_version = await load_metric_threshold_version(session, period.period_end)
     cache_key = redis_cache.make_key(
         "reporting",
-        "overview-v4",
+        "overview-v5",
         period_start=period.period_start,
         period_end=period.period_end,
         nop=nop_key or "",
