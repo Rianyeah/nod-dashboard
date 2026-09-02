@@ -317,6 +317,7 @@ describe('dashboard and reporting visual/data contracts', () => {
     const insights = src('features', 'reporting', 'ReportingExecutiveInsights.jsx');
     const insightBuilder = src('features', 'reporting', 'reportingInsights.js');
     const trend = src('features', 'reporting', 'ReportingPerformanceTrend.jsx');
+    const css = src('index.css');
 
     assert.match(scorecards, /EPM/);
     assert.match(scorecards, /Site \(non EPM\)/);
@@ -327,5 +328,14 @@ describe('dashboard and reporting visual/data contracts', () => {
     assert.doesNotMatch(insights, /Auto-generated|AI generated/i);
     assert.match(trend, /type="monotone"/);
     assert.match(trend, /linearGradient/);
+    assert.match(trend, /\bBar\b/);
+    assert.match(trend, /stackId="risk"/);
+    assert.match(trend, /Performance/);
+    assert.match(trend, /U30 & U60/);
+    assert.match(trend, /lg:grid-cols-\[minmax\(0,7fr\)_minmax\(260px,3fr\)\]/);
+    assert.match(trend, /reporting-trend-desktop/);
+    assert.match(trend, /reporting-trend-mobile/);
+    assert.match(css, /\.reporting-trend-desktop/);
+    assert.match(css, /\.reporting-trend-mobile/);
   });
 });
