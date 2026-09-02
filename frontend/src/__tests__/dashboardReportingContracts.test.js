@@ -102,9 +102,17 @@ describe('dashboard and reporting visual/data contracts', () => {
     assert.match(areaTable, /const handleRank = \(value\)/);
     assert.match(drilldown, /const handleSort = \(field\) => setQuery\([\s\S]*rank: 'all'/);
     assert.match(drilldown, /const handleRank = \(value\)/);
-    for (const field of ['site_id', 'site_class', 'status_site', 'revenue', 'revenue_mom', 'payload', 'payload_mom', 'availability']) {
+    for (const field of ['site_id', 'site_class', 'status_site', 'revenue', 'payload', 'availability']) {
       assert.match(drilldown, new RegExp(`SortHeader field="${field}"`));
     }
+    assert.match(areaTable, /ReportingMetricValue/);
+    assert.match(areaTable, /buildAreaGrandTotal/);
+    assert.match(areaTable, /<tfoot>/);
+    assert.match(drilldown, /ReportingMetricValue/);
+    assert.match(drilldown, /grand_total/);
+    assert.match(drilldown, /availability_delta_pct/);
+    assert.match(drilldown, /<tfoot>/);
+    assert.doesNotMatch(drilldown, /SortHeader field="revenue_mom"|SortHeader field="payload_mom"|label="Revenue MoM"|label="Payload MoM"/);
     assert.match(drilldown, /md:hidden/);
     assert.match(drilldown, /fetchReportingSites/);
   });
