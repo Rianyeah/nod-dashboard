@@ -102,9 +102,17 @@ describe('dashboard and reporting visual/data contracts', () => {
     assert.match(areaTable, /const handleRank = \(value\)/);
     assert.match(drilldown, /const handleSort = \(field\) => setQuery\([\s\S]*rank: 'all'/);
     assert.match(drilldown, /const handleRank = \(value\)/);
-    for (const field of ['site_id', 'site_class', 'status_site', 'revenue', 'revenue_mom', 'payload', 'payload_mom', 'availability']) {
+    for (const field of ['site_id', 'site_class', 'status_site', 'revenue', 'payload', 'availability']) {
       assert.match(drilldown, new RegExp(`SortHeader field="${field}"`));
     }
+    assert.match(areaTable, /ReportingMetricValue/);
+    assert.match(areaTable, /buildAreaGrandTotal/);
+    assert.match(areaTable, /<tfoot>/);
+    assert.match(drilldown, /ReportingMetricValue/);
+    assert.match(drilldown, /grand_total/);
+    assert.match(drilldown, /availability_delta_pct/);
+    assert.match(drilldown, /<tfoot>/);
+    assert.doesNotMatch(drilldown, /SortHeader field="revenue_mom"|SortHeader field="payload_mom"|label="Revenue MoM"|label="Payload MoM"/);
     assert.match(drilldown, /md:hidden/);
     assert.match(drilldown, /fetchReportingSites/);
   });
@@ -315,15 +323,27 @@ describe('dashboard and reporting visual/data contracts', () => {
   it('restores the approved scorecard hierarchy, insight panel, and smooth trend', () => {
     const scorecards = src('features', 'reporting', 'ReportingScorecards.jsx');
     const insights = src('features', 'reporting', 'ReportingExecutiveInsights.jsx');
+    const insightBuilder = src('features', 'reporting', 'reportingInsights.js');
     const trend = src('features', 'reporting', 'ReportingPerformanceTrend.jsx');
+    const css = src('index.css');
 
     assert.match(scorecards, /EPM/);
     assert.match(scorecards, /Site \(non EPM\)/);
     assert.match(scorecards, /YTD/);
-    assert.match(scorecards, /Kontribusi NOP/);
+    assert.doesNotMatch(scorecards, /metricContribution|availabilityContribution|Kontribusi NOP|difference_pp/);
+    assert.match(insightBuilder, /Kontribusi/);
     assert.match(insights, /Executive Insight/);
     assert.doesNotMatch(insights, /Auto-generated|AI generated/i);
     assert.match(trend, /type="monotone"/);
     assert.match(trend, /linearGradient/);
+    assert.match(trend, /\bBar\b/);
+    assert.match(trend, /stackId="risk"/);
+    assert.match(trend, /Performance/);
+    assert.match(trend, /U30 & U60/);
+    assert.match(trend, /lg:grid-cols-\[minmax\(0,7fr\)_minmax\(260px,3fr\)\]/);
+    assert.match(trend, /reporting-trend-desktop/);
+    assert.match(trend, /reporting-trend-mobile/);
+    assert.match(css, /\.reporting-trend-desktop/);
+    assert.match(css, /\.reporting-trend-mobile/);
   });
 });

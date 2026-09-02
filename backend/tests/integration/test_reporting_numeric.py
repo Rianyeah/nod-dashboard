@@ -414,3 +414,227 @@ async def test_mapped_site_with_blank_nop_stays_in_its_kabupaten_not_unmapped(re
 
     assert [item.site_id for item in gresik.items] == ["CCC001"]
     assert "CCC001" not in [item.site_id for item in unmapped.items]
+
+
+@pytest.mark.asyncio
+async def test_revenue_band_trend_uses_exact_boundaries_and_historical_threshold_versions(reporting_db_session):
+    from periods import resolve_month_period
+    from services.reporting_overview import load_reporting_overview
+
+    await _seed_numeric_facts(reporting_db_session)
+    await reporting_db_session.execute(
+        text(
+            '''
+            INSERT INTO public.data_site_master
+                (row_number, "Siteid", "Site Name", "Status Site", "Site Class", "NOP", "Kabupaten/KOTA", "Transport Type")
+            VALUES
+                (10, 'BND001', 'Boundary 1', 'Active', 'Gold', 'NOP SIDOARJO', 'SIDOARJO', 'FO'),
+                (11, 'BND002', 'Boundary 2', 'Active', 'Gold', 'NOP SIDOARJO', 'SIDOARJO', 'FO'),
+                (12, 'BND003', 'Boundary 3', 'Active', 'Gold', 'NOP SIDOARJO', 'SIDOARJO', 'FO'),
+                (13, 'BND004', 'Boundary 4', 'Active', 'Gold', 'NOP SIDOARJO', 'SIDOARJO', 'FO')
+            '''
+        )
+    )
+    await reporting_db_session.execute(
+        text(
+            '''
+            INSERT INTO public.traktor_data (trx_month, site_id, rev, traffic, payload)
+            VALUES
+                ('2026-06', 'BND001', 29999999, 1, 1),
+                ('2026-06', 'BND002', 30000000, 1, 1),
+                ('2026-06', 'BND003', 59999999, 1, 1),
+                ('2026-06', 'BND004', 60000000, 1, 1),
+                ('2026-07', 'BND001', 29999999, 1, 1),
+                ('2026-07', 'BND002', 30000000, 1, 1),
+                ('2026-07', 'BND003', 59999999, 1, 1),
+                ('2026-07', 'BND004', 60000000, 1, 1)
+            '''
+        )
+    )
+    await reporting_db_session.execute(
+        text(
+            '''
+            INSERT INTO public.reporting_metric_thresholds
+                (metric, threshold_key, site_class, effective_month, threshold_value, unit, updated_by)
+            VALUES
+                ('revenue', 'u30_upper', '*', '2026-07', 40000000, 'idr', 'integration'),
+                ('revenue', 'u60_upper', '*', '2026-07', 70000000, 'idr', 'integration')
+            ON CONFLICT (metric, threshold_key, site_class, effective_month) DO UPDATE
+            SET threshold_value = EXCLUDED.threshold_value, updated_at = now()
+            '''
+        )
+    )
+    await reporting_db_session.commit()
+
+    overview = await load_reporting_overview(
+        reporting_db_session,
+        resolve_month_period(period_start="2026-07", period_end="2026-07"),
+        None,
+    )
+    trend = {item.trx_month: item for item in overview.trend}
+
+    assert trend["2026-06"].u30_sites == 4
+    assert trend["2026-06"].u60_sites == 2
+    assert trend["2026-06"].achieved_sites == 1
+    assert trend["2026-06"].unavailable_sites == 0
+    assert trend["2026-07"].u30_sites == 5
+    assert trend["2026-07"].u60_sites == 2
+    assert trend["2026-07"].achieved_sites == 0
+    assert trend["2026-07"].unavailable_sites == 0
+
+    await reporting_db_session.execute(
+        text(
+            "DELETE FROM public.reporting_metric_thresholds "
+            "WHERE metric = 'revenue' AND threshold_key = 'u60_upper'"
+        )
+    )
+    await reporting_db_session.commit()
+    missing_threshold = await load_reporting_overview(
+        reporting_db_session,
+        resolve_month_period(period_start="2026-07", period_end="2026-07"),
+        None,
+    )
+    july = next(item for item in missing_threshold.trend if item.trx_month == "2026-07")
+
+    assert july.u30_sites is None
+    assert july.u60_sites is None
+    assert july.achieved_sites is None
+    assert july.unavailable_sites == 7
+
+
+@pytest.mark.asyncio
+async def test_overview_drivers_follow_nominal_change_and_outage_direction(reporting_db_session):
+    from periods import resolve_month_period
+    from services.reporting_overview import load_reporting_overview
+
+    await _seed_numeric_facts(reporting_db_session)
+    await reporting_db_session.execute(
+        text(
+            '''
+            UPDATE public.traktor_data
+            SET
+                rev = CASE
+                    WHEN site_id = 'AAA001' AND trx_month = '2026-06' THEN 100
+                    WHEN site_id = 'AAA001' AND trx_month = '2026-07' THEN 160
+                    WHEN site_id = 'BBB001' AND trx_month = '2026-06' THEN 1
+                    WHEN site_id = 'BBB001' AND trx_month = '2026-07' THEN 3
+                    ELSE rev
+                END,
+                payload = CASE
+                    WHEN site_id = 'AAA001' AND trx_month = '2026-06' THEN 100
+                    WHEN site_id = 'AAA001' AND trx_month = '2026-07' THEN 140
+                    WHEN site_id = 'BBB001' AND trx_month = '2026-06' THEN 1
+                    WHEN site_id = 'BBB001' AND trx_month = '2026-07' THEN 3
+                    ELSE payload
+                END
+            WHERE site_id IN ('AAA001', 'BBB001')
+              AND trx_month IN ('2026-06', '2026-07')
+            '''
+        )
+    )
+    await reporting_db_session.execute(
+        text(
+            '''
+            UPDATE public.site_month_metrics
+            SET total_outage_menit = 30
+            WHERE tahun = 2026 AND bulan = 7 AND site_id = 'BBB001'
+            '''
+        )
+    )
+    await reporting_db_session.commit()
+
+    overview = await load_reporting_overview(
+        reporting_db_session,
+        resolve_month_period(period_start="2026-07", period_end="2026-07"),
+        "SIDOARJO",
+    )
+
+    assert overview.revenue.driver.site_id == "AAA001"
+    assert overview.revenue.driver.delta_value == 60
+    assert overview.revenue.driver.delta_pct == pytest.approx(60.0)
+    assert overview.payload.driver.site_id == "AAA001"
+    assert overview.payload.driver.delta_value == 40
+    assert overview.availability.driver.site_id == "BBB001"
+    assert overview.availability.driver.outage_delta_minutes == pytest.approx(15.0)
+    assert overview.availability.driver.delta_pct == pytest.approx(-1.5)
+
+
+@pytest.mark.asyncio
+async def test_site_grand_total_is_filter_aware_but_independent_of_pagination_and_sort(reporting_db_session):
+    from models.reporting import ReportingSiteQuery
+    from periods import resolve_month_period
+    from services.reporting_drilldown import load_reporting_sites
+
+    await _seed_numeric_facts(reporting_db_session)
+    await reporting_db_session.execute(
+        text(
+            '''
+            UPDATE public.traktor_data
+            SET rev = 60000000, payload = 15728640
+            WHERE trx_month = '2026-07' AND site_id = 'AAA001'
+            '''
+        )
+    )
+    await reporting_db_session.execute(
+        text(
+            '''
+            UPDATE public.site_month_metrics
+            SET total_outage_menit = 3.2
+            WHERE tahun = 2026 AND bulan = 7 AND site_id = 'AAA001'
+            '''
+        )
+    )
+    await reporting_db_session.commit()
+    period = resolve_month_period(period_start="2026-07", period_end="2026-07")
+
+    page_one = await load_reporting_sites(
+        reporting_db_session,
+        period=period,
+        nop="SIDOARJO",
+        area_key="SIDOARJO",
+        query=ReportingSiteQuery(page=1, page_size=1, sort_by="revenue", sort_dir="desc"),
+    )
+    page_two = await load_reporting_sites(
+        reporting_db_session,
+        period=period,
+        nop="SIDOARJO",
+        area_key="SIDOARJO",
+        query=ReportingSiteQuery(page=2, page_size=1, sort_by="revenue", sort_dir="asc"),
+    )
+
+    assert page_one.grand_total == page_two.grand_total
+    assert page_one.grand_total.total_sites > len(page_one.items)
+    assert page_one.grand_total.avg_availability == pytest.approx(
+        100
+        * (page_one.grand_total.total_time_minutes - page_one.grand_total.outage_minutes)
+        / page_one.grand_total.total_time_minutes
+    )
+
+    gold_only = await load_reporting_sites(
+        reporting_db_session,
+        period=period,
+        nop="SIDOARJO",
+        area_key="SIDOARJO",
+        query=ReportingSiteQuery(site_class="Gold"),
+    )
+    achieved_only = await load_reporting_sites(
+        reporting_db_session,
+        period=period,
+        nop="SIDOARJO",
+        area_key="SIDOARJO",
+        query=ReportingSiteQuery(target_status="achieved"),
+    )
+    search_only = await load_reporting_sites(
+        reporting_db_session,
+        period=period,
+        nop="SIDOARJO",
+        area_key="SIDOARJO",
+        query=ReportingSiteQuery(q="BBB001"),
+    )
+
+    assert gold_only.grand_total.total_sites == 1
+    assert achieved_only.grand_total.total_sites == 1
+    assert search_only.grand_total.total_sites == 1
+    assert gold_only.grand_total.revenue != page_one.grand_total.revenue
+    assert achieved_only.grand_total.payload != page_one.grand_total.payload
+    assert search_only.grand_total.avg_availability != page_one.grand_total.avg_availability

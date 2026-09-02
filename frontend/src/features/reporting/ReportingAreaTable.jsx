@@ -3,6 +3,8 @@ import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, MapPinned } from 'lucide
 
 import { DashboardTableShell } from '../../components/ui/DashboardPrimitives.jsx';
 import { formatNumber, formatPayload, formatPercent, formatRevenue, formatRevenueShort, formatTraffic } from '../../utils/formatters.js';
+import ReportingMetricValue from './ReportingMetricValue.jsx';
+import { buildAreaGrandTotal } from './reportingPerformanceMetrics.js';
 import { rankAndSortAreas, toAreaMobileMetric } from './reportingTableState.js';
 
 
@@ -22,6 +24,10 @@ export default function ReportingAreaTable({ rows = [], loading = false, error, 
   const [rank, setRank] = useState('all');
   const [sort, setSort] = useState({ field: 'revenue', direction: 'desc' });
   const [expanded, setExpanded] = useState(null);
+  const grandTotal = useMemo(
+    () => (!loading && !error ? buildAreaGrandTotal(rows) : null),
+    [error, loading, rows],
+  );
   const visibleRows = useMemo(() => rankAndSortAreas(rows, {
     metric: sort.field,
     rank,
@@ -84,15 +90,29 @@ export default function ReportingAreaTable({ rows = [], loading = false, error, 
                   <tr key={row.area_key} onClick={() => onSelectArea(row)} className="cursor-pointer hover:bg-[var(--bg-hover)]/60 focus-within:bg-[var(--bg-hover)]/60">
                     <td className="px-3 py-3 font-semibold text-[var(--text-primary)]"><button type="button" className="flex items-center gap-2 text-left"><ChevronRight className="size-3.5 text-[var(--primary-light)]" />{row.kabupaten}</button></td>
                     <td className="px-3 py-3 text-right font-mono tabular-nums">{formatNumber(row.total_sites)}</td>
-                    <td className="px-3 py-3 text-right font-mono font-semibold tabular-nums text-[var(--success)]">{formatRevenueShort(row.revenue)}</td>
-                    <td className="px-3 py-3 text-right font-mono tabular-nums text-[var(--chart-info)]">{formatPayload(row.payload)}</td>
-                    <td className="px-3 py-3 text-right font-mono tabular-nums">{formatPercent(row.avg_availability)}</td>
+                    <td className="px-3 py-3 text-right"><ReportingMetricValue value={row.revenue} delta={row.revenue_delta_pct} formatValue={formatRevenueShort} valueClassName="text-[var(--success)]" /></td>
+                    <td className="px-3 py-3 text-right"><ReportingMetricValue value={row.payload} delta={row.payload_delta_pct} formatValue={formatPayload} valueClassName="text-[var(--chart-info)]" /></td>
+                    <td className="px-3 py-3 text-right"><ReportingMetricValue value={row.avg_availability} delta={row.availability_delta_pct} formatValue={formatPercent} digits={2} valueClassName="text-[var(--text-primary)]" /></td>
                     <td className="px-3 py-3 text-right font-mono tabular-nums text-[var(--text-secondary)]">{formatTraffic(row.traffic)}</td>
                     <td className="px-3 py-3 text-right text-xs text-[var(--text-secondary)]">BPS {formatNumber(row.ticket_swfm_bps)} / TS {formatNumber(row.ticket_swfm_ts)} / {formatPercent(row.backup_sukses_rate)}</td>
                     <td className="px-3 py-3 text-right text-xs text-[var(--text-secondary)]">{formatNumber(row.proker_open)} open / {formatNumber(row.proker_closed)} close</td>
                   </tr>
                 ))}
               </tbody>
+              {grandTotal ? (
+                <tfoot>
+                  <tr className="border-t-2 border-[var(--border-strong)] bg-[var(--surface-soft)]">
+                    <td className="px-3 py-3 font-semibold text-[var(--text-primary)]">Grand Total</td>
+                    <td className="px-3 py-3 text-right font-mono font-semibold tabular-nums">{formatNumber(grandTotal.total_sites)}</td>
+                    <td className="px-3 py-3 text-right"><ReportingMetricValue value={grandTotal.revenue} delta={grandTotal.revenue_delta_pct} formatValue={formatRevenueShort} valueClassName="text-[var(--success)]" /></td>
+                    <td className="px-3 py-3 text-right"><ReportingMetricValue value={grandTotal.payload} delta={grandTotal.payload_delta_pct} formatValue={formatPayload} valueClassName="text-[var(--chart-info)]" /></td>
+                    <td className="px-3 py-3 text-right"><ReportingMetricValue value={grandTotal.avg_availability} delta={grandTotal.availability_delta_pct} formatValue={formatPercent} digits={2} valueClassName="text-[var(--text-primary)]" /></td>
+                    <td className="px-3 py-3 text-right font-mono font-semibold tabular-nums text-[var(--text-secondary)]">{formatTraffic(grandTotal.traffic)}</td>
+                    <td className="px-3 py-3 text-right text-xs font-semibold text-[var(--text-secondary)]">BPS {formatNumber(grandTotal.ticket_swfm_bps)} / TS {formatNumber(grandTotal.ticket_swfm_ts)} / {formatPercent(grandTotal.backup_sukses_rate)}</td>
+                    <td className="px-3 py-3 text-right text-xs font-semibold text-[var(--text-secondary)]">{formatNumber(grandTotal.proker_open)} open / {formatNumber(grandTotal.proker_closed)} close</td>
+                  </tr>
+                </tfoot>
+              ) : null}
             </table>
           </div>
 
@@ -110,9 +130,9 @@ export default function ReportingAreaTable({ rows = [], loading = false, error, 
                     <ChevronRight className="mt-1 size-4 text-[var(--primary-light)]" />
                   </button>
                   <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
-                    <div><p className="text-[10px] text-[var(--text-muted)]">Revenue</p><strong className="font-mono text-[var(--success)]">{formatRevenue(item.revenue)}</strong></div>
-                    <div><p className="text-[10px] text-[var(--text-muted)]">Payload</p><strong className="font-mono text-[var(--text-primary)]">{formatPayload(item.payload)}</strong></div>
-                    <div><p className="text-[10px] text-[var(--text-muted)]">Availability</p><strong className="font-mono text-[var(--text-primary)]">{formatPercent(item.availability.value)}</strong></div>
+                    <div><p className="text-[10px] text-[var(--text-muted)]">Revenue</p><ReportingMetricValue value={item.revenue.value} delta={item.revenue.delta} formatValue={formatRevenue} valueClassName="text-[var(--success)]" /></div>
+                    <div><p className="text-[10px] text-[var(--text-muted)]">Payload</p><ReportingMetricValue value={item.payload.value} delta={item.payload.delta} formatValue={formatPayload} valueClassName="text-[var(--text-primary)]" /></div>
+                    <div><p className="text-[10px] text-[var(--text-muted)]">Availability</p><ReportingMetricValue value={item.availability.value} delta={item.availability.delta} formatValue={formatPercent} digits={2} valueClassName="text-[var(--text-primary)]" /></div>
                   </div>
                   <button type="button" onClick={() => setExpanded(open ? null : row.area_key)} className="mt-3 inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--text-muted)]">
                     <ChevronDown className={`size-3.5 transition-transform ${open ? 'rotate-180' : ''}`} /> Detail
@@ -121,6 +141,19 @@ export default function ReportingAreaTable({ rows = [], loading = false, error, 
                 </article>
               );
             })}
+            {grandTotal ? (
+              <article className="bg-[var(--surface-soft)] px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="font-semibold text-[var(--text-primary)]">Grand Total</h3>
+                  <span className="text-xs text-[var(--text-muted)]">{formatNumber(grandTotal.total_sites)} site</span>
+                </div>
+                <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                  <div><p className="text-[10px] text-[var(--text-muted)]">Revenue</p><ReportingMetricValue value={grandTotal.revenue} delta={grandTotal.revenue_delta_pct} formatValue={formatRevenue} valueClassName="text-[var(--success)]" /></div>
+                  <div><p className="text-[10px] text-[var(--text-muted)]">Payload</p><ReportingMetricValue value={grandTotal.payload} delta={grandTotal.payload_delta_pct} formatValue={formatPayload} valueClassName="text-[var(--text-primary)]" /></div>
+                  <div><p className="text-[10px] text-[var(--text-muted)]">Availability</p><ReportingMetricValue value={grandTotal.avg_availability} delta={grandTotal.availability_delta_pct} formatValue={formatPercent} digits={2} valueClassName="text-[var(--text-primary)]" /></div>
+                </div>
+              </article>
+            ) : null}
           </div>
         </>
       )}

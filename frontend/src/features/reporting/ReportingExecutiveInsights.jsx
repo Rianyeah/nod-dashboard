@@ -5,9 +5,9 @@ import { buildReportingInsights } from './reportingInsights.js';
 
 const ICONS = { revenue: Banknote, availability: Activity, payload: HardDrive };
 const TONES = {
-  success: 'border-[var(--success)]/25 bg-[var(--success)]/7 text-[var(--success)]',
-  warning: 'border-[var(--warning)]/30 bg-[var(--warning)]/8 text-[var(--warning)]',
-  info: 'border-[var(--primary)]/25 bg-[var(--primary)]/7 text-[var(--primary-light)]',
+  positive: 'border-emerald-500/25 bg-emerald-500/[0.055] text-emerald-400',
+  negative: 'border-rose-500/25 bg-rose-500/[0.055] text-rose-400',
+  neutral: 'border-[var(--border)] bg-[var(--surface-soft)] text-[var(--text-secondary)]',
   unavailable: 'border-[var(--border)] bg-[var(--surface-soft)] text-[var(--text-muted)]',
 };
 
@@ -32,7 +32,9 @@ export default function ReportingExecutiveInsights({ overview, comparisonLabel }
               <h3 className="mt-1.5 text-xs font-semibold">{card.title}</h3>
               <p className="mt-1.5 font-mono text-sm font-semibold tabular-nums text-[var(--text-primary)]">{card.summary}</p>
               {card.detail ? <p className="mt-1 text-[11px] leading-relaxed text-[var(--text-muted)]">{card.detail}</p> : null}
-              {card.contribution ? <p className="mt-2 border-t border-current/15 pt-2 text-[11px] font-medium leading-relaxed">{card.contribution}</p> : null}
+              {card.driver ? <p className="mt-2 text-[11px] font-medium leading-relaxed text-[var(--text-secondary)]">{card.driver}</p> : null}
+              {card.contribution ? <p className="mt-1.5 text-[11px] font-medium leading-relaxed">{card.contribution}</p> : null}
+              {card.recommendation ? <p className="mt-2 line-clamp-2 border-t border-current/15 pt-2 text-[11px] leading-relaxed text-[var(--text-secondary)]">{card.recommendation}</p> : null}
             </article>
           );
         })}

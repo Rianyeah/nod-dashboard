@@ -78,6 +78,10 @@ class RevenueTrendItem(BaseModel):
     total_payload: int = 0
     total_traffic: int = 0
     avg_availability: Optional[float] = None
+    u30_sites: int | None = None
+    u60_sites: int | None = None
+    achieved_sites: int | None = None
+    unavailable_sites: int = 0
 
 
 class SitePerformance(BaseModel):
@@ -111,12 +115,25 @@ class ReportingTarget(BaseModel):
     attainment_pct: float | None = None
 
 
+class ReportingMetricDriver(BaseModel):
+    site_id: str
+    site_name: str | None = None
+    current_value: int | float | None = None
+    previous_value: int | float | None = None
+    delta_value: int | float | None = None
+    delta_pct: float | None = None
+    contribution_pct: float | None = None
+    outage_delta_minutes: float | None = None
+
+
 class ReportingMetricFact(BaseModel):
     value: int | float | None = None
     previous_value: int | float | None = None
     delta_pct: float | None = None
     contribution: ReportingContribution = Field(default_factory=ReportingContribution)
     severity: Literal["success", "warning", "info", "unavailable"] = "unavailable"
+    driver: ReportingMetricDriver | None = None
+    recommendation: str | None = None
 
 
 class ReportingRevenueFact(ReportingMetricFact):
@@ -154,12 +171,14 @@ class ReportingAreaRow(BaseModel):
     is_unmapped: bool = False
     total_sites: int = 0
     revenue: int = 0
+    previous_revenue: int = 0
     rev_voice: int = 0
     rev_bb: int = 0
     rev_dig: int = 0
     rev_sms: int = 0
     rev_ir: int = 0
     payload: int = 0
+    previous_payload: int = 0
     pld_2g: int = 0
     pld_3g: int = 0
     pld_4g: int = 0
@@ -171,6 +190,10 @@ class ReportingAreaRow(BaseModel):
     total_time_minutes: float = 0
     outage_minutes: float = 0
     avg_availability: float | None = None
+    previous_total_time_minutes: float = 0
+    previous_outage_minutes: float = 0
+    previous_availability: float | None = None
+    availability_delta_pct: float | None = None
     sla_status: Literal["met", "missed", "unavailable"]
     ticket_swfm_bps: int = 0
     ticket_swfm_ts: int = 0
@@ -241,8 +264,13 @@ class ReportingSiteRow(BaseModel):
     payload: int = 0
     previous_payload: int = 0
     payload_mom_pct: float | None = None
+    total_time_minutes: float = 0
     avg_availability: float | None = None
     outage_minutes: float = 0
+    previous_total_time_minutes: float = 0
+    previous_outage_minutes: float = 0
+    previous_availability: float | None = None
+    availability_delta_pct: float | None = None
     sla_status: Literal["met", "missed", "unavailable"]
     availability_target: float | None = None
     availability_target_status: Literal["achieved", "not_achieved", "unavailable"] = "unavailable"
@@ -251,6 +279,23 @@ class ReportingSiteRow(BaseModel):
     payload_target_tb: float | None = None
     payload_target_status: Literal["achieved", "not_achieved", "unavailable"] = "unavailable"
     overall_target_status: Literal["achieved", "not_achieved", "unavailable"] = "unavailable"
+
+
+class ReportingSiteGrandTotal(BaseModel):
+    total_sites: int = 0
+    revenue: int = 0
+    previous_revenue: int = 0
+    revenue_mom_pct: float | None = None
+    payload: int = 0
+    previous_payload: int = 0
+    payload_mom_pct: float | None = None
+    total_time_minutes: float = 0
+    outage_minutes: float = 0
+    avg_availability: float | None = None
+    previous_total_time_minutes: float = 0
+    previous_outage_minutes: float = 0
+    previous_avg_availability: float | None = None
+    availability_delta_pct: float | None = None
 
 
 class ReportingSitePage(BaseModel):
@@ -263,6 +308,7 @@ class ReportingSitePage(BaseModel):
     site_classes: list[str] = Field(default_factory=list)
     rank: Literal["all", "top", "bottom"] = "all"
     rank_metric: str = "revenue"
+    grand_total: ReportingSiteGrandTotal | None = None
 
 
 PIVOT_DIMENSIONS = {

@@ -51,9 +51,9 @@ export function rankAndSortAreas(rows = [], { metric = 'revenue', rank = 'all', 
 export function toAreaMobileMetric(row = {}) {
   return {
     identity: row.kabupaten || 'Belum Terpetakan',
-    revenue: row.revenue ?? 0,
-    payload: row.payload ?? 0,
-    availability: { value: row.avg_availability ?? null },
+    revenue: { value: row.revenue ?? 0, delta: row.revenue_delta_pct ?? null },
+    payload: { value: row.payload ?? 0, delta: row.payload_delta_pct ?? null },
+    availability: { value: row.avg_availability ?? null, delta: row.availability_delta_pct ?? null },
     sites: row.total_sites ?? 0,
   };
 }

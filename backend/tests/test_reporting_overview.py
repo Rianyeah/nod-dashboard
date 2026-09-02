@@ -29,7 +29,7 @@ class _QueryResult:
 class FakeOverviewSession:
     async def execute(self, query, params=None):
         sql = str(query)
-        if "reporting_metric_thresholds" in sql and "DISTINCT ON" in sql:
+        if "SELECT DISTINCT ON (metric, threshold_key, site_class)" in sql:
             return _QueryResult(
                 [
                     {"metric": "availability", "threshold_key": "target", "site_class": "DIAMOND", "threshold_value": 99.87, "effective_month": "2026-01", "updated_by": "admin", "updated_at": "2026-01-01T00:00:00+00:00"},
@@ -52,9 +52,50 @@ class FakeOverviewSession:
             )
         if "reporting_ytd_aggregates" in sql:
             return _QueryResult([{"revenue_ytd": 900, "payload_ytd": 90}])
+        if "reporting_site_driver_candidates" in sql:
+            return _QueryResult(
+                [
+                    {
+                        "site_id": "AAA001",
+                        "site_name": "Alpha",
+                        "revenue": 140,
+                        "previous_revenue": 100,
+                        "payload": 20,
+                        "previous_payload": 10,
+                        "availability": 99.8,
+                        "previous_availability": 99.7,
+                        "outage_minutes": 2,
+                        "previous_outage_minutes": 3,
+                    },
+                    {
+                        "site_id": "BBB001",
+                        "site_name": "Beta",
+                        "revenue": 160,
+                        "previous_revenue": 150,
+                        "payload": 10,
+                        "previous_payload": 15,
+                        "availability": 98.0,
+                        "previous_availability": 99.0,
+                        "outage_minutes": 28,
+                        "previous_outage_minutes": 17,
+                    },
+                ]
+            )
         if "reporting_trend" in sql:
             return _QueryResult(
-                [{"trx_month": "2026-07", "total_revenue": 300, "total_payload": 30, "total_traffic": 12, "avg_availability": 98.5}]
+                [
+                    {
+                        "trx_month": "2026-07",
+                        "total_revenue": 300,
+                        "total_payload": 30,
+                        "total_traffic": 12,
+                        "avg_availability": 98.5,
+                        "u30_sites": 1,
+                        "u60_sites": 1,
+                        "achieved_sites": 0,
+                        "unavailable_sites": 0,
+                    }
+                ]
             )
         if "reporting_coverage" in sql:
             return _QueryResult(
@@ -83,10 +124,14 @@ class FakeAreaSession:
                     "is_unmapped": False,
                     "total_sites": 2,
                     "revenue": 300,
+                    "previous_revenue": 250,
                     "payload": 30,
+                    "previous_payload": 25,
                     "traffic": 12,
                     "total_time_minutes": 2000,
                     "outage_minutes": 30,
+                    "previous_total_time_minutes": 2000,
+                    "previous_outage_minutes": 20,
                     "ticket_swfm_bps": 2,
                     "ticket_swfm_ts": 1,
                     "backup_sukses_bps": 1,
@@ -99,10 +144,14 @@ class FakeAreaSession:
                     "is_unmapped": True,
                     "total_sites": 1,
                     "revenue": 100,
+                    "previous_revenue": 80,
                     "payload": 10,
+                    "previous_payload": 8,
                     "traffic": 4,
                     "total_time_minutes": 1000,
                     "outage_minutes": 30,
+                    "previous_total_time_minutes": 1000,
+                    "previous_outage_minutes": 40,
                     "ticket_swfm_bps": 0,
                     "ticket_swfm_ts": 0,
                     "backup_sukses_bps": 0,
@@ -131,6 +180,18 @@ def test_reporting_queries_fall_back_to_raw_availability_for_missing_cache_rows(
     assert '"outgage (menit)"' in normalized
     for query in (SCOPE_AGGREGATES_QUERY, TREND_QUERY, AREA_AGGREGATES_QUERY, COVERAGE_QUERY):
         assert "availability_facts" in query
+
+
+def test_trend_query_classifies_each_month_with_its_effective_threshold_version():
+    from services.reporting_overview import TREND_QUERY
+
+    normalized = " ".join(TREND_QUERY.lower().split())
+    assert "generate_series" in normalized
+    assert "threshold.effective_month <= sm.trx_month" in normalized
+    assert "threshold_key = 'u30_upper'" in normalized
+    assert "threshold_key = 'u60_upper'" in normalized
+    assert "order by threshold.effective_month desc" in normalized
+    assert "unavailable_sites" in normalized
 
 
 def test_threshold_coverage_generates_scalar_month_values():
@@ -298,6 +359,13 @@ async def test_overview_loader_returns_typed_numeric_contract_from_one_scope_que
     assert overview.thresholds.availability["DIAMOND"] == pytest.approx(99.87)
     assert overview.revenue.contribution.contribution_pct == pytest.approx(75.0)
     assert overview.availability.value == pytest.approx(98.5)
+    assert overview.revenue.driver.site_id == "AAA001"
+    assert overview.revenue.driver.delta_value == pytest.approx(40)
+    assert overview.payload.driver.site_id == "AAA001"
+    assert overview.availability.driver.site_id == "BBB001"
+    assert overview.revenue.recommendation
+    assert overview.trend[0].u30_sites == 1
+    assert overview.trend[0].u60_sites == 1
     assert overview.coverage[0].status == "complete"
     assert overview.coverage[0].latest_data_period == "2026-07"
 
@@ -327,7 +395,12 @@ async def test_area_loader_keeps_unmapped_sites_and_computes_ratio_metrics():
     assert [row.kabupaten for row in rows] == ["SIDOARJO", "Belum Terpetakan"]
     assert sum(row.total_sites for row in rows) == 3
     assert sum(row.revenue for row in rows) == 400
+    assert sum(row.previous_revenue for row in rows) == 330
+    assert sum(row.previous_payload for row in rows) == 33
     assert rows[0].avg_availability == pytest.approx(98.5)
+    assert rows[0].previous_availability == pytest.approx(99.0)
+    assert rows[0].availability_delta_pct == pytest.approx(-0.5)
     assert rows[0].backup_sukses_rate == pytest.approx(50.0)
     assert rows[0].sla_status == "missed"
     assert rows[1].is_unmapped is True
+    assert rows[1].availability_delta_pct == pytest.approx(1.0)
