@@ -68,118 +68,6 @@ previous_performance AS (
       AND NULLIF(TRIM(t.site_id), '') IS NOT NULL
     GROUP BY 1
 ),
-band_months AS (
-    SELECT
-        'selected'::text AS window_key,
-        TO_CHAR(month_value, 'YYYY-MM') AS trx_month
-    FROM GENERATE_SERIES(
-        TO_DATE(:period_start, 'YYYY-MM'),
-        TO_DATE(:period_end, 'YYYY-MM'),
-        INTERVAL '1 month'
-    ) AS selected_months(month_value)
-    UNION ALL
-    SELECT
-        'previous'::text AS window_key,
-        TO_CHAR(month_value, 'YYYY-MM') AS trx_month
-    FROM GENERATE_SERIES(
-        TO_DATE(:comparison_start, 'YYYY-MM'),
-        TO_DATE(:comparison_end, 'YYYY-MM'),
-        INTERVAL '1 month'
-    ) AS previous_months(month_value)
-),
-band_performance AS (
-    SELECT
-        t.trx_month,
-        UPPER(TRIM(t.site_id)) AS site_key,
-        SUM(t.rev)::bigint AS revenue
-    FROM public.traktor_data t
-    WHERE t.trx_month BETWEEN :comparison_start AND :period_end
-      AND NULLIF(TRIM(t.site_id), '') IS NOT NULL
-    GROUP BY 1, 2
-),
-band_window_sites AS (
-    SELECT DISTINCT months.window_key, performance.site_key
-    FROM band_months months
-    JOIN band_performance performance ON performance.trx_month = months.trx_month
-),
-band_monthly AS (
-    SELECT
-        sites.window_key,
-        months.trx_month,
-        sites.site_key,
-        performance.revenue,
-        revenue_u30.threshold_value::double precision AS u30_upper,
-        revenue_u60.threshold_value::double precision AS u60_upper
-    FROM band_window_sites sites
-    JOIN band_months months ON months.window_key = sites.window_key
-    LEFT JOIN band_performance performance
-      ON performance.site_key = sites.site_key
-     AND performance.trx_month = months.trx_month
-    LEFT JOIN LATERAL (
-        SELECT threshold.threshold_value
-        FROM public.reporting_metric_thresholds threshold
-        WHERE threshold.metric = 'revenue'
-          AND threshold.threshold_key = 'u30_upper'
-          AND threshold.site_class = '*'
-          AND threshold.effective_month <= months.trx_month
-        ORDER BY threshold.effective_month DESC, threshold.updated_at DESC
-        LIMIT 1
-    ) revenue_u30 ON TRUE
-    LEFT JOIN LATERAL (
-        SELECT threshold.threshold_value
-        FROM public.reporting_metric_thresholds threshold
-        WHERE threshold.metric = 'revenue'
-          AND threshold.threshold_key = 'u60_upper'
-          AND threshold.site_class = '*'
-          AND threshold.effective_month <= months.trx_month
-        ORDER BY threshold.effective_month DESC, threshold.updated_at DESC
-        LIMIT 1
-    ) revenue_u60 ON TRUE
-),
-band_monthly_status AS (
-    SELECT
-        *,
-        CASE
-            WHEN revenue IS NULL OR u30_upper IS NULL OR u60_upper IS NULL THEN 'unavailable'
-            WHEN revenue < u30_upper THEN 'u30'
-            WHEN revenue < u60_upper THEN 'u60'
-            ELSE 'achieved'
-        END AS revenue_band
-    FROM band_monthly
-),
-band_site_status AS (
-    SELECT
-        window_key,
-        site_key,
-        CASE
-            WHEN BOOL_OR(revenue_band = 'unavailable') THEN 'unavailable'
-            WHEN BOOL_OR(revenue_band = 'u30') THEN 'u30'
-            WHEN BOOL_OR(revenue_band = 'u60') THEN 'u60'
-            ELSE 'achieved'
-        END AS revenue_band
-    FROM band_monthly_status
-    GROUP BY 1, 2
-),
-band_area AS (
-    SELECT
-        COALESCE(UPPER(TRIM(master.kabupaten)), :unmapped_key) AS area_key,
-        COUNT(*) FILTER (
-            WHERE status.window_key = 'selected' AND status.revenue_band = 'u30'
-        )::bigint AS u30_sites,
-        COUNT(*) FILTER (
-            WHERE status.window_key = 'previous' AND status.revenue_band = 'u30'
-        )::bigint AS previous_u30_sites,
-        COUNT(*) FILTER (
-            WHERE status.window_key = 'selected' AND status.revenue_band = 'u60'
-        )::bigint AS u60_sites,
-        COUNT(*) FILTER (
-            WHERE status.window_key = 'previous' AND status.revenue_band = 'u60'
-        )::bigint AS previous_u60_sites
-    FROM band_site_status status
-    LEFT JOIN master ON master.site_key = status.site_key
-    WHERE CAST(:nop_key AS text) IS NULL OR master.nop_key = :nop_key
-    GROUP BY 1
-),
 {availability_facts_ctes},
 active_availability AS (
     SELECT
@@ -682,6 +570,118 @@ previous_performance AS (
     FROM public.traktor_data t
     WHERE t.trx_month BETWEEN :comparison_start AND :comparison_end
       AND NULLIF(TRIM(t.site_id), '') IS NOT NULL
+    GROUP BY 1
+),
+band_months AS (
+    SELECT
+        'selected'::text AS window_key,
+        TO_CHAR(month_value, 'YYYY-MM') AS trx_month
+    FROM GENERATE_SERIES(
+        TO_DATE(:period_start, 'YYYY-MM'),
+        TO_DATE(:period_end, 'YYYY-MM'),
+        INTERVAL '1 month'
+    ) AS selected_months(month_value)
+    UNION ALL
+    SELECT
+        'previous'::text AS window_key,
+        TO_CHAR(month_value, 'YYYY-MM') AS trx_month
+    FROM GENERATE_SERIES(
+        TO_DATE(:comparison_start, 'YYYY-MM'),
+        TO_DATE(:comparison_end, 'YYYY-MM'),
+        INTERVAL '1 month'
+    ) AS previous_months(month_value)
+),
+band_performance AS (
+    SELECT
+        t.trx_month,
+        UPPER(TRIM(t.site_id)) AS site_key,
+        SUM(t.rev)::bigint AS revenue
+    FROM public.traktor_data t
+    WHERE t.trx_month BETWEEN :comparison_start AND :period_end
+      AND NULLIF(TRIM(t.site_id), '') IS NOT NULL
+    GROUP BY 1, 2
+),
+band_window_sites AS (
+    SELECT DISTINCT months.window_key, performance.site_key
+    FROM band_months months
+    JOIN band_performance performance ON performance.trx_month = months.trx_month
+),
+band_monthly AS (
+    SELECT
+        sites.window_key,
+        months.trx_month,
+        sites.site_key,
+        performance.revenue,
+        revenue_u30.threshold_value::double precision AS u30_upper,
+        revenue_u60.threshold_value::double precision AS u60_upper
+    FROM band_window_sites sites
+    JOIN band_months months ON months.window_key = sites.window_key
+    LEFT JOIN band_performance performance
+      ON performance.site_key = sites.site_key
+     AND performance.trx_month = months.trx_month
+    LEFT JOIN LATERAL (
+        SELECT threshold.threshold_value
+        FROM public.reporting_metric_thresholds threshold
+        WHERE threshold.metric = 'revenue'
+          AND threshold.threshold_key = 'u30_upper'
+          AND threshold.site_class = '*'
+          AND threshold.effective_month <= months.trx_month
+        ORDER BY threshold.effective_month DESC, threshold.updated_at DESC
+        LIMIT 1
+    ) revenue_u30 ON TRUE
+    LEFT JOIN LATERAL (
+        SELECT threshold.threshold_value
+        FROM public.reporting_metric_thresholds threshold
+        WHERE threshold.metric = 'revenue'
+          AND threshold.threshold_key = 'u60_upper'
+          AND threshold.site_class = '*'
+          AND threshold.effective_month <= months.trx_month
+        ORDER BY threshold.effective_month DESC, threshold.updated_at DESC
+        LIMIT 1
+    ) revenue_u60 ON TRUE
+),
+band_monthly_status AS (
+    SELECT
+        *,
+        CASE
+            WHEN revenue IS NULL OR u30_upper IS NULL OR u60_upper IS NULL THEN 'unavailable'
+            WHEN revenue < u30_upper THEN 'u30'
+            WHEN revenue < u60_upper THEN 'u60'
+            ELSE 'achieved'
+        END AS revenue_band
+    FROM band_monthly
+),
+band_site_status AS (
+    SELECT
+        window_key,
+        site_key,
+        CASE
+            WHEN BOOL_OR(revenue_band = 'unavailable') THEN 'unavailable'
+            WHEN BOOL_OR(revenue_band = 'u30') THEN 'u30'
+            WHEN BOOL_OR(revenue_band = 'u60') THEN 'u60'
+            ELSE 'achieved'
+        END AS revenue_band
+    FROM band_monthly_status
+    GROUP BY 1, 2
+),
+band_area AS (
+    SELECT
+        COALESCE(UPPER(TRIM(master.kabupaten)), :unmapped_key) AS area_key,
+        COUNT(*) FILTER (
+            WHERE status.window_key = 'selected' AND status.revenue_band = 'u30'
+        )::bigint AS u30_sites,
+        COUNT(*) FILTER (
+            WHERE status.window_key = 'previous' AND status.revenue_band = 'u30'
+        )::bigint AS previous_u30_sites,
+        COUNT(*) FILTER (
+            WHERE status.window_key = 'selected' AND status.revenue_band = 'u60'
+        )::bigint AS u60_sites,
+        COUNT(*) FILTER (
+            WHERE status.window_key = 'previous' AND status.revenue_band = 'u60'
+        )::bigint AS previous_u60_sites
+    FROM band_site_status status
+    LEFT JOIN master ON master.site_key = status.site_key
+    WHERE CAST(:nop_key AS text) IS NULL OR master.nop_key = :nop_key
     GROUP BY 1
 ),
 {availability_facts_ctes},

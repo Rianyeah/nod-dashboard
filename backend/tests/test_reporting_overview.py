@@ -228,6 +228,19 @@ def test_reporting_queries_fall_back_to_raw_availability_for_missing_cache_rows(
         assert "availability_facts" in query
 
 
+def test_revenue_band_bindings_are_isolated_to_the_area_query():
+    from sqlalchemy import text
+
+    from services.reporting_overview import AREA_AGGREGATES_QUERY, SCOPE_AGGREGATES_QUERY
+
+    scope_params = set(text(SCOPE_AGGREGATES_QUERY).compile().params)
+    area_params = set(text(AREA_AGGREGATES_QUERY).compile().params)
+
+    assert "unmapped_key" not in scope_params
+    assert "unmapped_label" not in scope_params
+    assert {"unmapped_key", "unmapped_label"} <= area_params
+
+
 def test_trend_query_classifies_each_month_with_its_effective_threshold_version():
     from services.reporting_overview import TREND_QUERY
 
