@@ -236,6 +236,7 @@ export async function fetchReportingAreas(period, nop, signal) {
   const { data } = await api.get('/reporting/areas', {
     params: { ...monthPeriodParams(period), nop: nop || undefined },
     signal,
+    timeout: 60_000,
   });
   return data;
 }
@@ -244,6 +245,7 @@ export async function fetchReportingSites(areaKey, { period, nop, ...query } = {
   const { data } = await api.get(`/reporting/areas/${encodeURIComponent(areaKey)}/sites`, {
     params: { ...monthPeriodParams(period), nop: nop || undefined, ...query },
     signal,
+    timeout: 60_000,
   });
   return data;
 }

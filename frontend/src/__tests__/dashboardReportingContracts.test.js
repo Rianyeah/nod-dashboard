@@ -176,6 +176,8 @@ describe('dashboard and reporting visual/data contracts', () => {
     assert.match(api, /period_start:\s*period\?\.start/);
     assert.match(api, /period_end:\s*period\?\.end/);
     assert.match(api, /\/reporting\/overview[\s\S]*timeout:\s*60_000/);
+    assert.match(api, /\/reporting\/areas[\s\S]*timeout:\s*60_000/);
+    assert.match(api, /encodeURIComponent\(areaKey\)[\s\S]*timeout:\s*60_000/);
   });
 
   it('uses the full Network Reporting sidebar label and backend XLSX exports', () => {
