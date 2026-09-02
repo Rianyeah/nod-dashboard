@@ -4,6 +4,7 @@ import { formatNumber, formatPayload, formatPercent, formatRevenue } from '../..
 
 
 function formatSigned(value, digits = 1, suffix = '%') {
+  if (value == null) return '-';
   const number = Number(value);
   if (!Number.isFinite(number)) return '-';
   const sign = number > 0 ? '+' : number < 0 ? '-' : '';
@@ -11,37 +12,15 @@ function formatSigned(value, digits = 1, suffix = '%') {
 }
 
 
-function contributionPercent(value) {
-  const number = Number(value);
-  return Number.isFinite(number) ? `${number.toFixed(1).replace('.', ',')}%` : '-';
-}
-
-
-function normalizedScope(scopeLabel) {
-  return String(scopeLabel || '').trim().replace(/^NOP\s+/i, '').toUpperCase();
-}
-
-
-function metricContribution(scopeLabel, value, percentage, formatter) {
-  if (!scopeLabel || scopeLabel === 'Regional Jatim') return null;
-  return `Kontribusi NOP ${normalizedScope(scopeLabel)} ${formatter(value)} / ${contributionPercent(percentage)} pada Regional Jatim.`;
-}
-
-
-function availabilityContribution(scopeLabel, fact = {}) {
-  if (!scopeLabel || scopeLabel === 'Regional Jatim') return null;
-  return `NOP ${normalizedScope(scopeLabel)} ${formatPercent(fact.value)}, ${formatSigned(fact.contribution?.difference_pp, 2, ' pp')} terhadap Regional Jatim; outage ${contributionPercent(fact.contribution?.contribution_pct)}.`;
-}
-
-
 function deltaTone(value) {
+  if (value == null) return 'text-[var(--text-muted)]';
   const number = Number(value);
   if (!Number.isFinite(number) || number === 0) return 'text-[var(--text-muted)]';
   return number > 0 ? 'text-[var(--success)]' : 'text-[var(--danger)]';
 }
 
 
-function Scorecard({ title, icon: Icon, value, tone, delta, detail, contribution }) {
+function Scorecard({ title, icon: Icon, value, tone, delta, detail }) {
   return (
     <article className="glass-card min-w-0 px-4 py-4">
       <div className="flex items-start gap-3">
@@ -53,7 +32,6 @@ function Scorecard({ title, icon: Icon, value, tone, delta, detail, contribution
           <p className={`mt-1.5 font-mono text-[26px] font-bold leading-none tabular-nums tracking-tight ${tone}`}>{value}</p>
           {delta ? <p className={`mt-1.5 text-[10px] font-semibold ${deltaTone(delta.value)}`}>{delta.label}</p> : null}
           {detail ? <p className="mt-1 text-[10px] leading-snug text-[var(--text-muted)]">{detail}</p> : null}
-          {contribution ? <p className="mt-1.5 text-[10px] leading-snug text-[var(--text-secondary)]">{contribution}</p> : null}
         </div>
       </div>
     </article>
@@ -71,7 +49,6 @@ export default function ReportingScorecards({ overview, comparisonLabel, loading
   }
 
   const scorecards = overview?.scorecards || {};
-  const scopeLabel = overview?.scope_label || 'Regional Jatim';
   const revenue = overview?.revenue || {};
   const payload = overview?.payload || {};
   const availability = overview?.availability || {};
@@ -92,7 +69,6 @@ export default function ReportingScorecards({ overview, comparisonLabel, loading
         value={formatRevenue(scorecards.total_revenue)}
         delta={{ value: revenue.delta_pct, label: `${formatSigned(revenue.delta_pct)} ${comparisonLabel}` }}
         detail={`YTD: ${formatRevenue(scorecards.revenue_ytd)}`}
-        contribution={metricContribution(scopeLabel, revenue.value, revenue.contribution?.contribution_pct, formatRevenue)}
       />
       <Scorecard
         title="Total Payload"
@@ -101,15 +77,13 @@ export default function ReportingScorecards({ overview, comparisonLabel, loading
         value={formatPayload(scorecards.total_payload)}
         delta={{ value: payload.delta_pct, label: `${formatSigned(payload.delta_pct)} ${comparisonLabel}` }}
         detail={`YTD: ${formatPayload(scorecards.payload_ytd)}`}
-        contribution={metricContribution(scopeLabel, payload.value, payload.contribution?.contribution_pct, formatPayload)}
       />
       <Scorecard
         title="Availability"
         icon={Activity}
         tone={scorecards.avg_availability == null ? 'text-[var(--text-secondary)]' : availability.severity === 'warning' ? 'text-[var(--warning)]' : 'text-[var(--success)]'}
         value={formatPercent(scorecards.avg_availability)}
-        delta={{ value: availability.delta_pct, label: `${formatSigned(availability.delta_pct, 2, ' pp')} ${comparisonLabel}` }}
-        detail={availabilityContribution(scopeLabel, availability)}
+        delta={{ value: availability.delta_pct, label: `${formatSigned(availability.delta_pct, 2, '%')} ${comparisonLabel}` }}
       />
     </section>
   );

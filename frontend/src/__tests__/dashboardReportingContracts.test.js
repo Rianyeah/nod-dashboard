@@ -315,12 +315,14 @@ describe('dashboard and reporting visual/data contracts', () => {
   it('restores the approved scorecard hierarchy, insight panel, and smooth trend', () => {
     const scorecards = src('features', 'reporting', 'ReportingScorecards.jsx');
     const insights = src('features', 'reporting', 'ReportingExecutiveInsights.jsx');
+    const insightBuilder = src('features', 'reporting', 'reportingInsights.js');
     const trend = src('features', 'reporting', 'ReportingPerformanceTrend.jsx');
 
     assert.match(scorecards, /EPM/);
     assert.match(scorecards, /Site \(non EPM\)/);
     assert.match(scorecards, /YTD/);
-    assert.match(scorecards, /Kontribusi NOP/);
+    assert.doesNotMatch(scorecards, /metricContribution|availabilityContribution|Kontribusi NOP|difference_pp/);
+    assert.match(insightBuilder, /Kontribusi/);
     assert.match(insights, /Executive Insight/);
     assert.doesNotMatch(insights, /Auto-generated|AI generated/i);
     assert.match(trend, /type="monotone"/);
