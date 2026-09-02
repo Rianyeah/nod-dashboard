@@ -395,6 +395,8 @@ async def test_area_loader_keeps_unmapped_sites_and_computes_ratio_metrics():
     assert [row.kabupaten for row in rows] == ["SIDOARJO", "Belum Terpetakan"]
     assert sum(row.total_sites for row in rows) == 3
     assert sum(row.revenue for row in rows) == 400
+    assert sum(row.previous_revenue for row in rows) == 330
+    assert sum(row.previous_payload for row in rows) == 33
     assert rows[0].avg_availability == pytest.approx(98.5)
     assert rows[0].previous_availability == pytest.approx(99.0)
     assert rows[0].availability_delta_pct == pytest.approx(-0.5)

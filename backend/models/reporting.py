@@ -171,12 +171,14 @@ class ReportingAreaRow(BaseModel):
     is_unmapped: bool = False
     total_sites: int = 0
     revenue: int = 0
+    previous_revenue: int = 0
     rev_voice: int = 0
     rev_bb: int = 0
     rev_dig: int = 0
     rev_sms: int = 0
     rev_ir: int = 0
     payload: int = 0
+    previous_payload: int = 0
     pld_2g: int = 0
     pld_3g: int = 0
     pld_4g: int = 0
