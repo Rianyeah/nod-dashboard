@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
 from cache import redis_cache
-from database import get_session
+from database import async_session, get_session
 from models.reporting import (
     ReportingScorecard,
     RevenueByKabupaten,
@@ -521,7 +521,12 @@ async def get_reporting_overview(
             response.headers["X-Cache"] = cache_status
         return cached_value
 
-    payload = await load_reporting_overview(session, period, nop_key)
+    payload = await load_reporting_overview(
+        session,
+        period,
+        nop_key,
+        session_factory=async_session,
+    )
     if cache_status == "MISS":
         await redis_cache.set_json(cache_key, payload)
     if response is not None:

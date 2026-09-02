@@ -226,6 +226,7 @@ export async function fetchReportingOverview(period, nop, signal) {
   const { data } = await api.get('/reporting/overview', {
     params: { ...monthPeriodParams(period), nop: nop || undefined },
     signal,
+    timeout: 60_000,
   });
   return data;
 }

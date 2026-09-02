@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from sqlalchemy import text
 
 from models.reporting import (
@@ -1125,7 +1127,18 @@ def _coverage_from_rows(rows: list[dict], active_months: tuple[str, ...]) -> lis
     return coverage
 
 
-async def load_reporting_overview(session, period, nop: str | None) -> ReportingOverview:
+async def _run_overview_fact(session_factory, loader):
+    async with session_factory() as fact_session:
+        return await loader(fact_session)
+
+
+async def load_reporting_overview(
+    session,
+    period,
+    nop: str | None,
+    *,
+    session_factory=None,
+) -> ReportingOverview:
     """Load selected, Regional, comparison, trend, target, and coverage facts."""
     nop_key = canonical_nop(nop)
     params = {
@@ -1140,14 +1153,64 @@ async def load_reporting_overview(session, period, nop: str | None) -> Reporting
         "end_date_exclusive": period.end_date_exclusive,
         "nop_key": nop_key,
     }
-    target = await load_revenue_target(
-        session,
-        nop=nop_key,
-        period_start=period.period_start,
-        period_end=period.period_end,
-    )
-    thresholds = await resolve_threshold_snapshot(session, period.period_end)
-    scope_rows = _row_dicts(await session.execute(text(SCOPE_AGGREGATES_QUERY), params))
+    async def target_loader(fact_session):
+        return await load_revenue_target(
+            fact_session,
+            nop=nop_key,
+            period_start=period.period_start,
+            period_end=period.period_end,
+        )
+
+    async def threshold_loader(fact_session):
+        return await resolve_threshold_snapshot(fact_session, period.period_end)
+
+    async def query_rows(fact_session, query, query_params):
+        return _row_dicts(await fact_session.execute(text(query), query_params))
+
+    ytd_params = {**params, "year_start": f"{period.period_end[:4]}-01"}
+    driver_params = {**params, "availability_start": period.comparison_start}
+
+    if session_factory is None:
+        target = await target_loader(session)
+        thresholds = await threshold_loader(session)
+        scope_rows = await query_rows(session, SCOPE_AGGREGATES_QUERY, params)
+        ytd_rows = await query_rows(session, OVERVIEW_YTD_QUERY, ytd_params)
+        trend_rows = await query_rows(session, TREND_QUERY, params)
+        driver_rows = await query_rows(session, SITE_DRIVER_CANDIDATES_QUERY, driver_params)
+        coverage_rows = await query_rows(session, COVERAGE_QUERY, params)
+    else:
+        (
+            target,
+            thresholds,
+            scope_rows,
+            ytd_rows,
+            trend_rows,
+            driver_rows,
+            coverage_rows,
+        ) = await asyncio.gather(
+            _run_overview_fact(session_factory, target_loader),
+            _run_overview_fact(session_factory, threshold_loader),
+            _run_overview_fact(
+                session_factory,
+                lambda fact_session: query_rows(fact_session, SCOPE_AGGREGATES_QUERY, params),
+            ),
+            _run_overview_fact(
+                session_factory,
+                lambda fact_session: query_rows(fact_session, OVERVIEW_YTD_QUERY, ytd_params),
+            ),
+            _run_overview_fact(
+                session_factory,
+                lambda fact_session: query_rows(fact_session, TREND_QUERY, params),
+            ),
+            _run_overview_fact(
+                session_factory,
+                lambda fact_session: query_rows(fact_session, SITE_DRIVER_CANDIDATES_QUERY, driver_params),
+            ),
+            _run_overview_fact(
+                session_factory,
+                lambda fact_session: query_rows(fact_session, COVERAGE_QUERY, params),
+            ),
+        )
     scopes = {str(row["scope"]): row for row in scope_rows}
     zero_scope = {
         "total_sites": 0,
@@ -1158,28 +1221,8 @@ async def load_reporting_overview(session, period, nop: str | None) -> Reporting
         "total_time_minutes": 0,
         "outage_minutes": 0,
     }
-    ytd_rows = _row_dicts(
-        await session.execute(
-            text(OVERVIEW_YTD_QUERY),
-            {
-                **params,
-                "year_start": f"{period.period_end[:4]}-01",
-            },
-        )
-    )
     ytd = ytd_rows[0] if ytd_rows else {"revenue_ytd": 0, "payload_ytd": 0}
-    trend_rows = _row_dicts(await session.execute(text(TREND_QUERY), params))
     trend = [RevenueTrendItem(**row) for row in trend_rows]
-    driver_rows = _row_dicts(
-        await session.execute(
-            text(SITE_DRIVER_CANDIDATES_QUERY),
-            {
-                **params,
-                "availability_start": period.comparison_start,
-            },
-        )
-    )
-    coverage_rows = _row_dicts(await session.execute(text(COVERAGE_QUERY), params))
     coverage = _coverage_from_rows(coverage_rows, period.active_months)
     period_meta = build_period_meta(
         period,

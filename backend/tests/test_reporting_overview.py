@@ -1,4 +1,5 @@
 from pathlib import Path
+import asyncio
 import sys
 
 import pytest
@@ -168,6 +169,43 @@ class FakeAreaSession:
                 },
             ]
         )
+
+
+class _SessionContext:
+    def __init__(self, session):
+        self.session = session
+
+    async def __aenter__(self):
+        return self.session
+
+    async def __aexit__(self, exc_type, exc, traceback):
+        return False
+
+
+class _ConcurrentOverviewSession(FakeOverviewSession):
+    def __init__(self, tracker):
+        self.tracker = tracker
+
+    async def execute(self, query, params=None):
+        self.tracker["active"] += 1
+        self.tracker["max_active"] = max(
+            self.tracker["max_active"], self.tracker["active"]
+        )
+        await asyncio.sleep(0.01)
+        try:
+            return await super().execute(query, params)
+        finally:
+            self.tracker["active"] -= 1
+
+
+class _OverviewSessionFactory:
+    def __init__(self):
+        self.tracker = {"active": 0, "max_active": 0}
+        self.created = 0
+
+    def __call__(self):
+        self.created += 1
+        return _SessionContext(_ConcurrentOverviewSession(self.tracker))
 
 
 def test_weighted_availability_uses_ratio_of_summed_minutes():
@@ -376,6 +414,25 @@ async def test_overview_loader_returns_typed_numeric_contract_from_one_scope_que
     assert overview.trend[0].u60_sites == 1
     assert overview.coverage[0].status == "complete"
     assert overview.coverage[0].latest_data_period == "2026-07"
+
+
+@pytest.mark.asyncio
+async def test_overview_loader_uses_independent_sessions_for_concurrent_facts():
+    from periods import resolve_month_period
+    from services.reporting_overview import load_reporting_overview
+
+    factory = _OverviewSessionFactory()
+    overview = await load_reporting_overview(
+        FakeOverviewSession(),
+        resolve_month_period(period_start="2026-01", period_end="2026-06"),
+        "NOP SIDOARJO",
+        session_factory=factory,
+    )
+
+    assert overview.scope_label == "SIDOARJO"
+    assert overview.scorecards.total_sites == 2
+    assert factory.created == 7
+    assert factory.tracker["max_active"] > 1
 
 
 def test_overview_queries_keep_scorecard_breakdown_and_ytd_in_the_same_scope():

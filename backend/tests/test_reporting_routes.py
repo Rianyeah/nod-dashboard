@@ -14,9 +14,10 @@ async def test_overview_route_normalizes_scope_and_exposes_cache_header(monkeypa
 
     captured = {}
 
-    async def fake_loader(session, period, nop):
+    async def fake_loader(session, period, nop, *, session_factory=None):
         captured.update(
             session=session,
+            session_factory=session_factory,
             period_start=period.period_start,
             period_end=period.period_end,
             nop=nop,
@@ -39,6 +40,7 @@ async def test_overview_route_normalizes_scope_and_exposes_cache_header(monkeypa
     assert result == {"scope_label": "SIDOARJO"}
     assert captured == {
         "session": session,
+        "session_factory": reporting.async_session,
         "period_start": "2026-06",
         "period_end": "2026-07",
         "nop": "SIDOARJO",
