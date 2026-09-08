@@ -1,0 +1,296 @@
+from datetime import datetime, timedelta, timezone
+from uuid import uuid4
+
+import pytest
+from pydantic import ValidationError
+
+
+NOW = datetime(2026, 9, 8, 10, 0, tzinfo=timezone.utc)
+
+
+def job_row(**overrides):
+    row = {
+        "id": uuid4(),
+        "dataset": "impact_service",
+        "status": "running",
+        "requested_by_user_id": "user-1",
+        "requested_by_username": "viewer.one",
+        "requested_by_role": "viewer",
+        "callback_token_hash": "a" * 64,
+        "correlation_id": uuid4(),
+        "protocol_version": 1,
+        "started_at": NOW,
+        "dispatch_finished_at": NOW,
+        "dispatch_outcome_code": "accepted",
+        "claimed_at": None,
+        "callback_received_at": None,
+        "finished_at": None,
+        "rows_processed": None,
+        "result_code": None,
+        "cache_outcome_code": None,
+        "created_at": NOW,
+        "updated_at": NOW,
+    }
+    row.update(overrides)
+    return row
+
+
+class Result:
+    def __init__(self, *, first=None, rows=(), mapping=None, rowcount=0):
+        self._first = first
+        self._rows = list(rows)
+        self._mapping = mapping
+        self.rowcount = rowcount
+
+    def mappings(self):
+        return self
+
+    def first(self):
+        return self._first
+
+    def all(self):
+        return self._rows
+
+    def one(self):
+        return self._mapping
+
+    def __iter__(self):
+        return iter(self._rows)
+
+
+class ScriptedSession:
+    def __init__(self, handler):
+        self.handler = handler
+        self.sql = []
+
+    async def execute(self, statement, parameters=None):
+        sql = str(statement)
+        self.sql.append((sql, parameters or {}))
+        return self.handler(sql, parameters or {})
+
+
+def test_callback_request_enforces_terminal_status_and_result_code_pairing():
+    from models.data_sync import DataSyncCallbackRequest
+
+    succeeded = DataSyncCallbackRequest(
+        status="succeeded", rows_processed=12, result_code="completed"
+    )
+    failed = DataSyncCallbackRequest(
+        status="failed", result_code="database_write_failed"
+    )
+
+    assert succeeded.rows_processed == 12
+    assert failed.rows_processed is None
+    with pytest.raises(ValidationError):
+        DataSyncCallbackRequest(status="succeeded", result_code="workflow_failed")
+    with pytest.raises(ValidationError):
+        DataSyncCallbackRequest(status="failed", result_code="completed")
+    with pytest.raises(ValidationError):
+        DataSyncCallbackRequest(
+            status="succeeded", rows_processed=-1, result_code="completed"
+        )
+
+
+def test_public_job_redacts_requester_token_and_internal_diagnostics():
+    from models.data_sync import public_job_from_row
+
+    payload = public_job_from_row(
+        job_row(
+            status="failed",
+            finished_at=NOW,
+            result_code="database_write_failed",
+            dispatch_outcome_code="server_unknown",
+            cache_outcome_code="unavailable",
+        )
+    ).model_dump(mode="json")
+
+    assert payload == {
+        "id": payload["id"],
+        "dataset": "impact_service",
+        "status": "failed",
+        "started_at": "2026-09-08T10:00:00Z",
+        "finished_at": "2026-09-08T10:00:00Z",
+        "rows_processed": None,
+        "result_code": "database_write_failed",
+        "public_message": "Sinkronisasi gagal.",
+    }
+    assert "requested_by_username" not in payload
+    assert "callback_token_hash" not in payload
+    assert "dispatch_outcome_code" not in payload
+
+
+@pytest.mark.asyncio
+async def test_create_or_join_returns_active_job_before_counting_quota():
+    from data_sync_repository import create_or_join_job
+    from user_store import AppUser
+
+    active = job_row()
+
+    def handler(sql, _parameters):
+        if "pg_advisory_xact_lock" in sql:
+            return Result()
+        if "status IN ('dispatching', 'running', 'dispatch_unknown')" in sql:
+            return Result(first=active)
+        raise AssertionError(f"quota or insert should not run for a joined job: {sql}")
+
+    session = ScriptedSession(handler)
+    result = await create_or_join_job(
+        session,
+        dataset="impact_service",
+        actor=AppUser("user-1", "viewer.one", "hash", "viewer"),
+        job_id=uuid4(),
+        token_hash="b" * 64,
+        correlation_id=uuid4(),
+        now=NOW,
+    )
+
+    assert result.created is False
+    assert result.job["id"] == active["id"]
+    assert result.retry_after is None
+
+
+@pytest.mark.asyncio
+async def test_create_or_join_enforces_durable_hourly_user_limit():
+    from data_sync_repository import create_or_join_job
+    from user_store import AppUser
+
+    def handler(sql, _parameters):
+        if "pg_advisory_xact_lock" in sql:
+            return Result()
+        if "status IN ('dispatching', 'running', 'dispatch_unknown')" in sql:
+            return Result(first=None)
+        if "AS job_count" in sql:
+            return Result(first={"job_count": 10, "oldest_started_at": NOW - timedelta(minutes=30)})
+        raise AssertionError(f"cooldown or insert should not run after quota rejection: {sql}")
+
+    result = await create_or_join_job(
+        ScriptedSession(handler),
+        dataset="data_master",
+        actor=AppUser("user-1", "viewer.one", "hash", "viewer"),
+        job_id=uuid4(),
+        token_hash="b" * 64,
+        correlation_id=uuid4(),
+        now=NOW,
+    )
+
+    assert result.job is None
+    assert result.created is False
+    assert result.retry_after == 1800
+
+
+@pytest.mark.asyncio
+async def test_create_or_join_enforces_dataset_cooldown():
+    from data_sync_repository import create_or_join_job
+    from user_store import AppUser
+
+    def handler(sql, _parameters):
+        if "pg_advisory_xact_lock" in sql:
+            return Result()
+        if "status IN ('dispatching', 'running', 'dispatch_unknown')" in sql:
+            return Result(first=None)
+        if "AS job_count" in sql:
+            return Result(first={"job_count": 0, "oldest_started_at": None})
+        if "finished_at IS NOT NULL" in sql:
+            return Result(first={"finished_at": NOW - timedelta(seconds=25)})
+        raise AssertionError(f"insert should not run during cooldown: {sql}")
+
+    result = await create_or_join_job(
+        ScriptedSession(handler),
+        dataset="activity_enom",
+        actor=AppUser("user-1", "viewer.one", "hash", "viewer"),
+        job_id=uuid4(),
+        token_hash="b" * 64,
+        correlation_id=uuid4(),
+        now=NOW,
+    )
+
+    assert result.retry_after == 35
+
+
+@pytest.mark.asyncio
+async def test_first_claim_executes_and_duplicate_claim_stops():
+    from data_sync_repository import claim_job, hash_callback_token
+
+    token = "one-job-token"
+    active = job_row(callback_token_hash=hash_callback_token(token))
+    duplicate = job_row(
+        callback_token_hash=hash_callback_token(token),
+        claimed_at=NOW - timedelta(seconds=1),
+    )
+
+    first_session = ScriptedSession(
+        lambda sql, _params: (
+            Result(first=active)
+            if "FOR UPDATE" in sql
+            else Result(first={**active, "claimed_at": NOW})
+        )
+    )
+    duplicate_session = ScriptedSession(
+        lambda sql, _params: Result(first=duplicate)
+        if "FOR UPDATE" in sql
+        else (_ for _ in ()).throw(AssertionError("duplicate claim must not update"))
+    )
+
+    first = await claim_job(first_session, job_id=active["id"], presented_token=token, now=NOW)
+    second = await claim_job(
+        duplicate_session, job_id=duplicate["id"], presented_token=token, now=NOW
+    )
+
+    assert first.authenticated is True
+    assert first.execute is True
+    assert second.authenticated is True
+    assert second.execute is False
+
+
+@pytest.mark.asyncio
+async def test_wrong_callback_token_is_uniformly_unauthenticated():
+    from data_sync_repository import claim_job, hash_callback_token
+
+    row = job_row(callback_token_hash=hash_callback_token("correct-token"))
+    result = await claim_job(
+        ScriptedSession(lambda _sql, _params: Result(first=row)),
+        job_id=row["id"],
+        presented_token="wrong-token",
+        now=NOW,
+    )
+
+    assert result.authenticated is False
+    assert result.execute is False
+    assert result.job is None
+
+
+@pytest.mark.asyncio
+async def test_matching_terminal_callback_is_idempotent_but_conflict_is_rejected():
+    from data_sync_repository import prepare_completion, hash_callback_token
+
+    token = "one-job-token"
+    completed = job_row(
+        status="succeeded",
+        callback_token_hash=hash_callback_token(token),
+        callback_received_at=NOW,
+        finished_at=NOW,
+        rows_processed=12,
+        result_code="completed",
+    )
+
+    same = await prepare_completion(
+        ScriptedSession(lambda _sql, _params: Result(first=completed)),
+        job_id=completed["id"],
+        presented_token=token,
+        status="succeeded",
+        rows_processed=12,
+        result_code="completed",
+        now=NOW,
+    )
+    conflict = await prepare_completion(
+        ScriptedSession(lambda _sql, _params: Result(first=completed)),
+        job_id=completed["id"],
+        presented_token=token,
+        status="failed",
+        rows_processed=None,
+        result_code="workflow_failed",
+        now=NOW,
+    )
+
+    assert same.disposition == "idempotent"
+    assert conflict.disposition == "conflict"
