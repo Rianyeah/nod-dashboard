@@ -15,7 +15,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS app_users_username_lower_uq
 
 CREATE TABLE IF NOT EXISTS data_import_jobs (
     id UUID PRIMARY KEY,
-    target TEXT NOT NULL CHECK (target IN ('ticketing_swfm_non_inap', 'ticketing_fault_center')),
+    target TEXT NOT NULL CHECK (target IN ('ticketing_swfm_non_inap', 'ticketing_fault_center', 'packet_los_jatim')),
     strategy TEXT NOT NULL CHECK (strategy IN ('upsert', 'replace_period')),
     status TEXT NOT NULL CHECK (status IN ('validated', 'committing', 'completed', 'failed', 'cancelled')),
     actor_username TEXT NOT NULL,
@@ -33,6 +33,11 @@ CREATE TABLE IF NOT EXISTS data_import_jobs (
     committed_at TIMESTAMPTZ,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE data_import_jobs
+    DROP CONSTRAINT IF EXISTS data_import_jobs_target_check,
+    ADD CONSTRAINT data_import_jobs_target_check
+        CHECK (target IN ('ticketing_swfm_non_inap', 'ticketing_fault_center', 'packet_los_jatim'));
 
 CREATE INDEX IF NOT EXISTS data_import_jobs_created_at_idx
     ON data_import_jobs (created_at DESC);

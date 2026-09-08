@@ -46,6 +46,15 @@ Uploads are limited to 8 MB per file and 20 MB total. XLSX archives are checked 
 - Replaces only that month inside one transaction.
 - Rejects ticket numbers already used by another period.
 
+### `packet_los_jatim`
+
+- Accepts exactly one UTF-8 CSV file per job with the 45 allowlisted source columns.
+- Requires every row to have a unique Site ID and exactly one WEEK and DATE period.
+- Validates date and numeric values before any target data is changed.
+- Replaces only the matching `week + date` period inside one transaction, then verifies the stored row count.
+- Preserves every other Packet Loss period.
+- Does not create or alter columns in `packet_los_jatim`; deployment only extends the import-audit target constraint in `data_import_jobs`.
+
 ## Combined takeover ranking
 
 The Ticketing dashboard combines:
