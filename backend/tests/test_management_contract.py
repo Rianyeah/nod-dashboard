@@ -28,6 +28,28 @@ def test_non_inap_schema_adds_nullable_location_columns_idempotently():
     assert "ADD COLUMN IF NOT EXISTS kabupaten TEXT" in schema
 
 
+def test_management_schema_allows_packet_loss_audit_target():
+    from management_schema import management_schema_statements
+
+    statements = management_schema_statements()
+    target_migration = next(
+        statement
+        for statement in statements
+        if "DROP CONSTRAINT IF EXISTS data_import_jobs_target_check" in statement
+    )
+
+    assert "packet_los_jatim" in target_migration
+    assert "ADD CONSTRAINT data_import_jobs_target_check" in target_migration
+    assert "IF NOT EXISTS" in target_migration
+    assert target_migration.startswith("DO $management$")
+
+
+def test_packet_loss_parsing_runs_outside_the_async_request_loop():
+    source = (BACKEND / "services" / "management_imports.py").read_text(encoding="utf-8")
+
+    assert "await run_in_threadpool(_parse_packet_los_file" in source
+
+
 def test_management_router_exposes_allowlisted_reporting_configuration_routes():
     source = (BACKEND / "routers" / "management_data.py").read_text(encoding="utf-8")
 

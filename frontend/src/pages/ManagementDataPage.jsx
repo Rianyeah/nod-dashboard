@@ -101,6 +101,7 @@ function ImportsPanel({ targets, history, onRefresh }) {
     () => targets.find((target) => target.key === activeTarget),
     [activeTarget, targets],
   );
+  const isPacketLossTarget = selected?.key === 'packet_los_jatim';
 
   const resetDialog = () => {
     setFiles([]);
@@ -213,7 +214,9 @@ function ImportsPanel({ targets, history, onRefresh }) {
           <DialogHeader>
             <DialogTitle>Upload ke {selected?.label}</DialogTitle>
             <DialogDescription>
-              {selected?.strategy === 'upsert' ? 'Nomor ticket menjadi kunci upsert dan riwayat lama dipertahankan.' : 'Satu periode bulan akan diganti atomik setelah preview disetujui.'}
+              {selected?.commit_description || (selected?.strategy === 'upsert'
+                ? 'Nomor ticket menjadi kunci upsert dan riwayat lama dipertahankan.'
+                : 'Satu periode bulan akan diganti atomik setelah preview disetujui.')}
             </DialogDescription>
           </DialogHeader>
 
@@ -221,7 +224,9 @@ function ImportsPanel({ targets, history, onRefresh }) {
             <div className="space-y-4">
               <label className="flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--border-strong)] bg-[var(--bg-elevated)]/35 p-5 text-center hover:bg-[var(--bg-elevated)]/60">
                 <FileSpreadsheet className="mb-3 size-8 text-[var(--primary-light)]" />
-                <span className="text-sm font-semibold">Pilih file Excel atau CSV</span>
+                <span className="text-sm font-semibold">
+                  {isPacketLossTarget ? 'Pilih file CSV' : 'Pilih file Excel atau CSV'}
+                </span>
                 <span className="mt-1 text-xs text-[var(--text-muted)]">Maksimal 8 MB per file dan 20 MB total</span>
                 <Input
                   type="file"
@@ -252,16 +257,34 @@ function ImportsPanel({ targets, history, onRefresh }) {
               <div className="max-h-72 overflow-auto rounded-xl border border-[var(--border)]">
                 <table className="w-full min-w-[680px] text-left text-xs">
                   <thead className="sticky top-0 bg-[var(--bg-surface)] text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
-                    <tr><th className="px-3 py-2">File</th><th className="px-3 py-2">Row</th><th className="px-3 py-2">Ticket</th><th className="px-3 py-2">Type</th><th className="px-3 py-2">PIC</th><th className="px-3 py-2">Change</th></tr>
+                    <tr>
+                      <th className="px-3 py-2">File</th><th className="px-3 py-2">Row</th>
+                      {isPacketLossTarget ? (
+                        <><th className="px-3 py-2">Site ID</th><th className="px-3 py-2">Periode</th><th className="px-3 py-2">NOP</th></>
+                      ) : (
+                        <><th className="px-3 py-2">Ticket</th><th className="px-3 py-2">Type</th><th className="px-3 py-2">PIC</th></>
+                      )}
+                      <th className="px-3 py-2">Change</th>
+                    </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--border)]">
                     {(preview.preview_rows || []).map((row) => (
                       <tr key={`${row.source_file}-${row.source_row}`}>
                         <td className="max-w-44 truncate px-3 py-2" title={row.source_file}>{row.source_file}</td>
                         <td className="px-3 py-2 font-mono">{row.source_row}</td>
-                        <td className="px-3 py-2 font-mono">{row.row_key || '-'}</td>
-                        <td className="px-3 py-2">{row.ticket_type || '-'}</td>
-                        <td className="px-3 py-2">{row.pic || '-'}</td>
+                        {isPacketLossTarget ? (
+                          <>
+                            <td className="px-3 py-2 font-mono">{row.site_id || '-'}</td>
+                            <td className="px-3 py-2 font-mono">{row.period || '-'}</td>
+                            <td className="px-3 py-2">{row.nop || '-'}</td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="px-3 py-2 font-mono">{row.row_key || '-'}</td>
+                            <td className="px-3 py-2">{row.ticket_type || '-'}</td>
+                            <td className="px-3 py-2">{row.pic || '-'}</td>
+                          </>
+                        )}
                         <td className="px-3 py-2"><StatusPill status={row.change_kind} /></td>
                       </tr>
                     ))}

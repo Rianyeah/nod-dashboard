@@ -55,6 +55,7 @@ def test_data_admin_can_import_but_cannot_manage_users(security_settings):
     assert {target["key"] for target in targets.json()} == {
         "ticketing_swfm_non_inap",
         "ticketing_fault_center",
+        "packet_los_jatim",
     }
     assert users.status_code == 403
 

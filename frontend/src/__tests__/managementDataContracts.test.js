@@ -41,6 +41,10 @@ describe('Management Data contracts', () => {
     }
     assert.match(api, /FormData/);
     assert.match(page, /users:manage/);
+    assert.match(page, /selected\?\.key === 'packet_los_jatim'/);
+    for (const label of ['Site ID', 'Periode', 'NOP']) {
+      assert.match(page, new RegExp(label));
+    }
   });
 
   it('provides effective-dated Reporting threshold and NOP revenue target editors', () => {

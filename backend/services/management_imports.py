@@ -20,6 +20,7 @@ from uuid import uuid4
 from fastapi import HTTPException, UploadFile, status
 from openpyxl import load_workbook
 from sqlalchemy import text
+from starlette.concurrency import run_in_threadpool
 
 from database import async_session
 from user_store import AppUser
@@ -44,7 +45,70 @@ TARGETS = {
         "accepted_extensions": [".csv", ".xlsx"],
         "supports_multiple_files": False,
         "description": "Satu periode bulan diganti secara atomik.",
+        "commit_description": "Satu periode bulan akan diganti atomik setelah preview disetujui.",
     },
+    "packet_los_jatim": {
+        "label": "Packet Loss Jatim",
+        "strategy": "replace_period",
+        "accepted_extensions": [".csv"],
+        "supports_multiple_files": False,
+        "description": "Satu periode WEEK dan DATE diganti secara atomik.",
+        "commit_description": "Satu periode WEEK dan DATE akan diganti atomik setelah preview disetujui.",
+    },
+}
+
+
+PACKET_LOS_CSV_TO_COLUMN = {
+    "WEEK": "week",
+    "DATE": "date",
+    "AREA": "area",
+    "REGION": "region",
+    "TWAMP": "twamp",
+    "SITE ID": "site_id",
+    "SITE NAME": "site_name",
+    "NOP": "nop",
+    "CONNECTED ROUTER": "connected_router",
+    "TRANSPORT OWNER": "transport_owner",
+    "TRANSPORT TYPE": "transport_type",
+    "BW ACTUAL": "bw_actual",
+    "VLAN-U": "vlan_u",
+    "VLAN-C": "vlan_c",
+    "KABUPATEN": "kabupaten",
+    "DEPARTEMENT": "departement",
+    "KECAMATAN": "kecamatan",
+    "DESA": "desa",
+    "PROVINSI": "provinsi",
+    "AVG_DL_IUBUSAGE": "avg_dl_iubusage",
+    "MAX_DL_IUBUSAGE": "max_dl_iubusage",
+    "IDX_DL_IUBUSAGE": "idx_dl_iubusage",
+    "STATUS_IUBUSAGE": "status_iubusage",
+    "AVG PACKET LOSS": "avg_packet_loss",
+    "DISTRIBUTION_PL": "distribution_pl",
+    "LATENCY": "latency",
+    "DISTRIBUTION_LAT": "distribution_lat",
+    "JITTER": "jitter",
+    "PL STATUS - 0.1%": "pl_status_0_1_pct",
+    "FLAG PL STATUS": "flag_pl_status",
+    "REMARK PL STATUS 0.1%": "remark_pl_status_0_1_pct",
+    "LATENCY_THRESHOLD": "latency_threshold",
+    "LAT STATUS  NEW": "lat_status_new",
+    "REMARK LAT STATUS": "remark_lat_status",
+    "JITTER STATUS": "jitter_status",
+    "REMARK JITTER STATUS": "remark_jitter_status",
+    "THI STATUS": "thi_status",
+    "REMARK THI": "remark_thi",
+    "pl_aging": "pl_aging_2",
+    "remark_aging_pl": "remark_aging_pl",
+    "lat_aging": "lat_aging_2",
+    "remark_aging_lat": "remark_aging_lat_2",
+    "jitter_aging": "jitter_aging",
+    "remark_aging_jitter": "remark_aging_jitter",
+    "Nama_File_Sumber": "nama_file_sumber",
+}
+PACKET_LOS_INTEGER_COLUMNS = {"week", "area"}
+PACKET_LOS_DECIMAL_COLUMNS = {
+    "bw_actual", "vlan_c", "avg_dl_iubusage", "max_dl_iubusage", "idx_dl_iubusage",
+    "avg_packet_loss", "latency", "jitter", "latency_threshold",
 }
 
 
@@ -175,6 +239,10 @@ class ParsedImport:
     metadata: dict[str, object]
 
 
+class StalePacketLosImportError(RuntimeError):
+    """Raised when a Packet Loss period changed after it was previewed."""
+
+
 def normalize_text(value: object) -> str | None:
     if value is None:
         return None
@@ -283,7 +351,11 @@ def _rows_from_xlsx(content: bytes) -> tuple[list[str], list[dict[str, object]]]
         workbook.close()
 
 
-def _rows_from_csv(content: bytes) -> tuple[list[str], list[dict[str, object]]]:
+def _rows_from_csv(
+    content: bytes,
+    *,
+    strict_width: bool = False,
+) -> tuple[list[str], list[dict[str, object]]]:
     try:
         decoded = content.decode("utf-8-sig")
     except UnicodeDecodeError as exc:
@@ -297,7 +369,17 @@ def _rows_from_csv(content: bytes) -> tuple[list[str], list[dict[str, object]]]:
     headers = [normalize_text(value) or "" for value in (reader.fieldnames or [])]
     if not headers:
         raise ValueError("Header CSV kosong")
-    return headers, [dict(row) for row in reader]
+    rows = []
+    for line_number, row in enumerate(reader, start=2):
+        if strict_width and (
+            None in row
+            or any(row.get(header) is None for header in (reader.fieldnames or []))
+        ):
+            raise ValueError(
+                f"Baris {line_number} memiliki jumlah kolom yang tidak sesuai header"
+            )
+        rows.append(dict(row))
+    return headers, rows
 
 
 async def _read_upload(upload: UploadFile) -> tuple[str, bytes]:
@@ -388,6 +470,128 @@ def _parse_non_inap_file(filename: str, content: bytes) -> list[ParsedRow]:
         )
         parsed.append(ParsedRow(filename, index, ticket, payload, errors))
     return parsed
+
+
+def _packet_number(
+    value: object,
+    source_column: str,
+    *,
+    integer: bool = False,
+) -> int | str | None:
+    normalized = normalize_text(value)
+    if normalized is None:
+        return None
+    try:
+        number = Decimal(normalized)
+    except InvalidOperation as exc:
+        raise ValueError(f"{source_column} harus berupa angka: {normalized}") from exc
+    if not number.is_finite():
+        raise ValueError(f"{source_column} harus berupa angka finite: {normalized}")
+    if integer:
+        if number != number.to_integral_value():
+            raise ValueError(f"{source_column} harus berupa bilangan bulat: {normalized}")
+        return int(number)
+    return str(number)
+
+
+def _parse_packet_los_file(filename: str, content: bytes) -> ParsedImport:
+    if Path(filename).suffix.casefold() != ".csv":
+        raise ValueError("Packet Loss Jatim hanya menerima file CSV")
+
+    headers, source_rows = _rows_from_csv(content, strict_width=True)
+    expected_headers = {
+        normalize_header(header): header
+        for header in PACKET_LOS_CSV_TO_COLUMN
+    }
+    normalized_headers = [normalize_header(header) for header in headers]
+    if len(normalized_headers) != len(set(normalized_headers)):
+        raise ValueError("CSV Packet Loss memiliki header duplikat")
+    missing = [
+        source_header
+        for normalized, source_header in expected_headers.items()
+        if normalized not in normalized_headers
+    ]
+    unexpected = [
+        header
+        for header, normalized in zip(headers, normalized_headers, strict=True)
+        if normalized not in expected_headers
+    ]
+    if missing or unexpected:
+        details = []
+        if missing:
+            details.append(f"kolom wajib tidak ditemukan: {', '.join(missing)}")
+        if unexpected:
+            details.append(f"kolom tidak dikenali: {', '.join(unexpected)}")
+        raise ValueError(f"Header CSV Packet Loss tidak sesuai; {'; '.join(details)}")
+
+    actual_headers = {
+        normalize_header(header): header
+        for header in headers
+    }
+    resolved_headers = {
+        source_column: actual_headers[normalize_header(source_column)]
+        for source_column in PACKET_LOS_CSV_TO_COLUMN
+    }
+
+    parsed_rows: list[ParsedRow] = []
+    for index, source in enumerate(source_rows, start=2):
+        if not any(normalize_text(value) for value in source.values()):
+            continue
+        payload: dict[str, object] = {}
+        errors: list[str] = []
+        for source_column, target_column in PACKET_LOS_CSV_TO_COLUMN.items():
+            raw_value = source.get(resolved_headers[source_column])
+            try:
+                if target_column == "date":
+                    parsed_date = _parse_date(raw_value)
+                    payload[target_column] = parsed_date.isoformat() if parsed_date else None
+                elif target_column in PACKET_LOS_INTEGER_COLUMNS:
+                    payload[target_column] = _packet_number(
+                        raw_value,
+                        source_column,
+                        integer=True,
+                    )
+                elif target_column in PACKET_LOS_DECIMAL_COLUMNS:
+                    payload[target_column] = _packet_number(raw_value, source_column)
+                else:
+                    payload[target_column] = normalize_text(raw_value)
+            except ValueError as exc:
+                payload[target_column] = None
+                errors.append(str(exc))
+
+        site_id = normalize_text(payload.get("site_id"))
+        period_week = payload.get("week")
+        period_date = normalize_text(payload.get("date"))
+        if site_id is None:
+            errors.append("Site ID wajib diisi")
+        if period_week is None:
+            errors.append("WEEK wajib diisi")
+        elif not 1 <= int(period_week) <= 53:
+            errors.append("WEEK harus berada pada rentang 1-53")
+        if period_date is None:
+            errors.append("DATE wajib diisi")
+        row_key = (
+            f"{period_week}|{period_date}|{site_id.upper()}"
+            if period_week is not None and period_date and site_id
+            else None
+        )
+        parsed_rows.append(ParsedRow(filename, index, row_key, payload, errors))
+
+    if not parsed_rows:
+        raise ValueError("CSV Packet Loss tidak memiliki baris data")
+    periods = {
+        (row.payload.get("week"), row.payload.get("date"))
+        for row in parsed_rows
+        if row.payload.get("week") is not None and row.payload.get("date") is not None
+    }
+    if len(periods) != 1:
+        raise ValueError("CSV Packet Loss harus berisi tepat satu WEEK dan DATE")
+    period_week, period_date = next(iter(periods))
+    return ParsedImport(
+        rows=parsed_rows,
+        warnings=[],
+        metadata={"week": int(period_week), "date": str(period_date)},
+    )
 
 
 def _nullable(value: object) -> str | None:
@@ -601,7 +805,7 @@ def _mark_duplicates(rows: list[ParsedRow]) -> None:
     duplicates = {key for key, count in counts.items() if count > 1}
     for row in rows:
         if row.row_key in duplicates:
-            row.errors.append("Nomor ticket duplikat di dalam berkas upload")
+            row.errors.append("Kunci import duplikat di dalam berkas upload")
 
 
 def _fault_site_lookup_keys(row: ParsedRow) -> list[str]:
@@ -725,13 +929,23 @@ async def validate_import(target: str, uploads: list[UploadFile], actor: AppUser
         raise HTTPException(status_code=404, detail="Target import tidak tersedia")
     if not uploads:
         raise HTTPException(status_code=422, detail="Pilih minimal satu berkas")
-    if target == "ticketing_fault_center" and len(uploads) != 1:
-        raise HTTPException(status_code=422, detail="Fault Center hanya menerima satu berkas per import")
+    target_definition = TARGETS[target]
+    if not target_definition["supports_multiple_files"] and len(uploads) != 1:
+        raise HTTPException(
+            status_code=422,
+            detail=f"{target_definition['label']} hanya menerima satu berkas per import",
+        )
 
     files: list[tuple[str, bytes]] = []
     try:
         for upload in uploads:
-            files.append(await _read_upload(upload))
+            filename, content = await _read_upload(upload)
+            extension = Path(filename).suffix.casefold()
+            if extension not in target_definition["accepted_extensions"]:
+                raise ValueError(
+                    f"{target_definition['label']} tidak menerima format {extension}"
+                )
+            files.append((filename, content))
         if sum(len(content) for _, content in files) > MAX_TOTAL_BYTES:
             raise ValueError("Total ukuran upload melebihi 20 MB")
         if target == "ticketing_swfm_non_inap":
@@ -741,6 +955,8 @@ async def validate_import(target: str, uploads: list[UploadFile], actor: AppUser
                 metadata={"ticket_types": []},
             )
             parsed.metadata["ticket_types"] = sorted({row.payload.get("ticket_type") for row in parsed.rows})
+        elif target == "packet_los_jatim":
+            parsed = await run_in_threadpool(_parse_packet_los_file, *files[0])
         else:
             parsed = _parse_fault_file(*files[0])
     except ValueError as exc:
@@ -772,7 +988,7 @@ async def validate_import(target: str, uploads: list[UploadFile], actor: AppUser
                     {"keys": keys},
                 )
                 existing = {row.ticket_number: row.source_hash for row in result}
-            else:
+            elif target == "ticketing_fault_center":
                 result = await session.execute(
                     text(
                         "SELECT ticket_number_swfm, tahun, periode_bulan FROM ticketing_fault_center "
@@ -793,6 +1009,25 @@ async def validate_import(target: str, uploads: list[UploadFile], actor: AppUser
                 for parsed_row in parsed.rows:
                     if parsed_row.row_key in collisions:
                         parsed_row.errors.append("Nomor ticket sudah ada pada periode lain")
+            else:
+                period_week = int(parsed.metadata["week"])
+                period_date = date.fromisoformat(str(parsed.metadata["date"]))
+                existing_rows, period_fingerprint = await _packet_los_period_snapshot(
+                    session,
+                    period_week,
+                    period_date,
+                )
+                parsed.metadata["existing_rows"] = len(existing_rows)
+                parsed.metadata["period_fingerprint"] = period_fingerprint
+                existing = {
+                    f"{period_week}|{period_date.isoformat()}|{site_id.upper()}": ""
+                    for row in existing_rows
+                    if (site_id := normalize_text(row.site_id))
+                }
+                if existing_rows:
+                    parsed.warnings.append(
+                        f"{len(existing_rows)} baris periode existing akan diganti atomik"
+                    )
 
         for row in parsed.rows:
             if row.errors:
@@ -897,8 +1132,19 @@ def _job_response(
                 "row_key": row.row_key,
                 "change_kind": row.change_kind,
                 "ticket_type": row.payload.get("ticket_type"),
-                "ticket_date": row.payload.get("ticket_date") or row.payload.get("created_at"),
+                "ticket_date": (
+                    row.payload.get("ticket_date")
+                    or row.payload.get("created_at")
+                    or row.payload.get("date")
+                ),
                 "pic": row.payload.get("pic_takeover_raw") or row.payload.get("pic_take_over_ticket"),
+                "site_id": row.payload.get("site_id"),
+                "period": (
+                    f"W{int(row.payload['week']):02d} / {row.payload['date']}"
+                    if row.payload.get("week") is not None and row.payload.get("date")
+                    else None
+                ),
+                "nop": row.payload.get("nop"),
                 "errors": row.errors,
             }
             for row in parsed.rows[:MAX_PREVIEW_ROWS]
@@ -934,6 +1180,118 @@ def _fault_insert_statement() -> str:
         f"INSERT INTO ticketing_fault_center ({', '.join(columns)}) "
         f"VALUES ({', '.join(expressions)})"
     )
+
+
+def _packet_los_insert_statement() -> str:
+    columns = list(PACKET_LOS_CSV_TO_COLUMN.values())
+    expressions = []
+    for column in columns:
+        if column == "date":
+            expressions.append("CAST(:date AS date)")
+        elif column in PACKET_LOS_INTEGER_COLUMNS:
+            expressions.append(f"CAST(:{column} AS bigint)")
+        elif column in PACKET_LOS_DECIMAL_COLUMNS:
+            expressions.append(f"CAST(:{column} AS numeric)")
+        else:
+            expressions.append(f":{column}")
+    return (
+        f"INSERT INTO public.packet_los_jatim ({', '.join(columns)}) "
+        f"VALUES ({', '.join(expressions)})"
+    )
+
+
+def _packet_los_period_fingerprint(rows: Iterable[object]) -> str:
+    components = sorted(
+        (
+            (normalize_text(getattr(row, "site_id", None)) or "").upper(),
+            str(getattr(row, "row_fingerprint", "")),
+        )
+        for row in rows
+    )
+    canonical = "\n".join(f"{site_id}\x1f{row_hash}" for site_id, row_hash in components)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+async def _packet_los_period_snapshot(
+    session: object,
+    period_week: int,
+    period_date: date,
+) -> tuple[list[object], str]:
+    result = await session.execute(
+        text(
+            "SELECT site_id, md5(to_jsonb(pl)::text) AS row_fingerprint "
+            "FROM public.packet_los_jatim AS pl "
+            "WHERE week = :week AND date = CAST(:date AS date)"
+        ),
+        {"week": period_week, "date": period_date},
+    )
+    rows = list(result)
+    return rows, _packet_los_period_fingerprint(rows)
+
+
+def _prepare_packet_los_commit_rows(
+    staged_rows: Iterable[Mapping[str, object]],
+) -> list[dict[str, object]]:
+    prepared = []
+    for row in staged_rows:
+        payload = dict(row["payload"])
+        if isinstance(payload.get("date"), str):
+            payload["date"] = date.fromisoformat(payload["date"])
+        for column in PACKET_LOS_INTEGER_COLUMNS:
+            value = payload.get(column)
+            if value is not None and not isinstance(value, int):
+                payload[column] = int(value)
+        for column in PACKET_LOS_DECIMAL_COLUMNS:
+            value = payload.get(column)
+            if value is not None and not isinstance(value, Decimal):
+                payload[column] = Decimal(str(value))
+        prepared.append(payload)
+    return prepared
+
+
+async def _commit_packet_los_period(
+    session: object,
+    staged_rows: Iterable[Mapping[str, object]],
+    metadata: Mapping[str, object],
+) -> int:
+    period_week = int(metadata["week"])
+    period_date = date.fromisoformat(str(metadata["date"]))
+    period_params = {"week": period_week, "date": period_date}
+    _, current_fingerprint = await _packet_los_period_snapshot(
+        session,
+        period_week,
+        period_date,
+    )
+    expected_fingerprint = normalize_text(metadata.get("period_fingerprint"))
+    if expected_fingerprint is None or current_fingerprint != expected_fingerprint:
+        raise StalePacketLosImportError(
+            "Data periode Packet Loss berubah setelah preview. "
+            "Lakukan validasi ulang sebelum commit."
+        )
+    await session.execute(
+        text(
+            "DELETE FROM public.packet_los_jatim "
+            "WHERE week = :week AND date = CAST(:date AS date)"
+        ),
+        period_params,
+    )
+    prepared_rows = _prepare_packet_los_commit_rows(staged_rows)
+    if prepared_rows:
+        await session.execute(text(_packet_los_insert_statement()), prepared_rows)
+    result = await session.execute(
+        text(
+            "SELECT COUNT(*) FROM public.packet_los_jatim "
+            "WHERE week = :week AND date = CAST(:date AS date)"
+        ),
+        period_params,
+    )
+    inserted_rows = int(result.scalar_one())
+    if inserted_rows != len(prepared_rows):
+        raise RuntimeError(
+            "Jumlah baris Packet Loss setelah import tidak sesuai: "
+            f"expected={len(prepared_rows)}, actual={inserted_rows}"
+        )
+    return inserted_rows
 
 
 def _non_inap_upsert_statement() -> str:
@@ -1057,12 +1415,14 @@ async def commit_import(job_id: str, actor: AppUser) -> dict[str, object]:
                 {"id": job_id},
             )
             staged_rows = list(staged.mappings())
+            metadata = dict(job["metadata"])
             if job["target"] == "ticketing_swfm_non_inap":
                 changed = _prepare_non_inap_commit_rows(staged_rows, job_id)
                 if changed:
                     await session.execute(text(_non_inap_upsert_statement()), changed)
+            elif job["target"] == "packet_los_jatim":
+                await _commit_packet_los_period(session, staged_rows, metadata)
             else:
-                metadata = dict(job["metadata"])
                 period = str(metadata["period"])
                 await session.execute(
                     text(
@@ -1089,6 +1449,21 @@ async def commit_import(job_id: str, actor: AppUser) -> dict[str, object]:
                 {"id": job_id},
             )
             await session.commit()
+        except StalePacketLosImportError as exc:
+            await session.rollback()
+            async with async_session() as failure_session:
+                await failure_session.execute(
+                    text(
+                        "UPDATE data_import_jobs SET status = 'failed', updated_at = NOW() "
+                        "WHERE id = CAST(:id AS uuid) AND status <> 'completed'"
+                    ),
+                    {"id": job_id},
+                )
+                await failure_session.commit()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(exc),
+            ) from exc
         except Exception as exc:
             await session.rollback()
             async with async_session() as failure_session:
