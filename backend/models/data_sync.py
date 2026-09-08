@@ -7,7 +7,7 @@ from enum import StrEnum
 from typing import Literal, Mapping
 from uuid import UUID
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class DataSyncDataset(StrEnum):
@@ -76,6 +76,8 @@ class DataSyncClaimResponse(BaseModel):
 
 
 class DataSyncCallbackRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     status: Literal["succeeded", "failed"]
     rows_processed: int | None = Field(default=None, ge=0)
     result_code: Literal[
