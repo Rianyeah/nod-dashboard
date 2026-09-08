@@ -64,6 +64,34 @@
               "description": "Required read-only key for N8N static map sector exports",
               "default": ""
             },
+            "DATA_SYNC_ENABLED": {
+              "description": "Enable viewer-triggered dashboard data sync after N8N is configured",
+              "default": "false"
+            },
+            "DATA_SYNC_JOB_TIMEOUT_SECONDS": {
+              "description": "Maximum active sync duration before timeout",
+              "default": "1800"
+            },
+            "N8N_SYNC_BASE_URL": {
+              "description": "Approved HTTPS origin for N8N production webhooks",
+              "default": ""
+            },
+            "N8N_IMPACT_SERVICE_SYNC_WEBHOOK_URL": {
+              "description": "N8N production webhook for Impact Service sync",
+              "default": ""
+            },
+            "N8N_DATA_MASTER_SYNC_WEBHOOK_URL": {
+              "description": "N8N production webhook for Data Master sync",
+              "default": ""
+            },
+            "N8N_ACTIVITY_ENOM_SYNC_WEBHOOK_URL": {
+              "description": "N8N production webhook for Activity ENOM sync",
+              "default": ""
+            },
+            "N8N_SYNC_TRIGGER_API_KEY": {
+              "description": "Strong secret used only for dashboard-to-N8N sync triggers",
+              "default": ""
+            },
             "REDIS_URL": {
               "description": "Private Redis connection string from the Redis service",
               "default": ""

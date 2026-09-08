@@ -27,6 +27,36 @@ def _parse_bool(env: Mapping[str, str], name: str) -> bool:
     return value == "true"
 
 
+def _parse_bool_with_default(
+    env: Mapping[str, str], name: str, *, default: bool
+) -> bool:
+    fallback = "true" if default else "false"
+    value = env.get(name, fallback).strip().lower()
+    if value not in {"true", "false"}:
+        raise SecurityConfigurationError(f"{name} must be true or false")
+    return value == "true"
+
+
+def _parse_bounded_int(
+    env: Mapping[str, str],
+    name: str,
+    *,
+    default: int,
+    minimum: int,
+    maximum: int,
+) -> int:
+    raw_value = env.get(name, str(default)).strip()
+    try:
+        value = int(raw_value)
+    except ValueError as exc:
+        raise SecurityConfigurationError(f"{name} must be an integer") from exc
+    if not minimum <= value <= maximum:
+        raise SecurityConfigurationError(
+            f"{name} must be between {minimum} and {maximum}"
+        )
+    return value
+
+
 def _decode_urlsafe_secret(value: str, name: str) -> bytes:
     try:
         return base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
@@ -34,6 +64,104 @@ def _decode_urlsafe_secret(value: str, name: str) -> bytes:
         raise SecurityConfigurationError(
             f"{name} must be URL-safe base64"
         ) from exc
+
+
+def _origin_parts(value: str, name: str) -> tuple[str, str, int | None]:
+    parsed = urlparse(value)
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise SecurityConfigurationError(f"{name} has an invalid port") from exc
+    if (
+        parsed.scheme != "https"
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.params
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise SecurityConfigurationError(f"{name} must be a secure HTTPS URL")
+    return parsed.scheme, parsed.hostname.lower(), port
+
+
+@dataclass(frozen=True)
+class DataSyncSettings:
+    enabled: bool
+    job_timeout_seconds: int
+    base_url: str
+    webhook_urls: Mapping[str, str]
+    trigger_api_key: str
+
+    def webhook_url_for(self, dataset: str) -> str:
+        return self.webhook_urls[dataset]
+
+    @classmethod
+    def from_env(
+        cls,
+        env: Mapping[str, str],
+        *,
+        unrelated_n8n_keys: tuple[str, ...],
+    ) -> "DataSyncSettings":
+        enabled = _parse_bool_with_default(
+            env, "DATA_SYNC_ENABLED", default=False
+        )
+        job_timeout_seconds = _parse_bounded_int(
+            env,
+            "DATA_SYNC_JOB_TIMEOUT_SECONDS",
+            default=1800,
+            minimum=60,
+            maximum=86400,
+        )
+        if not enabled:
+            return cls(
+                enabled=False,
+                job_timeout_seconds=job_timeout_seconds,
+                base_url="",
+                webhook_urls={},
+                trigger_api_key="",
+            )
+
+        base_url = _required(env, "N8N_SYNC_BASE_URL").rstrip("/")
+        base = urlparse(base_url)
+        base_origin = _origin_parts(base_url, "N8N_SYNC_BASE_URL")
+        if base.path:
+            raise SecurityConfigurationError(
+                "N8N_SYNC_BASE_URL must be an origin without a path"
+            )
+
+        webhook_env_names = {
+            "impact_service": "N8N_IMPACT_SERVICE_SYNC_WEBHOOK_URL",
+            "data_master": "N8N_DATA_MASTER_SYNC_WEBHOOK_URL",
+            "activity_enom": "N8N_ACTIVITY_ENOM_SYNC_WEBHOOK_URL",
+        }
+        webhook_urls: dict[str, str] = {}
+        for dataset, env_name in webhook_env_names.items():
+            url = _required(env, env_name)
+            parsed = urlparse(url)
+            if _origin_parts(url, env_name) != base_origin:
+                raise SecurityConfigurationError(
+                    f"{env_name} must match N8N_SYNC_BASE_URL origin"
+                )
+            if not parsed.path.startswith("/webhook/"):
+                raise SecurityConfigurationError(
+                    f"{env_name} must use a production /webhook/ path"
+                )
+            webhook_urls[dataset] = url
+
+        trigger_api_key = _required(env, "N8N_SYNC_TRIGGER_API_KEY")
+        if len(trigger_api_key) < 32 or trigger_api_key in unrelated_n8n_keys:
+            raise SecurityConfigurationError(
+                "N8N_SYNC_TRIGGER_API_KEY must be strong and distinct"
+            )
+
+        return cls(
+            enabled=True,
+            job_timeout_seconds=job_timeout_seconds,
+            base_url=base_url,
+            webhook_urls=webhook_urls,
+            trigger_api_key=trigger_api_key,
+        )
 
 
 @dataclass(frozen=True)
@@ -50,6 +178,7 @@ class SecuritySettings:
     n8n_map_api_key: str
     n8n_capture_api_key: str
     n8n_capture_signing_secret: str
+    data_sync: DataSyncSettings
     redis_url: str
 
     @property
@@ -140,6 +269,15 @@ class SecuritySettings:
                 "N8N_CAPTURE_API_KEY must be distinct from other N8N keys"
             )
 
+        data_sync = DataSyncSettings.from_env(
+            source,
+            unrelated_n8n_keys=(
+                n8n_api_key,
+                n8n_map_api_key,
+                n8n_capture_api_key,
+            ),
+        )
+
         return cls(
             app_env=app_env,
             public_app_origin=origin,
@@ -153,5 +291,6 @@ class SecuritySettings:
             n8n_map_api_key=n8n_map_api_key,
             n8n_capture_api_key=n8n_capture_api_key,
             n8n_capture_signing_secret=n8n_capture_signing_secret,
+            data_sync=data_sync,
             redis_url=source.get("REDIS_URL", "").strip(),
         )
