@@ -20,6 +20,12 @@ import {
   ImpactServiceErrorBoundary,
 } from '../features/impact-service/ImpactServiceStates';
 import ImpactServiceTopAlarms from '../features/impact-service/ImpactServiceTopAlarms';
+import { DataSyncButton } from '../features/data-sync/DataSyncButton';
+import { useDataSync } from '../features/data-sync/DataSyncProvider';
+import {
+  preserveDateFilter,
+  preserveOptionFilter,
+} from '../features/data-sync/dataSyncRefreshPolicy';
 import {
   formatLocalDate,
   getSevenDayWindow,
@@ -61,6 +67,7 @@ const EMPTY_ALARMS = {
 
 function ImpactServiceDashboard() {
   const navigate = useNavigate();
+  const { successRevision } = useDataSync('impact_service');
   const [filterOptions, setFilterOptions] = useState(EMPTY_FILTERS);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -119,8 +126,17 @@ function ImpactServiceDashboard() {
 
         const defaultDate = normalizedFilters.default_date || normalizedFilters.max_date;
         setFilterOptions(normalizedFilters);
-        setStartDate(defaultDate);
-        setEndDate(defaultDate);
+        setStartDate((current) => preserveDateFilter(current, {
+          fallback: defaultDate,
+          min: normalizedFilters.min_date,
+          max: normalizedFilters.max_date,
+        }));
+        setEndDate((current) => preserveDateFilter(current, {
+          fallback: defaultDate,
+          min: normalizedFilters.min_date,
+          max: normalizedFilters.max_date,
+        }));
+        setSelectedNop((current) => preserveOptionFilter(current, normalizedFilters.nops, null));
       })
       .catch((error) => {
         console.error('Failed to load Impact Service filters:', error);
@@ -133,7 +149,7 @@ function ImpactServiceDashboard() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [successRevision]);
 
   const hasValidDateRange = Boolean(startDate && endDate && startDate <= endDate);
 
@@ -207,7 +223,7 @@ function ImpactServiceDashboard() {
     return () => {
       cancelled = true;
     };
-  }, [dashboardParams, hasValidDateRange, trendParams]);
+  }, [dashboardParams, hasValidDateRange, successRevision, trendParams]);
 
   useEffect(() => {
     if (!hasValidDateRange) return undefined;
@@ -234,7 +250,7 @@ function ImpactServiceDashboard() {
     return () => {
       cancelled = true;
     };
-  }, [hasValidDateRange, tableParams]);
+  }, [hasValidDateRange, successRevision, tableParams]);
 
   useEffect(() => {
     if (!selectedAlarmId || !hasValidDateRange) return undefined;
@@ -370,6 +386,7 @@ function ImpactServiceDashboard() {
         onPrint={handlePrint}
         printLoading={printLoading}
       >
+        <DataSyncButton dataset="impact_service" />
         <ImpactServiceFilters
           key={`${startDate}-${endDate}`}
           startDate={startDate}

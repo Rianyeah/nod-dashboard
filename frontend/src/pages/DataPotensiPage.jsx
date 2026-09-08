@@ -59,6 +59,9 @@ import { dataPotensiChartConfig } from '../features/data-potensi/dataPotensiChar
 import { DATA_POTENSI_ADVANCED_FILTERS } from '../features/data-potensi/dataPotensiFilters';
 import DataPotensiInsightCarousel from '../features/data-potensi/DataPotensiInsightCarousel';
 import { normalizedDeepLinkSite } from '../features/site-map/siteDeepLinks';
+import { DataSyncButton } from '../features/data-sync/DataSyncButton';
+import { useDataSync } from '../features/data-sync/DataSyncProvider';
+import { preserveOptionFilter } from '../features/data-sync/dataSyncRefreshPolicy';
 
 /* ─── Constants ────────────────────────────────────────── */
 
@@ -356,6 +359,7 @@ function TpDistributionChart({ data }) {
 
 export default function DataPotensiPage() {
   const navigate = useNavigate();
+  const { successRevision } = useDataSync('data_master');
   const [searchParams] = useSearchParams();
   const deepLinkedSite = normalizedDeepLinkSite(searchParams.get('site'));
   const lastDeepLinkedSiteRef = useRef(null);
@@ -394,8 +398,16 @@ export default function DataPotensiPage() {
     Promise.all([fetchFilterOptions(), fetchDataPotensiStatusOptions()])
       .then(([options, statuses]) => {
         if (cancelled) return;
-        setNopOptions(options?.nop || []);
-        setStatusOptions(statuses || []);
+        const nextNops = options?.nop || [];
+        const nextStatuses = statuses || [];
+        setNopOptions(nextNops);
+        setStatusOptions(nextStatuses);
+        setSelectedNop((current) => preserveOptionFilter(current, nextNops, null));
+        setSelectedStatus((current) => preserveOptionFilter(
+          current,
+          nextStatuses,
+          nextStatuses.includes('Active') ? 'Active' : (nextStatuses[0] || ''),
+        ));
       })
       .catch((error) => {
         console.error('Failed to load Data Potensi filters:', error);
@@ -408,7 +420,7 @@ export default function DataPotensiPage() {
         }
       });
     return () => { cancelled = true; };
-  }, []);
+  }, [successRevision]);
 
   useEffect(() => {
     if (!filtersReady) return undefined;
@@ -419,16 +431,25 @@ export default function DataPotensiPage() {
     fetchDataPotensiFilterOptions({
       nop: selectedNop || undefined,
       status_site: selectedStatus || undefined,
-    })
+      })
       .then((options) => {
-        if (!cancelled) setAdvancedFilterOptions({ ...EMPTY_FILTER_OPTIONS, ...options });
+        if (!cancelled) {
+          const nextOptions = { ...EMPTY_FILTER_OPTIONS, ...options };
+          setAdvancedFilterOptions(nextOptions);
+          setAdvancedFilters((current) => Object.fromEntries(
+            DATA_POTENSI_ADVANCED_FILTERS.map(({ key, optionsKey }) => [
+              key,
+              preserveOptionFilter(current[key], nextOptions[optionsKey], ''),
+            ]),
+          ));
+        }
       })
       .catch((error) => {
         console.error('Failed to load Data Potensi advanced filters:', error);
         if (!cancelled) setFilterError('Pilihan filter lanjutan tidak dapat diperbarui.');
       });
     return () => { cancelled = true; };
-  }, [filtersReady, selectedNop, selectedStatus]);
+  }, [filtersReady, selectedNop, selectedStatus, successRevision]);
 
   const dashboardParams = useMemo(() => ({
     nop: selectedNop || undefined,
@@ -472,7 +493,7 @@ export default function DataPotensiPage() {
         if (!cancelled) setDashboardLoading(false);
       });
     return () => { cancelled = true; };
-  }, [dashboardParams, filtersReady]);
+  }, [dashboardParams, filtersReady, successRevision]);
 
   useEffect(() => {
     if (!filtersReady) return undefined;
@@ -501,7 +522,7 @@ export default function DataPotensiPage() {
         if (!cancelled) setTableLoading(false);
       });
     return () => { cancelled = true; };
-  }, [filtersReady, tableParams]);
+  }, [filtersReady, successRevision, tableParams]);
 
   // Stacked bar data based on active badge
   const stackedBarData = useMemo(() => {
@@ -624,25 +645,27 @@ export default function DataPotensiPage() {
             </div>
           </div>
 
-          {/* Filters */}
-          <DashboardFilterBar>
-            <DashboardCombobox
-              id="data-potensi-nop-filter"
-              label="NOP"
-              value={selectedNop}
-              options={nopOptions}
-              onChange={handleNopChange}
-              allLabel="Semua NOP"
-            />
-            <DashboardCombobox
-              id="data-potensi-status-filter"
-              label="Status Site"
-              value={selectedStatus}
-              options={statusOptions}
-              onChange={handleStatusChange}
-              allLabel="Semua Status"
-            />
-          </DashboardFilterBar>
+          <div className="flex w-full flex-wrap items-end justify-end gap-2 xl:w-auto">
+            <DataSyncButton dataset="data_master" />
+            <DashboardFilterBar>
+              <DashboardCombobox
+                id="data-potensi-nop-filter"
+                label="NOP"
+                value={selectedNop}
+                options={nopOptions}
+                onChange={handleNopChange}
+                allLabel="Semua NOP"
+              />
+              <DashboardCombobox
+                id="data-potensi-status-filter"
+                label="Status Site"
+                value={selectedStatus}
+                options={statusOptions}
+                onChange={handleStatusChange}
+                allLabel="Semua Status"
+              />
+            </DashboardFilterBar>
+          </div>
         </div>
       </header>
 
