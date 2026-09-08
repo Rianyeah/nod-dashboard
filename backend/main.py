@@ -59,6 +59,14 @@ async def lifespan(app: FastAPI):
     else:
         print("[NOD] Redis cache is disabled.")
 
+    try:
+        from data_sync_schema import ensure_data_sync_schema
+        from database import engine as database_engine
+
+        await ensure_data_sync_schema(database_engine)
+    except Exception as exc:
+        raise RuntimeError("Data sync job schema bootstrap failed") from exc
+
     reporting_foundation_error = None
     try:
         from database import engine as database_engine
