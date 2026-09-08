@@ -1,4 +1,5 @@
 import csv
+import re
 from datetime import date
 from decimal import Decimal
 from io import BytesIO, StringIO
@@ -107,7 +108,7 @@ class PacketValidationSession:
         sql = str(statement)
         self.executions.append((sql, parameters))
         if "FROM public.packet_los_jatim" in sql:
-            return Result(rows=[SimpleNamespace(site_id="BDO001")])
+            return Result(rows=[SimpleNamespace(site_id="BDO001", row_fingerprint="hash-bdo001")])
         return Result()
 
     async def commit(self):
@@ -115,13 +116,16 @@ class PacketValidationSession:
 
 
 class PacketCommitSession:
-    def __init__(self, expected_rows: int):
+    def __init__(self, expected_rows: int, snapshot_rows=()):
         self.expected_rows = expected_rows
+        self.snapshot_rows = list(snapshot_rows)
         self.executions = []
 
     async def execute(self, statement, parameters=None):
         sql = str(statement)
         self.executions.append((sql, parameters))
+        if "SELECT site_id" in sql:
+            return Result(rows=self.snapshot_rows)
         if "SELECT COUNT(*)" in sql:
             return Result(scalar=self.expected_rows)
         return Result()
@@ -176,6 +180,38 @@ def test_packet_csv_marks_missing_site_and_invalid_numeric_as_invalid():
     assert any("AVG PACKET LOSS" in error for error in parsed.rows[0].errors)
 
 
+@pytest.mark.parametrize("malformed_row", ["extra", "short"])
+def test_packet_csv_rejects_rows_with_wrong_cell_count_after_sniff_sample(malformed_row):
+    output = StringIO(newline="")
+    writer = csv.DictWriter(output, fieldnames=PACKET_HEADERS)
+    writer.writeheader()
+    for index in range(120):
+        writer.writerow(packet_row(**{"SITE ID": f"BDO{index:03d}"}))
+    cells = [str(packet_row().get(header, "")) for header in PACKET_HEADERS]
+    if malformed_row == "extra":
+        cells.append("unexpected")
+    else:
+        cells.pop()
+    output.write(",".join(cells) + "\r\n")
+
+    with pytest.raises(ValueError, match="jumlah kolom"):
+        management_imports._parse_packet_los_file("malformed.csv", output.getvalue().encode())
+
+
+def test_packet_parser_does_not_repeat_generic_header_scan_per_field(monkeypatch):
+    def fail_repeated_scan(*_args, **_kwargs):
+        raise AssertionError("Packet parser must resolve headers once")
+
+    monkeypatch.setattr(management_imports, "_first", fail_repeated_scan)
+
+    parsed = management_imports._parse_packet_los_file(
+        "Data_PL_W33_2026.csv",
+        packet_csv(packet_row()),
+    )
+
+    assert parsed.rows[0].payload["site_id"] == "BDO001"
+
+
 @pytest.mark.asyncio
 async def test_validate_packet_import_previews_existing_site_as_update(monkeypatch):
     session = PacketValidationSession()
@@ -196,7 +232,10 @@ async def test_validate_packet_import_previews_existing_site_as_update(monkeypat
     assert result["strategy"] == "replace_period"
     assert result["updated_rows"] == 1
     assert result["inserted_rows"] == 0
-    assert result["metadata"] == {"week": 33, "date": "2026-08-20", "existing_rows": 1}
+    assert result["metadata"]["week"] == 33
+    assert result["metadata"]["date"] == "2026-08-20"
+    assert result["metadata"]["existing_rows"] == 1
+    assert re.fullmatch(r"[0-9a-f]{64}", result["metadata"]["period_fingerprint"])
     assert result["preview_rows"][0] == {
         "source_file": "Data_PL_W33_2026.csv",
         "source_row": 2,
@@ -226,7 +265,14 @@ async def test_packet_period_commit_deletes_and_reinserts_only_selected_week_dat
         {"payload": row.payload, "change_kind": "update"}
         for row in parsed.rows
     ]
-    session = PacketCommitSession(expected_rows=2)
+    snapshot_rows = [
+        SimpleNamespace(site_id="BDO001", row_fingerprint="hash-bdo001"),
+        SimpleNamespace(site_id="BDO002", row_fingerprint="hash-bdo002"),
+    ]
+    parsed.metadata["period_fingerprint"] = (
+        management_imports._packet_los_period_fingerprint(snapshot_rows)
+    )
+    session = PacketCommitSession(expected_rows=2, snapshot_rows=snapshot_rows)
 
     inserted = await management_imports._commit_packet_los_period(
         session,
@@ -236,15 +282,34 @@ async def test_packet_period_commit_deletes_and_reinserts_only_selected_week_dat
 
     assert inserted == 2
     sql_calls = [sql for sql, _ in session.executions]
-    assert "DELETE FROM public.packet_los_jatim" in sql_calls[0]
-    assert "week = :week" in sql_calls[0]
-    assert "date = CAST(:date AS date)" in sql_calls[0]
-    assert "INSERT INTO public.packet_los_jatim" in sql_calls[1]
-    assert "SELECT COUNT(*)" in sql_calls[2]
-    delete_params = session.executions[0][1]
+    assert "SELECT site_id" in sql_calls[0]
+    assert "DELETE FROM public.packet_los_jatim" in sql_calls[1]
+    assert "week = :week" in sql_calls[1]
+    assert "date = CAST(:date AS date)" in sql_calls[1]
+    assert "INSERT INTO public.packet_los_jatim" in sql_calls[2]
+    assert "SELECT COUNT(*)" in sql_calls[3]
+    delete_params = session.executions[1][1]
     assert delete_params == {"week": 33, "date": date(2026, 8, 20)}
-    insert_params = session.executions[1][1]
+    insert_params = session.executions[2][1]
     assert len(insert_params) == 2
     assert isinstance(insert_params[0]["date"], date)
     assert insert_params[0]["avg_packet_loss"] == Decimal("0.0025")
 
+
+@pytest.mark.asyncio
+async def test_packet_period_commit_rejects_stale_preview_before_delete():
+    session = PacketCommitSession(
+        expected_rows=1,
+        snapshot_rows=[SimpleNamespace(site_id="BDO001", row_fingerprint="new-state")],
+    )
+    metadata = {
+        "week": 33,
+        "date": "2026-08-20",
+        "period_fingerprint": "stale-state",
+    }
+
+    with pytest.raises(management_imports.StalePacketLosImportError):
+        await management_imports._commit_packet_los_period(session, [], metadata)
+
+    assert len(session.executions) == 1
+    assert "SELECT site_id" in session.executions[0][0]

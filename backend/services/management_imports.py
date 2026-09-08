@@ -20,6 +20,7 @@ from uuid import uuid4
 from fastapi import HTTPException, UploadFile, status
 from openpyxl import load_workbook
 from sqlalchemy import text
+from starlette.concurrency import run_in_threadpool
 
 from database import async_session
 from user_store import AppUser
@@ -238,6 +239,10 @@ class ParsedImport:
     metadata: dict[str, object]
 
 
+class StalePacketLosImportError(RuntimeError):
+    """Raised when a Packet Loss period changed after it was previewed."""
+
+
 def normalize_text(value: object) -> str | None:
     if value is None:
         return None
@@ -346,7 +351,11 @@ def _rows_from_xlsx(content: bytes) -> tuple[list[str], list[dict[str, object]]]
         workbook.close()
 
 
-def _rows_from_csv(content: bytes) -> tuple[list[str], list[dict[str, object]]]:
+def _rows_from_csv(
+    content: bytes,
+    *,
+    strict_width: bool = False,
+) -> tuple[list[str], list[dict[str, object]]]:
     try:
         decoded = content.decode("utf-8-sig")
     except UnicodeDecodeError as exc:
@@ -360,7 +369,17 @@ def _rows_from_csv(content: bytes) -> tuple[list[str], list[dict[str, object]]]:
     headers = [normalize_text(value) or "" for value in (reader.fieldnames or [])]
     if not headers:
         raise ValueError("Header CSV kosong")
-    return headers, [dict(row) for row in reader]
+    rows = []
+    for line_number, row in enumerate(reader, start=2):
+        if strict_width and (
+            None in row
+            or any(row.get(header) is None for header in (reader.fieldnames or []))
+        ):
+            raise ValueError(
+                f"Baris {line_number} memiliki jumlah kolom yang tidak sesuai header"
+            )
+        rows.append(dict(row))
+    return headers, rows
 
 
 async def _read_upload(upload: UploadFile) -> tuple[str, bytes]:
@@ -479,7 +498,7 @@ def _parse_packet_los_file(filename: str, content: bytes) -> ParsedImport:
     if Path(filename).suffix.casefold() != ".csv":
         raise ValueError("Packet Loss Jatim hanya menerima file CSV")
 
-    headers, source_rows = _rows_from_csv(content)
+    headers, source_rows = _rows_from_csv(content, strict_width=True)
     expected_headers = {
         normalize_header(header): header
         for header in PACKET_LOS_CSV_TO_COLUMN
@@ -505,6 +524,15 @@ def _parse_packet_los_file(filename: str, content: bytes) -> ParsedImport:
             details.append(f"kolom tidak dikenali: {', '.join(unexpected)}")
         raise ValueError(f"Header CSV Packet Loss tidak sesuai; {'; '.join(details)}")
 
+    actual_headers = {
+        normalize_header(header): header
+        for header in headers
+    }
+    resolved_headers = {
+        source_column: actual_headers[normalize_header(source_column)]
+        for source_column in PACKET_LOS_CSV_TO_COLUMN
+    }
+
     parsed_rows: list[ParsedRow] = []
     for index, source in enumerate(source_rows, start=2):
         if not any(normalize_text(value) for value in source.values()):
@@ -512,7 +540,7 @@ def _parse_packet_los_file(filename: str, content: bytes) -> ParsedImport:
         payload: dict[str, object] = {}
         errors: list[str] = []
         for source_column, target_column in PACKET_LOS_CSV_TO_COLUMN.items():
-            raw_value = _first(source, source_column)
+            raw_value = source.get(resolved_headers[source_column])
             try:
                 if target_column == "date":
                     parsed_date = _parse_date(raw_value)
@@ -777,7 +805,7 @@ def _mark_duplicates(rows: list[ParsedRow]) -> None:
     duplicates = {key for key, count in counts.items() if count > 1}
     for row in rows:
         if row.row_key in duplicates:
-            row.errors.append("Nomor ticket duplikat di dalam berkas upload")
+            row.errors.append("Kunci import duplikat di dalam berkas upload")
 
 
 def _fault_site_lookup_keys(row: ParsedRow) -> list[str]:
@@ -928,7 +956,7 @@ async def validate_import(target: str, uploads: list[UploadFile], actor: AppUser
             )
             parsed.metadata["ticket_types"] = sorted({row.payload.get("ticket_type") for row in parsed.rows})
         elif target == "packet_los_jatim":
-            parsed = _parse_packet_los_file(*files[0])
+            parsed = await run_in_threadpool(_parse_packet_los_file, *files[0])
         else:
             parsed = _parse_fault_file(*files[0])
     except ValueError as exc:
@@ -984,15 +1012,13 @@ async def validate_import(target: str, uploads: list[UploadFile], actor: AppUser
             else:
                 period_week = int(parsed.metadata["week"])
                 period_date = date.fromisoformat(str(parsed.metadata["date"]))
-                result = await session.execute(
-                    text(
-                        "SELECT site_id FROM public.packet_los_jatim "
-                        "WHERE week = :week AND date = CAST(:date AS date)"
-                    ),
-                    {"week": period_week, "date": period_date},
+                existing_rows, period_fingerprint = await _packet_los_period_snapshot(
+                    session,
+                    period_week,
+                    period_date,
                 )
-                existing_rows = list(result)
                 parsed.metadata["existing_rows"] = len(existing_rows)
+                parsed.metadata["period_fingerprint"] = period_fingerprint
                 existing = {
                     f"{period_week}|{period_date.isoformat()}|{site_id.upper()}": ""
                     for row in existing_rows
@@ -1174,6 +1200,35 @@ def _packet_los_insert_statement() -> str:
     )
 
 
+def _packet_los_period_fingerprint(rows: Iterable[object]) -> str:
+    components = sorted(
+        (
+            (normalize_text(getattr(row, "site_id", None)) or "").upper(),
+            str(getattr(row, "row_fingerprint", "")),
+        )
+        for row in rows
+    )
+    canonical = "\n".join(f"{site_id}\x1f{row_hash}" for site_id, row_hash in components)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+async def _packet_los_period_snapshot(
+    session: object,
+    period_week: int,
+    period_date: date,
+) -> tuple[list[object], str]:
+    result = await session.execute(
+        text(
+            "SELECT site_id, md5(to_jsonb(pl)::text) AS row_fingerprint "
+            "FROM public.packet_los_jatim AS pl "
+            "WHERE week = :week AND date = CAST(:date AS date)"
+        ),
+        {"week": period_week, "date": period_date},
+    )
+    rows = list(result)
+    return rows, _packet_los_period_fingerprint(rows)
+
+
 def _prepare_packet_los_commit_rows(
     staged_rows: Iterable[Mapping[str, object]],
 ) -> list[dict[str, object]]:
@@ -1202,6 +1257,17 @@ async def _commit_packet_los_period(
     period_week = int(metadata["week"])
     period_date = date.fromisoformat(str(metadata["date"]))
     period_params = {"week": period_week, "date": period_date}
+    _, current_fingerprint = await _packet_los_period_snapshot(
+        session,
+        period_week,
+        period_date,
+    )
+    expected_fingerprint = normalize_text(metadata.get("period_fingerprint"))
+    if expected_fingerprint is None or current_fingerprint != expected_fingerprint:
+        raise StalePacketLosImportError(
+            "Data periode Packet Loss berubah setelah preview. "
+            "Lakukan validasi ulang sebelum commit."
+        )
     await session.execute(
         text(
             "DELETE FROM public.packet_los_jatim "
@@ -1383,6 +1449,21 @@ async def commit_import(job_id: str, actor: AppUser) -> dict[str, object]:
                 {"id": job_id},
             )
             await session.commit()
+        except StalePacketLosImportError as exc:
+            await session.rollback()
+            async with async_session() as failure_session:
+                await failure_session.execute(
+                    text(
+                        "UPDATE data_import_jobs SET status = 'failed', updated_at = NOW() "
+                        "WHERE id = CAST(:id AS uuid) AND status <> 'completed'"
+                    ),
+                    {"id": job_id},
+                )
+                await failure_session.commit()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(exc),
+            ) from exc
         except Exception as exc:
             await session.rollback()
             async with async_session() as failure_session:

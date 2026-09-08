@@ -40,6 +40,14 @@ def test_management_schema_allows_packet_loss_audit_target():
 
     assert "packet_los_jatim" in target_migration
     assert "ADD CONSTRAINT data_import_jobs_target_check" in target_migration
+    assert "IF NOT EXISTS" in target_migration
+    assert target_migration.startswith("DO $management$")
+
+
+def test_packet_loss_parsing_runs_outside_the_async_request_loop():
+    source = (BACKEND / "services" / "management_imports.py").read_text(encoding="utf-8")
+
+    assert "await run_in_threadpool(_parse_packet_los_file" in source
 
 
 def test_management_router_exposes_allowlisted_reporting_configuration_routes():

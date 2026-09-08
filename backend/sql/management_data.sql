@@ -34,10 +34,22 @@ CREATE TABLE IF NOT EXISTS data_import_jobs (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-ALTER TABLE data_import_jobs
-    DROP CONSTRAINT IF EXISTS data_import_jobs_target_check,
-    ADD CONSTRAINT data_import_jobs_target_check
-        CHECK (target IN ('ticketing_swfm_non_inap', 'ticketing_fault_center', 'packet_los_jatim'));
+DO $management$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'data_import_jobs'::regclass
+          AND conname = 'data_import_jobs_target_check'
+          AND POSITION('packet_los_jatim' IN pg_get_constraintdef(oid)) > 0
+    ) THEN
+        ALTER TABLE data_import_jobs
+            DROP CONSTRAINT IF EXISTS data_import_jobs_target_check,
+            ADD CONSTRAINT data_import_jobs_target_check
+                CHECK (target IN ('ticketing_swfm_non_inap', 'ticketing_fault_center', 'packet_los_jatim'));
+    END IF;
+END
+$management$;
 
 CREATE INDEX IF NOT EXISTS data_import_jobs_created_at_idx
     ON data_import_jobs (created_at DESC);
