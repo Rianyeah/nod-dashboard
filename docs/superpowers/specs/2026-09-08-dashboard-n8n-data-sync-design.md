@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-08
 
-**Status:** Approved in chat; awaiting written-spec review
+**Status:** Approved for implementation planning
 
 ## Context
 
