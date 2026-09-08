@@ -358,7 +358,7 @@ async def publish_completion(
     status: str,
     rows_processed: int | None,
     result_code: str,
-    cache_outcome_code: str,
+    cache_outcome_code: str | None,
     now: datetime,
 ) -> Mapping[str, object] | None:
     result = await session.execute(
