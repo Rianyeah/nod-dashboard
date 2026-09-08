@@ -216,7 +216,7 @@ class DataSyncService:
             if prepared.disposition == "unauthenticated":
                 await session.commit()
                 raise DataSyncAuthenticationError
-            if prepared.disposition == "conflict":
+            if prepared.disposition in {"conflict", "unclaimed"}:
                 await session.commit()
                 raise DataSyncConflictError
             if prepared.disposition == "idempotent":

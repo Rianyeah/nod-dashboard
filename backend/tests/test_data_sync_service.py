@@ -245,6 +245,38 @@ async def test_success_callback_invalidates_dataset_cache_before_publish():
 
 
 @pytest.mark.asyncio
+async def test_unclaimed_callback_is_rejected_before_cache_or_publish():
+    from services.data_sync import DataSyncConflictError, DataSyncService
+
+    class UnclaimedRepository(Repository):
+        async def prepare_completion(self, _session, **_kwargs):
+            self.events.append("prepare")
+            return SimpleNamespace(disposition="unclaimed", job=self.row)
+
+    repository = UnclaimedRepository(row=job_row(status="running"))
+    events = repository.events
+    service = DataSyncService(
+        settings=settings(),
+        session_factory=session_factory([]),
+        repository=repository,
+        cache=Cache(events),
+        now=lambda: NOW,
+    )
+
+    with pytest.raises(DataSyncConflictError):
+        await service.complete(
+            repository.row["id"],
+            "single-job-token",
+            status="succeeded",
+            rows_processed=21,
+            result_code="completed",
+        )
+
+    assert events == ["expire", "prepare"]
+    assert repository.row["status"] == "running"
+
+
+@pytest.mark.asyncio
 async def test_disabled_feature_rejects_new_start_but_status_remains_available():
     from services.data_sync import DataSyncDisabledError, DataSyncService
 

@@ -78,6 +78,6 @@ async def complete_data_sync_job(
     except DataSyncConflictError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Data sync job is already terminal",
+            detail="Data sync job cannot be completed",
         ) from exc
     return DataSyncCallbackResponse(job=job)

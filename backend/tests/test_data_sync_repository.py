@@ -260,6 +260,30 @@ async def test_wrong_callback_token_is_uniformly_unauthenticated():
 
 
 @pytest.mark.asyncio
+async def test_unclaimed_active_job_cannot_be_completed():
+    from data_sync_repository import prepare_completion, hash_callback_token
+
+    token = "one-job-token"
+    unclaimed = job_row(
+        status="running",
+        claimed_at=None,
+        callback_token_hash=hash_callback_token(token),
+    )
+
+    result = await prepare_completion(
+        ScriptedSession(lambda _sql, _params: Result(first=unclaimed)),
+        job_id=unclaimed["id"],
+        presented_token=token,
+        status="succeeded",
+        rows_processed=12,
+        result_code="completed",
+        now=NOW,
+    )
+
+    assert result.disposition == "unclaimed"
+
+
+@pytest.mark.asyncio
 async def test_matching_terminal_callback_is_idempotent_but_conflict_is_rejected():
     from data_sync_repository import prepare_completion, hash_callback_token
 

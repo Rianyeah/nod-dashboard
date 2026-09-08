@@ -348,6 +348,8 @@ async def prepare_completion(
             disposition="idempotent" if is_same else "conflict",
             job=job,
         )
+    if job["claimed_at"] is None:
+        return CompletionResult(disposition="unclaimed", job=job)
     return CompletionResult(disposition="prepared", job=job)
 
 
@@ -372,6 +374,7 @@ async def publish_completion(
                 updated_at = :now
             WHERE id = CAST(:id AS uuid)
               AND status IN ('dispatching', 'running', 'dispatch_unknown')
+              AND claimed_at IS NOT NULL
             RETURNING *
             """
         ),

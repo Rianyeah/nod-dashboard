@@ -150,6 +150,8 @@ Allowed callback result codes are:
 `rows_processed` is optional and, when supplied, must be a non-negative integer.
 Duplicate identical callbacks are safe. A conflicting callback for an already
 terminal job returns HTTP 409 and must not be retried as a different outcome.
+A callback sent before the execution wins its claim also returns HTTP 409 and
+does not invalidate cache or publish a terminal result.
 
 ## Operational checks
 
