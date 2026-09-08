@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-08
 
-**Status:** Approved for implementation planning
+**Status:** Implemented on `codex/data-sync-n8n`
 
 ## Context
 
