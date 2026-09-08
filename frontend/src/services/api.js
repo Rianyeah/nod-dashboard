@@ -51,6 +51,22 @@ export function setUnauthorizedHandler(handler) {
   };
 }
 
+// ===== Data Sync =====
+
+export async function fetchDataSyncStatus(signal) {
+  const { data } = await api.get('/data-sync/status', { signal });
+  return data;
+}
+
+export async function startDataSync(dataset) {
+  const { data } = await api.post(
+    `/data-sync/${encodeURIComponent(dataset)}`,
+    undefined,
+    { timeout: 15000 },
+  );
+  return data;
+}
+
 
 // ===== Map =====
 
