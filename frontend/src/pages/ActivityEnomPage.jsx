@@ -47,6 +47,12 @@ import {
 } from '../services/api';
 import { formatNumber } from '../utils/formatters';
 import { formatMonthRangeLabel } from '../components/dashboard-filters/periodRange';
+import { DataSyncButton } from '../features/data-sync/DataSyncButton';
+import { useDataSync } from '../features/data-sync/DataSyncProvider';
+import {
+  preserveMonthRange,
+  preserveOptionFilter,
+} from '../features/data-sync/dataSyncRefreshPolicy';
 
 const TABLE_LIMIT = 20;
 const MONTH_FORMATTER = new Intl.DateTimeFormat('id-ID', { month: 'long' });
@@ -222,6 +228,7 @@ function ActivityDetailModal({ detail, loading, onClose }) {
 
 function ActivityEnomDashboard() {
   const navigate = useNavigate();
+  const { successRevision } = useDataSync('activity_enom');
   const [filterOptions, setFilterOptions] = useState({
     years: [],
     months: [],
@@ -270,17 +277,23 @@ function ActivityEnomDashboard() {
         const defaultMonth = data?.default_month || months[0]?.value || '';
         const years = Array.isArray(data?.years) ? data.years : [];
         const defaultPeriodMonth = String(defaultMonth).slice(0, 7);
+        const availableMonths = Array.isArray(data?.available_months) ? data.available_months : [];
+        const nextNops = Array.isArray(data?.nops) ? data.nops : [];
+        const nextCategories = Array.isArray(data?.categories) ? data.categories : [];
+        const nextDefaultPeriod = { start: defaultPeriodMonth, end: defaultPeriodMonth };
         setFilterOptions({
           years,
           months,
-          nops: Array.isArray(data?.nops) ? data.nops : [],
-          categories: Array.isArray(data?.categories) ? data.categories : [],
+          nops: nextNops,
+          categories: nextCategories,
           default_year: data?.default_year || null,
           default_month: data?.default_month || null,
-          available_months: Array.isArray(data?.available_months) ? data.available_months : [],
+          available_months: availableMonths,
         });
-        setSelectedPeriod({ start: defaultPeriodMonth, end: defaultPeriodMonth });
-        setDefaultPeriod({ start: defaultPeriodMonth, end: defaultPeriodMonth });
+        setSelectedPeriod((current) => preserveMonthRange(current, nextDefaultPeriod, availableMonths));
+        setDefaultPeriod(nextDefaultPeriod);
+        setSelectedNop((current) => preserveOptionFilter(current, nextNops, ''));
+        setSelectedCategory((current) => preserveOptionFilter(current, nextCategories, ''));
         setFiltersLoaded(true);
       })
       .catch((err) => {
@@ -293,7 +306,7 @@ function ActivityEnomDashboard() {
         }
       });
     return () => { cancelled = true; };
-  }, []);
+  }, [successRevision]);
 
   useEffect(() => {
     setPage(1);
@@ -344,7 +357,7 @@ function ActivityEnomDashboard() {
         if (!cancelled) setDashboardLoading(false);
       });
     return () => { cancelled = true; };
-  }, [dashboardParams, selectedPeriod]);
+  }, [dashboardParams, selectedPeriod, successRevision]);
 
   useEffect(() => {
     if (!selectedPeriod.start || !selectedPeriod.end) return;
@@ -370,7 +383,7 @@ function ActivityEnomDashboard() {
         if (!cancelled) setTableLoading(false);
       });
     return () => { cancelled = true; };
-  }, [selectedPeriod, tableParams]);
+  }, [selectedPeriod, successRevision, tableParams]);
 
   useEffect(() => {
     if (!selectedActivityId || !selectedPeriod.start || !selectedPeriod.end) return;
@@ -441,33 +454,36 @@ function ActivityEnomDashboard() {
               </p>
             </div>
           </div>
-          <DashboardFilterBar className="w-full border-0 bg-transparent p-0 shadow-none md:w-auto">
-            <DashboardMonthRangePicker
-              id="activity-enom-period"
-              label="Periode"
-              value={selectedPeriod}
-              defaultValue={defaultPeriod}
-              availableMonths={filterOptions.available_months}
-              onApply={setSelectedPeriod}
-              onReset={setSelectedPeriod}
-            />
-            <DashboardCombobox
-              id="activity-enom-nop"
-              label="NOP"
-              value={selectedNop}
-              onChange={setSelectedNop}
-              options={filterOptions.nops}
-              allLabel="Semua NOP"
-            />
-            <DashboardCombobox
-              id="activity-enom-category"
-              label="Kategori"
-              value={selectedCategory}
-              onChange={setSelectedCategory}
-              options={filterOptions.categories}
-              allLabel="Semua Kategori"
-            />
-          </DashboardFilterBar>
+          <div className="flex w-full flex-wrap items-end justify-end gap-2 md:w-auto">
+            <DataSyncButton dataset="activity_enom" />
+            <DashboardFilterBar className="w-full border-0 bg-transparent p-0 shadow-none md:w-auto">
+              <DashboardMonthRangePicker
+                id="activity-enom-period"
+                label="Periode"
+                value={selectedPeriod}
+                defaultValue={defaultPeriod}
+                availableMonths={filterOptions.available_months}
+                onApply={setSelectedPeriod}
+                onReset={setSelectedPeriod}
+              />
+              <DashboardCombobox
+                id="activity-enom-nop"
+                label="NOP"
+                value={selectedNop}
+                onChange={setSelectedNop}
+                options={filterOptions.nops}
+                allLabel="Semua NOP"
+              />
+              <DashboardCombobox
+                id="activity-enom-category"
+                label="Kategori"
+                value={selectedCategory}
+                onChange={setSelectedCategory}
+                options={filterOptions.categories}
+                allLabel="Semua Kategori"
+              />
+            </DashboardFilterBar>
+          </div>
         </div>
       </header>
 

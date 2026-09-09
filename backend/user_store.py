@@ -17,10 +17,17 @@ from database import async_session
 
 ROLES = frozenset({"viewer", "data_admin", "sysadmin"})
 ROLE_PERMISSIONS = {
-    "viewer": frozenset({"dashboard:view"}),
-    "data_admin": frozenset({"dashboard:view", "management_data:write"}),
+    "viewer": frozenset({"dashboard:view", "data_sync:trigger"}),
+    "data_admin": frozenset(
+        {"dashboard:view", "data_sync:trigger", "management_data:write"}
+    ),
     "sysadmin": frozenset(
-        {"dashboard:view", "management_data:write", "users:manage"}
+        {
+            "dashboard:view",
+            "data_sync:trigger",
+            "management_data:write",
+            "users:manage",
+        }
     ),
 }
 _password_hasher = PasswordHasher()

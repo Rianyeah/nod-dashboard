@@ -11,6 +11,8 @@ import { AppShell } from './components/DashboardSidebar';
 import MapRouteErrorBoundary from './components/MapRouteErrorBoundary';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import SiteDetailCapturePage from './pages/SiteDetailCapturePage';
+import { DataSyncProvider } from './features/data-sync/DataSyncProvider';
+import { DataSyncNotifications } from './features/data-sync/DataSyncNotifications';
 
 const ImpactServicePage = React.lazy(() => import('./pages/ImpactServicePage'));
 const SiteMapPage = React.lazy(() => import('./pages/SiteMapPage'));
@@ -126,7 +128,9 @@ export default function App() {
 function DashboardRoutes() {
   return (
     <AuthProvider>
-      <Routes>
+      <DataSyncProvider>
+        <DataSyncNotifications />
+        <Routes>
           <Route path="/login" element={<LoginRoute />} />
           <Route
             path="/home"
@@ -228,7 +232,8 @@ function DashboardRoutes() {
             }
           />
           <Route path="/" element={<Navigate to="/home" />} />
-      </Routes>
+        </Routes>
+      </DataSyncProvider>
     </AuthProvider>
   );
 }

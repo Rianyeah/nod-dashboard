@@ -24,7 +24,7 @@ def test_valid_login_sets_hardened_cookie(client, credentials):
         "authenticated": True,
         "username": "operator",
         "role": "viewer",
-        "permissions": ["dashboard:view"],
+        "permissions": ["dashboard:view", "data_sync:trigger"],
     }
     assert "token" not in response.json()
 

@@ -59,6 +59,14 @@ async def lifespan(app: FastAPI):
     else:
         print("[NOD] Redis cache is disabled.")
 
+    try:
+        from data_sync_schema import ensure_data_sync_schema
+        from database import engine as database_engine
+
+        await ensure_data_sync_schema(database_engine)
+    except Exception as exc:
+        raise RuntimeError("Data sync job schema bootstrap failed") from exc
+
     reporting_foundation_error = None
     try:
         from database import engine as database_engine
@@ -181,6 +189,7 @@ def _runtime_allowed_hosts(configured_hosts: tuple[str, ...]) -> list[str]:
 def create_app(
     settings: SecuritySettings | None = None,
     user_store: UserStore | None = None,
+    data_sync_service: object | None = None,
 ) -> FastAPI:
     """Build the application with explicit security configuration for tests."""
     security_settings = settings or SecuritySettings.from_env()
@@ -201,6 +210,11 @@ def create_app(
     app.state.user_store = user_store or HybridUserStore(security_settings)
     app.state.session_manager = SessionManager(security_settings)
     app.state.capture_token_manager = CaptureTokenManager(security_settings)
+    if data_sync_service is None:
+        from services.data_sync import DataSyncService
+
+        data_sync_service = DataSyncService(settings=security_settings)
+    app.state.data_sync_service = data_sync_service
     app.state.capture_token_limiter = InMemoryRateLimiter()
     app.state.login_limiter = InMemoryRateLimiter()
     app.state.rf_limiter = InMemoryRateLimiter()
@@ -293,10 +307,12 @@ def create_app(
     from routers import admin as admin_router
     from routers import availability as availability_router
     from routers import data_potensi as data_potensi_router
+    from routers import data_sync as data_sync_router
     from routers import impact_service as impact_service_router
     from routers import management_data as management_data_router
     from routers import map as map_router
     from routers import n8n_map as n8n_map_router
+    from routers import n8n_data_sync as n8n_data_sync_router
     from routers import n8n_site_capture as n8n_site_capture_router
     from routers import overview as overview_router
     from routers import reporting as reporting_router
@@ -319,12 +335,14 @@ def create_app(
     app.include_router(overview_router.router, prefix=API_PREFIX, dependencies=dashboard_dependency)
     app.include_router(activity_enom_router.router, prefix=API_PREFIX, dependencies=dashboard_dependency)
     app.include_router(data_potensi_router.router, prefix=API_PREFIX, dependencies=dashboard_dependency)
+    app.include_router(data_sync_router.router, prefix=API_PREFIX)
     app.include_router(rf_tilt_router.router, prefix=API_PREFIX, dependencies=dashboard_dependency)
     app.include_router(tower_plan_router.router, prefix=API_PREFIX, dependencies=dashboard_dependency)
     app.include_router(management_data_router.router, prefix=API_PREFIX)
     app.include_router(admin_router.router, prefix=API_PREFIX)
     app.include_router(n8n_map_router.router, prefix=API_PREFIX)
     app.include_router(n8n_site_capture_router.router, prefix=API_PREFIX)
+    app.include_router(n8n_data_sync_router.router, prefix=API_PREFIX)
 
     if FRONTEND_DIST.exists():
         app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIST / "assets")), name="assets")
