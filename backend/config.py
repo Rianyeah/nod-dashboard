@@ -88,10 +88,12 @@ def _origin_parts(value: str, name: str) -> tuple[str, str, int | None]:
 @dataclass(frozen=True)
 class DataSyncSettings:
     enabled: bool
+    dispatch_timeout_seconds: int
     job_timeout_seconds: int
     base_url: str
     webhook_urls: Mapping[str, str]
     trigger_api_key: str
+    execution_api_key: str
 
     def webhook_url_for(self, dataset: str) -> str:
         return self.webhook_urls[dataset]
@@ -106,6 +108,13 @@ class DataSyncSettings:
         enabled = _parse_bool_with_default(
             env, "DATA_SYNC_ENABLED", default=False
         )
+        dispatch_timeout_seconds = _parse_bounded_int(
+            env,
+            "DATA_SYNC_DISPATCH_TIMEOUT_SECONDS",
+            default=60,
+            minimum=15,
+            maximum=300,
+        )
         job_timeout_seconds = _parse_bounded_int(
             env,
             "DATA_SYNC_JOB_TIMEOUT_SECONDS",
@@ -116,10 +125,12 @@ class DataSyncSettings:
         if not enabled:
             return cls(
                 enabled=False,
+                dispatch_timeout_seconds=dispatch_timeout_seconds,
                 job_timeout_seconds=job_timeout_seconds,
                 base_url="",
                 webhook_urls={},
                 trigger_api_key="",
+                execution_api_key="",
             )
 
         base_url = _required(env, "N8N_SYNC_BASE_URL").rstrip("/")
@@ -155,12 +166,24 @@ class DataSyncSettings:
                 "N8N_SYNC_TRIGGER_API_KEY must be strong and distinct"
             )
 
+        execution_api_key = _required(env, "N8N_EXECUTION_API_KEY")
+        if (
+            len(execution_api_key) < 32
+            or execution_api_key == trigger_api_key
+            or execution_api_key in unrelated_n8n_keys
+        ):
+            raise SecurityConfigurationError(
+                "N8N_EXECUTION_API_KEY must be strong and distinct"
+            )
+
         return cls(
             enabled=True,
+            dispatch_timeout_seconds=dispatch_timeout_seconds,
             job_timeout_seconds=job_timeout_seconds,
             base_url=base_url,
             webhook_urls=webhook_urls,
             trigger_api_key=trigger_api_key,
+            execution_api_key=execution_api_key,
         )
 
 

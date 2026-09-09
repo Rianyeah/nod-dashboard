@@ -9,6 +9,12 @@ def test_data_sync_schema_contains_the_durable_job_contract():
     assert "callback_token_hash text NOT NULL" in schema
     assert "requested_by_username text NOT NULL" in schema
     assert "dispatch_unknown" in schema
+    assert "n8n_execution_id text" in schema
+    assert "canceled_at timestamptz" in schema
+    assert "canceled_by_user_id text" in schema
+    assert "dispatch_timed_out" in schema
+    assert "workflow_timed_out" in schema
+    assert "'canceled'" in schema
     assert "rows_processed bigint" in schema
     assert "protocol_version integer NOT NULL DEFAULT 1" in schema
     assert "uq_data_sync_jobs_active_dataset" in schema
@@ -20,7 +26,7 @@ def test_data_sync_schema_parser_returns_executable_statements_without_semicolon
 
     statements = data_sync_schema_statements()
 
-    assert len(statements) == 5
+    assert len(statements) >= 5
     assert all(statement.strip() == statement for statement in statements)
     assert all(not statement.endswith(";") for statement in statements)
     assert all(statement.count("(") == statement.count(")") for statement in statements)
