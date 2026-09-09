@@ -38,9 +38,10 @@ class DataSyncDisabledError(RuntimeError):
 
 
 class DataSyncRateLimitError(RuntimeError):
-    def __init__(self, retry_after: int):
+    def __init__(self, retry_after: int, *, limit_kind: str):
         super().__init__("Data sync rate limit exceeded")
         self.retry_after = retry_after
+        self.limit_kind = limit_kind
 
 
 class DataSyncAuthenticationError(RuntimeError):
@@ -118,7 +119,10 @@ class DataSyncService:
             await session.commit()
 
         if start_result.retry_after is not None:
-            raise DataSyncRateLimitError(start_result.retry_after)
+            raise DataSyncRateLimitError(
+                start_result.retry_after,
+                limit_kind=start_result.limit_kind or "hourly_quota",
+            )
         if not start_result.created:
             return DataSyncStartResponse(
                 job=public_job_from_row(start_result.job, actor=actor),

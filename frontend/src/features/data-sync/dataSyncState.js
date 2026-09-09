@@ -5,7 +5,7 @@ export const DATA_SYNC_DATASETS = Object.freeze([
 ]);
 
 const ACTIVE_STATUSES = new Set(['dispatching', 'running', 'dispatch_unknown']);
-const TERMINAL_STATUSES = new Set(['succeeded', 'failed', 'timed_out']);
+const TERMINAL_STATUSES = new Set(['succeeded', 'failed', 'timed_out', 'canceled']);
 
 function datasetRecord(value) {
   return Object.fromEntries(DATA_SYNC_DATASETS.map((dataset) => [dataset, value]));
@@ -76,7 +76,7 @@ export function reconcileDataSyncJobs(previousState, payload, observedAt = Date.
       jobId: job.id,
       dataset,
       status: job.status,
-      message: job.public_message || terminalFallback(job.status),
+      message: formatDataSyncResultMessage(job),
       observedAt,
     });
   }
@@ -95,12 +95,45 @@ export function reconcileDataSyncJobs(previousState, payload, observedAt = Date.
 function terminalFallback(status) {
   if (status === 'succeeded') return 'Sinkronisasi selesai.';
   if (status === 'timed_out') return 'Sinkronisasi melewati batas waktu.';
+  if (status === 'canceled') return 'Sinkronisasi telah dibatalkan.';
   return 'Sinkronisasi gagal.';
+}
+
+export function formatDataSyncResultMessage(job) {
+  if (job?.result_code === 'completed' && Number.isFinite(job.rows_processed)) {
+    const rows = new Intl.NumberFormat('id-ID').format(job.rows_processed);
+    return `Sinkronisasi selesai. ${rows} baris diproses.`;
+  }
+  return job?.public_message || terminalFallback(job?.status);
+}
+
+export function formatDataSyncRateLimitMessage(retryAfter, limitKind) {
+  const seconds = Math.max(1, Math.ceil(Number(retryAfter) || 1));
+  if (limitKind === 'cooldown') {
+    return `Tunggu ${seconds} detik sebelum mencoba sinkronisasi ulang.`;
+  }
+  const minutes = Math.max(1, Math.ceil(seconds / 60));
+  return `Batas 10 sinkronisasi per jam tercapai. Coba lagi dalam ${minutes} menit.`;
+}
+
+export function getDataSyncStartErrorMessage({ status, retryAfter, limitKind }) {
+  if (status === 429) {
+    return formatDataSyncRateLimitMessage(retryAfter, limitKind);
+  }
+  if (status === 503) {
+    return 'Sinkronisasi data sedang dinonaktifkan.';
+  }
+  return 'Sinkronisasi tidak dapat dimulai. Status sedang diperiksa ulang.';
+}
+
+export function shouldReportDataSyncStartFailure(payload, dataset) {
+  return !isActiveDataSyncStatus(payload?.jobs?.[dataset]?.status);
 }
 
 export function getDataSyncButtonPresentation({
   enabled,
   actionPending = false,
+  cancelPending = false,
   job = null,
   terminalObservedAt = null,
   nowMs = Date.now(),
@@ -108,8 +141,14 @@ export function getDataSyncButtonPresentation({
   if (!enabled) {
     return { hidden: true, disabled: true, spinning: false, label: 'Sync Data' };
   }
+  if (cancelPending) {
+    return { hidden: false, disabled: true, spinning: true, label: 'Canceling...' };
+  }
   if (actionPending || job?.status === 'dispatching') {
-    return { hidden: false, disabled: true, spinning: true, label: 'Starting...' };
+    const elapsed = isActiveDataSyncStatus(job?.status)
+      ? formatDataSyncElapsed(job.started_at, nowMs)
+      : '00:00';
+    return { hidden: false, disabled: true, spinning: true, label: `Starting ${elapsed}` };
   }
   if (isActiveDataSyncStatus(job?.status)) {
     return {
@@ -128,6 +167,9 @@ export function getDataSyncButtonPresentation({
   }
   if (showTerminal && job?.status === 'timed_out') {
     return { hidden: false, disabled: false, spinning: false, label: 'Timed out' };
+  }
+  if (showTerminal && job?.status === 'canceled') {
+    return { hidden: false, disabled: false, spinning: false, label: 'Canceled' };
   }
   return { hidden: false, disabled: false, spinning: false, label: 'Sync Data' };
 }

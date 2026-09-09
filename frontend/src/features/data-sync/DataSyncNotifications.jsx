@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { CheckCircle2, CircleAlert, Clock3, X } from 'lucide-react';
+import { Ban, CheckCircle2, CircleAlert, Clock3, X } from 'lucide-react';
 
 import { Button } from '../../components/ui/button';
 import { cn } from '../../lib/utils';
@@ -9,6 +9,7 @@ import { useDataSyncNotifications } from './DataSyncProvider';
 function NotificationIcon({ status }) {
   if (status === 'succeeded') return <CheckCircle2 className="size-4 text-emerald-500" />;
   if (status === 'timed_out') return <Clock3 className="size-4 text-amber-500" />;
+  if (status === 'canceled') return <Ban className="size-4 text-amber-500" />;
   return <CircleAlert className="size-4 text-destructive" />;
 }
 
@@ -45,6 +46,7 @@ function NotificationItem({ notification, onDismiss }) {
         'pointer-events-auto flex items-start gap-3 rounded-xl border border-border/80 bg-popover/95 p-3 text-popover-foreground shadow-lg backdrop-blur',
         notification.status === 'succeeded' && 'border-emerald-500/30',
         notification.status === 'timed_out' && 'border-amber-500/30',
+        notification.status === 'canceled' && 'border-amber-500/30',
         notification.status === 'failed' && 'border-destructive/30',
       )}
     >

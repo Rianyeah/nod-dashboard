@@ -67,6 +67,15 @@ export async function startDataSync(dataset) {
   return data;
 }
 
+export async function cancelDataSync(dataset, jobId) {
+  const { data } = await api.post(
+    `/data-sync/${encodeURIComponent(dataset)}/${encodeURIComponent(jobId)}/cancel`,
+    undefined,
+    { timeout: 15000 },
+  );
+  return data;
+}
+
 
 // ===== Map =====
 

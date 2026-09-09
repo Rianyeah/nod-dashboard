@@ -57,7 +57,10 @@ async def start_data_sync(
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Terlalu banyak permintaan sinkronisasi",
-            headers={"Retry-After": str(exc.retry_after)},
+            headers={
+                "Retry-After": str(exc.retry_after),
+                "X-Data-Sync-Limit": exc.limit_kind,
+            },
         ) from exc
 
 

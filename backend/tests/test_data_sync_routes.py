@@ -99,7 +99,7 @@ def test_start_rejects_disabled_feature_and_exposes_retry_after(authenticated_cl
     disabled = authenticated_client.post(
         "/api/v1/data-sync/data_master", headers={"Origin": ORIGIN}
     )
-    service.start_error = DataSyncRateLimitError(37)
+    service.start_error = DataSyncRateLimitError(37, limit_kind="cooldown")
     limited = authenticated_client.post(
         "/api/v1/data-sync/activity_enom", headers={"Origin": ORIGIN}
     )
@@ -108,6 +108,7 @@ def test_start_rejects_disabled_feature_and_exposes_retry_after(authenticated_cl
     assert disabled.json() == {"detail": "Sinkronisasi data sedang dinonaktifkan"}
     assert limited.status_code == 429
     assert limited.headers["Retry-After"] == "37"
+    assert limited.headers["X-Data-Sync-Limit"] == "cooldown"
 
 
 def test_status_has_all_dataset_keys_without_private_job_fields(authenticated_client):

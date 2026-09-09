@@ -180,6 +180,7 @@ async def test_create_or_join_enforces_durable_hourly_user_limit():
     assert result.job is None
     assert result.created is False
     assert result.retry_after == 1800
+    assert result.limit_kind == "hourly_quota"
 
 
 @pytest.mark.asyncio
@@ -209,6 +210,7 @@ async def test_create_or_join_enforces_dataset_cooldown():
     )
 
     assert result.retry_after == 35
+    assert result.limit_kind == "cooldown"
 
 
 @pytest.mark.asyncio

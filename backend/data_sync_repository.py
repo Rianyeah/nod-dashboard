@@ -25,6 +25,7 @@ class StartResult:
     job: Mapping[str, object] | None
     created: bool
     retry_after: int | None = None
+    limit_kind: str | None = None
 
 
 @dataclass(frozen=True)
@@ -135,7 +136,12 @@ async def create_or_join_job(
     if quota_row and int(quota_row["job_count"]) >= 10:
         oldest = quota_row["oldest_started_at"]
         retry_after = max(1, math.ceil(3600 - (now - oldest).total_seconds()))
-        return StartResult(job=None, created=False, retry_after=retry_after)
+        return StartResult(
+            job=None,
+            created=False,
+            retry_after=retry_after,
+            limit_kind="hourly_quota",
+        )
 
     latest_terminal = await session.execute(
         text(
@@ -157,6 +163,7 @@ async def create_or_join_job(
                 job=None,
                 created=False,
                 retry_after=max(1, math.ceil(60 - elapsed)),
+                limit_kind="cooldown",
             )
 
     inserted = await session.execute(

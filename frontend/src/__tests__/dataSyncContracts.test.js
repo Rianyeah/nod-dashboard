@@ -57,4 +57,28 @@ describe('data sync API boundary', () => {
     assert.equal(requestConfig.method, 'post');
     assert.equal(requestConfig.timeout, 15000);
   });
+
+  it('cancels one encoded job through the browser API boundary', async () => {
+    assert.equal(typeof apiModule.cancelDataSync, 'function');
+    let requestConfig;
+    api.defaults.adapter = async (config) => {
+      requestConfig = config;
+      return {
+        data: { canceled: true, job: { id: 'job/1', status: 'canceled' } },
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+        config,
+      };
+    };
+
+    await apiModule.cancelDataSync('data master/unsafe', 'job/1');
+
+    assert.equal(
+      requestConfig.url,
+      '/data-sync/data%20master%2Funsafe/job%2F1/cancel',
+    );
+    assert.equal(requestConfig.method, 'post');
+    assert.equal(requestConfig.timeout, 15000);
+  });
 });
