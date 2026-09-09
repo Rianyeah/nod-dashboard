@@ -46,10 +46,10 @@ TERMINAL_DATA_SYNC_STATUSES = frozenset(
 
 PUBLIC_MESSAGES = {
     "completed": "Sinkronisasi selesai.",
-    "workflow_failed": "Sinkronisasi gagal.",
-    "source_validation_failed": "Sinkronisasi gagal.",
-    "database_write_failed": "Sinkronisasi gagal.",
-    "trigger_rejected": "Workflow tidak dapat dimulai.",
+    "workflow_failed": "Workflow sinkronisasi mengalami kegagalan.",
+    "source_validation_failed": "Data sumber tidak lolos validasi.",
+    "database_write_failed": "Data gagal disimpan ke database.",
+    "trigger_rejected": "Workflow menolak permintaan sinkronisasi.",
     "timed_out": "Sinkronisasi melewati batas waktu.",
     "dispatch_timed_out": "Workflow tidak merespons dalam 60 detik.",
     "workflow_timed_out": "Sinkronisasi melewati batas waktu 30 menit.",

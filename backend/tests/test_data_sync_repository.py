@@ -115,7 +115,7 @@ def test_public_job_redacts_requester_token_and_internal_diagnostics():
         "finished_at": "2026-09-08T10:00:00Z",
         "rows_processed": None,
         "result_code": "database_write_failed",
-        "public_message": "Sinkronisasi gagal.",
+        "public_message": "Data gagal disimpan ke database.",
         "can_cancel": False,
     }
     assert "requested_by_username" not in payload

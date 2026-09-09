@@ -1,18 +1,20 @@
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { basename, resolve } from 'node:path';
 import { cwd } from 'node:process';
 import { describe, it } from 'node:test';
 
 
-const src = (...parts) => readFileSync(resolve(cwd(), 'frontend', 'src', ...parts), 'utf8');
+const frontendRoot = basename(cwd()).toLowerCase() === 'frontend'
+  ? cwd()
+  : resolve(cwd(), 'frontend');
+const src = (...parts) => readFileSync(resolve(frontendRoot, 'src', ...parts), 'utf8');
 
 
 describe('data sync cancellation UI contracts', () => {
   it('provides an explicit destructive confirmation dialog', () => {
     const path = resolve(
-      cwd(),
-      'frontend',
+      frontendRoot,
       'src',
       'features',
       'data-sync',

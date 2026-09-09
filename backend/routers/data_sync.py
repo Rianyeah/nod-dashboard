@@ -77,11 +77,21 @@ async def cancel_data_sync(
     try:
         return await _service(request).cancel(dataset.value, job_id, actor)
     except DataSyncCancelForbiddenError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden") from exc
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden",
+        ) from exc
     except DataSyncCancelNotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Data sync job not found") from exc
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Data sync job not found",
+        ) from exc
     except DataSyncCancelUnavailableError as exc:
-        code = status.HTTP_504_GATEWAY_TIMEOUT if exc.timed_out else status.HTTP_502_BAD_GATEWAY
+        code = (
+            status.HTTP_504_GATEWAY_TIMEOUT
+            if exc.timed_out
+            else status.HTTP_502_BAD_GATEWAY
+        )
         raise HTTPException(
             status_code=code,
             detail="Execution belum berhasil dihentikan. Coba batalkan kembali.",
