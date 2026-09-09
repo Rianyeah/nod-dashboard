@@ -455,7 +455,6 @@ function ActivityEnomDashboard() {
             </div>
           </div>
           <div className="flex w-full flex-wrap items-end justify-end gap-2 md:w-auto">
-            <DataSyncButton dataset="activity_enom" />
             <DashboardFilterBar className="w-full border-0 bg-transparent p-0 shadow-none md:w-auto">
               <DashboardMonthRangePicker
                 id="activity-enom-period"
@@ -483,6 +482,7 @@ function ActivityEnomDashboard() {
                 allLabel="Semua Kategori"
               />
             </DashboardFilterBar>
+            <DataSyncButton dataset="activity_enom" />
           </div>
         </div>
       </header>

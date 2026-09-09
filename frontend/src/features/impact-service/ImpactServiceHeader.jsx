@@ -14,6 +14,7 @@ export default function ImpactServiceHeader({
   onBack,
   onPrint,
   printLoading,
+  syncAction,
   children,
 }) {
   return (
@@ -66,6 +67,7 @@ export default function ImpactServiceHeader({
             )}
             {printLoading ? 'Menyiapkan' : 'Print PDF'}
           </Button>
+          {syncAction}
         </div>
       </div>
     </header>
