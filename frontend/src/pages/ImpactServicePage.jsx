@@ -385,8 +385,8 @@ function ImpactServiceDashboard() {
         onBack={() => navigate('/home')}
         onPrint={handlePrint}
         printLoading={printLoading}
+        syncAction={<DataSyncButton dataset="impact_service" />}
       >
-        <DataSyncButton dataset="impact_service" />
         <ImpactServiceFilters
           key={`${startDate}-${endDate}`}
           startDate={startDate}

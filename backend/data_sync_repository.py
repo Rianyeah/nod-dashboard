@@ -25,6 +25,7 @@ class StartResult:
     job: Mapping[str, object] | None
     created: bool
     retry_after: int | None = None
+    limit_kind: str | None = None
 
 
 @dataclass(frozen=True)
@@ -51,19 +52,34 @@ def _token_matches(stored_hash: object, presented_token: str) -> bool:
 
 
 async def expire_stale_jobs(
-    session: AsyncSession, *, now: datetime, timeout_seconds: int
+    session: AsyncSession,
+    *,
+    now: datetime,
+    dispatch_timeout_seconds: int,
+    job_timeout_seconds: int,
 ) -> int:
     result = await session.execute(
         text(
             f"""
             UPDATE public.data_sync_jobs
             SET status = 'timed_out', finished_at = :now,
-                result_code = 'timed_out', updated_at = :now
-            WHERE status IN ({ACTIVE_STATUS_SQL})
-              AND started_at <= :expires_before
+                result_code = CASE
+                    WHEN status = 'dispatching' THEN 'dispatch_timed_out'
+                    ELSE 'workflow_timed_out'
+                END,
+                updated_at = :now
+            WHERE (status = 'dispatching'
+                   AND started_at <= :dispatch_expires_before)
+               OR (status IN ('running', 'dispatch_unknown')
+                   AND started_at <= :job_expires_before)
             """
         ),
-        {"now": now, "expires_before": now - timedelta(seconds=timeout_seconds)},
+        {
+            "now": now,
+            "dispatch_expires_before": now
+            - timedelta(seconds=dispatch_timeout_seconds),
+            "job_expires_before": now - timedelta(seconds=job_timeout_seconds),
+        },
     )
     return int(result.rowcount or 0)
 
@@ -120,7 +136,12 @@ async def create_or_join_job(
     if quota_row and int(quota_row["job_count"]) >= 10:
         oldest = quota_row["oldest_started_at"]
         retry_after = max(1, math.ceil(3600 - (now - oldest).total_seconds()))
-        return StartResult(job=None, created=False, retry_after=retry_after)
+        return StartResult(
+            job=None,
+            created=False,
+            retry_after=retry_after,
+            limit_kind="hourly_quota",
+        )
 
     latest_terminal = await session.execute(
         text(
@@ -142,6 +163,7 @@ async def create_or_join_job(
                 job=None,
                 created=False,
                 retry_after=max(1, math.ceil(60 - elapsed)),
+                limit_kind="cooldown",
             )
 
     inserted = await session.execute(
@@ -293,6 +315,7 @@ async def claim_job(
     *,
     job_id: UUID,
     presented_token: str,
+    execution_id: str,
     now: datetime,
 ) -> ClaimResult:
     job = await _locked_job(session, job_id)
@@ -301,19 +324,20 @@ async def claim_job(
         presented_token,
     ):
         return ClaimResult(authenticated=False, execute=False)
-    if job["status"] in {"succeeded", "failed", "timed_out"} or job["claimed_at"]:
+    if job["status"] in {"succeeded", "failed", "timed_out", "canceled"} or job["claimed_at"]:
         return ClaimResult(authenticated=True, execute=False, job=job)
 
     result = await session.execute(
         text(
             """
             UPDATE public.data_sync_jobs
-            SET status = 'running', claimed_at = :now, updated_at = :now
+            SET status = 'running', claimed_at = :now,
+                n8n_execution_id = :execution_id, updated_at = :now
             WHERE id = CAST(:id AS uuid)
             RETURNING *
             """
         ),
-        {"id": str(job_id), "now": now},
+        {"id": str(job_id), "execution_id": execution_id, "now": now},
     )
     return ClaimResult(
         authenticated=True,
@@ -338,7 +362,7 @@ async def prepare_completion(
         presented_token,
     ):
         return CompletionResult(disposition="unauthenticated")
-    if job["status"] in {"succeeded", "failed", "timed_out"}:
+    if job["status"] in {"succeeded", "failed", "timed_out", "canceled"}:
         is_same = (
             job["status"] == status
             and job["rows_processed"] == rows_processed
@@ -384,6 +408,43 @@ async def publish_completion(
             "rows_processed": rows_processed,
             "result_code": result_code,
             "cache_outcome_code": cache_outcome_code,
+            "now": now,
+        },
+    )
+    return result.mappings().first()
+
+
+async def get_job_for_cancel(
+    session: AsyncSession, job_id: UUID
+) -> Mapping[str, object] | None:
+    """Lock and return a job while cancellation eligibility is evaluated."""
+    return await _locked_job(session, job_id)
+
+
+async def publish_cancellation(
+    session: AsyncSession,
+    *,
+    job_id: UUID,
+    canceled_by_user_id: str,
+    now: datetime,
+) -> Mapping[str, object] | None:
+    """Publish cancellation only if no terminal callback won the race."""
+    result = await session.execute(
+        text(
+            f"""
+            UPDATE public.data_sync_jobs
+            SET status = 'canceled', result_code = 'canceled',
+                finished_at = :now, canceled_at = :now,
+                canceled_by_user_id = :canceled_by_user_id,
+                updated_at = :now
+            WHERE id = CAST(:id AS uuid)
+              AND status IN ({ACTIVE_STATUS_SQL})
+            RETURNING *
+            """
+        ),
+        {
+            "id": str(job_id),
+            "canceled_by_user_id": canceled_by_user_id,
             "now": now,
         },
     )

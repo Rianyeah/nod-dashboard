@@ -12,6 +12,8 @@ from cache import CacheUnavailableError, redis_cache
 from config import SecuritySettings
 from database import async_session
 from models.data_sync import (
+    ACTIVE_DATA_SYNC_STATUSES,
+    DataSyncCancelResponse,
     DataSyncClaimResponse,
     DataSyncDataset,
     DataSyncPublicJob,
@@ -20,6 +22,7 @@ from models.data_sync import (
     public_job_from_row,
 )
 from services.data_sync_dispatch import DispatchOutcome, dispatch_n8n
+from services.data_sync_cancel import stop_n8n_execution
 from user_store import AppUser
 
 
@@ -35,9 +38,10 @@ class DataSyncDisabledError(RuntimeError):
 
 
 class DataSyncRateLimitError(RuntimeError):
-    def __init__(self, retry_after: int):
+    def __init__(self, retry_after: int, *, limit_kind: str):
         super().__init__("Data sync rate limit exceeded")
         self.retry_after = retry_after
+        self.limit_kind = limit_kind
 
 
 class DataSyncAuthenticationError(RuntimeError):
@@ -46,6 +50,20 @@ class DataSyncAuthenticationError(RuntimeError):
 
 class DataSyncConflictError(RuntimeError):
     pass
+
+
+class DataSyncCancelForbiddenError(RuntimeError):
+    pass
+
+
+class DataSyncCancelNotFoundError(RuntimeError):
+    pass
+
+
+class DataSyncCancelUnavailableError(RuntimeError):
+    def __init__(self, *, timed_out: bool = False):
+        super().__init__("N8N execution stop was not confirmed")
+        self.timed_out = timed_out
 
 
 def _iso_z(value: datetime) -> str:
@@ -60,6 +78,7 @@ class DataSyncService:
         session_factory=async_session,
         repository=data_sync_repository,
         dispatcher=dispatch_n8n,
+        stopper=stop_n8n_execution,
         cache=redis_cache,
         now: Callable[[], datetime] | None = None,
         token_factory: Callable[[], str] | None = None,
@@ -68,6 +87,7 @@ class DataSyncService:
         self.session_factory = session_factory
         self.repository = repository
         self.dispatcher = dispatcher
+        self.stopper = stopper
         self.cache = cache
         self.now = now or (lambda: datetime.now(timezone.utc))
         self.token_factory = token_factory or (lambda: secrets.token_urlsafe(32))
@@ -84,7 +104,8 @@ class DataSyncService:
             await self.repository.expire_stale_jobs(
                 session,
                 now=started_at,
-                timeout_seconds=self.settings.data_sync.job_timeout_seconds,
+                dispatch_timeout_seconds=self.settings.data_sync.dispatch_timeout_seconds,
+                job_timeout_seconds=self.settings.data_sync.job_timeout_seconds,
             )
             start_result = await self.repository.create_or_join_job(
                 session,
@@ -98,10 +119,13 @@ class DataSyncService:
             await session.commit()
 
         if start_result.retry_after is not None:
-            raise DataSyncRateLimitError(start_result.retry_after)
+            raise DataSyncRateLimitError(
+                start_result.retry_after,
+                limit_kind=start_result.limit_kind or "hourly_quota",
+            )
         if not start_result.created:
             return DataSyncStartResponse(
-                job=public_job_from_row(start_result.job),
+                job=public_job_from_row(start_result.job, actor=actor),
                 already_running=True,
             )
 
@@ -146,22 +170,25 @@ class DataSyncService:
         if row is None:
             raise RuntimeError("Data-sync job disappeared after dispatch")
         return DataSyncStartResponse(
-            job=public_job_from_row(row),
+            job=public_job_from_row(row, actor=actor),
             already_running=False,
         )
 
-    async def status(self) -> DataSyncStatusResponse:
+    async def status(self, actor: AppUser) -> DataSyncStatusResponse:
         checked_at = self.now()
         async with self.session_factory() as session:
             await self.repository.expire_stale_jobs(
                 session,
                 now=checked_at,
-                timeout_seconds=self.settings.data_sync.job_timeout_seconds,
+                dispatch_timeout_seconds=self.settings.data_sync.dispatch_timeout_seconds,
+                job_timeout_seconds=self.settings.data_sync.job_timeout_seconds,
             )
             latest = await self.repository.latest_jobs_by_dataset(session)
             await session.commit()
         jobs = {
-            dataset: public_job_from_row(latest[dataset]) if dataset in latest else None
+            dataset: public_job_from_row(latest[dataset], actor=actor)
+            if dataset in latest
+            else None
             for dataset in (item.value for item in DataSyncDataset)
         }
         return DataSyncStatusResponse(
@@ -169,18 +196,22 @@ class DataSyncService:
             jobs=jobs,
         )
 
-    async def claim(self, job_id: UUID, token: str) -> DataSyncClaimResponse:
+    async def claim(
+        self, job_id: UUID, token: str, execution_id: str
+    ) -> DataSyncClaimResponse:
         checked_at = self.now()
         async with self.session_factory() as session:
             await self.repository.expire_stale_jobs(
                 session,
                 now=checked_at,
-                timeout_seconds=self.settings.data_sync.job_timeout_seconds,
+                dispatch_timeout_seconds=self.settings.data_sync.dispatch_timeout_seconds,
+                job_timeout_seconds=self.settings.data_sync.job_timeout_seconds,
             )
             result = await self.repository.claim_job(
                 session,
                 job_id=job_id,
                 presented_token=token,
+                execution_id=execution_id,
                 now=checked_at,
             )
             await session.commit()
@@ -202,7 +233,8 @@ class DataSyncService:
             await self.repository.expire_stale_jobs(
                 session,
                 now=completed_at,
-                timeout_seconds=self.settings.data_sync.job_timeout_seconds,
+                dispatch_timeout_seconds=self.settings.data_sync.dispatch_timeout_seconds,
+                job_timeout_seconds=self.settings.data_sync.job_timeout_seconds,
             )
             prepared = await self.repository.prepare_completion(
                 session,
@@ -241,6 +273,93 @@ class DataSyncService:
         if row is None:
             raise DataSyncConflictError
         return public_job_from_row(row)
+
+    async def cancel(
+        self,
+        dataset: str,
+        job_id: UUID,
+        actor: AppUser,
+    ) -> DataSyncCancelResponse:
+        checked_at = self.now()
+        async with self.session_factory() as session:
+            await self.repository.expire_stale_jobs(
+                session,
+                now=checked_at,
+                dispatch_timeout_seconds=self.settings.data_sync.dispatch_timeout_seconds,
+                job_timeout_seconds=self.settings.data_sync.job_timeout_seconds,
+            )
+            job = await self.repository.get_job_for_cancel(session, job_id)
+            if job is None or str(job["dataset"]) != dataset:
+                await session.commit()
+                raise DataSyncCancelNotFoundError
+            if (
+                str(job.get("requested_by_user_id")) != str(actor.id)
+                and actor.role != "sysadmin"
+            ):
+                await session.commit()
+                raise DataSyncCancelForbiddenError
+            if str(job["status"]) not in {
+                status.value for status in ACTIVE_DATA_SYNC_STATUSES
+            }:
+                await session.commit()
+                return DataSyncCancelResponse(
+                    canceled=str(job["status"]) == "canceled",
+                    job=public_job_from_row(job, actor=actor),
+                )
+            execution_id = job.get("n8n_execution_id")
+            if not execution_id:
+                if job.get("claimed_at") is not None:
+                    await session.commit()
+                    raise DataSyncCancelUnavailableError
+                canceled = await self.repository.publish_cancellation(
+                    session,
+                    job_id=job_id,
+                    canceled_by_user_id=str(actor.id),
+                    now=checked_at,
+                )
+                await session.commit()
+                if canceled is None:
+                    raise DataSyncConflictError
+                return DataSyncCancelResponse(
+                    canceled=True,
+                    job=public_job_from_row(canceled, actor=actor),
+                )
+            await session.commit()
+
+        stop_result = await self.stopper(
+            settings=self.settings.data_sync,
+            execution_id=str(execution_id),
+        )
+        if not stop_result.confirmed:
+            raise DataSyncCancelUnavailableError(timed_out=stop_result.timed_out)
+
+        canceled_at = self.now()
+        async with self.session_factory() as session:
+            current = await self.repository.get_job_for_cancel(session, job_id)
+            if current is None:
+                await session.commit()
+                raise DataSyncCancelNotFoundError
+            if str(current["status"]) not in {
+                status.value for status in ACTIVE_DATA_SYNC_STATUSES
+            }:
+                await session.commit()
+                return DataSyncCancelResponse(
+                    canceled=str(current["status"]) == "canceled",
+                    job=public_job_from_row(current, actor=actor),
+                )
+            canceled = await self.repository.publish_cancellation(
+                session,
+                job_id=job_id,
+                canceled_by_user_id=str(actor.id),
+                now=canceled_at,
+            )
+            await session.commit()
+        if canceled is None:
+            raise DataSyncConflictError
+        return DataSyncCancelResponse(
+            canceled=True,
+            job=public_job_from_row(canceled, actor=actor),
+        )
 
     async def _invalidate_dataset_cache(self, dataset: str) -> str:
         if not self.cache.enabled:

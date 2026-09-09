@@ -22,6 +22,7 @@ describe('shared data sync state', () => {
     assert.equal(isActiveDataSyncStatus('dispatch_unknown'), true);
     assert.equal(isActiveDataSyncStatus('succeeded'), false);
     assert.equal(isActiveDataSyncStatus('failed'), false);
+    assert.equal(isActiveDataSyncStatus('canceled'), false);
     assert.equal(isActiveDataSyncStatus(null), false);
   });
 
@@ -115,7 +116,7 @@ describe('shared data sync state', () => {
     );
     assert.equal(
       getDataSyncButtonPresentation({ enabled: true, actionPending: true, nowMs }).label,
-      'Starting...',
+      'Starting 00:00',
     );
     assert.equal(
       getDataSyncButtonPresentation({
@@ -143,5 +144,75 @@ describe('shared data sync state', () => {
       }).label,
       'Sync Data',
     );
+    assert.equal(
+      getDataSyncButtonPresentation({
+        enabled: true,
+        cancelPending: true,
+        job: { status: 'running', started_at: startedAt },
+        nowMs,
+      }).label,
+      'Canceling...',
+    );
+    assert.equal(
+      getDataSyncButtonPresentation({
+        enabled: true,
+        job: { status: 'canceled', started_at: startedAt },
+        terminalObservedAt: nowMs - 1000,
+        nowMs,
+      }).label,
+      'Canceled',
+    );
+  });
+
+  it('formats safe completion and dynamic rate-limit messages', async () => {
+    const {
+      formatDataSyncResultMessage,
+      formatDataSyncRateLimitMessage,
+      getDataSyncStartErrorMessage,
+    } = await import(
+      '../features/data-sync/dataSyncState.js'
+    );
+
+    assert.equal(
+      formatDataSyncResultMessage({ result_code: 'completed', rows_processed: 1250 }),
+      'Sinkronisasi selesai. 1.250 baris diproses.',
+    );
+    assert.equal(
+      formatDataSyncRateLimitMessage(42, 'cooldown'),
+      'Tunggu 42 detik sebelum mencoba sinkronisasi ulang.',
+    );
+    assert.equal(
+      formatDataSyncRateLimitMessage(1080, 'hourly_quota'),
+      'Batas 10 sinkronisasi per jam tercapai. Coba lagi dalam 18 menit.',
+    );
+    assert.equal(
+      getDataSyncStartErrorMessage({
+        status: 429,
+        retryAfter: 42,
+        limitKind: 'cooldown',
+      }),
+      'Tunggu 42 detik sebelum mencoba sinkronisasi ulang.',
+    );
+    assert.equal(
+      getDataSyncStartErrorMessage({ status: 503 }),
+      'Sinkronisasi data sedang dinonaktifkan.',
+    );
+  });
+
+  it('suppresses an ambiguous start failure when status confirms an active job', async () => {
+    const { shouldReportDataSyncStartFailure } = await import(
+      '../features/data-sync/dataSyncState.js'
+    );
+    const payload = emptyPayload();
+    payload.jobs.impact_service = {
+      id: 'job-active',
+      dataset: 'impact_service',
+      status: 'running',
+      started_at: '2026-09-08T10:00:00Z',
+    };
+
+    assert.equal(shouldReportDataSyncStartFailure(payload, 'impact_service'), false);
+    assert.equal(shouldReportDataSyncStartFailure(payload, 'data_master'), true);
+    assert.equal(shouldReportDataSyncStartFailure(null, 'impact_service'), true);
   });
 });

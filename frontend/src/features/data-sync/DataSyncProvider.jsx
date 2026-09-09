@@ -9,14 +9,19 @@ import {
 } from 'react';
 
 import { useAuth } from '../../auth/AuthContext';
-import { fetchDataSyncStatus, startDataSync } from '../../services/api';
+import { cancelDataSync, fetchDataSyncStatus, startDataSync } from '../../services/api';
 import {
   DATA_SYNC_DATASETS,
   createInitialDataSyncState,
   getDataSyncPollDelay,
   isActiveDataSyncStatus,
+  getDataSyncStartErrorMessage,
   reconcileDataSyncJobs,
 } from './dataSyncState';
+import {
+  reconcileStartFailure,
+  requestDataSyncCancellation,
+} from './dataSyncActions';
 
 
 const DataSyncContext = createContext(null);
@@ -37,6 +42,8 @@ function createStore() {
     sync: createInitialDataSyncState(),
     actionPending: datasetRecord(false),
     actionErrors: datasetRecord(null),
+    cancelPending: datasetRecord(false),
+    cancelErrors: datasetRecord(null),
     notifications: [],
   };
 }
@@ -71,6 +78,22 @@ function dataSyncReducer(store, action) {
       notifications: appendNotifications(store.notifications, [action.notification]),
     };
   }
+  if (action.type === 'cancel_pending') {
+    return {
+      ...store,
+      cancelPending: { ...store.cancelPending, [action.dataset]: action.value },
+      cancelErrors: action.value
+        ? { ...store.cancelErrors, [action.dataset]: null }
+        : store.cancelErrors,
+    };
+  }
+  if (action.type === 'cancel_error') {
+    return {
+      ...store,
+      cancelErrors: { ...store.cancelErrors, [action.dataset]: action.message },
+      notifications: appendNotifications(store.notifications, [action.notification]),
+    };
+  }
   if (action.type === 'dismiss') {
     return {
       ...store,
@@ -98,13 +121,11 @@ function isUnauthorized(error) {
 }
 
 function actionFailureMessage(error) {
-  if (error?.response?.status === 429) {
-    return 'Batas permintaan sync tercapai. Coba kembali setelah jeda.';
-  }
-  if (error?.response?.status === 503) {
-    return 'Sinkronisasi data sedang dinonaktifkan.';
-  }
-  return 'Sinkronisasi tidak dapat dimulai. Status sedang diperiksa ulang.';
+  return getDataSyncStartErrorMessage({
+    status: error?.response?.status,
+    retryAfter: error?.response?.headers?.['retry-after'],
+    limitKind: error?.response?.headers?.['x-data-sync-limit'],
+  });
 }
 
 const anonymousContext = {
@@ -114,8 +135,11 @@ const anonymousContext = {
   terminalObservedAt: datasetRecord(null),
   actionPending: datasetRecord(false),
   actionErrors: datasetRecord(null),
+  cancelPending: datasetRecord(false),
+  cancelErrors: datasetRecord(null),
   notifications: [],
   start: async () => null,
+  cancel: async () => null,
   dismissNotification: () => {},
 };
 
@@ -135,6 +159,7 @@ function AuthenticatedDataSyncProvider({
   children,
   fetchStatus = fetchDataSyncStatus,
   startSync = startDataSync,
+  cancelSync = cancelDataSync,
   random = Math.random,
 }) {
   const [store, dispatch] = useReducer(dataSyncReducer, undefined, createStore);
@@ -223,18 +248,17 @@ function AuthenticatedDataSyncProvider({
       return response;
     } catch (error) {
       if (!isUnauthorized(error)) {
-        const message = actionFailureMessage(error);
-        const id = `start:${dataset}:${Date.now()}`;
-        dispatch({
-          type: 'start_error',
-          dataset,
-          message,
-          notification: { id, dataset, status: 'failed', message },
-        });
-        try {
-          applyPayload(await fetchStatus());
-        } catch {
-          // The original request is never retried; regular polling can recover later.
+        const reconciliation = await reconcileStartFailure({ dataset, fetchStatus });
+        if (reconciliation.payload) applyPayload(reconciliation.payload);
+        if (reconciliation.reportFailure) {
+          const message = actionFailureMessage(error);
+          const id = `start:${dataset}:${Date.now()}`;
+          dispatch({
+            type: 'start_error',
+            dataset,
+            message,
+            notification: { id, dataset, status: 'failed', message },
+          });
         }
       }
       return null;
@@ -244,6 +268,46 @@ function AuthenticatedDataSyncProvider({
       }
     }
   }, [applyPayload, fetchStatus, startSync, store.sync]);
+
+  const cancel = useCallback(async (dataset) => {
+    const job = store.sync.jobs[dataset];
+    if (!job?.id || !job.can_cancel || !isActiveDataSyncStatus(job.status)) return null;
+    dispatch({ type: 'cancel_pending', dataset, value: true });
+    try {
+      const result = await requestDataSyncCancellation({
+        dataset,
+        jobId: job.id,
+        cancelSync,
+        fetchStatus,
+      });
+      if (result.ok) {
+        applyPayload({
+          enabled: store.sync.enabled,
+          jobs: { ...store.sync.jobs, [dataset]: result.response.job },
+        });
+        return result.response;
+      }
+      if (isUnauthorized(result.error)) return null;
+      if (result.payload) applyPayload(result.payload);
+      const message = 'Execution belum berhasil dihentikan. Coba batalkan kembali.';
+      dispatch({
+        type: 'cancel_error',
+        dataset,
+        message,
+        notification: {
+          id: `cancel:${dataset}:${Date.now()}`,
+          dataset,
+          status: 'failed',
+          message,
+        },
+      });
+      return null;
+    } finally {
+      if (mountedRef.current) {
+        dispatch({ type: 'cancel_pending', dataset, value: false });
+      }
+    }
+  }, [applyPayload, cancelSync, fetchStatus, store.sync]);
 
   const dismissNotification = useCallback((id) => {
     dispatch({ type: 'dismiss', id });
@@ -256,10 +320,13 @@ function AuthenticatedDataSyncProvider({
     terminalObservedAt: store.sync.terminalObservedAt,
     actionPending: store.actionPending,
     actionErrors: store.actionErrors,
+    cancelPending: store.cancelPending,
+    cancelErrors: store.cancelErrors,
     notifications: store.notifications,
     start,
+    cancel,
     dismissNotification,
-  }), [dismissNotification, start, store]);
+  }), [cancel, dismissNotification, start, store]);
 
   return <DataSyncContext.Provider value={value}>{children}</DataSyncContext.Provider>;
 }
@@ -277,6 +344,13 @@ export function useDataSync(dataset) {
     terminalObservedAt: context.terminalObservedAt[dataset],
     actionPending: context.actionPending[dataset],
     actionError: context.actionErrors[dataset],
+    canCancel: Boolean(
+      context.jobs[dataset]?.can_cancel
+      && isActiveDataSyncStatus(context.jobs[dataset]?.status)
+    ),
+    cancel: () => context.cancel(dataset),
+    cancelPending: context.cancelPending[dataset],
+    cancelError: context.cancelErrors[dataset],
   };
 }
 

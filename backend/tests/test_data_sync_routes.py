@@ -2,11 +2,19 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from models.data_sync import (
+    DataSyncCancelResponse,
+    DataSyncDataset,
     DataSyncPublicJob,
     DataSyncStartResponse,
     DataSyncStatusResponse,
+    DataSyncStatus,
 )
-from services.data_sync import DataSyncDisabledError, DataSyncRateLimitError
+from services.data_sync import (
+    DataSyncCancelForbiddenError,
+    DataSyncCancelUnavailableError,
+    DataSyncDisabledError,
+    DataSyncRateLimitError,
+)
 
 
 NOW = datetime(2026, 9, 8, 10, 0, tzinfo=timezone.utc)
@@ -34,7 +42,7 @@ class BrowserService:
             raise self.start_error
         return DataSyncStartResponse(job=self.job, already_running=False)
 
-    async def status(self):
+    async def status(self, actor):
         return DataSyncStatusResponse(
             enabled=True,
             jobs={
@@ -43,6 +51,22 @@ class BrowserService:
                 "activity_enom": None,
             },
         )
+
+    async def cancel(self, dataset, job_id, actor):
+        if self.start_error:
+            raise self.start_error
+        self.job = self.job.model_copy(
+            update={
+                "id": job_id,
+                "dataset": DataSyncDataset(dataset),
+                "status": DataSyncStatus.CANCELED,
+                "finished_at": NOW,
+                "result_code": "canceled",
+                "public_message": "Sinkronisasi telah dibatalkan.",
+                "can_cancel": False,
+            }
+        )
+        return DataSyncCancelResponse(canceled=True, job=self.job)
 
 
 def test_viewer_can_start_dataset_sync(authenticated_client):
@@ -75,7 +99,7 @@ def test_start_rejects_disabled_feature_and_exposes_retry_after(authenticated_cl
     disabled = authenticated_client.post(
         "/api/v1/data-sync/data_master", headers={"Origin": ORIGIN}
     )
-    service.start_error = DataSyncRateLimitError(37)
+    service.start_error = DataSyncRateLimitError(37, limit_kind="cooldown")
     limited = authenticated_client.post(
         "/api/v1/data-sync/activity_enom", headers={"Origin": ORIGIN}
     )
@@ -84,6 +108,7 @@ def test_start_rejects_disabled_feature_and_exposes_retry_after(authenticated_cl
     assert disabled.json() == {"detail": "Sinkronisasi data sedang dinonaktifkan"}
     assert limited.status_code == 429
     assert limited.headers["Retry-After"] == "37"
+    assert limited.headers["X-Data-Sync-Limit"] == "cooldown"
 
 
 def test_status_has_all_dataset_keys_without_private_job_fields(authenticated_client):
@@ -109,3 +134,35 @@ def test_unknown_dataset_is_rejected_without_calling_service(authenticated_clien
 
     assert response.status_code == 422
     assert service.started == []
+
+
+def test_creator_cancel_route_returns_safe_terminal_job(authenticated_client):
+    service = BrowserService()
+    authenticated_client.app.state.data_sync_service = service
+    job_id = uuid4()
+
+    response = authenticated_client.post(
+        f"/api/v1/data-sync/impact_service/{job_id}/cancel",
+        headers={"Origin": ORIGIN},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["job"]["status"] == "canceled"
+    assert "n8n_execution_id" not in response.text
+
+
+def test_cancel_route_maps_forbidden_and_timeout_safely(authenticated_client):
+    service = BrowserService()
+    authenticated_client.app.state.data_sync_service = service
+    endpoint = f"/api/v1/data-sync/impact_service/{uuid4()}/cancel"
+
+    service.start_error = DataSyncCancelForbiddenError()
+    forbidden = authenticated_client.post(endpoint, headers={"Origin": ORIGIN})
+    service.start_error = DataSyncCancelUnavailableError(timed_out=True)
+    unavailable = authenticated_client.post(endpoint, headers={"Origin": ORIGIN})
+
+    assert forbidden.status_code == 403
+    assert unavailable.status_code == 504
+    assert unavailable.json() == {
+        "detail": "Execution belum berhasil dihentikan. Coba batalkan kembali."
+    }

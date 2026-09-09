@@ -40,6 +40,7 @@ def enabled_sync_env(**overrides):
             "https://n8n.example.com/webhook/activity-enom-sync"
         ),
         N8N_SYNC_TRIGGER_API_KEY="s" * 40,
+        N8N_EXECUTION_API_KEY="e" * 40,
     )
     env.update(overrides)
     return env
@@ -49,9 +50,11 @@ def test_data_sync_is_disabled_by_default_without_webhook_settings():
     settings = SecuritySettings.from_env(valid_env())
 
     assert settings.data_sync.enabled is False
+    assert settings.data_sync.dispatch_timeout_seconds == 60
     assert settings.data_sync.job_timeout_seconds == 1800
     assert settings.data_sync.webhook_urls == {}
     assert settings.data_sync.trigger_api_key == ""
+    assert settings.data_sync.execution_api_key == ""
 
 
 def test_enabled_data_sync_maps_each_dataset_to_its_webhook():
@@ -77,6 +80,7 @@ def test_enabled_data_sync_maps_each_dataset_to_its_webhook():
         "N8N_DATA_MASTER_SYNC_WEBHOOK_URL",
         "N8N_ACTIVITY_ENOM_SYNC_WEBHOOK_URL",
         "N8N_SYNC_TRIGGER_API_KEY",
+        "N8N_EXECUTION_API_KEY",
     ],
 )
 def test_enabled_data_sync_requires_every_setting(name):
@@ -88,6 +92,17 @@ def test_enabled_data_sync_requires_every_setting(name):
 def test_data_sync_job_timeout_rejects_unsafe_values(value):
     with pytest.raises(SecurityConfigurationError, match="DATA_SYNC_JOB_TIMEOUT_SECONDS"):
         SecuritySettings.from_env(enabled_sync_env(DATA_SYNC_JOB_TIMEOUT_SECONDS=value))
+
+
+@pytest.mark.parametrize("value", ["14", "301", "not-a-number"])
+def test_data_sync_dispatch_timeout_rejects_unsafe_values(value):
+    with pytest.raises(
+        SecurityConfigurationError,
+        match="DATA_SYNC_DISPATCH_TIMEOUT_SECONDS",
+    ):
+        SecuritySettings.from_env(
+            enabled_sync_env(DATA_SYNC_DISPATCH_TIMEOUT_SECONDS=value)
+        )
 
 
 @pytest.mark.parametrize(
@@ -130,6 +145,15 @@ def test_data_sync_rejects_unapproved_webhook_urls(overrides):
 def test_data_sync_trigger_key_must_be_strong_and_distinct(value):
     with pytest.raises(SecurityConfigurationError, match="N8N_SYNC_TRIGGER_API_KEY"):
         SecuritySettings.from_env(enabled_sync_env(N8N_SYNC_TRIGGER_API_KEY=value))
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["short", "n" * 32, "m" * 32, "c" * 32, "s" * 40],
+)
+def test_n8n_execution_key_must_be_strong_and_distinct(value):
+    with pytest.raises(SecurityConfigurationError, match="N8N_EXECUTION_API_KEY"):
+        SecuritySettings.from_env(enabled_sync_env(N8N_EXECUTION_API_KEY=value))
 
 
 def test_unknown_dataset_never_selects_a_webhook():

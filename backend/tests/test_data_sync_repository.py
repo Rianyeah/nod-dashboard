@@ -24,6 +24,9 @@ def job_row(**overrides):
         "dispatch_outcome_code": "accepted",
         "claimed_at": None,
         "callback_received_at": None,
+        "n8n_execution_id": None,
+        "canceled_at": None,
+        "canceled_by_user_id": None,
         "finished_at": None,
         "rows_processed": None,
         "result_code": None,
@@ -112,7 +115,8 @@ def test_public_job_redacts_requester_token_and_internal_diagnostics():
         "finished_at": "2026-09-08T10:00:00Z",
         "rows_processed": None,
         "result_code": "database_write_failed",
-        "public_message": "Sinkronisasi gagal.",
+        "public_message": "Data gagal disimpan ke database.",
+        "can_cancel": False,
     }
     assert "requested_by_username" not in payload
     assert "callback_token_hash" not in payload
@@ -176,6 +180,7 @@ async def test_create_or_join_enforces_durable_hourly_user_limit():
     assert result.job is None
     assert result.created is False
     assert result.retry_after == 1800
+    assert result.limit_kind == "hourly_quota"
 
 
 @pytest.mark.asyncio
@@ -205,6 +210,7 @@ async def test_create_or_join_enforces_dataset_cooldown():
     )
 
     assert result.retry_after == 35
+    assert result.limit_kind == "cooldown"
 
 
 @pytest.mark.asyncio
@@ -231,13 +237,24 @@ async def test_first_claim_executes_and_duplicate_claim_stops():
         else (_ for _ in ()).throw(AssertionError("duplicate claim must not update"))
     )
 
-    first = await claim_job(first_session, job_id=active["id"], presented_token=token, now=NOW)
+    first = await claim_job(
+        first_session,
+        job_id=active["id"],
+        presented_token=token,
+        execution_id="execution-1",
+        now=NOW,
+    )
     second = await claim_job(
-        duplicate_session, job_id=duplicate["id"], presented_token=token, now=NOW
+        duplicate_session,
+        job_id=duplicate["id"],
+        presented_token=token,
+        execution_id="execution-2",
+        now=NOW,
     )
 
     assert first.authenticated is True
     assert first.execute is True
+    assert first_session.sql[-1][1]["execution_id"] == "execution-1"
     assert second.authenticated is True
     assert second.execute is False
 
@@ -251,12 +268,89 @@ async def test_wrong_callback_token_is_uniformly_unauthenticated():
         ScriptedSession(lambda _sql, _params: Result(first=row)),
         job_id=row["id"],
         presented_token="wrong-token",
+        execution_id="execution-1",
         now=NOW,
     )
 
     assert result.authenticated is False
     assert result.execute is False
     assert result.job is None
+
+
+@pytest.mark.asyncio
+async def test_expiration_uses_distinct_dispatch_and_execution_deadlines():
+    from data_sync_repository import expire_stale_jobs
+
+    session = ScriptedSession(lambda _sql, _params: Result(rowcount=3))
+
+    count = await expire_stale_jobs(
+        session,
+        now=NOW,
+        dispatch_timeout_seconds=60,
+        job_timeout_seconds=1800,
+    )
+
+    sql, params = session.sql[0]
+    assert count == 3
+    assert "status = 'dispatching'" in sql
+    assert "dispatch_timed_out" in sql
+    assert "workflow_timed_out" in sql
+    assert params["dispatch_expires_before"] == NOW - timedelta(seconds=60)
+    assert params["job_expires_before"] == NOW - timedelta(seconds=1800)
+
+
+@pytest.mark.asyncio
+async def test_canceled_job_cannot_be_claimed():
+    from data_sync_repository import claim_job, hash_callback_token
+
+    token = "one-job-token"
+    canceled = job_row(
+        status="canceled",
+        finished_at=NOW,
+        callback_token_hash=hash_callback_token(token),
+    )
+    session = ScriptedSession(
+        lambda sql, _params: Result(first=canceled)
+        if "FOR UPDATE" in sql
+        else (_ for _ in ()).throw(AssertionError("canceled claim must not update"))
+    )
+
+    result = await claim_job(
+        session,
+        job_id=canceled["id"],
+        presented_token=token,
+        execution_id="execution-late",
+        now=NOW,
+    )
+
+    assert result.authenticated is True
+    assert result.execute is False
+
+
+@pytest.mark.asyncio
+async def test_publish_cancellation_sets_terminal_audit_fields_only_while_active():
+    from data_sync_repository import publish_cancellation
+
+    canceled = job_row(
+        status="canceled",
+        finished_at=NOW,
+        canceled_at=NOW,
+        canceled_by_user_id="admin-1",
+        result_code="canceled",
+    )
+    session = ScriptedSession(lambda _sql, _params: Result(first=canceled))
+
+    row = await publish_cancellation(
+        session,
+        job_id=canceled["id"],
+        canceled_by_user_id="admin-1",
+        now=NOW,
+    )
+
+    sql, params = session.sql[0]
+    assert "status IN ('dispatching', 'running', 'dispatch_unknown')" in sql
+    assert params["canceled_by_user_id"] == "admin-1"
+    assert row["status"] == "canceled"
 
 
 @pytest.mark.asyncio

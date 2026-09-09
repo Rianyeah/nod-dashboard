@@ -646,7 +646,6 @@ export default function DataPotensiPage() {
           </div>
 
           <div className="flex w-full flex-wrap items-end justify-end gap-2 xl:w-auto">
-            <DataSyncButton dataset="data_master" />
             <DashboardFilterBar>
               <DashboardCombobox
                 id="data-potensi-nop-filter"
@@ -665,6 +664,7 @@ export default function DataPotensiPage() {
                 allLabel="Semua Status"
               />
             </DashboardFilterBar>
+            <DataSyncButton dataset="data_master" />
           </div>
         </div>
       </header>
