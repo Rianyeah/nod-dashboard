@@ -9,6 +9,7 @@ from fastapi import APIRouter, Header, HTTPException, Request, status
 from models.data_sync import (
     DataSyncCallbackRequest,
     DataSyncCallbackResponse,
+    DataSyncClaimRequest,
     DataSyncClaimResponse,
 )
 from services.data_sync import (
@@ -41,6 +42,7 @@ def _token_or_reject(token: str | None) -> str:
 @router.post("/{job_id}/claim", response_model=DataSyncClaimResponse)
 async def claim_data_sync_job(
     job_id: UUID,
+    payload: DataSyncClaimRequest,
     request: Request,
     x_data_sync_job_token: str | None = Header(
         default=None,
@@ -49,7 +51,7 @@ async def claim_data_sync_job(
 ):
     token = _token_or_reject(x_data_sync_job_token)
     try:
-        return await _service(request).claim(job_id, token)
+        return await _service(request).claim(job_id, token, payload.execution_id)
     except DataSyncAuthenticationError as exc:
         raise _credential_error() from exc
 

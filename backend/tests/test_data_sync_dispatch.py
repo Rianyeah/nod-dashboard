@@ -10,6 +10,7 @@ from config import DataSyncSettings
 def sync_settings():
     return DataSyncSettings(
         enabled=True,
+        dispatch_timeout_seconds=60,
         job_timeout_seconds=1800,
         base_url="https://n8n.example.com",
         webhook_urls={
@@ -18,6 +19,7 @@ def sync_settings():
             "activity_enom": "https://n8n.example.com/webhook/enom-sync",
         },
         trigger_api_key="sync-trigger-secret-value-1234567890",
+        execution_api_key="execution-api-secret-value-123456789",
     )
 
 

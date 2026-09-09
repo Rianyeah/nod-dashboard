@@ -13,8 +13,8 @@ class MachineService:
         self.claim_execute = True
         self.calls = []
 
-    async def claim(self, job_id, token):
-        self.calls.append(("claim", str(job_id), token))
+    async def claim(self, job_id, token, execution_id):
+        self.calls.append(("claim", str(job_id), token, execution_id))
         if token != "valid-job-token":
             raise DataSyncAuthenticationError
         return DataSyncClaimResponse(execute=self.claim_execute)
@@ -47,11 +47,13 @@ def test_first_and_duplicate_claim_return_execute_instruction(client):
     first = client.post(
         f"/api/v1/integrations/n8n/data-sync/{job_id}/claim",
         headers={"X-Data-Sync-Job-Token": "valid-job-token"},
+        json={"execution_id": "execution-1"},
     )
     service.claim_execute = False
     duplicate = client.post(
         f"/api/v1/integrations/n8n/data-sync/{job_id}/claim",
         headers={"X-Data-Sync-Job-Token": "valid-job-token"},
+        json={"execution_id": "execution-2"},
     )
 
     assert first.status_code == 200
@@ -65,11 +67,13 @@ def test_missing_wrong_and_unknown_job_credentials_share_generic_401(client):
     unknown_job = uuid4()
 
     missing = client.post(
-        f"/api/v1/integrations/n8n/data-sync/{unknown_job}/claim"
+        f"/api/v1/integrations/n8n/data-sync/{unknown_job}/claim",
+        json={"execution_id": "execution-1"},
     )
     wrong = client.post(
         f"/api/v1/integrations/n8n/data-sync/{unknown_job}/claim",
         headers={"X-Data-Sync-Job-Token": "wrong"},
+        json={"execution_id": "execution-1"},
     )
 
     assert missing.status_code == wrong.status_code == 401

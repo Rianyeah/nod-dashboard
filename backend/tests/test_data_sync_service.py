@@ -49,6 +49,7 @@ def settings(enabled=True):
         public_app_origin="https://dashboard.example",
         data_sync=DataSyncSettings(
             enabled=enabled,
+            dispatch_timeout_seconds=60,
             job_timeout_seconds=1800,
             base_url="https://n8n.example.com" if enabled else "",
             webhook_urls={
@@ -57,6 +58,7 @@ def settings(enabled=True):
             if enabled
             else {},
             trigger_api_key="s" * 40 if enabled else "",
+            execution_api_key="e" * 40 if enabled else "",
         ),
     )
 
@@ -115,6 +117,21 @@ class Repository:
             "finished_at": NOW,
             "rows_processed": kwargs["rows_processed"],
             "result_code": kwargs["result_code"],
+        }
+        return self.row
+
+    async def get_job_for_cancel(self, _session, _job_id):
+        self.events.append("get_cancel")
+        return self.row
+
+    async def publish_cancellation(self, _session, **kwargs):
+        self.events.append("cancel")
+        self.row = {
+            **self.row,
+            "status": "canceled",
+            "finished_at": NOW,
+            "result_code": "canceled",
+            "canceled_by_user_id": kwargs["canceled_by_user_id"],
         }
         return self.row
 
@@ -292,7 +309,141 @@ async def test_disabled_feature_rejects_new_start_but_status_remains_available()
         await service.start(
             "impact_service", AppUser("user-1", "viewer.one", "hash", "viewer")
         )
-    status = await service.status()
+    status = await service.status(AppUser("user-1", "viewer.one", "hash", "viewer"))
 
     assert status.enabled is False
     assert status.jobs["impact_service"].status == "running"
+
+
+@pytest.mark.asyncio
+async def test_creator_can_cancel_claimed_execution_after_confirmed_stop():
+    from services.data_sync import DataSyncService
+    from services.data_sync_cancel import StopResult
+
+    repository = Repository(
+        row=job_row(
+            status="running",
+            requested_by_user_id="user-1",
+            n8n_execution_id="execution-1",
+        )
+    )
+    stop_calls = []
+
+    async def stopper(**kwargs):
+        stop_calls.append(kwargs["execution_id"])
+        return StopResult(confirmed=True)
+
+    service = DataSyncService(
+        settings=settings(),
+        session_factory=session_factory([]),
+        repository=repository,
+        stopper=stopper,
+        now=lambda: NOW,
+    )
+
+    result = await service.cancel(
+        "impact_service",
+        repository.row["id"],
+        AppUser("user-1", "viewer.one", "hash", "viewer"),
+    )
+
+    assert stop_calls == ["execution-1"]
+    assert result.canceled is True
+    assert result.job.status == "canceled"
+    assert repository.events == ["expire", "get_cancel", "get_cancel", "cancel"]
+
+
+@pytest.mark.asyncio
+async def test_unrelated_viewer_cannot_cancel_shared_job():
+    from services.data_sync import DataSyncCancelForbiddenError, DataSyncService
+
+    repository = Repository(
+        row=job_row(
+            status="running",
+            requested_by_user_id="user-1",
+            n8n_execution_id="execution-1",
+        )
+    )
+    service = DataSyncService(
+        settings=settings(),
+        session_factory=session_factory([]),
+        repository=repository,
+        now=lambda: NOW,
+    )
+
+    with pytest.raises(DataSyncCancelForbiddenError):
+        await service.cancel(
+            "impact_service",
+            repository.row["id"],
+            AppUser("user-2", "viewer.two", "hash", "viewer"),
+        )
+
+    assert repository.row["status"] == "running"
+
+
+@pytest.mark.asyncio
+async def test_sysadmin_can_cancel_before_claim_without_calling_n8n():
+    from services.data_sync import DataSyncService
+
+    repository = Repository(
+        row=job_row(
+            status="dispatching",
+            requested_by_user_id="user-1",
+            n8n_execution_id=None,
+        )
+    )
+
+    async def stopper(**_kwargs):
+        raise AssertionError("unclaimed cancellation must not call N8N")
+
+    service = DataSyncService(
+        settings=settings(),
+        session_factory=session_factory([]),
+        repository=repository,
+        stopper=stopper,
+        now=lambda: NOW,
+    )
+
+    result = await service.cancel(
+        "impact_service",
+        repository.row["id"],
+        AppUser("admin-1", "admin", "hash", "sysadmin"),
+    )
+
+    assert result.canceled is True
+    assert result.job.status == "canceled"
+
+
+@pytest.mark.asyncio
+async def test_unconfirmed_stop_leaves_job_active_for_retry():
+    from services.data_sync import DataSyncCancelUnavailableError, DataSyncService
+    from services.data_sync_cancel import StopResult
+
+    repository = Repository(
+        row=job_row(
+            status="running",
+            requested_by_user_id="user-1",
+            n8n_execution_id="execution-1",
+        )
+    )
+
+    async def stopper(**_kwargs):
+        return StopResult(confirmed=False, timed_out=True)
+
+    service = DataSyncService(
+        settings=settings(),
+        session_factory=session_factory([]),
+        repository=repository,
+        stopper=stopper,
+        now=lambda: NOW,
+    )
+
+    with pytest.raises(DataSyncCancelUnavailableError) as error:
+        await service.cancel(
+            "impact_service",
+            repository.row["id"],
+            AppUser("user-1", "viewer.one", "hash", "viewer"),
+        )
+
+    assert error.value.timed_out is True
+    assert repository.row["status"] == "running"
