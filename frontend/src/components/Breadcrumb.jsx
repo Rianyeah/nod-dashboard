@@ -11,6 +11,7 @@ const ROUTE_LABELS = {
   'ticketing': 'Ticketing',
   toti: 'Ticket TOTI',
   'rf-tilt-analysis': 'RF Tilt Analysis',
+  'peta-jalur-epm': 'Peta Jalur EPM',
   'tower-plan-generator': 'Tower Visualizer',
 };
 

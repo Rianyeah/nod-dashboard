@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 
@@ -10,8 +12,11 @@ class RequestBodyLimitMiddleware:
         self,
         app: ASGIApp,
         max_bytes: int = 1_048_576,
+        epm_prefix: str | None = None,
         route_limits: dict[str, int] | None = None,
     ) -> None:
+        self.epm_prefix = epm_prefix
+        self.photo_path = re.compile(re.escape(epm_prefix or "") + r"/points/[a-fA-F0-9-]{36}/photos")
         self.app = app
         self.max_bytes = max_bytes
         self.route_limits = route_limits or {}
@@ -29,6 +34,15 @@ class RequestBodyLimitMiddleware:
             ),
             self.max_bytes,
         )
+        path = scope.get("path", "")
+        if self.epm_prefix and scope.get("method") == "POST":
+            if self.photo_path.fullmatch(path):
+                request_limit = 10 * 1024**2
+            elif path in {f"{self.epm_prefix}/imports/preview", f"{self.epm_prefix}/imports/commit"}:
+                request_limit = 512 * 1024**2 if scope["headers"] and any(
+                    k.lower() == b"content-type" and v.split(b";")[0] == b"application/zip"
+                    for k, v in scope["headers"]
+                ) else 16 * 1024**2
         content_length = next(
             (value for name, value in scope["headers"] if name == b"content-length"),
             b"",

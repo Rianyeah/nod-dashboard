@@ -12,3 +12,5 @@ argon2-cffi==25.1.0
 itsdangerous==2.2.0
 openpyxl==3.1.5
 python-multipart==0.0.32
+boto3==1.44.6
+pillow==13.0.0

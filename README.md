@@ -76,6 +76,28 @@ docker run -p 8000:8000 \
   nod-dashboard
 ```
 
+## Peta Jalur EPM
+
+The dashboard opens this feature under **Tools → Peta Jalur EPM**. Set up
+each environment before deploying the application:
+
+1. Apply `backend/sql/epm.sql`, `backend/sql/epm_photos.sql`, then
+   `backend/sql/epm_seed.sql` against that environment's direct PostgreSQL
+   connection. The seed can run again without replacing user edits.
+2. Provision the private `uploads` bucket declared in `neon.ts` on the same
+   Neon branch as the database. Set the branch's S3 endpoint, region and
+   storage read/write credentials in the backend environment. Use the
+   variable names in `backend/.env.example`. A local `.env.local` is ignored
+   by Git. Set the same storage variables on the hosting service before release.
+3. Build with the existing public Mapbox token. Verify a test photo upload,
+   report JPG, and backup restore in an isolated branch before release.
+
+JSON backups contain collection metadata and do not include image files.
+Use a ZIP backup (up to 512 MiB per collection) to restore original images and
+verify their checksums. JPG allows a single selected evidence photo.
+The seeded 4.434 km follows an estimated road corridor. Its field verification
+status remains pending until an operator verifies it.
+
 ## License
 
 Internal tool — NOP Jawa Timur

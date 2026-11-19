@@ -227,6 +227,7 @@ def create_app(
         RequestBodyLimitMiddleware,
         max_bytes=1_048_576,
         route_limits={f"{API_PREFIX}/management-data/imports/validate": 20_971_520},
+        epm_prefix=f"{API_PREFIX}/epm",
     )
     app.add_middleware(SecurityHeadersMiddleware, content_security_policy=CONTENT_SECURITY_POLICY)
 
@@ -307,6 +308,7 @@ def create_app(
     from routers import admin as admin_router
     from routers import availability as availability_router
     from routers import data_potensi as data_potensi_router
+    from routers import epm, epm_photos, epm_transfer
     from routers import data_sync as data_sync_router
     from routers import impact_service as impact_service_router
     from routers import management_data as management_data_router
@@ -324,6 +326,8 @@ def create_app(
     from routers import transport_quality as transport_quality_router
 
     dashboard_dependency = [Depends(require_dashboard_session)]
+    for feature in (epm, epm_photos, epm_transfer):
+        app.include_router(feature.router, prefix=API_PREFIX, dependencies=dashboard_dependency)
     app.include_router(map_router.router, prefix=API_PREFIX, dependencies=dashboard_dependency)
     app.include_router(availability_router.router, prefix=API_PREFIX, dependencies=dashboard_dependency)
     app.include_router(sites_router.router, prefix=API_PREFIX, dependencies=dashboard_dependency)
