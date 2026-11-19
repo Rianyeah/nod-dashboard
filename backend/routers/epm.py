@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_session
-from services import epm_core as epm
+from services import epm_cables, epm_core as epm
 
 router = APIRouter(prefix="/epm", tags=["Peta Jalur EPM"])
 Session = Annotated[AsyncSession, Depends(get_session)]
@@ -40,6 +40,17 @@ async def get_route(route_id: UUID, session: Session):
 async def put_route(route_id: UUID, payload: dict, session: Session):
     async with session.begin():
         return await epm.update_route(session, route_id, payload)
+
+
+@router.post("/routes/{route_id}/cable-replacements/preview")
+async def preview_cable(route_id: UUID, payload: epm_cables.CableRequest, session: Session):
+    return epm_cables.cable_section(await epm.route_detail(session, route_id), payload)
+
+
+@router.post("/routes/{route_id}/cable-replacements", status_code=201)
+async def record_cable(route_id: UUID, payload: epm_cables.CableSave, session: Session):
+    async with session.begin():
+        return await epm_cables.record_replacement(session, route_id, payload)
 
 
 @router.delete("/routes/{route_id}", status_code=204)

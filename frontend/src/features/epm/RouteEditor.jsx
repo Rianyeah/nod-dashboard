@@ -1,7 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
 import api from '../../services/api';
 import RouteMap from './RouteMap';
-import {blankRoute,calculateRoad,distanceLabel,errorText,parseCoordinates,POINT_TYPES,prepareReshape,readLineString,routePayload,toAnchors} from './routeEditing';
+import {blankRoute,calculateRoad,distanceLabel,errorText,getRouteSection,parseCoordinates,POINT_TYPES,prepareReshape,readLineString,replaceRouteSection,routePayload,toAnchors} from './routeEditing';
 
 function rowsText(anchors) { return anchors.map(a=>[a.label,a.lat,a.lng].join('\t')).join('\n'); }
 
@@ -15,21 +15,31 @@ function IntervalSelect({point,anchors,onChange}) {
   }}><option value="" disabled>Pilih bagian trase</option>{anchors.slice(0,-1).map((a,i)=><option value={i} key={a.id}>{a.label} → {anchors[i+1].label}</option>)}</select></label>;
 }
 
-export default function RouteEditor({initial, initialPointId, onClose, onSaved}) {
+export default function RouteEditor({initial, initialPointId, initialCorrection, onClose, onSaved}) {
   const [draft,setDraft]=useState(()=>structuredClone(initial || blankRoute()));
   const [text,setText]=useState(()=>rowsText(initial?.anchors || []));
-  const [section,setSection]=useState(initialPointId ? 'points' : initial ? 'metadata':'shape');
+  const [section,setSection]=useState(initialCorrection || !initial ? 'shape' : initialPointId ? 'points' : 'metadata');
   const [target,setTarget]=useState(initialPointId || '');
   const [pendingShape,setPendingShape]=useState(false),[review,setReview]=useState(null);
   const [message,setMessage]=useState(''),[busy,setBusy]=useState(''),[conflict,setConflict]=useState(null);
   const [clickMode,setClickMode]=useState('');
+  const [correctionIndex,setCorrectionIndex]=useState(initialCorrection ? Math.max(0, intervalValue(
+    initial.points.find(p=>p.id===initialPointId) || {}, initial.anchors,
+  )) : null);
+  const [bends,setBends]=useState([]);
   const controller=useRef(null);
   useEffect(()=>()=>controller.current?.abort(),[]);
   const current=draft.points.find(p=>p.id===target);
+  const activeSection = section==='shape' && correctionIndex!==null ? getRouteSection(draft,correctionIndex) : null;
+  const correction = activeSection && {
+    sectionIndex: correctionIndex, original: activeSection.coordinates,
+    proposed: bends.length ? [activeSection.coordinates[0], ...bends, activeSection.coordinates.at(-1)] : [],
+  };
   function change(data) { setDraft(d=>({...d,...data}));setReview(null);setMessage(''); }
   function changePoint(id,data) { change({points:draft.points.map(p=>p.id===id ? {...p,...data} : p)}); }
   function changeText(v) { setText(v);setPendingShape(true);setReview(null);setMessage(''); }
   async function shape(mode,line=null) {
+    if(correctionIndex!==null) return;
     setMessage('');setBusy('shape');
     try {
       let geo, anchors;
@@ -68,10 +78,31 @@ export default function RouteEditor({initial, initialPointId, onClose, onSaved})
     setTarget(p.id);
   }
   function pick({lng,lat}) {
+    if(activeSection) {
+      setBends(points=>[...points,[+lng.toFixed(7),+lat.toFixed(7)]]);
+      setMessage('');
+      return;
+    }
     if(clickMode==='shape') { const nextIndex=text.trim()?text.trim().split(/\n/).length+1:1;changeText([text.trim(),`Titik ${nextIndex}\t${lat.toFixed(7)}\t${lng.toFixed(7)}`].filter(Boolean).join('\n')); }
     if(clickMode==='point' && current){changePoint(target,{lat:+lat.toFixed(7),lng:+lng.toFixed(7),station_m:undefined});setClickMode('');}
   }
+  function cancelCorrection() {
+    setBends([]);
+    setCorrectionIndex(null);
+  }
+  function applyCorrection() {
+    try {
+      const next=replaceRouteSection(draft,correctionIndex,bends);
+      change(next);
+      cancelCorrection();
+      setMessage('Ruas diperbarui dalam draf. Pratinjau jarak dan urutan titik, lalu simpan jalur.');
+    } catch(e) {setMessage(errorText(e));}
+  }
   async function submit(save) {
+    if(correctionIndex!==null) {
+      setSection('shape');setMessage('Terapkan atau batalkan koreksi ruas sebelum menyimpan.');
+      return;
+    }
     if(pendingShape) {setMessage('Terapkan koordinat penentu trase sebelum pratinjau.');return;}
     if(draft.points.some(p=>!p.label.trim() || p.lat==='' || p.lng==='')) {setMessage('Lengkapi label dan koordinat setiap titik.');return;}
     setMessage('');setBusy(save?'save':'preview');
@@ -95,22 +126,50 @@ export default function RouteEditor({initial, initialPointId, onClose, onSaved})
   const endpoint=current && (current.id===draft.points[0]?.id || current.id===draft.points.at(-1)?.id);
   return <section className="epm-editor epm-panel" aria-label="Editor jalur">
     <header className="epm-heading"><h2>{initial?'Edit jalur':'Jalur baru'}</h2><button type="button" disabled={!!busy} onClick={()=>{if(window.confirm('Tutup editor dan buang draf ini?'))onClose();}}>Tutup editor</button></header>
-    <div className="epm-row">{[['metadata','Info jalur'],['shape','Trase'],['points','Titik operasional']].map(([id,label])=><button key={id} aria-pressed={section===id} onClick={()=>{setSection(id);setClickMode('');}}>{label}</button>)}</div>
+    <div className="epm-row">{[['metadata','Info jalur'],['shape','Lintasan kabel (trase)'],['points','Titik operasional']].map(([id,label])=><button key={id} aria-pressed={section===id} onClick={()=>{setSection(id);setClickMode('');}}>{label}</button>)}</div>
     <fieldset disabled={!!busy}><legend className="sr-only">Data jalur</legend>
     {section==='metadata' && <div className="epm-form">
       {[['name','Nama jalur'],['start_site','Site awal'],['end_site','Site akhir'],['area','Area'],['pic','Tim / PIC'],['asset_ref','Referensi aset / as-built'],['reference_distance','Acuan jarak lapangan']].map(([k,l])=><label key={k}>{l}<input value={draft[k] || ''} onChange={e=>change({[k]:e.target.value})}/></label>)}
       <label>Verifikasi trase<select value={draft.verification} onChange={e=>change({verification:e.target.value})}><option value="pending">Belum diverifikasi</option><option value="field">Terverifikasi lapangan</option></select></label>
     </div>}
-    {section==='shape' && <div className="epm-stack"><label>Titik penentu trase <span>Label, lintang, bujur · sesuai urutan kabel</span>
+    {section==='shape' && <div className="epm-stack">
+      <p className="epm-note">Trase adalah garis yang menunjukkan lintasan kabel FO di peta. Panjang jalur dan jarak dari site awal dihitung mengikuti garis ini. Site, sambungan, dan titik putus dikelola di tab Titik operasional.</p>
+      {draft.anchors.length>=2 && (correctionIndex===null ?
+        <div className="epm-row"><button type="button" className="epm-primary" disabled={pendingShape} onClick={()=>{
+          setClickMode('');setBends([]);setCorrectionIndex(0);setReview(null);setMessage('');
+        }}>Koreksi ruas di peta</button></div> :
+        <div className="epm-stack">
+          <label>Ruas yang dikoreksi<select value={correctionIndex} onChange={e=>{
+            const index = Number(e.target.value);
+            setCorrectionIndex(index);setBends([]);setMessage('');
+          }}>
+            {draft.anchors.slice(0,-1).map((a,i)=><option value={i} key={a.id}>{a.label} → {draft.anchors[i+1].label}</option>)}
+          </select></label>
+          <p>Ikuti lintasan kabel yang kamu ketahui. Klik setiap belokan secara berurutan dari A menuju B. Ujung ruas tetap terhubung ke jalur lama.</p>
+          <div className="epm-row">
+            <button type="button" className="epm-primary" disabled={!bends.length || !activeSection} onClick={applyCorrection}>Terapkan koreksi ruas</button>
+            <button type="button" disabled={!bends.length} onClick={()=>setBends(points=>points.slice(0,-1))}>Urungkan titik terakhir</button>
+            <button type="button" onClick={cancelCorrection}>Batalkan koreksi</button>
+            <span className="epm-muted" role="status">{bends.length} titik belok</span>
+          </div>
+        </div>
+      )}
+      {correctionIndex===null && <details open={!initial}>
+      <summary>Gambar, hitung ulang, atau impor seluruh jalur</summary>
+      <div className="epm-stack epm-shape-options"><label>Titik penentu trase <span>Label, lintang, bujur · sesuai urutan kabel</span>
       <textarea rows="5" value={text} onChange={e=>changeText(e.target.value)} placeholder={'Site awal;-7.840;112.770\nBelokan;-7.842;112.772\nSite akhir;-7.845;112.780'}/></label>
       <div className="epm-row"><button type="button" aria-pressed={clickMode==='shape'} onClick={()=>setClickMode(clickMode==='shape'?'':'shape')}>Pilih koordinat di peta</button>
         <button type="button" onClick={()=>shape('road')}>Hitung jalur jalan</button><button type="button" onClick={()=>shape('manual')}>Terapkan trase manual</button>
         <label className="epm-file">Impor GeoJSON<input type="file" accept=".geojson,.json,application/geo+json,application/json" onChange={async e=>{
           const file=e.target.files[0];e.target.value=''; if(!file)return;
           try{if(file.size>16*1024*1024)throw Error('Maksimum 16 MiB.'); await shape('imported',readLineString(JSON.parse(await file.text())));}catch(err){setMessage(errorText(err));}
-        }}/></label></div>
+        }}/></label>{pendingShape && <button type="button" onClick={()=>{
+          setText(rowsText(draft.anchors));setPendingShape(false);setClickMode('');setMessage('');
+        }}>Batalkan perubahan koordinat</button>}</div></div>
+      </details>}
     </div>}
     {section==='points' && <div className="epm-stack">
+      <p className="epm-muted">Untuk mengunggah foto, simpan titik dengan jenis Titik putus, lalu buka Foto titik putus di halaman peta.</p>
       <div className="epm-row"><label>Titik operasional<select value={target} onChange={e=>{setTarget(e.target.value);setClickMode('');}}><option value="">Pilih titik</option>{draft.points.map((p,i)=><option key={p.id} value={p.id}>{i+1}. {p.label || 'Titik baru'}</option>)}</select></label>
       <button type="button" disabled={draft.anchors.length<2} onClick={addPoint}>Tambah titik</button></div>
       {current && <div className="epm-form"><label>Label titik<input value={current.label} onChange={e=>changePoint(target,{label:e.target.value})}/></label>
@@ -123,8 +182,10 @@ export default function RouteEditor({initial, initialPointId, onClose, onSaved})
       </div>}
     </div>}
     </fieldset>
-    <RouteMap route={validMapRoute} selected={target} onSelect={id=>{setTarget(id);setSection('points');setClickMode('');}} onPick={clickMode&&!busy?pick:null}
-      hint={clickMode==='shape'?'Klik peta untuk menambahkan titik belok.':clickMode==='point'?'Klik posisi titik operasional.':''}/>
+    <RouteMap route={validMapRoute} selected={target} correction={correction}
+      onSelect={activeSection ? undefined : id=>{setTarget(id);setSection('points');setClickMode('');}}
+      onPick={(activeSection || clickMode) && !busy ? pick : null}
+      hint={activeSection?'Jingga: ruas lama · Biru putus-putus: usulan lintasan.':clickMode==='shape'?'Klik peta untuk menambahkan titik belok.':clickMode==='point'?'Klik posisi titik operasional.':''}/>
     {review && <div className="epm-scroll"><table><caption>Pratinjau · {distanceLabel(review.length_m)}</caption><thead><tr><th>Titik</th><th>Jarak dari awal</th><th>Selisih dari trase</th></tr></thead><tbody>
       {review.points.map(p=><tr key={p.id}><td>{p.label}</td><td>{distanceLabel(p.station_m)}</td><td>{Math.round(p.offset_m||0)} m</td></tr>)}</tbody></table></div>}
     {message && <p role="status" className="epm-note">{message}</p>}

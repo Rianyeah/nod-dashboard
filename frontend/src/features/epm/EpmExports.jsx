@@ -27,6 +27,23 @@ function Modal({title,onClose,children}) {
   </dialog>;
 }
 
+async function makePowerPoint(image, routeName) {
+  const { default: PptxGenJS } = await import('pptxgenjs');
+  const deck = new PptxGenJS();
+  deck.title = routeName;
+  deck.defineLayout({name:'EPM_REPORT',width:16,height:11});
+  deck.layout = 'EPM_REPORT';
+  const slide = deck.addSlide();
+  const data = await new Promise((resolve,reject)=>{
+    const reader = new FileReader();
+    reader.onload = ()=>resolve(reader.result);
+    reader.onerror = ()=>reject(reader.error);
+    reader.readAsDataURL(image);
+  });
+  slide.addImage({data,x:0,y:0,w:16,h:11,altText:'Laporan peta jalur EPM: '+routeName});
+  return deck.write({outputType:'blob'});
+}
+
 function Report({route,point:initialPoint,incident:initialIncident,onClose}) {
   const [pointId,setPoint]=useState(initialPoint?.id||initialIncident?.point_id||'');
   const [incidentId,setIncident]=useState(initialIncident?.id||'');
@@ -34,6 +51,8 @@ function Report({route,point:initialPoint,incident:initialIncident,onClose}) {
   const [photos,setPhotos]=useState([]);
   const [photoId,setPhoto]=useState('');
   const [layer,setLayer]=useState('plain');
+  const [format,setFormat]=useState('jpg');
+  const [exporting,setExporting]=useState(false);
   const [status,setStatus]=useState('');
   const [preview,setPreview]=useState(null);
   const [busy,setBusy]=useState(false);
@@ -60,14 +79,26 @@ function Report({route,point:initialPoint,incident:initialIncident,onClose}) {
     const seq=++sequence.current;setBusy(true);setStatus('');setPreview(null);
     try {
       const selected=available.find(p=>p.id===photoId);
-      const blob=await buildReportJpg({route,point:pt,incident:ev,photo:selected,layer});
+      const blob=await buildReportJpg({route,point:pt,incident:ev,photo:selected,layer,format});
       if(mounted.current&&sequence.current===seq)setPreview({blob,url:URL.createObjectURL(blob)});
     } catch(e){if(mounted.current&&sequence.current===seq)setStatus(e.message);}
     finally{if(mounted.current&&sequence.current===seq)setBusy(false);}
   }
-  return <Modal title="Simpan laporan JPG" onClose={onClose}>
+  async function download() {
+    setExporting(true);setStatus('');
+    try {
+      const file=format==='pptx'?await makePowerPoint(preview.blob,route.name):preview.blob;
+      const filename=route.name.replace(/[<>:"/\\|?*]/g,'-');
+      triggerBlobDownload(file,'Peta EPM '+filename+'.'+format);
+    } catch {setStatus('File laporan gagal dibuat. Coba unduh lagi.');}
+    finally {setExporting(false);}
+  }
+  return <Modal title="Simpan Report" onClose={onClose}>
     <p>{route.name} · 1.600 × 1.100 piksel</p>
     <div className="epm-export-fields">
+      <label>Format laporan<select value={format} onChange={e=>{changed();setFormat(e.target.value);}} disabled={exporting}>
+        <option value="jpg">JPG</option><option value="png">PNG</option><option value="pptx">PPTX</option>
+      </select></label>
       <label>Latar peta<select value={layer} onChange={e=>{changed();setLayer(e.target.value);}}>
         <option value="plain">Skema tanpa latar</option><option value="road">Jalan</option><option value="satellite">Satelit</option></select></label>
       <label>Sorot titik<select value={pointId} onChange={e=>{changed();setPoint(e.target.value);setPhoto('');setIncident('');setEvents([]);setPhotos([]);}}>
@@ -79,9 +110,9 @@ function Report({route,point:initialPoint,incident:initialIncident,onClose}) {
     </div>
     {photoId && <img className="epm-selected-photo" src={'/api/v1/epm/photos/'+photoId+'/thumbnail'} alt="Foto pilihan"/>}
     {status && <p role="alert">{status} <button onClick={()=>setRetry(n=>n+1)}>Muat ulang pilihan</button></p>}
-    {preview && <img src={preview.url} alt="Pratinjau laporan JPG" className="epm-jpg-preview"/>}
-    <footer><button disabled={busy} onClick={generate}>{busy?'Membuat pratinjau…':'Buat pratinjau'}</button>
-    {preview && <button onClick={()=>triggerBlobDownload(preview.blob,'Peta EPM '+route.name.replace(/[<>:"/\\|?*]/g,'-')+'.jpg')}>Unduh JPG</button>}</footer>
+    {preview && <img src={preview.url} alt="Pratinjau laporan peta" className="epm-jpg-preview"/>}
+    <footer><button disabled={busy||exporting} onClick={generate}>{busy?'Membuat pratinjau…':'Buat pratinjau'}</button>
+    {preview && <button disabled={exporting} onClick={download}>{exporting?'Menyiapkan file…':'Unduh '+format.toUpperCase()}</button>}</footer>
   </Modal>;
 }
 
@@ -113,10 +144,12 @@ function Transfers({filters,onClose,onChange}) {
   </Modal>;
 }
 
-export default function EpmExports({route,point,incident,filters,onChange}){
-  const [modal,setModal]=useState('');
-  return <div className="epm-export-actions"><button type="button" disabled={!route} onClick={()=>setModal('jpg')}>Simpan JPG</button>
-    <button type="button" onClick={()=>setModal('data')}>Cadangan &amp; data</button>
-    {modal==='jpg'&&route&&<Report key={route.id} route={route} point={point} incident={incident} onClose={()=>setModal('')}/>}
-    {modal==='data'&&<Transfers filters={filters} onChange={onChange} onClose={()=>setModal('')}/>}</div>;
+export default function EpmExports({mode,route,point,incident,filters,onChange}){
+  const [open,setOpen]=useState(false);
+  const isReport=mode==='report';
+  return <div className="epm-export-actions">
+    <button type="button" disabled={isReport&&!route} onClick={()=>setOpen(true)}>{isReport?'Simpan Report':'Cadangan & data'}</button>
+    {open && (isReport ? route && <Report key={route.id} route={route} point={point} incident={incident} onClose={()=>setOpen(false)}/>
+      : <Transfers filters={filters} onChange={onChange} onClose={()=>setOpen(false)}/>)}
+  </div>;
 }

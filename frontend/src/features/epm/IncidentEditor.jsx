@@ -3,7 +3,7 @@ import api from '../../services/api';
 import { errorText, INCIDENT_STATUSES, wibInput, wibInstant } from './routeEditing';
 
 export default function IncidentEditor({point,routeId,initial,onSaved,onClose}) {
-  const [draft,setDraft]=useState(()=>({status:initial?.status==='unknown'?'open':(initial?.status || 'open'),
+  const [draft,setDraft]=useState(()=>({status:initial?.status==='unknown'?'':(initial?.status || 'open'),
     ticket:initial?.ticket || '',cause:initial?.cause || '',action:initial?.action || '',
     start:wibInput(initial?.started_at || new Date().toISOString()),end:wibInput(initial?.recovered_at)}));
   const [error,setError]=useState(''),[busy,setBusy]=useState(false);
@@ -22,7 +22,8 @@ export default function IncidentEditor({point,routeId,initial,onSaved,onClose}) 
   return <form className="epm-panel epm-stack" onSubmit={submit}>
     <h3>{initial?'Edit kejadian':'Catat gangguan'} · {point.label}</h3>
     <fieldset disabled={busy} className="epm-form"><legend className="sr-only">Detail kejadian</legend>
-      <label>Status<select value={draft.status} onChange={e=>field('status',e.target.value)}>
+      <label>Status<select required value={draft.status} onChange={e=>field('status',e.target.value)}>
+        {!draft.status && <option value="" disabled>Pilih status</option>}
         {Object.entries(INCIDENT_STATUSES).map(([k,l])=><option key={k} value={k}>{l}</option>)}</select></label>
       <label>Nomor tiket<input maxLength={150} value={draft.ticket} onChange={e=>field('ticket',e.target.value)}/></label>
       <label>Waktu kejadian (WIB)<input required type="datetime-local" value={draft.start} onChange={e=>field('start',e.target.value)}/></label>

@@ -1,5 +1,7 @@
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
+import {INCIDENT_STATUSES} from './routeEditing';
+import {CABLE_COLOR} from './cableDisplay';
 
 export const reportWidth = 1600;
 export const reportHeight = 1100;
@@ -73,12 +75,13 @@ function wrap(ctx, text, x,y,width,lineHeight,maxLines=3) {
 
 const palette={site:'#12675e',tipus:'#b43832',sambungan:'#255caf',lainnya:'#6b647f'};
 
-export async function buildReportJpg({route,point,incident,photo,layer}) {
+export async function buildReportJpg({route,point,incident,photo,layer,format='jpg'}) {
   const canvas=document.createElement('canvas'); canvas.width=reportWidth;canvas.height=reportHeight;
   const ctx=canvas.getContext('2d');
   const mapWidth=1020,mapHeight=786, left=40, top=150, panelX=1100, panelWidth=455;
   const shape=route.geometry.coordinates;
-  const coords=[...shape,...route.points.map(p=>[p.lng,p.lat])];
+  const cables=(route.cable_replacements || []).map(a=>a.geometry.coordinates);
+  const coords=[...shape,...route.points.map(p=>[p.lng,p.lat]),...cables.flat()];
   const frame=layer==='plain'?gridProjection(coords,mapWidth,mapHeight):await exportBasemap(layer,coords,mapWidth,mapHeight);
   const projected=frame.points||coords.map(frame.project);
   const image=photo?await imageFrom('/api/v1/epm/photos/'+encodeURIComponent(photo.id)+'/preview'):null;
@@ -96,6 +99,13 @@ export async function buildReportJpg({route,point,incident,photo,layer}) {
   ctx.beginPath();
   projected.slice(0,shape.length).forEach(({x,y},i)=>{if(i)ctx.lineTo(x,y);else ctx.moveTo(x,y);});
   ctx.lineJoin='round';ctx.lineCap='round';ctx.lineWidth=9;ctx.strokeStyle='white';ctx.stroke();ctx.lineWidth=5;ctx.strokeStyle='#137e76';ctx.stroke();
+  let cableStart=shape.length+route.points.length;
+  for(const cable of cables){
+    ctx.beginPath();
+    projected.slice(cableStart,cableStart+cable.length).forEach(({x,y},i)=>{if(i)ctx.lineTo(x,y);else ctx.moveTo(x,y);});
+    ctx.lineWidth=7;ctx.strokeStyle=CABLE_COLOR;ctx.stroke();
+    cableStart+=cable.length;
+  }
   const pins=route.points.map((p,i)=>({p,i,...projected[shape.length+i]}));
   // Draw number badges with leader lines where several points share a few pixels.
   const used=[];
@@ -129,7 +139,7 @@ export async function buildReportJpg({route,point,incident,photo,layer}) {
   }
   if(point){line(point.label+'  ·  '+km(point.station_m)+' km',panelX,y,'bold 25px Arial','#172c36',panelWidth);y+=34;}
   if(incident){
-    const status={open:'Terbuka',working:'Dalam penanganan',resolved:'Pulih',unknown:'Belum dicatat'}[incident.status];
+    const status=INCIDENT_STATUSES[incident.status] || 'Belum dicatat';
     line([incident.ticket,status].filter(Boolean).join('  ·  '),panelX,y,'21px Arial','#714638',panelWidth);y+=27;
     for(const [key,label] of [['started_at','Mulai'],['recovered_at','Pulih']])if(incident[key]){
       line(label+' '+new Date(incident[key]).toLocaleString('id-ID',{timeZone:'Asia/Jakarta'})+' WIB',panelX,y,'18px Arial','#465964',panelWidth);y+=25;
@@ -150,6 +160,11 @@ export async function buildReportJpg({route,point,incident,photo,layer}) {
     line(label,x+25,984,'21px Arial');
   }
   line(frame.credits||'Skema trase tersimpan',left,1047,'18px Arial','#52656b',1050);
+  if(cables.length){
+    ctx.beginPath();ctx.arc(705,978,7,0,2*Math.PI);ctx.fillStyle=CABLE_COLOR;ctx.fill();
+    line('Kabel baru aktif',721,984,'21px Arial');
+  }
   line('Peta Jalur EPM  /  '+(route.area||route.start_site),panelX,1047,'18px Arial','#52656b',panelWidth);
-  return new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error('Gagal membuat JPG.')),'image/jpeg',0.92));
+  return new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error('Gagal membuat laporan.')),
+    format==='jpg'?'image/jpeg':'image/png',0.92));
 }

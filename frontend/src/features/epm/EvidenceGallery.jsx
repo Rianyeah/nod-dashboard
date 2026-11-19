@@ -12,7 +12,7 @@ const problem = (err, fallback) => typeof err?.response?.data?.detail === 'strin
 const incidentLabel = (incident) => incident.ticket || (incident.started_at
   ? `Kejadian ${dateFormat.format(new Date(incident.started_at))} WIB` : 'Kejadian terdahulu');
 
-function PhotoViewer({ photo, previous, next, close, refresh, position }) {
+function PhotoViewer({ photo, previous, next, close, refresh, position, readOnly }) {
   const dialog = useRef(null);
   const [editing, setEditing] = useState(false);
   const [caption, setCaption] = useState(photo.caption);
@@ -76,15 +76,17 @@ function PhotoViewer({ photo, previous, next, close, refresh, position }) {
         <button type="button" onClick={previous} disabled={!previous}>Sebelumnya</button>
         <button type="button" onClick={next} disabled={!next}>Berikutnya</button>
         <a href={imageUrl(photo.id, 'original')} download={`evidence-${photo.id}.${photo.media_type.split('/')[1]}`}>Unduh asli</a>
-        <button type="button" onClick={() => setEditing(true)}>Ubah keterangan</button>
-        <button type="button" onClick={() => setConfirmArchive(true)}>Arsipkan</button>
+        {!readOnly && <>
+          <button type="button" onClick={() => setEditing(true)}>Ubah keterangan</button>
+          <button type="button" onClick={() => setConfirmArchive(true)}>Arsipkan</button>
+        </>}
       </div>}
       {error && <p role="alert">{error}</p>}
     </dialog>
   );
 }
 
-function Gallery({ pointId, incidents = [], incidentId = null, onChange }) {
+function Gallery({ pointId, incidents = [], incidentId = null, onChange, readOnly = false }) {
   const [photos, setPhotos] = useState([]);
   const [selected, setSelected] = useState(null);
   const [uploadTarget, setUploadTarget] = useState(incidentId || '');
@@ -184,13 +186,15 @@ function Gallery({ pointId, incidents = [], incidentId = null, onChange }) {
 
   return <section className="epm-evidence" aria-label="Galeri foto evidence">
     <div className="epm-photo-head"><h3>Foto evidence <small>({photos.length})</small></h3>
-      <div className="epm-photo-actions">
+      {!readOnly && <div className="epm-photo-actions">
         <button type="button" onClick={() => galleryPicker.current.click()}>Tambah foto</button>
         <button type="button" className="epm-camera" onClick={() => cameraPicker.current.click()}>Kamera</button>
-      </div></div>
-    <input hidden type="file" ref={galleryPicker} accept={accept} multiple onChange={pick} />
-    <input hidden type="file" ref={cameraPicker} accept={accept} capture="environment" onChange={pick} />
-    {!!queue.length && <div className="epm-upload-list">
+      </div>}</div>
+    {!readOnly && <>
+      <input hidden type="file" ref={galleryPicker} accept={accept} multiple onChange={pick} />
+      <input hidden type="file" ref={cameraPicker} accept={accept} capture="environment" onChange={pick} />
+    </>}
+    {!readOnly && !!queue.length && <div className="epm-upload-list">
       {incidentId ? <strong>{incidentLabel(pointIncidents.find(i => i.id === incidentId) || {})}</strong> :
         <label>Simpan foto ke<select value={uploadTarget} disabled={submitting} onChange={e => setUploadTarget(e.target.value)}>
           <option value="">Foto lokasi</option>
@@ -222,7 +226,7 @@ function Gallery({ pointId, incidents = [], incidentId = null, onChange }) {
     {active >= 0 && <PhotoViewer key={selected} photo={photos[active]} position={`${active + 1} / ${photos.length}`}
       previous={active > 0 ? () => setSelected(photos[active - 1].id) : null}
       next={active + 1 < photos.length ? () => setSelected(photos[active + 1].id) : null}
-      close={() => setSelected(null)} refresh={changed} />}
+      close={() => setSelected(null)} refresh={changed} readOnly={readOnly} />}
   </section>;
 }
 

@@ -59,7 +59,9 @@ async def export_data(kind:Literal["json","zip","routes","points","incidents","g
     if kind=="incidents":
         records=await epm_core.list_incidents(session,route_id=route_id,status=status,date_from=date_from,date_to=date_to)
         body=as_csv(["Jalur","Titik","Tiket","Status","Mulai WIB","Pulih WIB","Durasi (menit)","Penyebab","Tindakan"],
-            [(r["route_name"],r["point_label"],r["ticket"],r["status"],wib(r["started_at"]),wib(r["recovered_at"]),
+            [(r["route_name"],r["point_label"],r["ticket"],
+              {"open":"OPEN","working":"INPROGRES","resolved":"CLOSED","unknown":"Belum dicatat"}.get(r["status"],r["status"]),
+              wib(r["started_at"]),wib(r["recovered_at"]),
               (r["recovered_at"]-r["started_at"]).total_seconds()/60 if r["started_at"] and r["recovered_at"] else None,
               r["cause"],r["action"]) for r in records])
         return download(body,"text/csv","gangguan-epm.csv")
@@ -82,6 +84,9 @@ async def export_data(kind:Literal["json","zip","routes","points","incidents","g
     features=[dict(type="Feature",geometry=r["geometry"],properties={k:r[k] for k in ("id","name","source","verification","length_m")}) for r in routes]
     features.extend(dict(type="Feature",geometry=dict(type="Point",coordinates=[p["lng"],p["lat"]]),
         properties={k:p[k] for k in ("id","route_id","label","type","station_m","note")}) for _,p in points)
+    features.extend(dict(type="Feature",geometry=a["geometry"],properties={
+        "id":a["id"],"route_id":r["id"],"type":"cable_replacement","active_at":a["active_at"],"length_m":a["length_m"]
+    }) for r in routes for a in r.get("cable_replacements",[]))
     return download(json.dumps(dict(type="FeatureCollection",features=features)),"application/geo+json","jalur-epm.geojson")
 
 

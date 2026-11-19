@@ -81,8 +81,9 @@ docker run -p 8000:8000 \
 The dashboard opens this feature under **Tools → Peta Jalur EPM**. Set up
 each environment before deploying the application:
 
-1. Apply `backend/sql/epm.sql`, `backend/sql/epm_photos.sql`, then
-   `backend/sql/epm_seed.sql` against that environment's direct PostgreSQL
+1. Apply `backend/sql/epm.sql`, `backend/sql/epm_photos.sql`,
+   `backend/sql/epm_cable_replacements.sql`, then `backend/sql/epm_seed.sql`
+   against that environment's direct PostgreSQL
    connection. The seed can run again without replacing user edits.
 2. Provision the private `uploads` bucket declared in `neon.ts` on the same
    Neon branch as the database. Set the branch's S3 endpoint, region and
@@ -94,7 +95,10 @@ each environment before deploying the application:
 
 JSON backups contain collection metadata and do not include image files.
 Use a ZIP backup (up to 512 MiB per collection) to restore original images and
-verify their checksums. JPG allows a single selected evidence photo.
+verify their checksums. JPG, PNG, and PPTX reports allow a single selected
+evidence photo. PPTX places the map report on one slide.
+To mark new cable, select a starting point, preview the installed section,
+then record when it went live and choose which old fault markers to archive.
 The seeded 4.434 km follows an estimated road corridor. Its field verification
 status remains pending until an operator verifies it.
 
