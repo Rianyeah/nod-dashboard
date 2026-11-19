@@ -120,3 +120,65 @@ export function prepareReshape(route, anchors, geometry, source) {
       { ...sitePoint(route.points.at(-1), last), from_anchor_id: anchors.at(-2).id, to_anchor_id: last.id, station_m: undefined },
     ] };
 }
+
+export function getRouteSection(route, index) {
+  const from = route.anchors[index]?.vertex_index;
+  const to = route.anchors[index + 1]?.vertex_index;
+  const coordinates = route.geometry.coordinates;
+  if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to <= from || to >= coordinates.length) {
+    return null;
+  }
+  return {from, to, coordinates: coordinates.slice(from, to + 1)};
+}
+
+function samePosition(a, b) {
+  return a[0] === b[0] && a[1] === b[1];
+}
+
+function pathLength(coordinates) {
+  const radians = Math.PI / 180;
+  let metres = 0;
+  for (let i = 1; i < coordinates.length; i++) {
+    const [lng1, lat1] = coordinates[i - 1];
+    const [lng2, lat2] = coordinates[i];
+    const h = Math.sin((lat2 - lat1) * radians / 2) ** 2
+      + Math.cos(lat1 * radians) * Math.cos(lat2 * radians) * Math.sin((lng2 - lng1) * radians / 2) ** 2;
+    metres += 2 * 6371008.8 * Math.asin(Math.sqrt(Math.min(1, h)));
+  }
+  return metres;
+}
+
+export function replaceRouteSection(route, index, bends) {
+  const section = getRouteSection(route, index);
+  if (!section) throw Error('Pilih ruas yang valid.');
+  if (!bends.every(validPosition)) throw Error('Koordinat titik belok tidak valid.');
+  const start = section.coordinates[0];
+  const end = section.coordinates.at(-1);
+  const interior = bends.filter(p => !samePosition(p, start) && !samePosition(p, end))
+    .filter((p, i, points) => i === 0 || !samePosition(p, points[i - 1]));
+  if (!interior.length) throw Error('Tambahkan setidaknya satu titik belok di antara ujung ruas.');
+  const replacement = [start, ...interior, end];
+  const coordinates = [
+    ...route.geometry.coordinates.slice(0, section.from), ...replacement,
+    ...route.geometry.coordinates.slice(section.to + 1),
+  ];
+  const geometry = readLineString({type: 'LineString', coordinates});
+  const vertexShift = replacement.length - section.coordinates.length;
+  const lengthShift = pathLength(replacement) - pathLength(section.coordinates);
+  const anchorOrder = new Map(route.anchors.map((anchor, i) => [anchor.id, i]));
+
+  return {
+    ...route, geometry, source: 'manual', verification: 'pending',
+    anchors: route.anchors.map((anchor, i) => (
+      i > index ? {...anchor, vertex_index: anchor.vertex_index + vertexShift} : anchor
+    )),
+    points: route.points.map(point => {
+      const leg = anchorOrder.get(point.from_anchor_id);
+      if (leg === index) return {...point, station_m: undefined};
+      if (leg > index && Number.isFinite(point.station_m)) {
+        return {...point, station_m: Math.max(0, point.station_m + lengthShift)};
+      }
+      return point;
+    }),
+  };
+}

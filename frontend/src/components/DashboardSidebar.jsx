@@ -39,9 +39,9 @@ const NAV_ITEMS = [
 
 const TOOL_ITEMS = [
   { to: '/management-data', label: 'Management Data', icon: DatabaseZap, permission: 'management_data:write' },
+  { to: '/peta-jalur-epm', label: 'Peta Jalur EPM', icon: RouteIcon },
   { to: '/rf-tilt-analysis', label: 'RF Tilt Analysis', icon: Radio },
   { to: '/tower-plan-generator', label: 'Tower Visualizer', icon: TowerControl },
-  { to: '/peta-jalur-epm', label: 'Peta Jalur EPM', icon: RouteIcon },
 ];
 
 function SidebarNavItem({ item, collapsed }) {
