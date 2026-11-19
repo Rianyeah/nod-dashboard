@@ -1,0 +1,25 @@
+.epm-evidence { margin-top: 1rem; border-top: 1px solid var(--border); padding-top: .85rem; min-width: 0; }
+.epm-photo-head, .epm-photo-actions { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; justify-content: space-between; }
+.epm-photo-actions { justify-content: flex-start; }
+.epm-evidence h3 { font-size: .95rem; font-weight: 650; }
+.epm-evidence small, .epm-photo-view small { color: var(--text-muted); font-size: .78rem; }
+.epm-evidence button, .epm-photo-view button, .epm-photo-view a { padding: .35rem .55rem; border: 1px solid var(--border); border-radius: .4rem; background: var(--bg-surface); font-size: .82rem; cursor: pointer; }
+.epm-evidence button:disabled, .epm-photo-view button:disabled { opacity: .5; cursor: default; }
+.epm-evidence button:focus-visible, .epm-photo-view button:focus-visible { outline: 2px solid var(--primary-light); }
+.epm-evidence input:not([hidden]), .epm-evidence select, .epm-photo-view input { background: var(--bg-base); color: var(--text-primary); border: 1px solid var(--border); border-radius: .35rem; display: block; padding: .35rem; max-width: 100%; width: 100%; margin: .25rem 0; }
+.epm-upload-list, .epm-photo-group { margin: .8rem 0 .3rem; display: grid; gap: .45rem; }
+.epm-upload-row { display: flex; gap: .5rem; align-items: flex-start; }
+.epm-upload-row img { width: 3.25rem; height: 3.25rem; object-fit: cover; border-radius: .3rem; }
+.epm-upload-row > div { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.epm-upload-row small, .epm-photo-group small { display: block; }
+.epm-evidence [role=alert], .epm-photo-view [role=alert] { color: var(--text-primary); }
+.epm-thumb-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(62px,1fr)); gap: .35rem; margin-top: .3rem; }
+.epm-thumb-grid button { padding: 0; overflow: hidden; aspect-ratio: 1; max-width: 108px; }
+.epm-thumb-grid img { width: 100%; height: 100%; object-fit: cover; }
+.epm-photo-view { width: min(92vw,48rem); max-height: 92dvh; overflow: auto; margin: auto; padding: 1rem; border: 1px solid var(--border); border-radius: .75rem; color: var(--text-primary); background: var(--bg-surface); }
+.epm-photo-view::backdrop { background: rgb(0 0 0 / .72); }
+.epm-photo-frame { margin: .75rem 0; display: grid; place-items: center; background: #17191c; color: white; border-radius: .4rem; min-height: 5rem; }
+.epm-photo-frame img { max-width: 100%; max-height: 60dvh; object-fit: contain; }
+.epm-photo-view .epm-photo-actions { margin-top: .75rem; }
+.epm-photo-view p { overflow-wrap: anywhere; }
+@media (pointer: fine) { .epm-camera { display: none; } }

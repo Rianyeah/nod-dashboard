@@ -17,6 +17,7 @@ import { DataSyncNotifications } from './features/data-sync/DataSyncNotification
 const ImpactServicePage = React.lazy(() => import('./pages/ImpactServicePage'));
 const SiteMapPage = React.lazy(() => import('./pages/SiteMapPage'));
 const RfTiltAnalysisPage = React.lazy(() => import('./pages/RfTiltAnalysisPage'));
+const EpmRouteMapPage = React.lazy(() => import('./pages/EpmRouteMapPage'));
 const TowerPlanGeneratorPage = React.lazy(() => import('./pages/TowerPlanGeneratorPage'));
 const TicketTotiPage = React.lazy(() => import('./pages/TicketTotiPage'));
 const ManagementDataPage = React.lazy(() => import('./pages/ManagementDataPage'));
@@ -231,6 +232,7 @@ function DashboardRoutes() {
               </PrivateRoute>
             }
           />
+          <Route path="/peta-jalur-epm" element={<PrivateRoute><MapRoute><EpmRouteMapPage /></MapRoute></PrivateRoute>} />
           <Route path="/" element={<Navigate to="/home" />} />
         </Routes>
       </DataSyncProvider>
