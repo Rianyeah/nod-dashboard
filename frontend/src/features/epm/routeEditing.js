@@ -1,5 +1,5 @@
 export const POINT_TYPES = { site: 'Site', tipus: 'Titik putus', sambungan: 'Sambungan', lainnya: 'Lainnya' };
-export const INCIDENT_STATUSES = { open: 'Terbuka', working: 'Dalam penanganan', resolved: 'Pulih' };
+export const INCIDENT_STATUSES = { open: 'OPEN', resolved: 'CLOSED', working: 'INPROGRES' };
 export const distanceLabel = metres => Number.isFinite(metres)
   ? `${(metres / 1000).toLocaleString('id-ID', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} km` : '—';
 export const wibLabel = value => value ? new Intl.DateTimeFormat('id-ID', {

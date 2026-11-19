@@ -14,6 +14,7 @@ from fastapi.encoders import jsonable_encoder
 from sqlalchemy import text
 
 from services import epm_core, epm_photos
+from services.epm_cables import CableActivity
 from services.epm_geometry import stations
 
 WIB = epm_core.WIB
@@ -155,6 +156,20 @@ def read_backup(file, zipped):
                 events={key(e["id"]):key(e["point_id"]) for e in r["incidents"]}
                 if any(pts.get(pid) != "tipus" for pid in events.values()):
                     invalid("Kejadian merujuk titik di luar jalur.")
+                activities=r.get("cable_replacements",[])
+                if not isinstance(activities,list):
+                    invalid("Daftar penggantian kabel tidak valid.")
+                activity_ids=set()
+                for i, raw in enumerate(activities):
+                    activity=CableActivity.model_validate(raw).model_dump(mode="json")
+                    candidates={p["id"] for p in activity["candidates"]}
+                    if (activity["id"] in activity_ids or activity["origin_point_id"] not in pts
+                        or (activity["incident_id"] and activity["incident_id"] not in events)
+                        or any(pid not in pts for pid in candidates)
+                        or not set(activity["archived_point_ids"]).issubset(candidates)):
+                        invalid("Hubungan penggantian kabel dengan titik atau kejadian tidak valid.")
+                    activity_ids.add(activity["id"])
+                    activities[i]=activity
                 for photo in r["photos"]:
                     pid=key(photo["point_id"])
                     if pts.get(pid) != "tipus" or (photo.get("incident_id") and events.get(key(photo["incident_id"]))!=pid):
@@ -237,6 +252,15 @@ async def restore(session,routes,file,zipped,copy,operation,uploaded):
             if p.get("archived_at"):
                 await session.execute(text("UPDATE public.epm_route_points SET archived_at=:value WHERE id=:id"),
                                       {"value":datetime.fromisoformat(p["archived_at"]),"id":p["id"]})
+        activities = [{**a, "id":remap(a["id"]), "origin_point_id":remap(a["origin_point_id"]),
+            "incident_id":remap(a["incident_id"]) if a["incident_id"] else None,
+            "candidates":[{**c, "id":remap(c["id"])} for c in a["candidates"]],
+            "archived_point_ids":[remap(pid) for pid in a["archived_point_ids"]]}
+            for a in r.get("cable_replacements",[])]
+        if activities:
+            await session.execute(text("""
+                UPDATE public.epm_routes SET cable_replacements=CAST(:activities AS jsonb) WHERE id=:id
+            """), {"id":rid,"activities":json.dumps(activities,allow_nan=False)})
         await restore_timestamps(session, "epm_routes", rid, r)
         existing.add(rid)
         created+=1

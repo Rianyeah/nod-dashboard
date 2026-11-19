@@ -69,6 +69,11 @@
 .epm-shape-options {margin-top:10px;}
 .epm-photo-dialog {position:fixed;inset:0;margin:auto;padding:clamp(12px,3vw,24px);width:min(640px,94vw);max-height:90dvh;overflow:auto;border:1px solid var(--border-light);border-radius:12px;background:var(--bg-surface);color:var(--text-primary);}
 .epm-photo-dialog::backdrop {background:#07121bbe;}
+.epm-cable-dialog {position:fixed;inset:0;margin:auto;padding:clamp(12px,3vw,24px);width:min(815px,95vw);max-height:92dvh;overflow:auto;border:1px solid var(--border-light);border-radius:12px;background:var(--bg-surface);color:var(--text-primary);}
+.epm-cable-dialog::backdrop {background:#07121bbe;}
+.epm-cable-dialog legend {padding:4px 0;font-weight:650;}
+.epm-cable-dialog .epm-check-row {display:flex;align-items:center;gap:8px;}
+.epm-cable-dialog :is(.epm-map-canvas,.epm-schematic) {height:clamp(210px,33vh,360px);}
 .epm-workspace .mapboxgl-ctrl button {display:block;padding:0;border:0;min-height:0;}
 @media(max-width:980px){.epm-split{grid-template-columns:minmax(0,1.6fr) minmax(190px,1fr)}}
 @media(max-width:768px){.epm-split{grid-template-columns:1fr}.epm-list ol{max-height:280px}.epm-workspace{padding:12px 9px 32px}.epm-toolbar{gap:10px}.epm-panel:not(.epm-map):not(.epm-list){padding:12px}.epm-tabs button{font-size:.74rem;padding:6px}.epm-map-canvas,.epm-schematic{height:310px}}

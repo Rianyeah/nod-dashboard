@@ -51,9 +51,9 @@ def parse_incident(payload, *, legacy=False):
     if not legacy and (item.status == "unknown" or item.started_at is None):
         fail(422, "Isi waktu mulai dan status kejadian.")
     if not legacy and item.status == "resolved" and item.recovered_at is None:
-        fail(422, "Isi waktu pemulihan untuk status Pulih.")
+        fail(422, "Isi waktu pemulihan untuk status CLOSED.")
     if item.recovered_at and (item.status != "resolved" or (item.started_at and item.recovered_at < item.started_at)):
-        fail(422, "Waktu pemulihan harus sesuai status Pulih dan setelah waktu kejadian.")
+        fail(422, "Waktu pemulihan hanya untuk status CLOSED dan harus setelah waktu kejadian.")
     return item.model_dump()
 
 
@@ -237,7 +237,7 @@ async def list_incidents(session, *, route_id=None, point_id=None, status=None,
         clauses.append("i.started_at < :end")
         params["end"] = day_bounds(date_to,end=True)
     return await records(session, f"""
-        SELECT i.*,r.name AS route_name,p.label AS point_label,p.station_m,
+        SELECT i.*,r.name AS route_name,p.label AS point_label,p.station_m,p.archived_at AS point_archived_at,
                extract(epoch FROM (i.recovered_at-i.started_at))/60 AS duration_minutes
         FROM epm_route_incidents i JOIN epm_routes r ON r.id=i.route_id
         JOIN epm_route_points p ON p.id=i.point_id
