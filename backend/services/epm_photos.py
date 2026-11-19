@@ -70,7 +70,7 @@ def storage_client():
 
 
 def bucket():
-    return os.getenv("EPM_EVIDENCE_BUCKET", "epm-evidence")
+    return os.getenv("EPM_EVIDENCE_BUCKET", "uploads")
 
 
 def _write_variants(prefix, raw, mime, variants):

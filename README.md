@@ -84,7 +84,7 @@ each environment before deploying the application:
 1. Apply `backend/sql/epm.sql`, `backend/sql/epm_photos.sql`, then
    `backend/sql/epm_seed.sql` against that environment's direct PostgreSQL
    connection. The seed can run again without replacing user edits.
-2. Create a private `epm-evidence` bucket on the same Neon branch. Set the
+2. Create a private `uploads` bucket on the same Neon branch. Set the
    branch S3 endpoint, region, and storage read/write credentials in the
    backend environment using the variables in `backend/.env.example`.
 3. Build with the existing public Mapbox token. Verify a test photo upload,
