@@ -172,7 +172,7 @@ def read_backup(file, zipped):
                     activities[i]=activity
                 for photo in r["photos"]:
                     pid=key(photo["point_id"])
-                    if pts.get(pid) != "tipus" or (photo.get("incident_id") and events.get(key(photo["incident_id"]))!=pid):
+                    if pid not in pts or (photo.get("incident_id") and events.get(key(photo["incident_id"]))!=pid):
                         invalid("Hubungan foto, titik, dan kejadian tidak valid.")
                     if z:
                         read_original(z,photo)

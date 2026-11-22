@@ -142,7 +142,7 @@ export default function RouteEditor({initial, initialPointId, initialCorrection,
       setMessage('Isi label serta lintang dan bujur yang valid untuk setiap titik.');
       return;
     }
-    if(save && photos.some(photo=>photo.validation || !draft.points.some(p=>p.id===photo.pointId && p.type==='tipus'))) {
+    if(save && photos.some(photo=>photo.validation || !draft.points.some(p=>p.id===photo.pointId))) {
       setMessage('Periksa berkas dan titik tujuan foto sebelum menyimpan jalur.');
       return;
     }
@@ -169,6 +169,8 @@ export default function RouteEditor({initial, initialPointId, initialCorrection,
     return lat!==null && lng!==null ? [{...p,lat,lng}] : [];
   })};
   const endpoint=current && (current.id===draft.points[0]?.id || current.id===draft.points.at(-1)?.id);
+  const destination=endpoint && current.id===draft.points.at(-1)?.id;
+  const allowedTypes=destination ? ['site','remote_sector'] : endpoint ? ['site'] : ['tipus','sambungan','lainnya'];
   if(savedRouteId) return <section className="epm-editor epm-panel" aria-label="Unggahan foto jalur baru">
     <h2>Jalur tersimpan</h2>
     <p className="epm-note" role="status">{busy ? 'Mengunggah ulang foto…' :
@@ -185,7 +187,7 @@ export default function RouteEditor({initial, initialPointId, initialCorrection,
     <div className="epm-row">{[['metadata','Info jalur'],['shape','Lintasan kabel (trase)'],['points','Titik operasional']].map(([id,label])=><button key={id} disabled={!!busy} aria-pressed={section===id} onClick={()=>{setSection(id);setClickMode('');}}>{label}</button>)}</div>
     <fieldset disabled={!!busy}><legend className="sr-only">Data jalur</legend>
     {section==='metadata' && <div className="epm-form">
-      {[['name','Nama jalur'],['start_site','Site awal'],['end_site','Site akhir'],['area','Area'],['pic','Tim / PIC'],['asset_ref','Referensi aset / as-built'],['reference_distance','Acuan jarak lapangan']].map(([k,l])=><label key={k}>{l}<input value={draft[k] || ''} onChange={e=>change({[k]:e.target.value})}/></label>)}
+      {[['name','Nama jalur'],['start_site','Site awal (ID Site Master)'],['end_site','Site akhir (ID Site Master)'],['area','Area'],['pic','Tim / PIC'],['asset_ref','Referensi aset / as-built'],['reference_distance','Acuan jarak lapangan']].map(([k,l])=><label key={k}>{l}<input value={draft[k] || ''} onChange={e=>change({[k]:e.target.value})}/></label>)}
       <label>Verifikasi trase<select value={draft.verification} onChange={e=>change({verification:e.target.value})}><option value="pending">Belum diverifikasi</option><option value="field">Terverifikasi lapangan</option></select></label>
     </div>}
     {section==='shape' && <div className="epm-stack">
@@ -228,7 +230,8 @@ export default function RouteEditor({initial, initialPointId, initialCorrection,
       <div className="epm-row"><label>Titik operasional<select value={target} onChange={e=>{setTarget(e.target.value);setClickMode('');}}><option value="">Pilih titik</option>{draft.points.map((p,i)=><option key={p.id} value={p.id}>{i+1}. {p.label || 'Titik baru'}</option>)}</select></label>
       <button type="button" disabled={draft.anchors.length<2} onClick={addPoint}>Tambah titik</button></div>
       {current && <div className="epm-form"><label>Label titik<input value={current.label} onChange={e=>changePoint(target,{label:e.target.value})}/></label>
-        <label>Jenis<select disabled={endpoint} value={current.type} onChange={e=>changePoint(target,{type:e.target.value})}>{Object.entries(POINT_TYPES).filter(([k])=>endpoint?k==='site':k!=='site').map(([k,l])=><option key={k} value={k}>{l}</option>)}</select></label>
+        <label>Jenis<select disabled={endpoint && !destination} value={current.type} onChange={e=>changePoint(target,{type:e.target.value})}>
+          {allowedTypes.map(type=><option key={type} value={type}>{POINT_TYPES[type]}</option>)}</select></label>
         {['lat','lng'].map((key,i)=><label key={key}>{i?'Bujur':'Lintang'}<input type="text" inputMode="decimal"
           value={current[key]} onChange={e=>changePoint(target,{[key]:e.target.value,station_m:undefined})}/></label>)}
         {!endpoint && <IntervalSelect point={current} anchors={draft.anchors} onChange={data=>changePoint(target,data)}/>}

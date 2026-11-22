@@ -20,6 +20,11 @@ async def get_routes(session: Session):
     return await epm.list_routes(session)
 
 
+@router.get("/site-master")
+async def get_site_master(site_ids: Annotated[str, Query(min_length=1, max_length=300)], session: Session):
+    return await epm.site_master_details(session, site_ids)
+
+
 @router.post("/routes/preview")
 async def preview_route(payload: dict):
     return epm.parse_route(payload)

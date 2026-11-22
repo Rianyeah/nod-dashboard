@@ -82,7 +82,7 @@ The dashboard opens this feature under **Tools → Peta Jalur EPM**. Set up
 each environment before deploying the application:
 
 1. Apply `backend/sql/epm.sql`, `backend/sql/epm_photos.sql`,
-   `backend/sql/epm_cable_replacements.sql`, then `backend/sql/epm_seed.sql`
+   `backend/sql/epm_cable_replacements.sql`, and `backend/sql/epm_remote_sector.sql`, then `backend/sql/epm_seed.sql`
    against that environment's direct PostgreSQL
    connection. The seed can run again without replacing user edits.
 2. Provision the private `uploads` bucket declared in `neon.ts` on the same

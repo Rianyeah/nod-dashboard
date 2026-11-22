@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS public.epm_routes (
 );
 CREATE TABLE IF NOT EXISTS public.epm_route_points (
     id uuid PRIMARY KEY, route_id uuid NOT NULL REFERENCES public.epm_routes(id),
-    position integer NOT NULL, label text NOT NULL, type text NOT NULL CHECK (type IN ('site','tipus','sambungan','lainnya')),
+    position integer NOT NULL, label text NOT NULL, type text NOT NULL CHECK (type IN ('site','remote_sector','tipus','sambungan','lainnya')),
     lat double precision NOT NULL CHECK(lat BETWEEN -85 AND 85),
     lng double precision NOT NULL CHECK(lng BETWEEN -180 AND 180),
     from_anchor_id uuid NOT NULL, to_anchor_id uuid NOT NULL,

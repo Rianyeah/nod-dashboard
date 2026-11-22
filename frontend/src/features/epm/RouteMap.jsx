@@ -2,11 +2,11 @@ import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { describeMapboxError, validateMapboxRuntime } from '../../utils/mapboxRuntime';
-import { distanceLabel } from './routeEditing';
+import { distanceLabel, POINT_COLORS as colors, POINT_TYPES } from './routeEditing';
 import { CABLE_COLOR, CABLE_PREVIEW_COLOR, cableFeatures } from './cableDisplay';
 import MapLocationSearch from './MapLocationSearch';
+import { isSitePoint, sitePointLabel } from './siteMaster';
 
-const colors = { site:'#087460', tipus:'#c53a32', sambungan:'#966300', lainnya:'#365ca4' };
 const styles = { street:'mapbox://styles/mapbox/streets-v12', satellite:'mapbox://styles/mapbox/satellite-streets-v12' };
 const token = import.meta.env.VITE_MAPBOX_TOKEN;
 const center = [112.7839,-7.849];
@@ -88,14 +88,21 @@ function OnlineMap({ layer, route, selected, onPick, onSelect, onMovePoint, onFa
       const draggable=p.id===draggablePoint;
       el.type = 'button'; el.className = 'epm-marker' + (p.id === selected ? ' selected' : '') + (draggable ? ' draggable' : '');
       el.style.setProperty('--pin',colors[p.type] || colors.lainnya);
-      el.title = `${p.label} · ${distanceLabel(p.station_m)} · ${p.photo_count || 0} foto`;
+      const label=sitePointLabel(p);
+      el.title = `${label} · ${distanceLabel(p.station_m)} · ${p.photo_count || 0} foto`;
       el.setAttribute('aria-label',el.title);
       el.textContent = String(i + 1);
+      if (isSitePoint(p)) {
+        const name=document.createElement('span');
+        name.className='epm-marker-name';name.textContent=label;
+        el.append(name);
+      }
       if (p.photo_count) {
         const badge = document.createElement('small'); badge.textContent = p.photo_count; el.append(badge);
       }
       el.addEventListener('click', e => { e.stopPropagation(); if(!draggable) selectedPoint(p.id); });
       const marker=new mapboxgl.Marker({element:el,draggable}).setLngLat([p.lng,p.lat]).addTo(map);
+      el.setAttribute('role','button');
       if(draggable) marker.on('dragend',()=>movedPoint(p.id,marker.getLngLat()));
       return marker;
     });
@@ -173,13 +180,16 @@ function Schematic({route,selected,onSelect,onPick,correction,fitSection,cablePr
     </>}
     {route?.points?.map((p,i) => {
       const [x,y]=frame.pixel([p.lng,p.lat]);
-      return <g key={p.id} role="button" tabIndex={0} aria-label={`${p.label}, ${p.photo_count || 0} foto`}
+      const label=sitePointLabel(p);
+      return <g key={p.id} role="button" tabIndex={0} aria-label={`${label}, ${p.photo_count || 0} foto`}
         onClick={e=>{e.stopPropagation(); onSelect?.(p.id);}} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onSelect?.(p.id);}}}
         transform={`translate(${x} ${y})`}>
-        <title>{p.label} · {distanceLabel(p.station_m)} · {p.photo_count || 0} foto</title>
+        <title>{label} · {distanceLabel(p.station_m)} · {p.photo_count || 0} foto</title>
         {p.id===selected && <circle r="19" fill="none" stroke="#069887" strokeWidth="3" />}
         <circle r="12" fill={colors[p.type]} stroke="white" strokeWidth="2" /><text y="4" textAnchor="middle" fill="white" fontSize="10">{i+1}</text>
         {p.photo_count>0 && <g transform="translate(11 -10)"><circle r="7" fill="#233447"/><text y="3" textAnchor="middle" fontSize="8" fill="white">{p.photo_count}</text></g>}
+        {isSitePoint(p) && <text className="epm-schematic-site-name" y={y>368 ? -23 : 29}
+          textAnchor={x<150 ? 'start' : x>550 ? 'end' : 'middle'}>{label}</text>}
       </g>;
     })}
     {correction && [correction.original[0], correction.original.at(-1)].map((p,i)=>{
@@ -192,7 +202,7 @@ function Schematic({route,selected,onSelect,onPick,correction,fitSection,cablePr
   </svg>;
 }
 
-export default function RouteMap({route,selected,onSelect,onPick,onMovePoint,draggablePoint,hint,correction,cablePreview}) {
+export default function RouteMap({route,selected,onSelect,onPick,onMovePoint,draggablePoint,hint,correction,cablePreview,popup}) {
   const [layer,setLayer] = useState(() => {try {return ['street','satellite','plain'].find(v=>v===localStorage.getItem('epm-layer')) || 'street';}catch{return 'street';}});
   const [failure,setFailure] = useState(''), [fit,setFit] = useState(0);
   const [showWhole,setShowWhole] = useState(null);
@@ -234,12 +244,15 @@ export default function RouteMap({route,selected,onSelect,onPick,onMovePoint,dra
     }}/>}
     {failure && <p className="epm-note" role="status">{failure} Menampilkan skema. <button type="button" onClick={()=>setFailure('')}>Coba lagi</button></p>}
     {hint && <p className="epm-note">{hint}</p>}
-    {showPlain ? <Schematic route={route} selected={selected} onSelect={onSelect} onPick={onPick} correction={correction} fitSection={fitSection}
+    <div className="epm-map-frame">
+      {showPlain ? <Schematic route={route} selected={selected} onSelect={onSelect} onPick={onPick} correction={correction} fitSection={fitSection}
         cablePreview={cablePreview}/> :
       <OnlineMap key={layer} layer={layer} route={route} selected={selected} onSelect={onSelect} onPick={onPick} onFail={setFailure}
         onMovePoint={onMovePoint} draggablePoint={draggablePoint} viewport={viewport} searchLocation={searchLocation}
         focusKey={focusKey} correction={correction} fitSection={fitSection} cablePreview={cablePreview}/>}
-    <div className="epm-legend">{[['site','Site'],['tipus','Titik putus'],['sambungan','Sambungan'],['lainnya','Lainnya']].map(([t,l])=>
+      {popup}
+    </div>
+    <div className="epm-legend">{Object.entries(POINT_TYPES).map(([t,l])=>
       <span key={t}><i style={{background:colors[t]}}/>{l}</span>)}
       {!!route?.cable_replacements?.length && <span><i style={{background:CABLE_COLOR}}/>Kabel baru aktif</span>}
       {cablePreview && <span><i style={{background:CABLE_PREVIEW_COLOR}}/>Pratinjau penggantian</span>}

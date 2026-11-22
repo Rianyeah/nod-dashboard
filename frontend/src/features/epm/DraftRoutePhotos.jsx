@@ -5,7 +5,7 @@ import {evidenceAccept,evidenceFileError} from './evidenceUpload';
 export default function DraftRoutePhotos({points,items,onChange,disabled,saved}) {
   const [target,setTarget]=useState('');
   const input=useRef(null);
-  const targets=points.filter(point=>point.type==='tipus' && point.label.trim());
+  const targets=points.filter(point=>point.label.trim());
   const pointId=targets.some(point=>point.id===target) ? target : targets[0]?.id || '';
   const change=(id,patch)=>onChange(list=>list.map(item=>item.id===id ? {...item,...patch} : item));
 
@@ -17,11 +17,11 @@ export default function DraftRoutePhotos({points,items,onChange,disabled,saved})
     event.target.value='';
   }
 
-  return <section className="epm-stack epm-panel" aria-label="Foto titik putus">
-    <h3>Foto titik putus</h3>
+  return <section className="epm-stack epm-panel" aria-label="Foto evidence">
+    <h3>Foto evidence</h3>
     {!saved && <>
       <p className="epm-muted">{pointId ? 'Foto akan diunggah saat kamu menyimpan jalur.' :
-        'Tambahkan titik dengan jenis Titik putus dan isi labelnya untuk memilih foto.'}</p>
+        'Tambahkan titik jalur dan isi labelnya untuk memilih foto.'}</p>
       <div className="epm-row">
         {!!pointId && <label>Titik tujuan foto<select value={pointId} disabled={disabled} onChange={e=>setTarget(e.target.value)}>
           {targets.map(point=><option key={point.id} value={point.id}>{point.label}</option>)}
@@ -41,14 +41,14 @@ export default function DraftRoutePhotos({points,items,onChange,disabled,saved})
           {saved ? <span>{targets.find(point=>point.id===item.pointId)?.label}</span> : <div className="epm-form">
             <label>Simpan ke titik<select disabled={disabled} value={validTarget ? item.pointId : ''}
               onChange={e=>change(item.id,{pointId:e.target.value})}>
-              {!validTarget && <option value="" disabled>Pilih titik putus</option>}
+              {!validTarget && <option value="" disabled>Pilih titik jalur</option>}
               {targets.map(point=><option key={point.id} value={point.id}>{point.label}</option>)}
             </select></label>
             <label>Keterangan foto<input disabled={disabled} maxLength={500} value={item.caption}
               onChange={e=>change(item.id,{caption:e.target.value})}/></label>
           </div>}
           {(item.error || item.validation || (!validTarget && !saved)) && <p role="alert">
-            {item.error || item.validation || 'Titik tujuan berubah. Pilih titik putus lain atau hapus foto dari draf.'}
+            {item.error || item.validation || 'Titik tujuan berubah. Pilih titik lain atau hapus foto dari draf.'}
           </p>}
           {!saved && <div><button type="button" disabled={disabled}
             onClick={()=>onChange(list=>list.filter(photo=>photo.id!==item.id))}>Hapus dari draf</button></div>}

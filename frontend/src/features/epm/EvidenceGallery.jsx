@@ -60,7 +60,7 @@ function PhotoViewer({ photo, previous, next, close, refresh, position, readOnly
           setUnavailable(false); setAttempt(attempt + 1);
         }}>Coba lagi</button></div> :
           <img src={imageUrl(photo.id, 'preview') + `?v=${attempt}`}
-            alt={photo.caption || 'Foto evidence titik putus'} onError={() => setUnavailable(true)} />}
+            alt={photo.caption || 'Foto evidence titik jalur'} onError={() => setUnavailable(true)} />}
       </div>
       <p>{photo.caption || 'Tanpa keterangan'}<br />
         <small>Diunggah {dateFormat.format(new Date(photo.created_at))} WIB</small></p>
@@ -191,6 +191,7 @@ function Gallery({ pointId, incidents = [], incidentId = null, onChange, readOnl
     </>}
     {!readOnly && !!queue.length && <div className="epm-upload-list">
       {incidentId ? <strong>{incidentLabel(pointIncidents.find(i => i.id === incidentId) || {})}</strong> :
+        pointIncidents.length > 0 &&
         <label>Simpan foto ke<select value={uploadTarget} disabled={submitting} onChange={e => setUploadTarget(e.target.value)}>
           <option value="">Foto lokasi</option>
           {pointIncidents.filter(i => !i.archived_at).map(i => <option key={i.id} value={i.id}>{incidentLabel(i)}</option>)}
