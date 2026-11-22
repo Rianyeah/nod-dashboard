@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import api from '../../services/api';
+import {evidenceAccept as accept,evidenceFileError,uploadEvidence} from './evidenceUpload';
 import './EvidenceGallery.css';
 
 const dateFormat = new Intl.DateTimeFormat('id-ID', {
   timeZone: 'Asia/Jakarta', dateStyle: 'medium', timeStyle: 'short',
 });
 const dayFormat = new Intl.DateTimeFormat('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'long' });
-const accept = 'image/jpeg,image/png,image/webp';
 const imageUrl = (id, size) => `/api/v1/epm/photos/${id}/${size}`;
 const problem = (err, fallback) => typeof err?.response?.data?.detail === 'string' ? err.response.data.detail : fallback;
 const incidentLabel = (incident) => incident.ticket || (incident.started_at
@@ -141,8 +141,7 @@ function Gallery({ pointId, incidents = [], incidentId = null, onChange, readOnl
   }
   function pick(event) {
     const items = Array.from(event.target.files || [], file => {
-      const errorText = file.size > 10 * 1024 * 1024 ? 'Ukuran melebihi 10 MiB.' :
-        file.type && !accept.split(',').includes(file.type) ? 'Gunakan JPEG, PNG, atau WebP.' : '';
+      const errorText = evidenceFileError(file);
       const url = errorText ? '' : URL.createObjectURL(file);
       if (url) objectUrls.current.add(url);
       return { id: crypto.randomUUID(), file, url, caption: '', state: errorText ? 'invalid' : 'ready', error: errorText };
@@ -159,11 +158,7 @@ function Gallery({ pointId, incidents = [], incidentId = null, onChange, readOnl
         const target = item.target === undefined ? uploadTarget : item.target;
         update(item.id, { state: 'uploading', progress: 0, error: '', target });
         try {
-          await api.post(`/epm/points/${pointId}/photos`, item.file, {
-            params: { upload_id: item.id, incident_id: target || undefined, caption: item.caption },
-            headers: { 'Content-Type': item.file.type || 'application/octet-stream' }, timeout: 120000,
-            onUploadProgress: e => update(item.id, { progress: Math.round((e.progress || 0) * 100) }),
-          });
+          await uploadEvidence(pointId,item,target,e=>update(item.id,{progress:Math.round((e.progress || 0)*100)}));
           remove(item);
           saved = true;
         } catch (err) {

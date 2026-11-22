@@ -33,6 +33,12 @@
 .epm-split {display:grid;grid-template-columns:minmax(0,2fr) minmax(230px,1fr);gap:14px;}
 .epm-map {padding:0;overflow:hidden;}
 .epm-map-tools,.epm-legend {padding:8px 12px;}
+.epm-location-search {display:grid;gap:6px;padding:0 12px 8px;}
+.epm-location-form {display:flex;gap:8px;max-width:520px;}
+.epm-location-form button {flex-shrink:0;}
+.epm-location-results,.epm-draft-photos {list-style:none;display:grid;gap:7px;margin:0;padding:0;}
+.epm-location-results button {justify-content:flex-start;text-align:left;width:100%;max-width:520px;}
+.epm-draft-photos li {padding:10px;border:1px solid var(--border);border-radius:7px;gap:8px;overflow-wrap:anywhere;}
 .epm-legend {font-size:.72rem;gap:12px;}
 .epm-legend span {display:inline-flex;align-items:center;gap:4px;}
 .epm-legend i {width:9px;height:9px;display:inline-block;border-radius:100%;}
@@ -41,6 +47,10 @@
 .epm-schematic g[role=button] {cursor:pointer;}
 .epm-marker { width:27px;height:27px;border-radius:100%;color:white;background:var(--pin);border:2px solid white;font-size:11px;font-weight:bold;box-shadow:0 1px 4px #17262a77; }
 .epm-marker.selected {outline:3px solid #1ec6ac;}
+.epm-marker.draggable {cursor:grab;}
+.epm-marker.draggable:active {cursor:grabbing;}
+.epm-search-pin {width:18px;height:18px;border:2px solid white;border-radius:50%;background:#225cc8;box-shadow:0 1px 6px #17262a77;pointer-events:none;}
+.epm-schematic[data-picking],.epm-map-canvas[data-picking] .mapboxgl-canvas {cursor:crosshair;}
 .epm-marker small {position:absolute;top:-8px;right:-8px;background:#172933;padding:0 4px;border-radius:6px;color:white;font-size:10px;}
 .epm-correction-pin {display:grid;place-items:center;width:22px;height:22px;border:2px solid white;border-radius:50%;background:#193454;color:white;font-size:.75rem;font-weight:700;pointer-events:none;}
 .epm-list {padding:0;overflow:hidden;display:flex;flex-direction:column;}

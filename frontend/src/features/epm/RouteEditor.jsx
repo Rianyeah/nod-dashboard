@@ -1,7 +1,9 @@
 import {useEffect,useRef,useState} from 'react';
 import api from '../../services/api';
+import DraftRoutePhotos from './DraftRoutePhotos';
 import RouteMap from './RouteMap';
-import {blankRoute,calculateRoad,distanceLabel,errorText,getRouteSection,parseCoordinates,POINT_TYPES,prepareReshape,readLineString,replaceRouteSection,routePayload,toAnchors} from './routeEditing';
+import {uploadEvidence} from './evidenceUpload';
+import {blankRoute,calculateRoad,distanceLabel,errorText,getRouteSection,parseCoordinates,pointCoordinate,POINT_TYPES,prepareReshape,readLineString,replaceRouteSection,routePayload,toAnchors} from './routeEditing';
 
 function rowsText(anchors) { return anchors.map(a=>[a.label,a.lat,a.lng].join('\t')).join('\n'); }
 
@@ -10,9 +12,15 @@ function intervalValue(p,anchors) {
   return i>=0 && anchors[i+1]?.id===p.to_anchor_id ? i : '';
 }
 function IntervalSelect({point,anchors,onChange}) {
-  return <label>Bagian trase<select value={intervalValue(point,anchors)} onChange={e=>{
+  const value=point.from_anchor_id || point.to_anchor_id ? intervalValue(point,anchors) : 'auto';
+  return <label>Bagian trase<select value={value} onChange={e=>{
+    if(e.target.value==='auto') {
+      onChange({from_anchor_id:null,to_anchor_id:null,station_m:undefined});
+      return;
+    }
     const i=Number(e.target.value);onChange({from_anchor_id:anchors[i].id,to_anchor_id:anchors[i+1].id,station_m:undefined});
-  }}><option value="" disabled>Pilih bagian trase</option>{anchors.slice(0,-1).map((a,i)=><option value={i} key={a.id}>{a.label} → {anchors[i+1].label}</option>)}</select></label>;
+  }}><option value="" disabled>Pilih ulang bagian trase</option><option value="auto">Ruas terdekat otomatis</option>
+    {anchors.slice(0,-1).map((a,i)=><option value={i} key={a.id}>{a.label} → {anchors[i+1].label}</option>)}</select></label>;
 }
 
 export default function RouteEditor({initial, initialPointId, initialCorrection, onClose, onSaved}) {
@@ -27,6 +35,8 @@ export default function RouteEditor({initial, initialPointId, initialCorrection,
     initial.points.find(p=>p.id===initialPointId) || {}, initial.anchors,
   )) : null);
   const [bends,setBends]=useState([]);
+  const [photos,setPhotos]=useState([]);
+  const [savedRouteId,setSavedRouteId]=useState('');
   const controller=useRef(null);
   useEffect(()=>()=>controller.current?.abort(),[]);
   const current=draft.points.find(p=>p.id===target);
@@ -37,6 +47,9 @@ export default function RouteEditor({initial, initialPointId, initialCorrection,
   };
   function change(data) { setDraft(d=>({...d,...data}));setReview(null);setMessage(''); }
   function changePoint(id,data) { change({points:draft.points.map(p=>p.id===id ? {...p,...data} : p)}); }
+  function movePoint(id,{lat,lng}) {
+    changePoint(id,{lat:+lat.toFixed(7),lng:+lng.toFixed(7),station_m:undefined});
+  }
   function changeText(v) { setText(v);setPendingShape(true);setReview(null);setMessage(''); }
   async function shape(mode,line=null) {
     if(correctionIndex!==null) return;
@@ -84,7 +97,7 @@ export default function RouteEditor({initial, initialPointId, initialCorrection,
       return;
     }
     if(clickMode==='shape') { const nextIndex=text.trim()?text.trim().split(/\n/).length+1:1;changeText([text.trim(),`Titik ${nextIndex}\t${lat.toFixed(7)}\t${lng.toFixed(7)}`].filter(Boolean).join('\n')); }
-    if(clickMode==='point' && current){changePoint(target,{lat:+lat.toFixed(7),lng:+lng.toFixed(7),station_m:undefined});setClickMode('');}
+    if(clickMode==='point' && current) movePoint(current.id,{lat,lng});
   }
   function cancelCorrection() {
     setBends([]);
@@ -98,19 +111,48 @@ export default function RouteEditor({initial, initialPointId, initialCorrection,
       setMessage('Ruas diperbarui dalam draf. Pratinjau jarak dan urutan titik, lalu simpan jalur.');
     } catch(e) {setMessage(errorText(e));}
   }
+  async function savePhotos(routeId) {
+    setBusy('photos');
+    try {
+      const remaining=[];
+      for(const photo of photos) {
+        try { await uploadEvidence(photo.pointId,photo); }
+        catch(error) {
+          const detail=error.response?.data?.detail;
+          remaining.push({...photo,error:typeof detail==='string' ? detail : errorText(error)});
+        }
+      }
+      if (!remaining.length) { onSaved(routeId); return; }
+      setPhotos(remaining);
+      setSavedRouteId(routeId);
+    } finally {
+      setBusy('');
+    }
+  }
+
   async function submit(save) {
     if(correctionIndex!==null) {
       setSection('shape');setMessage('Terapkan atau batalkan koreksi ruas sebelum menyimpan.');
       return;
     }
     if(pendingShape) {setMessage('Terapkan koordinat penentu trase sebelum pratinjau.');return;}
-    if(draft.points.some(p=>!p.label.trim() || p.lat==='' || p.lng==='')) {setMessage('Lengkapi label dan koordinat setiap titik.');return;}
+    const invalidPoint=draft.points.find(p=>!p.label.trim() || pointCoordinate(p.lat,85)===null || pointCoordinate(p.lng,180)===null);
+    if(invalidPoint) {
+      setSection('points');setTarget(invalidPoint.id);setClickMode('');
+      setMessage('Isi label serta lintang dan bujur yang valid untuk setiap titik.');
+      return;
+    }
+    if(save && photos.some(photo=>photo.validation || !draft.points.some(p=>p.id===photo.pointId && p.type==='tipus'))) {
+      setMessage('Periksa berkas dan titik tujuan foto sebelum menyimpan jalur.');
+      return;
+    }
     setMessage('');setBusy(save?'save':'preview');
     try {
       const payload=routePayload(draft);
       if(save) {
         const {data}=draft.id ? await api.put(`/epm/routes/${draft.id}`,payload) : await api.post('/epm/routes',payload);
-        onSaved(data.id);
+        if(photos.length) await savePhotos(data.id);
+        else onSaved(data.id);
       } else {
         const {data}=await api.post('/epm/routes/preview',payload);
         setReview(data);setClickMode('');setMessage('Pratinjau siap. Periksa urutan dan jarak setiap titik.');
@@ -122,11 +164,25 @@ export default function RouteEditor({initial, initialPointId, initialCorrection,
       }
     } finally {setBusy('');}
   }
-  const validMapRoute = review || {...draft,points:draft.points.filter(p=>p.lat!=='' && p.lng!=='')};
+  const validMapRoute = review ? {...review,id:draft.id} : {...draft,points:draft.points.flatMap(p=>{
+    const lat=pointCoordinate(p.lat,85), lng=pointCoordinate(p.lng,180);
+    return lat!==null && lng!==null ? [{...p,lat,lng}] : [];
+  })};
   const endpoint=current && (current.id===draft.points[0]?.id || current.id===draft.points.at(-1)?.id);
+  if(savedRouteId) return <section className="epm-editor epm-panel" aria-label="Unggahan foto jalur baru">
+    <h2>Jalur tersimpan</h2>
+    <p className="epm-note" role="status">{busy ? 'Mengunggah ulang foto…' :
+      photos.length+' foto belum berhasil diunggah. Kamu bisa mencoba lagi atau membuka jalur.'}</p>
+    <DraftRoutePhotos points={draft.points} items={photos} disabled={!!busy} saved/>
+    <div className="epm-row">
+      <button type="button" className="epm-primary" disabled={!!busy} onClick={()=>savePhotos(savedRouteId)}>Ulangi unggah foto</button>
+      <button type="button" disabled={!!busy} onClick={()=>onSaved(savedRouteId)}>Buka jalur</button>
+    </div>
+  </section>;
+
   return <section className="epm-editor epm-panel" aria-label="Editor jalur">
     <header className="epm-heading"><h2>{initial?'Edit jalur':'Jalur baru'}</h2><button type="button" disabled={!!busy} onClick={()=>{if(window.confirm('Tutup editor dan buang draf ini?'))onClose();}}>Tutup editor</button></header>
-    <div className="epm-row">{[['metadata','Info jalur'],['shape','Lintasan kabel (trase)'],['points','Titik operasional']].map(([id,label])=><button key={id} aria-pressed={section===id} onClick={()=>{setSection(id);setClickMode('');}}>{label}</button>)}</div>
+    <div className="epm-row">{[['metadata','Info jalur'],['shape','Lintasan kabel (trase)'],['points','Titik operasional']].map(([id,label])=><button key={id} disabled={!!busy} aria-pressed={section===id} onClick={()=>{setSection(id);setClickMode('');}}>{label}</button>)}</div>
     <fieldset disabled={!!busy}><legend className="sr-only">Data jalur</legend>
     {section==='metadata' && <div className="epm-form">
       {[['name','Nama jalur'],['start_site','Site awal'],['end_site','Site akhir'],['area','Area'],['pic','Tim / PIC'],['asset_ref','Referensi aset / as-built'],['reference_distance','Acuan jarak lapangan']].map(([k,l])=><label key={k}>{l}<input value={draft[k] || ''} onChange={e=>change({[k]:e.target.value})}/></label>)}
@@ -169,23 +225,29 @@ export default function RouteEditor({initial, initialPointId, initialCorrection,
       </details>}
     </div>}
     {section==='points' && <div className="epm-stack">
-      <p className="epm-muted">Untuk mengunggah foto, simpan titik dengan jenis Titik putus, lalu buka Foto titik putus di halaman peta.</p>
       <div className="epm-row"><label>Titik operasional<select value={target} onChange={e=>{setTarget(e.target.value);setClickMode('');}}><option value="">Pilih titik</option>{draft.points.map((p,i)=><option key={p.id} value={p.id}>{i+1}. {p.label || 'Titik baru'}</option>)}</select></label>
       <button type="button" disabled={draft.anchors.length<2} onClick={addPoint}>Tambah titik</button></div>
       {current && <div className="epm-form"><label>Label titik<input value={current.label} onChange={e=>changePoint(target,{label:e.target.value})}/></label>
         <label>Jenis<select disabled={endpoint} value={current.type} onChange={e=>changePoint(target,{type:e.target.value})}>{Object.entries(POINT_TYPES).filter(([k])=>endpoint?k==='site':k!=='site').map(([k,l])=><option key={k} value={k}>{l}</option>)}</select></label>
-        {['lat','lng'].map((key,i)=><label key={key}>{i?'Bujur':'Lintang'}<input type="number" step="any" disabled={endpoint} value={current[key]} onChange={e=>changePoint(target,{[key]:e.target.value===''?'':Number(e.target.value),station_m:undefined})}/></label>)}
+        {['lat','lng'].map((key,i)=><label key={key}>{i?'Bujur':'Lintang'}<input type="text" inputMode="decimal"
+          value={current[key]} onChange={e=>changePoint(target,{[key]:e.target.value,station_m:undefined})}/></label>)}
         {!endpoint && <IntervalSelect point={current} anchors={draft.anchors} onChange={data=>changePoint(target,data)}/>}
         <label>Catatan<input value={current.note||''} onChange={e=>changePoint(target,{note:e.target.value})}/></label>
-        {!endpoint && <div className="epm-row"><button type="button" aria-pressed={clickMode==='point'} onClick={()=>setClickMode(clickMode==='point'?'':'point')}>Ambil koordinat di peta</button>
-          <button type="button" onClick={()=>{if(window.confirm('Arsipkan titik saat jalur disimpan?')){change({points:draft.points.filter(p=>p.id!==target)});setTarget('');setClickMode('');}}}>Arsipkan titik</button></div>}
+        <div className="epm-row">
+          <button type="button" aria-pressed={clickMode==='point'} onClick={()=>setClickMode(clickMode==='point'?'':'point')}>
+            {clickMode==='point'?'Selesai geser':'Geser titik di peta'}
+          </button>
+          {!endpoint && <button type="button" onClick={()=>{if(window.confirm('Arsipkan titik saat jalur disimpan?')){change({points:draft.points.filter(p=>p.id!==target)});setTarget('');setClickMode('');}}}>Arsipkan titik</button>}
+        </div>
       </div>}
     </div>}
     </fieldset>
     <RouteMap route={validMapRoute} selected={target} correction={correction}
-      onSelect={activeSection ? undefined : id=>{setTarget(id);setSection('points');setClickMode('');}}
+      onSelect={activeSection || busy ? undefined : id=>{setTarget(id);setSection('points');setClickMode('');}}
       onPick={(activeSection || clickMode) && !busy ? pick : null}
-      hint={activeSection?'Jingga: ruas lama · Biru putus-putus: usulan lintasan.':clickMode==='shape'?'Klik peta untuk menambahkan titik belok.':clickMode==='point'?'Klik posisi titik operasional.':''}/>
+      onMovePoint={movePoint} draggablePoint={clickMode==='point' && !busy ? current?.id : null}
+      hint={activeSection?'Jingga: ruas lama · Biru putus-putus: usulan lintasan.':clickMode==='shape'?'Klik peta untuk menambahkan titik belok.':clickMode==='point'?'Seret penanda yang dipilih atau klik posisi baru di peta.':''}/>
+    {!initial && <DraftRoutePhotos points={draft.points} items={photos} onChange={setPhotos} disabled={!!busy}/>}
     {review && <div className="epm-scroll"><table><caption>Pratinjau · {distanceLabel(review.length_m)}</caption><thead><tr><th>Titik</th><th>Jarak dari awal</th><th>Selisih dari trase</th></tr></thead><tbody>
       {review.points.map(p=><tr key={p.id}><td>{p.label}</td><td>{distanceLabel(p.station_m)}</td><td>{Math.round(p.offset_m||0)} m</td></tr>)}</tbody></table></div>}
     {message && <p role="status" className="epm-note">{message}</p>}
@@ -193,6 +255,8 @@ export default function RouteEditor({initial, initialPointId, initialCorrection,
       if(window.confirm('Ganti draf dengan versi terbaru?')){setDraft(structuredClone(conflict));setText(rowsText(conflict.anchors));setReview(null);setConflict(null);setPendingShape(false);setTarget('');setMessage('Versi terbaru dimuat.');}
     }}>Gunakan versi terbaru</button></details>}
     <div className="epm-row"><button type="button" disabled={!!busy||!draft.geometry.coordinates.length} onClick={()=>submit(false)}>{busy==='preview'?'Menghitung…':'Pratinjau jarak & urutan'}</button>
-    <button className="epm-primary" type="button" disabled={!!busy||!review} onClick={()=>submit(true)}>{busy==='save'?'Menyimpan…':'Simpan jalur'}</button></div>
+    <button className="epm-primary" type="button" disabled={!!busy||!review} onClick={()=>submit(true)}>
+      {busy==='photos'?'Mengunggah foto…':busy==='save'?'Menyimpan…':'Simpan jalur'}
+    </button></div>
   </section>;
 }

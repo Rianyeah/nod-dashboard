@@ -16,6 +16,14 @@ export function errorText(error) {
   return error.message || 'Permintaan gagal.';
 }
 
+export function pointCoordinate(value, limit) {
+  if (typeof value==='number') return Number.isFinite(value) && Math.abs(value)<=limit ? value : null;
+  const text=String(value ?? '').trim().replace(',','.');
+  if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(text)) return null;
+  const coordinate=Number(text);
+  return Math.abs(coordinate)<=limit ? coordinate : null;
+}
+
 export function parseCoordinates(text) {
   const rows = text.trim().split(/\r?\n/).filter(row => row.trim());
   if (/^label[\t;,]/i.test(rows[0]?.trim())) rows.shift();
@@ -100,7 +108,8 @@ export function routePayload(route) {
   const { name,start_site,end_site,area,pic,asset_ref,reference_distance,verification,source,geometry,anchors } = route;
   const points = route.points.filter(p => !p.archived_at).map(p => {
     const { id,label,type,lat,lng,note,from_anchor_id,to_anchor_id,station_m } = p;
-    return { id,label,type,lat,lng,note: note || '',from_anchor_id,to_anchor_id,...(Number.isFinite(station_m) ? {station_m} : {}) };
+    return { id,label,type,lat:pointCoordinate(lat,85),lng:pointCoordinate(lng,180),note: note || '',from_anchor_id,to_anchor_id,
+      ...(Number.isFinite(station_m) ? {station_m} : {}) };
   });
   return { name,start_site,end_site,area,pic,asset_ref,reference_distance,verification,source,geometry,
     anchors: anchors.map(({id,label,lat,lng,vertex_index}) => ({id,label,lat,lng,vertex_index})),

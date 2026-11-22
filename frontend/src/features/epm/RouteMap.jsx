@@ -4,6 +4,7 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import { describeMapboxError, validateMapboxRuntime } from '../../utils/mapboxRuntime';
 import { distanceLabel } from './routeEditing';
 import { CABLE_COLOR, CABLE_PREVIEW_COLOR, cableFeatures } from './cableDisplay';
+import MapLocationSearch from './MapLocationSearch';
 
 const colors = { site:'#087460', tipus:'#c53a32', sambungan:'#966300', lainnya:'#365ca4' };
 const styles = { street:'mapbox://styles/mapbox/streets-v12', satellite:'mapbox://styles/mapbox/satellite-streets-v12' };
@@ -21,13 +22,15 @@ function correctionFeatures(correction) {
   return {type:'FeatureCollection', features};
 }
 
-function OnlineMap({ layer, route, selected, onPick, onSelect, onFail, fitKey, correction, fitSection, cablePreview }) {
+function OnlineMap({ layer, route, selected, onPick, onSelect, onMovePoint, onFail, focusKey, fitSection,
+  correction, cablePreview, viewport, searchLocation, draggablePoint }) {
   const container = useRef(null);
   const [map, setMap] = useState(null);
   const [ready, setReady] = useState(false);
   const failed = useEffectEvent(onFail);
   const picked = useEffectEvent((e) => onPick?.(e.lngLat));
   const selectedPoint = useEffectEvent(id => onSelect?.(id));
+  const movedPoint = useEffectEvent((id, coordinates) => onMovePoint?.(id,coordinates));
   const focus = useEffectEvent((instance, sectionOnly) => {
     const coords = sectionOnly ? correction?.original : [
       ...(route?.geometry?.coordinates || []),
@@ -44,7 +47,8 @@ function OnlineMap({ layer, route, selected, onPick, onSelect, onFail, fitKey, c
     if (error) { failed(error.message); return; }
     let instance;
     try {
-      instance = new mapboxgl.Map({container:container.current,accessToken:token,style:styles[layer],center,zoom:13});
+      instance = new mapboxgl.Map({container:container.current,accessToken:token,style:styles[layer],
+        ...(viewport.readCamera() || {center,zoom:13})});
       instance.addControl(new mapboxgl.NavigationControl({showCompass:false}), 'top-left');
     } catch { failed('Peta jalan/satelit tidak dapat dimuat di perangkat ini.'); return; }
     const timer = window.setTimeout(() => failed('Latar peta belum berhasil dimuat.'), 22000);
@@ -68,16 +72,21 @@ function OnlineMap({ layer, route, selected, onPick, onSelect, onFail, fitKey, c
     });
     instance.on('error', e => { const err = describeMapboxError(e); if (err.fatal) failed(err.message); });
     instance.on('click', e => picked(e));
+    instance.on('move', () => {
+      viewport.saveCamera({center:instance.getCenter().toArray(),zoom:instance.getZoom(),
+        bearing:instance.getBearing(),pitch:instance.getPitch()});
+    });
     const resize = new ResizeObserver(() => instance.resize());
     resize.observe(container.current);
     return () => { clearTimeout(timer); resize.disconnect(); instance.remove(); };
-  }, [layer]);
+  }, [layer,viewport]);
   useEffect(() => {
     if (!map || !ready) return;
     map.getSource('epm-route')?.setData(geoLine(route));
     const markers = (route?.points || []).map((p,i) => {
       const el = document.createElement('button');
-      el.type = 'button'; el.className = 'epm-marker' + (p.id === selected ? ' selected' : '');
+      const draggable=p.id===draggablePoint;
+      el.type = 'button'; el.className = 'epm-marker' + (p.id === selected ? ' selected' : '') + (draggable ? ' draggable' : '');
       el.style.setProperty('--pin',colors[p.type] || colors.lainnya);
       el.title = `${p.label} · ${distanceLabel(p.station_m)} · ${p.photo_count || 0} foto`;
       el.setAttribute('aria-label',el.title);
@@ -85,11 +94,13 @@ function OnlineMap({ layer, route, selected, onPick, onSelect, onFail, fitKey, c
       if (p.photo_count) {
         const badge = document.createElement('small'); badge.textContent = p.photo_count; el.append(badge);
       }
-      el.addEventListener('click', e => { e.stopPropagation(); selectedPoint?.(p.id); });
-      return new mapboxgl.Marker({element:el}).setLngLat([p.lng,p.lat]).addTo(map);
+      el.addEventListener('click', e => { e.stopPropagation(); if(!draggable) selectedPoint(p.id); });
+      const marker=new mapboxgl.Marker({element:el,draggable}).setLngLat([p.lng,p.lat]).addTo(map);
+      if(draggable) marker.on('dragend',()=>movedPoint(p.id,marker.getLngLat()));
+      return marker;
     });
     return () => markers.forEach(marker => marker.remove());
-  }, [map,ready,route,selected]);
+  }, [map,ready,route,selected,draggablePoint]);
   const original = correction?.original;
   useEffect(() => {
     if (map && ready) map.getSource('epm-correction')?.setData(correctionFeatures(correction));
@@ -107,8 +118,23 @@ function OnlineMap({ layer, route, selected, onPick, onSelect, onFail, fitKey, c
     });
     return () => pins.forEach(pin => pin.remove());
   }, [map,ready,original]);
-  useEffect(() => { if (map && ready) focus(map,fitSection); }, [map,ready,route?.id,fitKey,fitSection,correction?.sectionIndex]);
-  return <div ref={container} className="epm-map-canvas" aria-label="Peta geografis jalur EPM" />;
+  useEffect(() => {
+    if (map && ready && viewport.updateFocus(focusKey)) focus(map,fitSection);
+  }, [map,ready,focusKey,fitSection,viewport]);
+  useEffect(()=>{
+    if(!map || !ready || !searchLocation) return;
+    if(viewport.updateSearch(searchLocation)) {
+      map.jumpTo({center:searchLocation.coordinates,zoom:16});
+    }
+    const pin=document.createElement('span');
+    pin.className='epm-search-pin';
+    pin.title=searchLocation.label;
+    pin.setAttribute('aria-label',searchLocation.label);
+    const marker=new mapboxgl.Marker({element:pin}).setLngLat(searchLocation.coordinates).addTo(map);
+    return ()=>marker.remove();
+  },[map,ready,searchLocation,viewport]);
+  return <div ref={container} className="epm-map-canvas" aria-label="Peta geografis jalur EPM"
+    data-picking={onPick ? 'true' : undefined} />;
 }
 
 function Schematic({route,selected,onSelect,onPick,correction,fitSection,cablePreview}) {
@@ -133,7 +159,8 @@ function Schematic({route,selected,onSelect,onPick,correction,fitSection,cablePr
     const pos=point.matrixTransform(matrix.inverse());
     onPick({lng:frame.cx+(pos.x-350)/(frame.scale*frame.cosine),lat:frame.cy-(pos.y-208)/frame.scale});
   }
-  return <svg className="epm-schematic" viewBox="0 0 700 416" onClick={pick} aria-label="Skema trase dan penanda titik">
+  return <svg className="epm-schematic" viewBox="0 0 700 416" onClick={pick} aria-label="Skema trase dan penanda titik"
+    data-picking={onPick ? 'true' : undefined}>
     <polyline points={(route?.geometry?.coordinates || []).map(p=>frame.pixel(p).join(',')).join(' ')} fill="none" stroke="#009688" strokeWidth="4" strokeLinejoin="round" />
     {cables.map(({geometry,properties},i)=><polyline key={i} points={geometry.coordinates.map(p=>frame.pixel(p).join(',')).join(' ')}
       fill="none" stroke={properties.preview?CABLE_PREVIEW_COLOR:CABLE_COLOR} strokeWidth={properties.preview?8:6}
@@ -165,12 +192,29 @@ function Schematic({route,selected,onSelect,onPick,correction,fitSection,cablePr
   </svg>;
 }
 
-export default function RouteMap({route,selected,onSelect,onPick,hint,correction,cablePreview}) {
+export default function RouteMap({route,selected,onSelect,onPick,onMovePoint,draggablePoint,hint,correction,cablePreview}) {
   const [layer,setLayer] = useState(() => {try {return ['street','satellite','plain'].find(v=>v===localStorage.getItem('epm-layer')) || 'street';}catch{return 'street';}});
   const [failure,setFailure] = useState(''), [fit,setFit] = useState(0);
   const [showWhole,setShowWhole] = useState(null);
+  const [searchLocation,setSearchLocation]=useState(null);
+  const view=useRef({});
+  const viewport=useMemo(()=>({
+    readCamera:()=>view.current.camera,
+    saveCamera:camera=>{view.current.camera=camera;},
+    updateFocus:key=>{
+      if(view.current.focusKey===key) return false;
+      view.current.focusKey=key;
+      return true;
+    },
+    updateSearch:location=>{
+      if(view.current.searchLocation===location) return false;
+      view.current.searchLocation=location;
+      return true;
+    },
+  }),[]);
   const showPlain = layer === 'plain' || !!failure;
   const fitSection = !!correction && showWhole !== correction.sectionIndex;
+  const focusKey=JSON.stringify([route?.id,route?.geometry?.coordinates?.length>=2,fit,fitSection ? correction.sectionIndex : null]);
   function update(value) {
     setLayer(value); setFailure('');
     try {localStorage.setItem('epm-layer',value);} catch { /* Browsers may disable preference storage. */ }
@@ -184,12 +228,17 @@ export default function RouteMap({route,selected,onSelect,onPick,hint,correction
         setFit(v=>v+1);
       }}>{correction && !fitSection ? 'Fokus ruas' : 'Seluruh jalur'}</button>}
     </div>
+    {!cablePreview && token?.startsWith('pk.') && !failure && <MapLocationSearch token={token} onSelect={location=>{
+      setSearchLocation(location);
+      if(layer==='plain') update('street');
+    }}/>}
     {failure && <p className="epm-note" role="status">{failure} Menampilkan skema. <button type="button" onClick={()=>setFailure('')}>Coba lagi</button></p>}
     {hint && <p className="epm-note">{hint}</p>}
     {showPlain ? <Schematic route={route} selected={selected} onSelect={onSelect} onPick={onPick} correction={correction} fitSection={fitSection}
         cablePreview={cablePreview}/> :
       <OnlineMap key={layer} layer={layer} route={route} selected={selected} onSelect={onSelect} onPick={onPick} onFail={setFailure}
-        fitKey={fit} correction={correction} fitSection={fitSection} cablePreview={cablePreview}/>}
+        onMovePoint={onMovePoint} draggablePoint={draggablePoint} viewport={viewport} searchLocation={searchLocation}
+        focusKey={focusKey} correction={correction} fitSection={fitSection} cablePreview={cablePreview}/>}
     <div className="epm-legend">{[['site','Site'],['tipus','Titik putus'],['sambungan','Sambungan'],['lainnya','Lainnya']].map(([t,l])=>
       <span key={t}><i style={{background:colors[t]}}/>{l}</span>)}
       {!!route?.cable_replacements?.length && <span><i style={{background:CABLE_COLOR}}/>Kabel baru aktif</span>}
