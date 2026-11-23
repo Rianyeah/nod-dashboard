@@ -73,7 +73,7 @@ function wrap(ctx, text, x,y,width,lineHeight,maxLines=3) {
   return y+lineHeight;
 }
 
-const palette={site:'#12675e',tipus:'#b43832',sambungan:'#255caf',lainnya:'#6b647f'};
+const palette={site:'#12675e',remote_sector:'#6740ab',tipus:'#b43832',sambungan:'#255caf',lainnya:'#6b647f'};
 
 export async function buildReportJpg({route,point,incident,photo,layer,format='jpg'}) {
   const canvas=document.createElement('canvas'); canvas.width=reportWidth;canvas.height=reportHeight;
@@ -155,14 +155,15 @@ export async function buildReportJpg({route,point,incident,photo,layer,format='j
     line((row.i+1)+'.  '+row.p.label,panelX,y,'18px Arial','#324c53',300);
     line(km(row.p.station_m)+' km',panelX+310,y,'18px Arial','#324c53',140);y+=rowHeight;
   }
-  for (const [x,type,label] of [[40,'site','Site'],[147,'tipus','Titik putus'],[322,'sambungan','Sambungan'],[516,'lainnya','Titik lainnya']]) {
+  for (const [x,type,label] of [[40,'site','Site'],[135,'remote_sector','Remote Sector'],[315,'tipus','Titik putus'],
+    [459,'sambungan','Sambungan'],[617,'lainnya','Titik lainnya']]) {
     ctx.beginPath();ctx.arc(x+9,978,7,0,2*Math.PI);ctx.fillStyle=palette[type];ctx.fill();
     line(label,x+25,984,'21px Arial');
   }
   line(frame.credits||'Skema trase tersimpan',left,1047,'18px Arial','#52656b',1050);
   if(cables.length){
-    ctx.beginPath();ctx.arc(705,978,7,0,2*Math.PI);ctx.fillStyle=CABLE_COLOR;ctx.fill();
-    line('Kabel baru aktif',721,984,'21px Arial');
+    ctx.beginPath();ctx.arc(794,978,7,0,2*Math.PI);ctx.fillStyle=CABLE_COLOR;ctx.fill();
+    line('Kabel baru aktif',810,984,'21px Arial');
   }
   line('Peta Jalur EPM  /  '+(route.area||route.start_site),panelX,1047,'18px Arial','#52656b',panelWidth);
   return new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error('Gagal membuat laporan.')),

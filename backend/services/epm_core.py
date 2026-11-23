@@ -1,6 +1,7 @@
 """Shared EPM queries and mutations. The caller owns the database transaction."""
 
 import json
+import re
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Literal
 from uuid import UUID, uuid4
@@ -86,6 +87,20 @@ async def list_routes(session, *, include_archived=False):
     """, include_archived=include_archived)
 
 
+async def site_master_details(session, codes):
+    site_ids = sorted({code.strip().upper() for code in codes.split(",")})
+    if len(site_ids) > 20 or any(not re.fullmatch(r"[A-Z]{2,6}[0-9]{1,7}", code) for code in site_ids):
+        fail(422, "Masukkan maksimal 20 ID Site Master yang valid.")
+    return await records(session, """
+        SELECT DISTINCT ON ("Siteid") "Siteid" AS site_id, "Site Name" AS site_name,
+               "Type Site" AS type_site, "Status Site" AS status_site, "NOP" AS nop,
+               "Site Class" AS site_class, "Kabupaten/KOTA" AS kabupaten
+        FROM public.data_site_master
+        WHERE "Siteid" = ANY(CAST(:site_ids AS text[]))
+        ORDER BY "Siteid", NULLIF(BTRIM("Site Name"), '') NULLS LAST
+    """, site_ids=site_ids)
+
+
 async def route_detail(session, route_id, *, include_archived=False):
     route = await existing(session, """
         SELECT * FROM epm_routes WHERE id=:id AND (:include_archived OR archived_at IS NULL)
@@ -148,11 +163,10 @@ async def write_route(session, payload, *, update=False):
     if retyped:
         protected = await records(session, """
             SELECT id FROM epm_route_incidents WHERE point_id=ANY(CAST(:ids AS uuid[]))
-            UNION ALL SELECT id FROM epm_evidence_photos WHERE point_id=ANY(CAST(:ids AS uuid[]))
             LIMIT 1
         """, ids=retyped)
         if protected:
-            fail(422, "Lokasi dengan riwayat gangguan atau foto harus tetap bertipe titik putus.")
+            fail(422, "Lokasi dengan riwayat gangguan harus tetap bertipe titik putus.")
     if updates:
         assignments = ",".join(f"{k}=:{k}" for k in POINT_FIELDS)
         await session.execute(text(f"UPDATE epm_route_points SET {assignments} WHERE id=:id AND route_id=:route_id"), updates)

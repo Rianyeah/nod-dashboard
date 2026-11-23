@@ -1,4 +1,4 @@
-import {useCallback,useEffect,useRef,useState} from 'react';
+import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {MapPinned,Camera,Plus,RotateCw} from 'lucide-react';
 import Breadcrumb from '../components/Breadcrumb';
 import {DashboardPageHeader} from '../components/ui/DashboardPrimitives';
@@ -6,10 +6,12 @@ import api from '../services/api';
 import EvidenceGallery from '../features/epm/EvidenceGallery';
 import EpmExports from '../features/epm/EpmExports';
 import RouteMap from '../features/epm/RouteMap';
+import MapPointPopup from '../features/epm/MapPointPopup';
 import RouteEditor from '../features/epm/RouteEditor';
 import IncidentEditor from '../features/epm/IncidentEditor';
 import CableReplacement,{CableActivityList} from '../features/epm/CableReplacement';
 import {distanceLabel,errorText,INCIDENT_STATUSES,POINT_TYPES,wibLabel} from '../features/epm/routeEditing';
+import {pointMasterCode,sitePointLabel} from '../features/epm/siteMaster';
 import '../features/epm/epm.css';
 
 const tabs=['Peta & Titik','Inventaris Jalur','Laporan Gangguan'];
@@ -48,15 +50,15 @@ function PointPhotoDialog({points, point, events, onSelect, onClose, onChange}) 
   return <dialog ref={dialog} className="epm-photo-dialog" aria-labelledby="epm-photo-title" onCancel={onClose}>
     <div className="epm-stack">
       <div className="epm-heading">
-        <h2 id="epm-photo-title">Foto titik putus</h2>
+        <h2 id="epm-photo-title">Foto evidence</h2>
         <button type="button" onClick={onClose}>Tutup galeri</button>
       </div>
       {point ? <>
-        <label>Pilih titik putus<select value={point.id} onChange={e=>onSelect(e.target.value)}>
-          {points.map(p=><option value={p.id} key={p.id}>{p.label}</option>)}
+        <label>Pilih titik jalur<select value={point.id} onChange={e=>onSelect(e.target.value)}>
+          {points.map(p=><option value={p.id} key={p.id}>{sitePointLabel(p)}</option>)}
         </select></label>
         <EvidenceGallery pointId={point.id} incidents={events.filter(row=>row.point_id===point.id)} onChange={onChange}/>
-      </> : <p>Belum ada titik putus pada jalur ini.</p>}
+      </> : <p>Belum ada titik pada jalur ini.</p>}
     </div>
   </dialog>;
 }
@@ -73,16 +75,31 @@ export default function EpmRouteMapPage() {
   const [editor,setEditor]=useState(null),[eventEditor,setEventEditor]=useState(null),[notice,setNotice]=useState('');
   const [search,setSearch]=useState(''),[filters,setFilters]=useState({route_id:'',status:'',date_from:'',date_to:''});
   const [photoTarget,setPhotoTarget]=useState(null);
+  const [popupId,setPopupId]=useState('');
   const [cableDraft,setCableDraft]=useState(null);
   const listing=useResource('/epm/routes',tick);
   const routes=listing.data || [];
   const activeId=routes.some(r=>r.id===routeId)?routeId:(routes[0]?.id || '');
   const detail=useResource(activeId?`/epm/routes/${activeId}`:'',tick);
   const route=detail.data;
-  const points=route?.points || [];
+  const codes=useMemo(()=>{
+    if(!route?.points.length) return '';
+    const ordered=[route.points[0],route.points.at(-1),...route.points.slice(1,-1)];
+    return [...new Set(ordered.map(p=>pointMasterCode(route,p)).filter(Boolean))].slice(0,20).sort().join(',');
+  },[route]);
+  const siteLookup=useResource(tab===tabs[0] && codes ? '/epm/site-master?site_ids='+encodeURIComponent(codes) : '',tick);
+  const mapRoute=useMemo(()=>{
+    if(!route) return null;
+    const masterByCode=new Map((siteLookup.data || []).map(site=>[site.site_id,site]));
+    return {...route,points:route.points.map(p=>{
+      const site_code=pointMasterCode(route,p);
+      return site_code ? {...p,site_code,site_master:masterByCode.get(site_code)} : p;
+    })};
+  },[route,siteLookup.data]);
+  const points=mapRoute?.points || [];
   const point=points.find(p=>p.id===pointId) || points[0];
-  const breakPoints=points.filter(p=>p.type==='tipus');
-  const photoPoint=breakPoints.find(p=>p.id===photoTarget) || breakPoints[0];
+  const photoPoint=points.find(p=>p.id===photoTarget) || points[0];
+  const popupPoint=points.find(p=>p.id===popupId);
   const routeEvents=useResource(activeId?`/epm/incidents?route_id=${activeId}`:'',tick);
   const events=routeEvents.data || [];
   const pointEvents=events.filter(r=>r.point_id===point?.id);
@@ -93,8 +110,8 @@ export default function EpmRouteMapPage() {
   const reportForActive=incident && incident.route_id===route?.id;
   const cableActivities=route?.cable_replacements || [];
 
-  function selectRoute(id) {setRouteId(id);setPointId('');setIncidentId('');setEventEditor(null);setNotice('');}
-  function selectPoint(id) {setPointId(id);setIncidentId('');setEventEditor(null);}
+  function selectRoute(id) {setRouteId(id);setPointId('');setPopupId('');setIncidentId('');setEventEditor(null);setNotice('');}
+  function selectPoint(id) {setPointId(id);setPopupId('');setIncidentId('');setEventEditor(null);}
   function openEvent(r) {
     setRouteId(r.route_id);setPointId(r.point_id);setIncidentId(r.id);setEventEditor(null);
   }
@@ -105,7 +122,7 @@ export default function EpmRouteMapPage() {
   }
   const failures=[listing.error,detail.error,routeEvents.error,report.error].filter(Boolean);
   const shownRoutes=routes.filter(r=>[r.name,r.area,r.pic,r.start_site,r.end_site].some(v=>v?.toLowerCase().includes(search.toLowerCase())));
-  function changeTab(t) {setTab(t);setIncidentId('');setEventEditor(null);setNotice('');}
+  function changeTab(t) {setTab(t);setPopupId('');setIncidentId('');setEventEditor(null);setNotice('');}
   function incidentDetail(row) {
     return <section className="epm-stack epm-panel"><div className="epm-heading"><div><small>Detail kejadian</small><h3>{row.ticket || row.point_label} · {INCIDENT_STATUSES[row.status] || 'Belum dicatat'}</h3></div><button onClick={()=>setIncidentId('')}>Tutup detail</button></div>
       <dl className="epm-values"><div><dt>Mulai</dt><dd>{wibLabel(row.started_at)}</dd></div><div><dt>Pulih</dt><dd>{wibLabel(row.recovered_at)}</dd></div><div><dt>Penyebab</dt><dd>{row.cause || '—'}</dd></div><div><dt>Tindakan</dt><dd>{row.action || '—'}</dd></div></dl>
@@ -139,25 +156,27 @@ export default function EpmRouteMapPage() {
       <div className="epm-toolbar-actions">
         <button onClick={()=>setEditor({initial:route})}>Edit jalur</button>
         <button onClick={()=>setEditor({initial:route,correction:true,pointId:point?.id})}>Koreksi ruas di peta</button>
-        <button className="epm-primary" onClick={()=>setPhotoTarget(point?.type==='tipus' ? point.id : breakPoints[0]?.id || '')}>
-          <Camera size={16}/> Foto titik putus
+        <button className="epm-primary" onClick={()=>setPhotoTarget(point?.id || '')}>
+          <Camera size={16}/> Foto evidence
         </button>
       </div></>}</div>
       {route ? <>
-        <div className="epm-split"><RouteMap route={route} selected={point?.id} onSelect={selectPoint}/>
+        <div className="epm-split"><RouteMap route={mapRoute} selected={point?.id}
+          onSelect={id=>{selectPoint(id);setPopupId(id);}}
+          popup={popupPoint && <MapPointPopup point={popupPoint} events={events} lookup={siteLookup} onClose={()=>setPopupId('')}/>}/>
         <section className="epm-panel epm-list"><header><h2>Titik jalur <small>{points.length}</small></h2></header>
         <ol>{points.map((p,i)=><li key={p.id}><button aria-current={point?.id===p.id?'location':undefined} onClick={()=>selectPoint(p.id)}>
-          <b>{i+1}</b><span><strong>{p.label}</strong><small>{POINT_TYPES[p.type]}{p.photo_count>0 && <> · <Camera size={11}/> {p.photo_count}</>}</small></span>
+          <b>{i+1}</b><span><strong>{sitePointLabel(p)}</strong><small>{POINT_TYPES[p.type]}{p.photo_count>0 && <> · <Camera size={11}/> {p.photo_count}</>}</small></span>
           <span className="epm-dist">{distanceLabel(p.station_m)}<small>+{Math.round(p.segment_m || 0)} m</small></span>
         </button></li>)}</ol></section></div>
-        {point && <section className="epm-panel epm-stack"><div className="epm-heading"><div><small>{POINT_TYPES[point.type]} · {distanceLabel(point.station_m)}</small><h2>{point.label}</h2></div>
+        {point && <section className="epm-panel epm-stack"><div className="epm-heading"><div><small>{POINT_TYPES[point.type]} · {distanceLabel(point.station_m)}</small><h2>{sitePointLabel(point)}</h2></div>
           <div className="epm-row">
             <button onClick={()=>setEditor({initial:route,pointId:point.id})}>Edit titik</button>
             <button onClick={()=>setCableDraft({route,point})}>Catat penggantian kabel</button>
           </div></div>
           <p className="epm-muted">Koordinat {point.lat}, {point.lng}{point.note?' · '+point.note:''}</p>
+          <div className="epm-row"><button className="epm-primary" onClick={()=>setPhotoTarget(point.id)}><Camera size={16}/> Tambah / lihat foto ({point.photo_count || 0})</button></div>
           {point.type==='tipus' && <>
-            <div className="epm-row"><button className="epm-primary" onClick={()=>setPhotoTarget(point.id)}><Camera size={16}/> Tambah / lihat foto ({point.photo_count || 0})</button></div>
             <div className="epm-heading"><h3>Riwayat gangguan</h3><button onClick={()=>setEventEditor({point,routeId:activeId})}>Catat gangguan</button></div>
             {!routeEvents.data ? <p>Memuat riwayat…</p> : pointEvents.length ? <ReportTable rows={pointEvents} selected={incidentId} onSelect={openEvent}/> : <p className="epm-muted">Belum dicatat</p>}
           </>}
@@ -175,7 +194,7 @@ export default function EpmRouteMapPage() {
       {[['date_from','Dari tanggal'],['date_to','Sampai tanggal']].map(([k,l])=><label key={k}>{l} (WIB)<input type="date" value={filters[k]} min={k==='date_to'?filters.date_from || undefined:undefined} max={k==='date_from'?filters.date_to || undefined:undefined} onChange={e=>setFilters({...filters,[k]:e.target.value})}/></label>)}
       </div>{report.data?.length ? <ReportTable rows={report.data} selected={incidentId} onSelect={openEvent}/> : <p>{report.data?'Belum ada kejadian untuk filter ini.':'Memuat laporan…'}</p>}</section>}
     {eventEditor ? <IncidentEditor key={eventEditor.initial?.id || eventEditor.point.id} {...eventEditor} onClose={()=>setEventEditor(null)} onSaved={()=>{setEventEditor(null);setNotice('Kejadian tersimpan.');refresh();}}/> : incident && incidentDetail(incident)}
-    {photoTarget!==null && <PointPhotoDialog points={breakPoints} point={photoPoint} events={events}
+    {photoTarget!==null && <PointPhotoDialog points={points} point={photoPoint} events={events}
       onSelect={setPhotoTarget} onClose={()=>setPhotoTarget(null)} onChange={refresh}/>}
     {cableDraft && <CableReplacement {...cableDraft} incidents={events} onClose={()=>setCableDraft(null)}
       onSaved={activity=>{setCableDraft(null);refresh();

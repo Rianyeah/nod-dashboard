@@ -140,9 +140,9 @@ async def save_photo(session: AsyncSession, *, photo_id: UUID, point_id: UUID, i
     active = "" if restoring else " AND p.archived_at IS NULL AND r.archived_at IS NULL"
     point = await session.scalar(text(f"""
         SELECT p.id FROM epm_route_points p JOIN epm_routes r ON r.id=p.route_id
-        WHERE p.id=:id AND p.type='tipus'{active} FOR SHARE OF p,r"""), {"id": point_id})
+        WHERE p.id=:id{active} FOR SHARE OF p,r"""), {"id": point_id})
     if point is None:
-        raise HTTPException(404, "Titik putus tidak ditemukan.")
+        raise HTTPException(404, "Titik jalur tidak ditemukan.")
     if incident_id is not None:
         active_incident = "" if restoring else " AND archived_at IS NULL"
         found = await session.scalar(text(f"""

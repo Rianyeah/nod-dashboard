@@ -61,6 +61,15 @@ def test_validation_rejects_invalid_route_and_mismatched_revision():
     assert exc.value.status_code == 409
 
 
+def test_remote_sector_is_valid_at_the_epm_endpoint():
+    raw = route_fixture()
+    raw["points"][-1]["type"] = "remote_sector"
+    assert parse_route(raw)["points"][-1]["type"] == "remote_sector"
+    raw["points"][1]["type"] = "remote_sector"
+    with pytest.raises(HTTPException, match="titik akhir"):
+        parse_route(raw)
+
+
 def test_incident_dates_validate_completed_work_and_legacy_import():
     base = dict(route_id=uuid4(),point_id=uuid4(),status="resolved",started_at="2026-11-19T23:50:00+07:00")
     with pytest.raises(HTTPException):
@@ -112,6 +121,44 @@ async def test_real_postgres_inventory_history_and_archive():
                 history = await epm.list_incidents(session,route_id=row["id"])
                 assert len(history) == 2
                 assert next(i for i in history if i["id"]==second["id"])["status"]=="open"
+                await transaction.rollback()
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_real_postgres_photos_on_every_point_type(monkeypatch):
+    import io
+    import os
+
+    from PIL import Image
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+    from services import epm_core as epm, epm_photos
+
+    dsn = os.environ.get("EPM_TEST_DATABASE_URL")
+    if not dsn:
+        pytest.skip("Disposable EPM test database was not supplied")
+    raw = io.BytesIO()
+    Image.new("RGB", (12, 12), "tomato").save(raw, "PNG")
+    monkeypatch.setattr(epm_photos, "_write_variants", lambda *args: None)
+    engine = create_async_engine(dsn)
+    try:
+        async with async_sessionmaker(engine)() as session:
+            async with session.begin() as transaction:
+                payload = route_fixture()
+                middle = payload["points"][1]
+                payload["points"][1:1] = [dict(middle, id=str(uuid4()), label=kind, type=kind)
+                                           for kind in ("sambungan", "lainnya")]
+                payload["points"][-1]["type"] = "remote_sector"
+                route = await epm.create_route(session, payload)
+                for point in route["points"]:
+                    photo = await epm_photos.save_photo(session, photo_id=uuid4(), point_id=point["id"],
+                        incident_id=None, caption=point["label"], raw=raw.getvalue())
+                    assert photo["point_id"] == point["id"]
+                middle["type"] = "sambungan"
+                updated = await epm.update_route(session, route["id"], dict(payload, expected_revision=1))
+                assert all(point["photo_count"] == 1 for point in updated["points"])
+                assert next(point for point in updated["points"] if str(point["id"]) == middle["id"])["type"] == "sambungan"
                 await transaction.rollback()
     finally:
         await engine.dispose()

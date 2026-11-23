@@ -1,4 +1,7 @@
-export const POINT_TYPES = { site: 'Site', tipus: 'Titik putus', sambungan: 'Sambungan', lainnya: 'Lainnya' };
+import {siteMasterCode} from './siteMaster.js';
+
+export const POINT_TYPES = { site: 'Site', remote_sector: 'Remote Sector', tipus: 'Titik putus', sambungan: 'Sambungan', lainnya: 'Lainnya' };
+export const POINT_COLORS = {site:'#087460',remote_sector:'#6740ab',tipus:'#c53a32',sambungan:'#966300',lainnya:'#365ca4'};
 export const INCIDENT_STATUSES = { open: 'OPEN', resolved: 'CLOSED', working: 'INPROGRES' };
 export const distanceLabel = metres => Number.isFinite(metres)
   ? `${(metres / 1000).toLocaleString('id-ID', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} km` : '—';
@@ -14,6 +17,14 @@ export function errorText(error) {
   if (typeof detail === 'string') return detail;
   if (Array.isArray(detail)) return detail.map(item => `${item.loc?.slice(1).join('.') || 'Data'}: ${item.msg}`).join('; ');
   return error.message || 'Permintaan gagal.';
+}
+
+export function pointCoordinate(value, limit) {
+  if (typeof value==='number') return Number.isFinite(value) && Math.abs(value)<=limit ? value : null;
+  const text=String(value ?? '').trim().replace(',','.');
+  if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(text)) return null;
+  const coordinate=Number(text);
+  return Math.abs(coordinate)<=limit ? coordinate : null;
 }
 
 export function parseCoordinates(text) {
@@ -100,7 +111,8 @@ export function routePayload(route) {
   const { name,start_site,end_site,area,pic,asset_ref,reference_distance,verification,source,geometry,anchors } = route;
   const points = route.points.filter(p => !p.archived_at).map(p => {
     const { id,label,type,lat,lng,note,from_anchor_id,to_anchor_id,station_m } = p;
-    return { id,label,type,lat,lng,note: note || '',from_anchor_id,to_anchor_id,...(Number.isFinite(station_m) ? {station_m} : {}) };
+    return { id,label,type,lat:pointCoordinate(lat,85),lng:pointCoordinate(lng,180),note: note || '',from_anchor_id,to_anchor_id,
+      ...(Number.isFinite(station_m) ? {station_m} : {}) };
   });
   return { name,start_site,end_site,area,pic,asset_ref,reference_distance,verification,source,geometry,
     anchors: anchors.map(({id,label,lat,lng,vertex_index}) => ({id,label,lat,lng,vertex_index})),
@@ -109,15 +121,16 @@ export function routePayload(route) {
 
 export function prepareReshape(route, anchors, geometry, source) {
   const first = anchors[0], last = anchors.at(-1);
-  const sitePoint = (old, anchor) => ({ ...old, id: old?.id || crypto.randomUUID(), label: anchor.label,
-    type: 'site', lat: anchor.lat,lng: anchor.lng,note: old?.note || '' });
+  const sitePoint = (old, anchor, type) => ({ ...old, id: old?.id || crypto.randomUUID(), label: anchor.label,
+    type, lat: anchor.lat,lng: anchor.lng,note: old?.note || '' });
+  const destinationType=route.points.at(-1)?.type || (siteMasterCode(last.label).startsWith('EPM')?'remote_sector':'site');
   const inner = route.points.filter(p => !p.archived_at).slice(1, -1).map(p => ({...p, station_m: undefined}));
   return { ...route, name: route.name || `${first.label} → ${last.label}`,
     start_site: first.label, end_site: last.label, geometry, anchors, source, verification:'pending',
     points: [
-      { ...sitePoint(route.points[0], first), from_anchor_id: first.id, to_anchor_id: anchors[1].id, station_m: 0 },
+      { ...sitePoint(route.points[0], first, 'site'), from_anchor_id: first.id, to_anchor_id: anchors[1].id, station_m: 0 },
       ...inner,
-      { ...sitePoint(route.points.at(-1), last), from_anchor_id: anchors.at(-2).id, to_anchor_id: last.id, station_m: undefined },
+      { ...sitePoint(route.points.at(-1), last, destinationType), from_anchor_id: anchors.at(-2).id, to_anchor_id: last.id, station_m: undefined },
     ] };
 }
 

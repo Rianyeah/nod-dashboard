@@ -35,13 +35,16 @@ def test_legacy_seed_identity_and_bare_break():
     assert route["incidents"] == []
 
 
-def test_zip_validates_original_checksum_and_omits_storage_keys():
+@pytest.mark.parametrize("photo_target", ["site", "tipus", "sambungan", "remote_sector"])
+def test_zip_validates_original_checksum_and_omits_storage_keys(photo_target):
     route, = read_backup(io.BytesIO(json.dumps(legacy_collection()).encode()), False)
+    point_index = {"site": 0, "tipus": 1, "sambungan": 1, "remote_sector": 2}[photo_target]
+    route["points"][point_index]["type"] = photo_target
     image = b"test-original"
     identifier = str(uuid4())
     route["photos"] = [{
         "id": identifier,
-        "point_id": route["points"][1]["id"],
+        "point_id": route["points"][point_index]["id"],
         "incident_id": None,
         "size_bytes": len(image),
         "sha256": hashlib.sha256(image).hexdigest(),

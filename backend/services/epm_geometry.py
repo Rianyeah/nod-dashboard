@@ -26,7 +26,7 @@ class Anchor(Coordinates):
 class Point(Coordinates):
     id: UUID = Field(default_factory=uuid4)
     label: str = Field(min_length=1, max_length=150)
-    type: Literal["site", "tipus", "sambungan", "lainnya"]
+    type: Literal["site", "remote_sector", "tipus", "sambungan", "lainnya"]
     note: str = Field(default="", max_length=2000)
     from_anchor_id: UUID | None = None
     to_anchor_id: UUID | None = None
@@ -145,8 +145,10 @@ def prepare_route(payload):
     indices = [a["vertex_index"] for a in anchors]
     if len({p.id for p in route.points}) != len(route.points):
         raise ValueError("ID titik duplikat dalam satu jalur.")
-    if route.points[0].type != "site" or route.points[-1].type != "site":
-        raise ValueError("Titik awal dan akhir harus berupa site.")
+    if route.points[0].type != "site" or route.points[-1].type not in ("site", "remote_sector"):
+        raise ValueError("Titik awal harus berupa Site. Titik akhir harus berupa Site atau Remote Sector.")
+    if any(point.type == "remote_sector" for point in route.points[1:-1]):
+        raise ValueError("Remote Sector hanya untuk titik akhir jalur.")
     work, points = 0, []
     for i, point in enumerate(route.points):
         raw = (point.lng, point.lat)
