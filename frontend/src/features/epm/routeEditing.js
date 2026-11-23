@@ -124,7 +124,12 @@ export function prepareReshape(route, anchors, geometry, source) {
   const sitePoint = (old, anchor, type) => ({ ...old, id: old?.id || crypto.randomUUID(), label: anchor.label,
     type, lat: anchor.lat,lng: anchor.lng,note: old?.note || '' });
   const destinationType=route.points.at(-1)?.type || (siteMasterCode(last.label).startsWith('EPM')?'remote_sector':'site');
-  const inner = route.points.filter(p => !p.archived_at).slice(1, -1).map(p => ({...p, station_m: undefined}));
+  const nextAnchorById = new Map(anchors.slice(0,-1).map((anchor,i)=>[anchor.id,anchors[i+1].id]));
+  const inner = route.points.filter(p => !p.archived_at).slice(1, -1).map(p => {
+    const assigned = p.to_anchor_id && nextAnchorById.get(p.from_anchor_id)===p.to_anchor_id;
+    return {...p, from_anchor_id:assigned?p.from_anchor_id:null, to_anchor_id:assigned?p.to_anchor_id:null,
+      station_m:undefined};
+  });
   return { ...route, name: route.name || `${first.label} → ${last.label}`,
     start_site: first.label, end_site: last.label, geometry, anchors, source, verification:'pending',
     points: [
