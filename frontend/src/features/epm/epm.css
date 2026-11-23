@@ -57,15 +57,25 @@
 .epm-legend i {width:9px;height:9px;display:inline-block;border-radius:100%;}
 .epm-map-canvas,.epm-schematic {width:100%;height:clamp(450px,64vh,760px);display:block;}
 .epm-main-map :is(.epm-map-canvas,.epm-schematic) {height:clamp(475px,70vh,850px);}
-.epm-nearby-popup {color:#20374e;max-width:200px;overflow-wrap:anywhere;}
 .epm-sector-symbol {pointer-events:none;z-index:0;}
 .epm-map-frame {position:relative;}
-.epm-map-popup {position:absolute;z-index:2;top:10px;right:12px;width:min(330px,calc(100% - 58px));max-height:calc(100% - 24px);
+.epm-map-popup {position:absolute;z-index:2;top:10px;right:12px;width:min(390px,calc(100% - 58px));max-height:calc(100% - 24px);
   overflow:auto;overscroll-behavior:contain;padding:12px;background:var(--bg-surface);border:1px solid var(--border-light);
   border-radius:10px;box-shadow:0 6px 22px #101b2b6b;overflow-wrap:anywhere;}
 .epm-map-popup-header {display:flex;align-items:flex-start;justify-content:space-between;gap:8px;}
 .epm-map-popup-header button {flex-shrink:0;}
 .epm-master-values {grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}
+.epm-popup-metrics {display:grid;gap:5px;min-width:0;overflow-x:auto;}
+.epm-popup-metrics h4 {font-size:.81rem;font-weight:650;}
+.epm-popup-metrics table {width:100%;border-collapse:collapse;font-size:.75rem;font-variant-numeric:tabular-nums;white-space:nowrap;overflow-wrap:normal;}
+.epm-popup-metrics :is(th,td) {padding:6px 3px;border-bottom:1px solid var(--border);font-weight:inherit;text-align:right;}
+.epm-popup-metrics tr>:first-child {text-align:left;}
+.epm-popup-metrics thead {color:var(--text-muted);}
+.epm-popup-links {display:flex;align-items:center;flex-wrap:wrap;gap:6px 16px;font-size:.8125rem;}
+.epm-popup-links a {display:inline-flex;align-items:center;gap:4px;text-decoration:underline;text-underline-offset:3px;}
+@media (max-width:600px) {
+  .epm-map-popup {width:min(390px,calc(100% - 24px));}
+}
 .epm-map-popup .epm-thumb-grid {grid-template-columns:repeat(auto-fill,minmax(64px,1fr));}
 .epm-schematic {background-color:var(--bg-base);background-image:radial-gradient(var(--border) 1px,transparent 1px);background-size:18px 18px;}
 .epm-schematic g[role=button] {cursor:pointer;}

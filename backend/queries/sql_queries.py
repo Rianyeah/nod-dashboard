@@ -24,6 +24,15 @@ TREND_MONTH_MINUTES_EXPR = """
 )
 """.strip()
 
+TREND_AVAILABILITY_EXPR = f"""
+    ROUND(
+        (
+            MAX(COALESCE(jumlah_cell, 1))::NUMERIC * {TREND_MONTH_MINUTES_EXPR}
+            - SUM(COALESCE(NULLIF("outgage (menit)", ''), '0')::NUMERIC)
+        ) / NULLIF(MAX(COALESCE(jumlah_cell, 1))::NUMERIC * {TREND_MONTH_MINUTES_EXPR}, 0) * 100.0
+    , 4)
+"""
+
 SITE_MONTH_AGG_CTE = f"""
 WITH site_raw AS (
     SELECT
@@ -262,12 +271,7 @@ FROM (
     SELECT
         "Bulan",
         "Tahun",
-        ROUND(
-            (
-                (MAX(COALESCE(jumlah_cell, 1))::NUMERIC * {TREND_MONTH_MINUTES_EXPR})
-                - SUM(COALESCE(NULLIF("outgage (menit)", ''), '0')::NUMERIC)
-            ) / NULLIF(MAX(COALESCE(jumlah_cell, 1))::NUMERIC * {TREND_MONTH_MINUTES_EXPR}, 0) * 100.0
-        , 4) AS avg_availability,
+        {TREND_AVAILABILITY_EXPR} AS avg_availability,
         SUM(COALESCE(NULLIF("outgage (menit)", ''), '0')::NUMERIC) AS total_outage_menit
     FROM availability_logs_jatim
     WHERE "SITE ID" = :site_id

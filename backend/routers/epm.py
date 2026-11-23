@@ -26,6 +26,11 @@ async def get_site_master(site_ids: Annotated[str, Query(min_length=1, max_lengt
     return await epm.site_master_details(session, site_ids)
 
 
+@router.get("/sites/{site_id}/monthly-metrics")
+async def get_site_monthly_metrics(site_id: str, session: Session):
+    return await epm.site_monthly_metrics(session, site_id)
+
+
 @router.get("/map-sites")
 async def get_nearby_sites(bbox: Annotated[str, Query(min_length=7, max_length=110)], session: Session):
     try:

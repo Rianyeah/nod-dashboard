@@ -11,6 +11,7 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
+from queries.sql_queries import TREND_AVAILABILITY_EXPR
 from services.epm_geometry import prepare_route
 
 WIB = timezone(timedelta(hours=7))
@@ -104,6 +105,41 @@ async def site_master_details(session, codes):
         WHERE "Siteid" = ANY(CAST(:site_ids AS text[]))
         ORDER BY "Siteid", NULLIF(BTRIM("Site Name"), '') NULLS LAST
     """, site_ids=site_ids)
+
+
+async def site_monthly_metrics(session, code):
+    site_id, = parse_site_codes(code, limit=1)
+    return await records(session, f"""
+        WITH latest AS (
+            SELECT GREATEST(
+                (SELECT MAKE_DATE("Tahun"::int, "Bulan"::int, 1)
+                 FROM public.availability_logs_jatim
+                 WHERE "Tahun" IS NOT NULL AND "Bulan" BETWEEN 1 AND 12
+                 ORDER BY "Tahun" DESC, "Bulan" DESC LIMIT 1),
+                (SELECT CAST(MAX(trx_month) || '-01' AS date) FROM public.traktor_data)
+            ) AS period
+        ),
+        months AS (
+            SELECT period - n * INTERVAL '1 month' AS month
+            FROM latest CROSS JOIN generate_series(0, 2) AS offsets(n)
+            WHERE period IS NOT NULL
+        )
+        SELECT TO_CHAR(m.month, 'YYYY-MM') AS period, a.availability, r.revenue
+        FROM months m
+        LEFT JOIN LATERAL (
+            SELECT {TREND_AVAILABILITY_EXPR} AS availability
+            FROM public.availability_logs_jatim
+            WHERE "SITE ID" = :site_id AND "Tahun" = EXTRACT(YEAR FROM m.month)::bigint
+              AND "Bulan" = EXTRACT(MONTH FROM m.month)::bigint
+            GROUP BY "Tahun", "Bulan"
+        ) a ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT SUM(rev) AS revenue
+            FROM public.traktor_data
+            WHERE site_id = :site_id AND trx_month = TO_CHAR(m.month, 'YYYY-MM')
+        ) r ON TRUE
+        ORDER BY m.month DESC
+    """, site_id=site_id)
 
 
 async def nearby_map_sites(session, bounds):

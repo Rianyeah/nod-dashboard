@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useEffectEvent, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import api from '../../services/api';
 import { pointMasterCode } from './siteMaster';
@@ -36,13 +36,14 @@ export function addNearbySiteLayer(map) {
   }});
 }
 
-export function useNearbySites(map,enabled,excludedCodes,onStatus) {
+export function useNearbySites(map,enabled,excludedCodes,onStatus,onSelect) {
+  const selectSite=useEffectEvent(site=>onSelect?.(site));
   useEffect(()=>{
     if (!map || !enabled) return;
     const source = map.getSource(nearbyLayer);
     if (!source) return;
     const exclude = new Set(excludedCodes.split(','));
-    let timer, request, popup;
+    let timer, request;
 
     async function loadSites() {
       onStatus('');
@@ -81,16 +82,7 @@ export function useNearbySites(map,enabled,excludedCodes,onStatus) {
     }
     function showSite(event) {
       const site = event.features?.[0];
-      if (!site) return;
-      popup?.remove();
-      const body = document.createElement('div');
-      body.className = 'epm-nearby-popup';
-      const title = document.createElement('strong');
-      title.textContent = site.properties.code;
-      const name = document.createElement('p');
-      name.textContent = site.properties.name;
-      body.append(title,name);
-      popup = new mapboxgl.Popup({offset:9}).setDOMContent(body).setLngLat(event.lngLat).addTo(map);
+      if (site) selectSite(site.properties);
     }
     const enter = ()=>{map.getCanvas().style.cursor='pointer';};
     const leave = ()=>{map.getCanvas().style.cursor='';};
@@ -102,7 +94,6 @@ export function useNearbySites(map,enabled,excludedCodes,onStatus) {
     return ()=>{
       clearTimeout(timer);
       request?.abort();
-      popup?.remove();
       map.off('moveend',schedule);
       map.off('click',nearbyLayer,showSite);
       map.off('mouseenter',nearbyLayer,enter);

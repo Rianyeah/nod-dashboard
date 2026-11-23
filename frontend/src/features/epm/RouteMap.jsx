@@ -25,7 +25,7 @@ function correctionFeatures(correction) {
 }
 
 function OnlineMap({ layer, route, selected, onPick, onSelect, onMovePoint, onFail, focusKey, fitSection,
-  correction, cablePreview, viewport, searchLocation, draggablePoint, showSites, onSitesStatus, endpoints, directions }) {
+  correction, cablePreview, viewport, searchLocation, draggablePoint, showSites, onSitesStatus, onSelectNearby, endpoints, directions }) {
   const container = useRef(null);
   const [map, setMap] = useState(null);
   const [ready, setReady] = useState(false);
@@ -34,7 +34,7 @@ function OnlineMap({ layer, route, selected, onPick, onSelect, onMovePoint, onFa
   const selectedPoint = useEffectEvent(id => onSelect?.(id));
   const movedPoint = useEffectEvent((id, coordinates) => onMovePoint?.(id,coordinates));
   const excludedCodes=useMemo(()=>[...new Set(route?.points.map(point=>pointMasterCode(route,point)))].sort().join(','),[route]);
-  useNearbySites(map,ready && showSites,excludedCodes,onSitesStatus);
+  useNearbySites(map,ready && showSites,excludedCodes,onSitesStatus,onSelectNearby);
   const focus = useEffectEvent((instance, sectionOnly) => {
     const coords = sectionOnly ? correction?.original : [
       ...(route?.geometry?.coordinates || []),
@@ -212,7 +212,7 @@ function Schematic({route,selected,onSelect,onPick,correction,fitSection,cablePr
   </svg>;
 }
 
-export default function RouteMap({route,selected,onSelect,onPick,onMovePoint,draggablePoint,hint,correction,cablePreview,popup,contextLayers=false}) {
+export default function RouteMap({route,selected,onSelect,onSelectNearby,onPick,onMovePoint,draggablePoint,hint,correction,cablePreview,popup,contextLayers=false}) {
   const [layer,setLayer] = useState(() => {try {return ['street','satellite','plain'].find(v=>v===localStorage.getItem('epm-layer')) || 'street';}catch{return 'street';}});
   const [failure,setFailure] = useState(''), [fit,setFit] = useState(0);
   const [showWhole,setShowWhole] = useState(null);
@@ -285,7 +285,8 @@ export default function RouteMap({route,selected,onSelect,onPick,onMovePoint,dra
       <OnlineMap key={layer} layer={layer} route={route} selected={selected} onSelect={onSelect} onPick={onPick} onFail={setFailure}
         onMovePoint={onMovePoint} draggablePoint={draggablePoint} viewport={viewport} searchLocation={searchLocation}
         focusKey={focusKey} correction={correction} fitSection={fitSection} cablePreview={cablePreview}
-        showSites={contextLayers && showSites} onSitesStatus={setSitesStatus} endpoints={endpoints} directions={sectors?.data}/>}
+        showSites={contextLayers && showSites} onSitesStatus={setSitesStatus} onSelectNearby={onSelectNearby}
+        endpoints={endpoints} directions={sectors?.data}/>}
       {popup}
     </div>
     <div className="epm-legend">{Object.entries(POINT_TYPES).map(([t,l])=>

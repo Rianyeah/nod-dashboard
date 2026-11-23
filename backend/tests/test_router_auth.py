@@ -3,6 +3,7 @@ import pytest
 
 PROTECTED_PATHS = (
     "/api/v1/map/sites",
+    "/api/v1/epm/sites/PSN100/monthly-metrics",
     "/api/v1/availability/latest-period",
     "/api/v1/sites",
     "/api/v1/reporting/available-months",

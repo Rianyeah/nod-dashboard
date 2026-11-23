@@ -11,7 +11,7 @@ import RouteEditor from '../features/epm/RouteEditor';
 import IncidentEditor from '../features/epm/IncidentEditor';
 import CableReplacement,{CableActivityList} from '../features/epm/CableReplacement';
 import {distanceLabel,errorText,INCIDENT_STATUSES,POINT_TYPES,wibLabel} from '../features/epm/routeEditing';
-import {pointMasterCode,sitePointLabel} from '../features/epm/siteMaster';
+import {pointMasterCode,siteMasterCode,sitePointLabel} from '../features/epm/siteMaster';
 import '../features/epm/epm.css';
 
 const tabs=['Peta & Titik','Inventaris Jalur','Laporan Gangguan'];
@@ -75,18 +75,20 @@ export default function EpmRouteMapPage() {
   const [editor,setEditor]=useState(null),[eventEditor,setEventEditor]=useState(null),[notice,setNotice]=useState('');
   const [search,setSearch]=useState(''),[filters,setFilters]=useState({route_id:'',status:'',date_from:'',date_to:''});
   const [photoTarget,setPhotoTarget]=useState(null);
-  const [popupId,setPopupId]=useState('');
+  const [mapSelection,setMapSelection]=useState(null);
   const [cableDraft,setCableDraft]=useState(null);
   const listing=useResource('/epm/routes',tick);
   const routes=listing.data || [];
   const activeId=routes.some(r=>r.id===routeId)?routeId:(routes[0]?.id || '');
   const detail=useResource(activeId?`/epm/routes/${activeId}`:'',tick);
   const route=detail.data;
+  const nearby=mapSelection?.nearby;
+  const nearbyCode=siteMasterCode(nearby?.code);
   const codes=useMemo(()=>{
     if(!route?.points.length) return '';
     const ordered=[route.points[0],route.points.at(-1),...route.points.slice(1,-1)];
-    return [...new Set(ordered.map(p=>pointMasterCode(route,p)).filter(Boolean))].slice(0,20).sort().join(',');
-  },[route]);
+    return [...new Set([nearbyCode,...ordered.map(p=>pointMasterCode(route,p))].filter(Boolean))].slice(0,20).sort().join(',');
+  },[route,nearbyCode]);
   const siteLookup=useResource(tab===tabs[0] && codes ? '/epm/site-master?site_ids='+encodeURIComponent(codes) : '',tick);
   const mapRoute=useMemo(()=>{
     if(!route) return null;
@@ -99,7 +101,12 @@ export default function EpmRouteMapPage() {
   const points=mapRoute?.points || [];
   const point=points.find(p=>p.id===pointId) || points[0];
   const photoPoint=points.find(p=>p.id===photoTarget) || points[0];
-  const popupPoint=points.find(p=>p.id===popupId);
+  const popupPoint=nearby ? {
+    type:'site',label:nearby.name || nearby.code,site_code:nearbyCode,
+    site_master:siteLookup.data?.find(site=>site.site_id===nearbyCode),
+  } : points.find(p=>p.id===mapSelection?.pointId);
+  const monthlyMetrics=useResource(tab===tabs[0] && popupPoint?.site_code
+    ? '/epm/sites/'+encodeURIComponent(popupPoint.site_code)+'/monthly-metrics' : '',tick);
   const routeEvents=useResource(activeId?`/epm/incidents?route_id=${activeId}`:'',tick);
   const events=routeEvents.data || [];
   const pointEvents=events.filter(r=>r.point_id===point?.id);
@@ -110,8 +117,8 @@ export default function EpmRouteMapPage() {
   const reportForActive=incident && incident.route_id===route?.id;
   const cableActivities=route?.cable_replacements || [];
 
-  function selectRoute(id) {setRouteId(id);setPointId('');setPopupId('');setIncidentId('');setEventEditor(null);setNotice('');}
-  function selectPoint(id) {setPointId(id);setPopupId('');setIncidentId('');setEventEditor(null);}
+  function selectRoute(id) {setRouteId(id);setPointId('');setMapSelection(null);setIncidentId('');setEventEditor(null);setNotice('');}
+  function selectPoint(id) {setPointId(id);setMapSelection(null);setIncidentId('');setEventEditor(null);}
   function openEvent(r) {
     setRouteId(r.route_id);setPointId(r.point_id);setIncidentId(r.id);setEventEditor(null);
   }
@@ -122,7 +129,7 @@ export default function EpmRouteMapPage() {
   }
   const failures=[listing.error,detail.error,routeEvents.error,report.error].filter(Boolean);
   const shownRoutes=routes.filter(r=>[r.name,r.area,r.pic,r.start_site,r.end_site].some(v=>v?.toLowerCase().includes(search.toLowerCase())));
-  function changeTab(t) {setTab(t);setPopupId('');setIncidentId('');setEventEditor(null);setNotice('');}
+  function changeTab(t) {setTab(t);setMapSelection(null);setIncidentId('');setEventEditor(null);setNotice('');}
   function incidentDetail(row) {
     return <section className="epm-stack epm-panel"><div className="epm-heading"><div><small>Detail kejadian</small><h3>{row.ticket || row.point_label} · {INCIDENT_STATUSES[row.status] || 'Belum dicatat'}</h3></div><button onClick={()=>setIncidentId('')}>Tutup detail</button></div>
       <dl className="epm-values"><div><dt>Mulai</dt><dd>{wibLabel(row.started_at)}</dd></div><div><dt>Pulih</dt><dd>{wibLabel(row.recovered_at)}</dd></div><div><dt>Penyebab</dt><dd>{row.cause || '—'}</dd></div><div><dt>Tindakan</dt><dd>{row.action || '—'}</dd></div></dl>
@@ -158,8 +165,10 @@ export default function EpmRouteMapPage() {
       </div></>}</div>
       {route ? <>
         <div className="epm-main-map"><RouteMap route={mapRoute} selected={point?.id} contextLayers
-          onSelect={id=>{selectPoint(id);setPopupId(id);}}
-          popup={popupPoint && <MapPointPopup point={popupPoint} events={events} lookup={siteLookup} onClose={()=>setPopupId('')}/>}/></div>
+          onSelect={id=>{selectPoint(id);setMapSelection({pointId:id});}}
+          onSelectNearby={site=>setMapSelection({nearby:site})}
+          popup={popupPoint && <MapPointPopup key={popupPoint.id || nearby.code} point={popupPoint}
+            events={events} lookup={siteLookup} metrics={monthlyMetrics} onClose={()=>setMapSelection(null)}/>}/></div>
         <div className="epm-point-workspace">
         <section className="epm-panel epm-list"><header><h2>Titik jalur <small>{points.length}</small></h2></header>
         <ol>{points.map((p,i)=><li key={p.id}><button aria-current={point?.id===p.id?'location':undefined} onClick={()=>selectPoint(p.id)}>
