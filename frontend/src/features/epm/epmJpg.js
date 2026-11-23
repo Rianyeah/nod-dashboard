@@ -1,171 +1,208 @@
-import mapboxgl from 'mapbox-gl';
-import 'mapbox-gl/dist/mapbox-gl.css';
-import {INCIDENT_STATUSES} from './routeEditing';
+import {INCIDENT_STATUSES,POINT_COLORS,POINT_TYPES,wibLabel} from './routeEditing';
 import {CABLE_COLOR} from './cableDisplay';
+import {chooseReportInset,compactFocusRadius,drawReportMap,fitText,focusBounds,loadReportImage,reportKm,
+  reportMapFrame,roundedPanel} from './epmReportMap';
 
-export const reportWidth = 1600;
-export const reportHeight = 1100;
-const km = m => Number(m / 1000).toLocaleString('id-ID', { maximumFractionDigits: 3 });
-const styles = { road: 'mapbox://styles/mapbox/streets-v12', satellite: 'mapbox://styles/mapbox/satellite-streets-v12' };
+export const REPORT_LAYOUTS={
+  full:{label:'Lengkap',fileLabel:'Lengkap',width:1600,height:1100,map:{x:40,y:173,w:976,h:806},panelX:1046,panelWidth:514},
+  compact:{label:'Ringkas 16:9 untuk PPT',fileLabel:'Ringkas 16x9',width:1600,height:900,
+    map:{x:40,y:148,w:1520,h:647},panelX:1056,panelWidth:504},
+  square:{label:'Ringkas 1:1 (persegi)',fileLabel:'Ringkas 1x1',width:1200,height:1200,
+    map:{x:40,y:148,w:1120,h:947},panelX:704,panelWidth:456},
+};
 
-function imageFrom(url) {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error('Gambar gagal dimuat. Coba lagi atau ekspor tanpa foto.'));
-    image.src = url;
-  });
+const ink='#15343d';
+const muted='#4d6771';
+const accent='#08766d';
+const rule='#d9e3e4';
+const numberFormat=new Intl.NumberFormat('id-ID',{maximumFractionDigits:1});
+
+function text(ctx,value,x,y,{size=18,weight=400,color=ink,width}={}) {
+  ctx.font=weight+' '+size+'px Arial';
+  ctx.fillStyle=color;
+  ctx.fillText(width ? fitText(ctx,value,width) : String(value ?? ''),x,y);
 }
 
-function gridProjection(coords, width, height) {
-  const mercator = ([lng, lat]) => [lng * Math.PI / 180, -Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360))];
-  let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
-  for (const pt of coords) {
-    const [x, y] = mercator(pt);
-    minX=Math.min(minX,x); maxX=Math.max(maxX,x); minY=Math.min(minY,y); maxY=Math.max(maxY,y);
-  }
-  const scale = Math.min((width-140)/Math.max(1e-10,maxX-minX),(height-110)/Math.max(1e-10,maxY-minY));
-  return {project(pt) { const [x,y]=mercator(pt); return {x:width/2+(x-(minX+maxX)/2)*scale, y:height/2+(y-(minY+maxY)/2)*scale}; },
-    metresPerPixel: 6371008.8 * Math.cos(coords[0][1]*Math.PI/180)/scale};
+function divider(ctx,x1,x2,y) {
+  ctx.fillStyle=rule;
+  ctx.fillRect(x1,y,x2-x1,1);
 }
 
-async function exportBasemap(style, coords, width, height) {
-  const token = import.meta.env.VITE_MAPBOX_TOKEN;
-  if (!token || !mapboxgl.supported()) throw new Error('Latar peta tidak tersedia. Pilih Skema untuk membuat JPG.');
-  const holder = document.createElement('div');
-  Object.assign(holder.style, {position:'fixed', left:'-12000px', top:'0', width:width+'px', height:height+'px',pointerEvents:'none'});
-  document.body.appendChild(holder);
-  let map;
-  try {
-    const bounds=new mapboxgl.LngLatBounds();
-    coords.forEach(pt=>bounds.extend(pt));
-    map = new mapboxgl.Map({container:holder, accessToken:token, style:styles[style],interactive:false,
-      attributionControl:true, preserveDrawingBuffer:true, fadeDuration:0, bounds, fitBoundsOptions:{padding:66,maxZoom:18}, projection:'mercator'});
-    await new Promise((resolve,reject)=>{
-      const id=setTimeout(()=>reject(new Error('Latar peta belum siap. Coba lagi atau pilih Skema.')),25000);
-      map.once('idle',()=>{ clearTimeout(id); resolve(); });
-      map.once('error',()=>{ clearTimeout(id); reject(new Error('Latar peta gagal dimuat. Pilih Skema atau coba lagi.')); });
-    });
-    const bitmap=document.createElement('canvas');
-    bitmap.width=width;bitmap.height=height;
-    bitmap.getContext('2d').drawImage(map.getCanvas(),0,0,width,height);
-    const points=coords.map(c=>map.project(c));
-    const a=map.unproject([width/2,height/2]), b=map.unproject([width/2+1,height/2]);
-    const logoElement=holder.querySelector('.mapboxgl-ctrl-logo');
-    const logoCss=logoElement ? getComputedStyle(logoElement).backgroundImage : '';
-    const logoUrl=logoCss.match(/^url\(["']?(.*?)["']?\)$/)?.[1];
-    return {bitmap, points, metresPerPixel:a.distanceTo(b),logo:logoUrl?await imageFrom(logoUrl):null,
-      credits:holder.querySelector('.mapboxgl-ctrl-attrib-inner')?.textContent?.replace('Improve this map','').trim() || '© Mapbox © OpenStreetMap'};
-  } finally {map?.remove();holder.remove();}
+function wrapText(ctx,value,x,y,width,{size=17,color=muted,lines=2}={}) {
+  ctx.font=size+'px Arial';
+  const words=String(value || '').trim().split(/\s+/);
+  let row='', used=0;
+  for(const [i,word] of words.entries()){
+    const next=row ? row+' '+word : word;
+    if(row && ctx.measureText(next).width>width){
+      text(ctx,row,x,y+used*(size+5),{size,color,width});
+      used++;
+      row=word;
+      if(used===lines-1) {row=words.slice(i).join(' ');break;}
+    }else row=next;
+  }
+  if(row) text(ctx,row,x,y+used*(size+5),{size,color,width});
 }
 
-function wrap(ctx, text, x,y,width,lineHeight,maxLines=3) {
-  const words=String(text || '').split(/\s+/);
-  let line='', count=0;
-  for (const [i, word] of words.entries()) {
-    if (line && ctx.measureText(line+' '+word).width>width) {
-      ctx.fillText(line,x,y,width); line='';y+=lineHeight;
-      if (++count>=maxLines-1) {ctx.fillText([word,...words.slice(i+1)].join(' '),x,y,width);return y+lineHeight;}
-    }
-    line+=(line?' ':'')+word;
-  }
-  if (line) ctx.fillText(line,x,y,width);
-  return y+lineHeight;
+function header(ctx,route,layout) {
+  const {width,height,panelX,panelWidth}=layout;
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,width,height);
+  ctx.fillStyle=accent;ctx.fillRect(0,0,width,7);
+  text(ctx,'Peta Jalur EPM',40,48,{size:22,weight:700,color:accent});
+  text(ctx,route.name,40,106,{size:48,weight:700,width:panelX-61});
+  const date=new Intl.DateTimeFormat('id-ID',{dateStyle:'long',timeZone:'Asia/Jakarta'}).format(new Date());
+  text(ctx,date,panelX+260,43,{size:17,color:muted,width:panelWidth-260});
+  text(ctx,'Panjang trase',panelX,44,{size:17,color:muted});
+  text(ctx,reportKm(route.length_m),panelX,92,{size:41,weight:700});
+  text(ctx,route.verification==='field'?'Terverifikasi lapangan':'Estimasi · Belum diverifikasi',
+    panelX+260,78,{size:17,color:muted,width:panelWidth-260});
+  text(ctx,route.points.length+' titik',panelX+260,105,{size:17,color:muted});
+  divider(ctx,40,width-40,125);
 }
 
-const palette={site:'#12675e',remote_sector:'#6740ab',tipus:'#b43832',sambungan:'#255caf',lainnya:'#6b647f'};
+function pointHeading(ctx,point,x,y,width) {
+  text(ctx,'Titik terpilih',x,y,{size:17,weight:700,color:accent});
+  text(ctx,point.label,x,y+37,{size:30,weight:700,width});
+  text(ctx,(POINT_TYPES[point.type] || 'Titik')+' · '+reportKm(point.station_m)+' dari site awal',x,y+64,
+    {size:17,color:muted,width});
+}
 
-export async function buildReportJpg({route,point,incident,photo,layer,format='jpg'}) {
-  const canvas=document.createElement('canvas'); canvas.width=reportWidth;canvas.height=reportHeight;
-  const ctx=canvas.getContext('2d');
-  const mapWidth=1020,mapHeight=786, left=40, top=150, panelX=1100, panelWidth=455;
-  const shape=route.geometry.coordinates;
-  const cables=(route.cable_replacements || []).map(a=>a.geometry.coordinates);
-  const coords=[...shape,...route.points.map(p=>[p.lng,p.lat]),...cables.flat()];
-  const frame=layer==='plain'?gridProjection(coords,mapWidth,mapHeight):await exportBasemap(layer,coords,mapWidth,mapHeight);
-  const projected=frame.points||coords.map(frame.project);
-  const image=photo?await imageFrom('/api/v1/epm/photos/'+encodeURIComponent(photo.id)+'/preview'):null;
-  function line(text,x,y,font='24px Arial',color='#172c36',max) {
-    ctx.font=font;ctx.fillStyle=color;ctx.fillText(String(text),x,y,max);
-  }
-  ctx.fillStyle='#fff';ctx.fillRect(0,0,1600,1100);
-  line('PETA JALUR EPM',left,50,'bold 23px Arial','#226960');
-  line(route.name,left,110,'bold 49px Arial','#152d36',1200);
-  const stamp=new Intl.DateTimeFormat('id-ID',{dateStyle:'long',timeZone:'Asia/Jakarta'}).format(new Date());
-  line(stamp,1240,55,'23px Arial','#46606a',315);
-  ctx.save();ctx.translate(left,top);ctx.beginPath();ctx.rect(0,0,mapWidth,mapHeight);ctx.clip();
-  if(frame.bitmap) ctx.drawImage(frame.bitmap,0,0);
-  else {ctx.fillStyle='#f1f5f4';ctx.fillRect(0,0,mapWidth,mapHeight);}
-  ctx.beginPath();
-  projected.slice(0,shape.length).forEach(({x,y},i)=>{if(i)ctx.lineTo(x,y);else ctx.moveTo(x,y);});
-  ctx.lineJoin='round';ctx.lineCap='round';ctx.lineWidth=9;ctx.strokeStyle='white';ctx.stroke();ctx.lineWidth=5;ctx.strokeStyle='#137e76';ctx.stroke();
-  let cableStart=shape.length+route.points.length;
-  for(const cable of cables){
-    ctx.beginPath();
-    projected.slice(cableStart,cableStart+cable.length).forEach(({x,y},i)=>{if(i)ctx.lineTo(x,y);else ctx.moveTo(x,y);});
-    ctx.lineWidth=7;ctx.strokeStyle=CABLE_COLOR;ctx.stroke();
-    cableStart+=cable.length;
-  }
-  const pins=route.points.map((p,i)=>({p,i,...projected[shape.length+i]}));
-  // Draw number badges with leader lines where several points share a few pixels.
-  const used=[];
-  for(const {p,i,x,y} of pins){
-    let tx=x,ty=y;
-    for(let s=0;s<48 && used.some(a=>Math.hypot(a[0]-tx,a[1]-ty)<29);s++){
-      tx=Math.min(mapWidth-17,Math.max(17,x+18*Math.sqrt(s+1)*Math.cos(s*2.4)));
-      ty=Math.min(mapHeight-17,Math.max(17,y+18*Math.sqrt(s+1)*Math.sin(s*2.4)));
-    }
-    used.push([tx,ty]);ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(tx,ty);ctx.strokeStyle='#394b50';ctx.lineWidth=1.7;ctx.stroke();
-    ctx.beginPath();ctx.arc(tx,ty,point?.id===p.id?17:13,0,2*Math.PI);ctx.fillStyle=palette[p.type]||palette.lainnya;ctx.fill();ctx.lineWidth=point?.id===p.id?5:2;ctx.strokeStyle=point?.id===p.id?'#ffc04d':'#fff';ctx.stroke();
-    ctx.textAlign='center';line(i+1,tx,ty+5,'bold 15px Arial','white');ctx.textAlign='left';
-  }
-  const unit=10**Math.floor(Math.log10(frame.metresPerPixel*110));
-  const scale=[1,2,5,10].map(v=>v*unit).filter(v=>v<=frame.metresPerPixel*110).at(-1)||unit;
-  const px=scale/frame.metresPerPixel;
-  ctx.fillStyle='#fff';ctx.fillRect(10,mapHeight-54,px+24,45);
-  ctx.fillStyle='#273d42';ctx.fillRect(20,mapHeight-20,px,4);
-  line(scale>=1000?km(scale)+' km':scale+' m',20,mapHeight-27,'17px Arial');
-  if(frame.logo)ctx.drawImage(frame.logo,mapWidth-115,mapHeight-36,100,25);
+function photoPanel(ctx,image,box) {
+  const {x,y,w,h}=box;
+  roundedPanel(ctx,x,y,w,h,'#edf2f2');
+  ctx.save();ctx.beginPath();ctx.roundRect(x,y,w,h,12);ctx.clip();
+  const scale=Math.min(w/image.width,h/image.height);
+  const iw=image.width*scale,ih=image.height*scale;
+  ctx.drawImage(image,x+(w-iw)/2,y+(h-ih)/2,iw,ih);
   ctx.restore();
-  line('PANJANG TRASE',panelX,top+28,'bold 19px Arial','#547078');
-  line(km(route.length_m)+' km',panelX,top+88,'bold 50px Arial');
-  line(route.verification==='field'?'Terverifikasi lapangan':'Estimasi • Belum diverifikasi',panelX,top+125,'22px Arial','#52656b',panelWidth);
-  let y=top+179;
+}
+
+function compactInset(ctx,{card,zoom,frame,route,shape,cables,point,image,photo,incident,origin}) {
+  const x=origin.x+card.x,y=origin.y+card.y;
+  const pad=12,headerH=57,contentY=y+headerH;
+  ctx.save();ctx.shadowColor='#182f3650';ctx.shadowBlur=15;ctx.shadowOffsetY=4;
+  roundedPanel(ctx,x,y,card.w,card.h,'#fff','#b7cdca',12);
+  ctx.restore();
+  text(ctx,'Zoom lokasi',x+pad,y+21,{size:14,weight:700,color:accent});
+  text(ctx,point.label+' · '+reportKm(point.station_m),x+pad,y+43,{size:19,weight:700,width:card.w-2*pad});
+  drawReportMap(ctx,{x:x+pad,y:contentY,...zoom},frame,route,shape,cables,point,{detail:true});
   if(image){
-    const h=incident ? 177 : 220;ctx.fillStyle='#eff2f2';ctx.fillRect(panelX,y,panelWidth,h);
-    const ratio=Math.min(panelWidth/image.width,h/image.height);
-    ctx.drawImage(image,panelX+(panelWidth-image.width*ratio)/2,y+(h-image.height*ratio)/2,image.width*ratio,image.height*ratio);
-    y+=h+28;ctx.font='20px Arial';ctx.fillStyle='#254147';y=wrap(ctx,photo.caption||'Foto evidence',panelX,y,panelWidth,22,2)+7;
+    const photoX=x+zoom.w+2*pad;
+    photoPanel(ctx,image,{x:photoX,y:contentY,w:card.w-zoom.w-3*pad,h:zoom.h});
+    text(ctx,photo.caption || 'Foto evidence',photoX,contentY+zoom.h+17,
+      {size:13,color:muted,width:card.w-zoom.w-3*pad});
   }
-  if(point){line(point.label+'  ·  '+km(point.station_m)+' km',panelX,y,'bold 25px Arial','#172c36',panelWidth);y+=34;}
-  if(incident){
-    const status=INCIDENT_STATUSES[incident.status] || 'Belum dicatat';
-    line([incident.ticket,status].filter(Boolean).join('  ·  '),panelX,y,'21px Arial','#714638',panelWidth);y+=27;
-    for(const [key,label] of [['started_at','Mulai'],['recovered_at','Pulih']])if(incident[key]){
-      line(label+' '+new Date(incident[key]).toLocaleString('id-ID',{timeZone:'Asia/Jakarta'})+' WIB',panelX,y,'18px Arial','#465964',panelWidth);y+=25;
+  if(incident) incidentDetails(ctx,incident,x+pad,contentY+zoom.h+(image?40:30),card.w-2*pad);
+}
+
+function incidentDetails(ctx,incident,x,y,width) {
+  if(!incident) return;
+  const status=INCIDENT_STATUSES[incident.status] || 'Belum dicatat';
+  text(ctx,[incident.ticket,status].filter(Boolean).join(' · '),x,y,{size:18,weight:700,width});
+  const time=[incident.started_at && 'Mulai '+wibLabel(incident.started_at),
+    incident.recovered_at && 'Pulih '+wibLabel(incident.recovered_at)].filter(Boolean);
+  if(time.length) wrapText(ctx,time.join('  ·  '),x,y+24,width,{size:15});
+}
+
+function table(ctx,points,x,y,width,limit,point) {
+  text(ctx,'Urutan titik dan jarak',x,y,{size:22,weight:700});
+  const rows=points.map((p,i)=>({p,i}));
+  const shown=rows.length<=limit ? rows : [...rows.slice(0,limit-2),null,rows.at(-1)];
+  const rowH=31, headingY=y+13;
+  roundedPanel(ctx,x,headingY,width,(shown.length+1)*rowH+1,'#fff',rule,8);
+  ctx.save();ctx.beginPath();ctx.roundRect(x,headingY,width,(shown.length+1)*rowH,8);ctx.clip();
+  ctx.fillStyle='#e8f1ef';ctx.fillRect(x,headingY,width,rowH);
+  text(ctx,'#',x+12,headingY+21,{size:15,weight:700});
+  text(ctx,'Titik',x+44,headingY+21,{size:15,weight:700});
+  text(ctx,'Dari awal',x+width-193,headingY+21,{size:15,weight:700});
+  text(ctx,'Δ meter',x+width-89,headingY+21,{size:15,weight:700});
+  shown.forEach((entry,i)=>{
+    const rowY=headingY+(i+1)*rowH;
+    const selected=Boolean(entry && entry.p.id===point?.id);
+    if(selected || i%2===1) {
+      ctx.fillStyle=selected?'#fff6e1':'#f6f9f9';ctx.fillRect(x,rowY,width,rowH);
     }
+    if(selected) {ctx.fillStyle='#d89b31';ctx.fillRect(x,rowY,3,rowH);}
+    if(!entry) {
+      text(ctx,'…  Daftar lengkap tersedia di CSV titik',x+12,rowY+21,{size:15,color:muted,width:width-24});
+      return;
+    }
+    const {p,i:index}=entry;
+    text(ctx,index+1,x+12,rowY+21,{size:15,color:muted});
+    text(ctx,p.label,x+44,rowY+21,{size:16,weight:700,color:POINT_COLORS[p.type] || ink,width:width-249});
+    text(ctx,reportKm(p.station_m),x+width-193,rowY+21,{size:15,color:muted});
+    text(ctx,index && Number.isFinite(p.segment_m)?numberFormat.format(p.segment_m):'—',x+width-89,rowY+21,
+      {size:15,color:muted,width:79});
+  });
+  ctx.restore();
+}
+
+function footer(ctx,route,mapFrame,layout,highlighted,cables) {
+  const y=layout.height-88;
+  const keys=Object.entries(POINT_TYPES).filter(([type])=>route.points.some(point=>point.type===type))
+    .map(([type,label])=>[label,POINT_COLORS[type]]);
+  if(cables.length) keys.push(['Kabel baru aktif',CABLE_COLOR]);
+  if(highlighted) keys.push(['Titik terpilih','#d89b31']);
+  let x=40;
+  for(const [label,color] of keys){
+    ctx.beginPath();ctx.arc(x+6,y-5,5.5,0,2*Math.PI);ctx.fillStyle=color;ctx.fill();
+    text(ctx,label,x+17,y,{size:15,color:muted});
+    x+=ctx.measureText(label).width+38;
   }
-  y+=12;line('Titik dan jarak dari site awal',panelX,y,'bold 21px Arial');y+=29;
-  const rowHeight = pins.length * 25 > 958-y ? 20 : 25;
-  const available=Math.max(3,1+Math.floor((955-y)/rowHeight));
-  let list=pins;
-  if(list.length>available)list=[...list.slice(0,available-2),null,list.at(-1)];
-  for(const row of list){
-    if(!row){line('…  Daftar lengkap tersedia di CSV titik',panelX,y,'16px Arial','#52656b',panelWidth);y+=rowHeight;continue;}
-    line((row.i+1)+'.  '+row.p.label,panelX,y,'18px Arial','#324c53',300);
-    line(km(row.p.station_m)+' km',panelX+310,y,'18px Arial','#324c53',140);y+=rowHeight;
+  divider(ctx,40,layout.width-40,layout.height-62);
+  text(ctx,mapFrame.credits || 'Skema trase tersimpan',40,layout.height-31,{size:14,color:muted,width:layout.panelX-60});
+  if(route.area) text(ctx,route.area,layout.panelX,layout.height-31,{size:15,color:muted,width:layout.panelWidth});
+}
+
+export async function buildReportJpg({route,point,incident,photo,layer,format='jpg',version='full',signal}) {
+  const layout=REPORT_LAYOUTS[version];
+  const compact=version!=='full';
+  const {map,panelX:x,panelWidth:w}=layout;
+  const canvas=document.createElement('canvas');
+  canvas.width=layout.width;canvas.height=layout.height;
+  const ctx=canvas.getContext('2d');
+  const shape=route.geometry.coordinates;
+  const cables=(route.cable_replacements || []).map(activity=>activity.geometry.coordinates);
+  const positions=[...shape,...route.points.map(p=>[p.lng,p.lat]),...cables.flat()];
+  const zoom=compact ? {w:photo?304:374,h:211} : {x,y:222,w:photo?326:w,h:223};
+  const maxRadius=point && compact ? compactFocusRadius(positions,map,zoom) : undefined;
+  const bounds=point && focusBounds(point,route.length_m,zoom.w/zoom.h,maxRadius);
+  const previewUrl=photo && '/api/v1/epm/photos/'+encodeURIComponent(photo.id)+'/preview';
+  const [mainFrame,image]=await Promise.all([
+    reportMapFrame(layer,positions,map.w,map.h,{extraPositions:bounds || [],signal}),
+    previewUrl ? loadReportImage(previewUrl) : null,
+  ]);
+  const detailFrame=point ? await reportMapFrame(layer,positions,zoom.w,zoom.h,{zoomBounds:bounds,signal}) : null;
+  signal?.throwIfAborted();
+  const inset=compact && point ? chooseReportInset(map,mainFrame,shape.length,route.points,cables,point,{
+    w:zoom.w+(image?183:24), h:zoom.h+57+(image?31:12)+(incident?70:0),
+  }) : null;
+  header(ctx,route,layout);
+  if(!compact) text(ctx,'Peta lintasan',map.x,map.y-13,{size:20,weight:700});
+  drawReportMap(ctx,map,mainFrame,route,shape,cables,point,{hasFocusBox:Boolean(bounds),inset});
+  if(inset) compactInset(ctx,{card:inset,zoom,frame:detailFrame,route,shape,cables,point,image,photo,incident,origin:map});
+  let tableY=171;
+  if(point && !compact){
+    pointHeading(ctx,point,x,150,w);
+    drawReportMap(ctx,zoom,detailFrame,route,shape,cables,point,{detail:true});
+    roundedPanel(ctx,x+8,zoom.y+8,84,23,'#fffffff2',null,4);
+    text(ctx,'Zoom lokasi',x+16,zoom.y+24,{size:13,weight:700,color:accent});
+    const below=zoom.y+zoom.h;
+    if(image){
+      const photoX=x+zoom.w+12;
+      photoPanel(ctx,image,{x:photoX,y:zoom.y,w:w-zoom.w-12,h:zoom.h});
+      text(ctx,photo.caption || 'Foto evidence',photoX,below+19,{size:14,color:muted,width:w-zoom.w-12});
+      incidentDetails(ctx,incident,x,below+51,w);
+    } else {
+      incidentDetails(ctx,incident,x,below+46,w);
+    }
+    tableY=below+(incident?129:image?66:46);
   }
-  for (const [x,type,label] of [[40,'site','Site'],[135,'remote_sector','Remote Sector'],[315,'tipus','Titik putus'],
-    [459,'sambungan','Sambungan'],[617,'lainnya','Titik lainnya']]) {
-    ctx.beginPath();ctx.arc(x+9,978,7,0,2*Math.PI);ctx.fillStyle=palette[type];ctx.fill();
-    line(label,x+25,984,'21px Arial');
+  if(!compact){
+    const limit=Math.max(3,Math.min(24,Math.floor((map.y+map.h-tableY-44)/31)));
+    table(ctx,route.points,x,tableY,w,limit,point);
   }
-  line(frame.credits||'Skema trase tersimpan',left,1047,'18px Arial','#52656b',1050);
-  if(cables.length){
-    ctx.beginPath();ctx.arc(794,978,7,0,2*Math.PI);ctx.fillStyle=CABLE_COLOR;ctx.fill();
-    line('Kabel baru aktif',810,984,'21px Arial');
-  }
-  line('Peta Jalur EPM  /  '+(route.area||route.start_site),panelX,1047,'18px Arial','#52656b',panelWidth);
-  return new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error('Gagal membuat laporan.')),
+  footer(ctx,route,mainFrame,layout,point,cables);
+  return new Promise((resolve,reject)=>canvas.toBlob(blob=>blob ? resolve(blob) : reject(Error('Gagal membuat laporan.')),
     format==='jpg'?'image/jpeg':'image/png',0.92));
 }

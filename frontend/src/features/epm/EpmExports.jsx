@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import api from '../../services/api';
 import { triggerBlobDownload } from '../../utils/downloadFile';
-import { buildReportJpg } from './epmJpg';
+import { buildReportJpg, REPORT_LAYOUTS } from './epmJpg';
 import './epm-exports.css';
 
 const formats = [
@@ -27,11 +27,12 @@ function Modal({title,onClose,children}) {
   </dialog>;
 }
 
-async function makePowerPoint(image, routeName) {
+async function makePowerPoint(image, routeName, layout) {
   const { default: PptxGenJS } = await import('pptxgenjs');
   const deck = new PptxGenJS();
   deck.title = routeName;
-  deck.defineLayout({name:'EPM_REPORT',width:16,height:11});
+  const w=layout.width/100,h=layout.height/100;
+  deck.defineLayout({name:'EPM_REPORT',width:w,height:h});
   deck.layout = 'EPM_REPORT';
   const slide = deck.addSlide();
   const data = await new Promise((resolve,reject)=>{
@@ -40,7 +41,7 @@ async function makePowerPoint(image, routeName) {
     reader.onerror = ()=>reject(reader.error);
     reader.readAsDataURL(image);
   });
-  slide.addImage({data,x:0,y:0,w:16,h:11,altText:'Laporan peta jalur EPM: '+routeName});
+  slide.addImage({data,x:0,y:0,w,h,altText:'Laporan peta jalur EPM: '+routeName});
   return deck.write({outputType:'blob'});
 }
 
@@ -50,16 +51,19 @@ function Report({route,point:initialPoint,incident:initialIncident,onClose}) {
   const [events,setEvents]=useState([]);
   const [photos,setPhotos]=useState([]);
   const [photoId,setPhoto]=useState('');
-  const [layer,setLayer]=useState('plain');
+  const [layer,setLayer]=useState(import.meta.env.VITE_MAPBOX_TOKEN?.startsWith('pk.') ? 'road' : 'plain');
   const [format,setFormat]=useState('jpg');
+  const [version,setVersion]=useState('full');
   const [exporting,setExporting]=useState(false);
   const [status,setStatus]=useState('');
   const [preview,setPreview]=useState(null);
   const [busy,setBusy]=useState(false);
   const [retry,setRetry]=useState(0);
   const sequence=useRef(0);
+  const rendering=useRef(null);
   const mounted=useRef(false);
-  useEffect(()=>{mounted.current=true;return ()=>{mounted.current=false;};},[]);
+  useEffect(()=>{mounted.current=true;return ()=>{mounted.current=false;rendering.current?.abort();};},[]);
+  const layout=REPORT_LAYOUTS[version];
   const pt=route.points.find(p=>p.id===pointId);
   const ev=events.find(e=>e.id===incidentId);
   const available=photos.filter(p=>!p.incident_id || p.incident_id===incidentId);
@@ -74,12 +78,14 @@ function Report({route,point:initialPoint,incident:initialIncident,onClose}) {
     return ()=>controller.abort();
   },[pointId,retry]);
   useEffect(()=>()=>{if(preview) URL.revokeObjectURL(preview.url);},[preview]);
-  function changed() { sequence.current++;setPreview(null);setStatus('');setBusy(false); }
+  function changed() { sequence.current++;rendering.current?.abort();setPreview(null);setStatus('');setBusy(false); }
   async function generate(){
     const seq=++sequence.current;setBusy(true);setStatus('');setPreview(null);
+    const controller=new AbortController();
+    rendering.current=controller;
     try {
       const selected=available.find(p=>p.id===photoId);
-      const blob=await buildReportJpg({route,point:pt,incident:ev,photo:selected,layer,format});
+      const blob=await buildReportJpg({route,point:pt,incident:ev,photo:selected,layer,format,version,signal:controller.signal});
       if(mounted.current&&sequence.current===seq)setPreview({blob,url:URL.createObjectURL(blob)});
     } catch(e){if(mounted.current&&sequence.current===seq)setStatus(e.message);}
     finally{if(mounted.current&&sequence.current===seq)setBusy(false);}
@@ -87,15 +93,18 @@ function Report({route,point:initialPoint,incident:initialIncident,onClose}) {
   async function download() {
     setExporting(true);setStatus('');
     try {
-      const file=format==='pptx'?await makePowerPoint(preview.blob,route.name):preview.blob;
+      const file=format==='pptx'?await makePowerPoint(preview.blob,route.name,layout):preview.blob;
       const filename=route.name.replace(/[<>:"/\\|?*]/g,'-');
-      triggerBlobDownload(file,'Peta EPM '+filename+'.'+format);
+      triggerBlobDownload(file,'Peta EPM '+filename+' - '+layout.fileLabel+'.'+format);
     } catch {setStatus('File laporan gagal dibuat. Coba unduh lagi.');}
     finally {setExporting(false);}
   }
   return <Modal title="Simpan Report" onClose={onClose}>
-    <p>{route.name} · 1.600 × 1.100 piksel</p>
+    <p>{route.name} · {layout.width.toLocaleString('id-ID')} × {layout.height.toLocaleString('id-ID')} piksel</p>
     <div className="epm-export-fields">
+      <label>Tampilan laporan<select value={version} onChange={e=>{changed();setVersion(e.target.value);}} disabled={exporting}>
+        {Object.entries(REPORT_LAYOUTS).map(([id,option])=><option key={id} value={id}>{option.label}</option>)}
+      </select></label>
       <label>Format laporan<select value={format} onChange={e=>{changed();setFormat(e.target.value);}} disabled={exporting}>
         <option value="jpg">JPG</option><option value="png">PNG</option><option value="pptx">PPTX</option>
       </select></label>
