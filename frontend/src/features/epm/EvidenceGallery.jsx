@@ -44,7 +44,7 @@ function PhotoViewer({ photo, previous, next, close, refresh, position, readOnly
   }
 
   return (
-    <dialog ref={dialog} aria-label="Foto evidence" className="epm-photo-view" onCancel={close}
+    <dialog ref={dialog} aria-label="Foto bukti" className="epm-photo-view" onCancel={close}
       onKeyDown={(event) => {
         if (!editing && !confirmArchive && !busy) {
           if (event.key === 'ArrowRight' && next) next();
@@ -52,7 +52,7 @@ function PhotoViewer({ photo, previous, next, close, refresh, position, readOnly
         }
       }}>
       <div className="epm-photo-head">
-        <strong>Foto evidence · {position}</strong>
+        <strong>Foto bukti · {position}</strong>
         <button type="button" onClick={close} aria-label="Tutup foto">Tutup</button>
       </div>
       <div className="epm-photo-frame">
@@ -60,7 +60,7 @@ function PhotoViewer({ photo, previous, next, close, refresh, position, readOnly
           setUnavailable(false); setAttempt(attempt + 1);
         }}>Coba lagi</button></div> :
           <img src={imageUrl(photo.id, 'preview') + `?v=${attempt}`}
-            alt={photo.caption || 'Foto evidence titik jalur'} onError={() => setUnavailable(true)} />}
+            alt={photo.caption || 'Foto bukti titik jalur'} onError={() => setUnavailable(true)} />}
       </div>
       <p>{photo.caption || 'Tanpa keterangan'}<br />
         <small>Diunggah {dateFormat.format(new Date(photo.created_at))} WIB</small></p>
@@ -179,8 +179,8 @@ function Gallery({ pointId, incidents = [], incidentId = null, onChange, readOnl
     days.get(day).push(photo);
   }
 
-  return <section className="epm-evidence" aria-label="Galeri foto evidence">
-    <div className="epm-photo-head"><h3>Foto evidence <small>({photos.length})</small></h3>
+  return <section className="epm-evidence" aria-label="Galeri foto bukti">
+    <div className="epm-photo-head"><h3>Foto bukti <small>({photos.length})</small></h3>
       {!readOnly && <div className="epm-photo-actions">
         <button type="button" onClick={() => galleryPicker.current.click()}>Tambah foto</button>
         <button type="button" className="epm-camera" onClick={() => cameraPicker.current.click()}>Kamera</button>
@@ -216,7 +216,7 @@ function Gallery({ pointId, incidents = [], incidentId = null, onChange, readOnl
       {[...days.entries()].map(([day, list]) => <div key={day}><small>{day}</small>
         <div className="epm-thumb-grid">{list.map(photo =>
           <button title={photo.caption || 'Lihat foto'} key={photo.id} type="button" onClick={() => setSelected(photo.id)}>
-            <img src={imageUrl(photo.id, 'thumbnail')} loading="lazy" alt={photo.caption || `Foto evidence ${day}`} />
+            <img src={imageUrl(photo.id, 'thumbnail')} loading="lazy" alt={photo.caption || `Foto bukti ${day}`} />
           </button>)}</div></div>)}
     </div>)}
     {active >= 0 && <PhotoViewer key={selected} photo={photos[active]} position={`${active + 1} / ${photos.length}`}

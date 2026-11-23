@@ -20,7 +20,7 @@ export default function IncidentEditor({point,routeId,initial,onSaved,onClose}) 
     } catch(err){setError(errorText(err));} finally {setBusy(false);}
   }
   return <form className="epm-panel epm-stack" onSubmit={submit}>
-    <h3>{initial?'Edit kejadian':'Catat gangguan'} · {point.label}</h3>
+    <h3>{initial?'Ubah kejadian':'Catat gangguan'} · {point.label}</h3>
     <fieldset disabled={busy} className="epm-form"><legend className="sr-only">Detail kejadian</legend>
       <label>Status<select required value={draft.status} onChange={e=>field('status',e.target.value)}>
         {!draft.status && <option value="" disabled>Pilih status</option>}

@@ -87,10 +87,15 @@ async def list_routes(session, *, include_archived=False):
     """, include_archived=include_archived)
 
 
-async def site_master_details(session, codes):
+def parse_site_codes(codes, limit=20):
     site_ids = sorted({code.strip().upper() for code in codes.split(",")})
-    if len(site_ids) > 20 or any(not re.fullmatch(r"[A-Z]{2,6}[0-9]{1,7}", code) for code in site_ids):
-        fail(422, "Masukkan maksimal 20 ID Site Master yang valid.")
+    if len(site_ids) > limit or any(not re.fullmatch(r"[A-Z]{2,6}[0-9]{1,7}", code) for code in site_ids):
+        fail(422, f"Masukkan maksimal {limit} ID Site Master yang valid.")
+    return site_ids
+
+
+async def site_master_details(session, codes):
+    site_ids = parse_site_codes(codes)
     return await records(session, """
         SELECT DISTINCT ON ("Siteid") "Siteid" AS site_id, "Site Name" AS site_name,
                "Type Site" AS type_site, "Status Site" AS status_site, "NOP" AS nop,
@@ -99,6 +104,38 @@ async def site_master_details(session, codes):
         WHERE "Siteid" = ANY(CAST(:site_ids AS text[]))
         ORDER BY "Siteid", NULLIF(BTRIM("Site Name"), '') NULLS LAST
     """, site_ids=site_ids)
+
+
+async def nearby_map_sites(session, bounds):
+    west, south, east, north = bounds
+    if east - west > 2 or north - south > 2:
+        fail(422, "Perbesar peta untuk menampilkan site sekitar.")
+    limit = 250
+    sites = await records(session, """
+        WITH sites AS (
+            SELECT "Siteid" AS site_id, "Site Name" AS site_name,
+                CASE WHEN BTRIM("Latitude"::text) ~ '^[+-]?[0-9]+([.][0-9]+)?$'
+                     THEN "Latitude"::double precision END AS latitude,
+                CASE WHEN BTRIM("Longitude"::text) ~ '^[+-]?[0-9]+([.][0-9]+)?$'
+                     THEN "Longitude"::double precision END AS longitude
+            FROM public.data_site_master
+            WHERE NULLIF(BTRIM("Siteid"), '') IS NOT NULL
+        )
+        SELECT DISTINCT ON (site_id) site_id, site_name, latitude, longitude
+        FROM sites WHERE longitude BETWEEN :west AND :east AND latitude BETWEEN :south AND :north
+        ORDER BY site_id, latitude, longitude, site_name
+        LIMIT :limit
+    """, west=west, south=south, east=east, north=north, limit=limit+1)
+    return {"sites":sites[:limit], "truncated":len(sites)>limit}
+
+
+async def map_sector_directions(session, codes):
+    return await records(session, """
+        SELECT DISTINCT site_id, CASE WHEN azimuth=360 THEN 0 ELSE azimuth END AS azimuth
+        FROM public.ransys_gabungan
+        WHERE site_id=ANY(CAST(:site_ids AS text[])) AND azimuth BETWEEN 0 AND 360
+        ORDER BY site_id, azimuth
+    """, site_ids=parse_site_codes(codes, limit=2))
 
 
 async def route_detail(session, route_id, *, include_archived=False):

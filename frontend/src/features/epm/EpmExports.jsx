@@ -99,7 +99,7 @@ function Report({route,point:initialPoint,incident:initialIncident,onClose}) {
     } catch {setStatus('File laporan gagal dibuat. Coba unduh lagi.');}
     finally {setExporting(false);}
   }
-  return <Modal title="Simpan Report" onClose={onClose}>
+  return <Modal title="Unduh laporan" onClose={onClose}>
     <p>{route.name} · {layout.width.toLocaleString('id-ID')} × {layout.height.toLocaleString('id-ID')} piksel</p>
     <div className="epm-export-fields">
       <label>Tampilan laporan<select value={version} onChange={e=>{changed();setVersion(e.target.value);}} disabled={exporting}>
@@ -114,7 +114,7 @@ function Report({route,point:initialPoint,incident:initialIncident,onClose}) {
         <option value="">Seluruh jalur</option>{route.points.map(p=><option key={p.id} value={p.id}>{p.label}</option>)}</select></label>
       {pointId && <><label>Kejadian<select value={incidentId} onChange={e=>{changed();setIncident(e.target.value);setPhoto('');}}>
         <option value="">Foto lokasi saja</option>{events.map((e,i)=><option key={e.id} value={e.id}>{e.ticket||'Kejadian '+(i+1)}{e.started_at?' · '+new Date(e.started_at).toLocaleDateString('id-ID',{timeZone:'Asia/Jakarta'}):''}</option>)}</select></label>
-      <label>Sertakan foto evidence<select value={photoId} onChange={e=>{changed();setPhoto(e.target.value);}}>
+      <label>Sertakan foto bukti<select value={photoId} onChange={e=>{changed();setPhoto(e.target.value);}}>
         <option value="">Tanpa foto</option>{available.map((p,i)=><option key={p.id} value={p.id}>{p.caption||'Foto '+(i+1)} · {p.incident_id?'Kejadian':'Lokasi'}</option>)}</select></label></>}
     </div>
     {photoId && <img className="epm-selected-photo" src={'/api/v1/epm/photos/'+photoId+'/thumbnail'} alt="Foto pilihan"/>}
@@ -157,7 +157,7 @@ export default function EpmExports({mode,route,point,incident,filters,onChange})
   const [open,setOpen]=useState(false);
   const isReport=mode==='report';
   return <div className="epm-export-actions">
-    <button type="button" disabled={isReport&&!route} onClick={()=>setOpen(true)}>{isReport?'Simpan Report':'Cadangan & data'}</button>
+    <button type="button" disabled={isReport&&!route} onClick={()=>setOpen(true)}>{isReport?'Unduh laporan':'Cadangan data'}</button>
     {open && (isReport ? route && <Report key={route.id} route={route} point={point} incident={incident} onClose={()=>setOpen(false)}/>
       : <Transfers filters={filters} onChange={onChange} onClose={()=>setOpen(false)}/>)}
   </div>;

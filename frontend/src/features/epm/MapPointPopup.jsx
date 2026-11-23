@@ -30,6 +30,6 @@ export default function MapPointPopup({point,events,lookup,onClose}) {
           lookup.data ? point.site_code+' belum ditemukan di Site Master.' : 'Memuat data Site Master…'
     }</p>)}
     {point.photo_count > 0 ? <EvidenceGallery pointId={point.id} incidents={events} readOnly/> :
-      <p className="epm-muted">Belum ada foto evidence.</p>}
+      <p className="epm-muted">Belum ada foto bukti.</p>}
   </aside>;
 }

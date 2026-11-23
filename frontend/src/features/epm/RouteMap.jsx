@@ -1,11 +1,13 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
+import {Layers} from 'lucide-react';
 import { describeMapboxError, validateMapboxRuntime } from '../../utils/mapboxRuntime';
 import { distanceLabel, POINT_COLORS as colors, POINT_TYPES } from './routeEditing';
 import { CABLE_COLOR, CABLE_PREVIEW_COLOR, cableFeatures } from './cableDisplay';
 import MapLocationSearch from './MapLocationSearch';
-import { isSitePoint, sitePointLabel } from './siteMaster';
+import { isSitePoint, pointMasterCode, sitePointLabel } from './siteMaster';
+import {addNearbySiteLayer,endpointSites,sectorMarkers,useNearbySites,useSectorDirections} from './epmMapLayers';
 
 const styles = { street:'mapbox://styles/mapbox/streets-v12', satellite:'mapbox://styles/mapbox/satellite-streets-v12' };
 const token = import.meta.env.VITE_MAPBOX_TOKEN;
@@ -23,7 +25,7 @@ function correctionFeatures(correction) {
 }
 
 function OnlineMap({ layer, route, selected, onPick, onSelect, onMovePoint, onFail, focusKey, fitSection,
-  correction, cablePreview, viewport, searchLocation, draggablePoint }) {
+  correction, cablePreview, viewport, searchLocation, draggablePoint, showSites, onSitesStatus, endpoints, directions }) {
   const container = useRef(null);
   const [map, setMap] = useState(null);
   const [ready, setReady] = useState(false);
@@ -31,6 +33,8 @@ function OnlineMap({ layer, route, selected, onPick, onSelect, onMovePoint, onFa
   const picked = useEffectEvent((e) => onPick?.(e.lngLat));
   const selectedPoint = useEffectEvent(id => onSelect?.(id));
   const movedPoint = useEffectEvent((id, coordinates) => onMovePoint?.(id,coordinates));
+  const excludedCodes=useMemo(()=>[...new Set(route?.points.map(point=>pointMasterCode(route,point)))].sort().join(','),[route]);
+  useNearbySites(map,ready && showSites,excludedCodes,onSitesStatus);
   const focus = useEffectEvent((instance, sectionOnly) => {
     const coords = sectionOnly ? correction?.original : [
       ...(route?.geometry?.coordinates || []),
@@ -54,6 +58,7 @@ function OnlineMap({ layer, route, selected, onPick, onSelect, onMovePoint, onFa
     const timer = window.setTimeout(() => failed('Latar peta belum berhasil dimuat.'), 22000);
     instance.on('load', () => {
       window.clearTimeout(timer);
+      addNearbySiteLayer(instance);
       instance.addSource('epm-route',{type:'geojson',data:{ type:'FeatureCollection',features:[] }});
       instance.addLayer({id:'epm-casing',type:'line',source:'epm-route', paint:{'line-color':'#fff','line-width':7}});
       instance.addLayer({id:'epm-line',type:'line',source:'epm-route', paint:{'line-color':'#008578','line-width':4}});
@@ -115,6 +120,11 @@ function OnlineMap({ layer, route, selected, onPick, onSelect, onMovePoint, onFa
   useEffect(() => {
     if (map && ready) map.getSource('epm-cables')?.setData(cableFeatures(route,cablePreview));
   }, [map,ready,route,cablePreview]);
+  useEffect(()=>{
+    if(!map || !ready || !directions?.length) return;
+    const symbols=sectorMarkers(map,endpoints,directions);
+    return ()=>symbols.forEach(marker=>marker.remove());
+  },[map,ready,endpoints,directions]);
   useEffect(() => {
     if (!map || !ready || !original) return;
     const pins = [original[0], original.at(-1)].map((position, i) => {
@@ -202,11 +212,14 @@ function Schematic({route,selected,onSelect,onPick,correction,fitSection,cablePr
   </svg>;
 }
 
-export default function RouteMap({route,selected,onSelect,onPick,onMovePoint,draggablePoint,hint,correction,cablePreview,popup}) {
+export default function RouteMap({route,selected,onSelect,onPick,onMovePoint,draggablePoint,hint,correction,cablePreview,popup,contextLayers=false}) {
   const [layer,setLayer] = useState(() => {try {return ['street','satellite','plain'].find(v=>v===localStorage.getItem('epm-layer')) || 'street';}catch{return 'street';}});
   const [failure,setFailure] = useState(''), [fit,setFit] = useState(0);
   const [showWhole,setShowWhole] = useState(null);
   const [searchLocation,setSearchLocation]=useState(null);
+  const [showSites,setShowSites]=useState(false);
+  const [showSectors,setShowSectors]=useState(false);
+  const [sitesStatus,setSitesStatus]=useState('');
   const view=useRef({});
   const viewport=useMemo(()=>({
     readCamera:()=>view.current.camera,
@@ -223,6 +236,10 @@ export default function RouteMap({route,selected,onSelect,onPick,onMovePoint,dra
     },
   }),[]);
   const showPlain = layer === 'plain' || !!failure;
+  const endpoints=useMemo(()=>endpointSites(route),[route]);
+  const endpointCodes=[...new Set(endpoints.map(site=>site.code))].sort().join(',');
+  const sectors=useSectorDirections(contextLayers && showSectors && !showPlain,endpointCodes);
+  const missingDirections=sectors?.data ? endpoints.filter(site=>!sectors.data.some(row=>row.site_id===site.code)) : [];
   const fitSection = !!correction && showWhole !== correction.sectionIndex;
   const focusKey=JSON.stringify([route?.id,route?.geometry?.coordinates?.length>=2,fit,fitSection ? correction.sectionIndex : null]);
   function update(value) {
@@ -230,18 +247,36 @@ export default function RouteMap({route,selected,onSelect,onPick,onMovePoint,dra
     try {localStorage.setItem('epm-layer',value);} catch { /* Browsers may disable preference storage. */ }
   }
   return <section className="epm-panel epm-map">
-    <div className="epm-map-tools"><div role="group" aria-label="Latar peta">
-      {[['street','Jalan'],['satellite','Satelit'],['plain','Skema']].map(([id,label])=><button key={id} type="button"
-        aria-pressed={layer===id} onClick={()=>update(id)}>{label}</button>)}</div>
+    <div className="epm-map-tools">
+      {!cablePreview && token?.startsWith('pk.') && !failure && <MapLocationSearch token={token} onSelect={location=>{
+        setSearchLocation(location);
+        if(layer==='plain') update('street');
+      }}/>}
+      <div className="epm-map-actions">
+        <details className="epm-layer-menu">
+          <summary><Layers size={16} aria-hidden="true"/> Lapisan peta</summary>
+          <div className="epm-layer-panel">
+            <label>Latar peta<select value={layer} onChange={e=>update(e.target.value)}>
+              <option value="street">Jalan</option><option value="satellite">Satelit</option><option value="plain">Skema</option>
+            </select></label>
+            {contextLayers && <>
+              <label className="epm-check-row"><input type="checkbox" checked={showSites} onChange={e=>{
+                setSitesStatus('');setShowSites(e.target.checked);
+                if(e.target.checked && showPlain) update('street');
+              }}/> Site sekitar</label>
+              <label className="epm-check-row"><input type="checkbox" checked={showSectors} onChange={e=>{
+                setShowSectors(e.target.checked);
+                if(e.target.checked && showPlain) update('street');
+              }}/> Arah sektor site awal dan EPM</label>
+            </>}
+          </div>
+        </details>
       {(!showPlain || correction) && <button type="button" onClick={()=>{
         setShowWhole(fitSection ? correction.sectionIndex : null);
         setFit(v=>v+1);
       }}>{correction && !fitSection ? 'Fokus ruas' : 'Seluruh jalur'}</button>}
+      </div>
     </div>
-    {!cablePreview && token?.startsWith('pk.') && !failure && <MapLocationSearch token={token} onSelect={location=>{
-      setSearchLocation(location);
-      if(layer==='plain') update('street');
-    }}/>}
     {failure && <p className="epm-note" role="status">{failure} Menampilkan skema. <button type="button" onClick={()=>setFailure('')}>Coba lagi</button></p>}
     {hint && <p className="epm-note">{hint}</p>}
     <div className="epm-map-frame">
@@ -249,13 +284,23 @@ export default function RouteMap({route,selected,onSelect,onPick,onMovePoint,dra
         cablePreview={cablePreview}/> :
       <OnlineMap key={layer} layer={layer} route={route} selected={selected} onSelect={onSelect} onPick={onPick} onFail={setFailure}
         onMovePoint={onMovePoint} draggablePoint={draggablePoint} viewport={viewport} searchLocation={searchLocation}
-        focusKey={focusKey} correction={correction} fitSection={fitSection} cablePreview={cablePreview}/>}
+        focusKey={focusKey} correction={correction} fitSection={fitSection} cablePreview={cablePreview}
+        showSites={contextLayers && showSites} onSitesStatus={setSitesStatus} endpoints={endpoints} directions={sectors?.data}/>}
       {popup}
     </div>
     <div className="epm-legend">{Object.entries(POINT_TYPES).map(([t,l])=>
       <span key={t}><i style={{background:colors[t]}}/>{l}</span>)}
       {!!route?.cable_replacements?.length && <span><i style={{background:CABLE_COLOR}}/>Kabel baru aktif</span>}
       {cablePreview && <span><i style={{background:CABLE_PREVIEW_COLOR}}/>Pratinjau penggantian</span>}
+      {!showPlain && showSites && <span><i style={{background:'#4a6988'}}/>Site sekitar</span>}
+      {!showPlain && Boolean(sectors?.data?.length) && <span>Arah sektor · ukuran ilustratif</span>}
     </div>
+    {!showPlain && (showSites && sitesStatus || showSectors && (!endpointCodes || sectors?.error || missingDirections.length>0)) &&
+      <div className="epm-map-status" role="status">
+        {showSites && sitesStatus && <p>{sitesStatus}</p>}
+        {showSectors && !endpointCodes && <p>Isi ID site awal dan EPM di Info jalur untuk menampilkan arah sektor.</p>}
+        {showSectors && sectors?.error && <p>Arah sektor gagal dimuat.</p>}
+        {showSectors && missingDirections.length>0 && <p>Azimut belum tersedia untuk {missingDirections.map(site=>site.code).join(', ')}.</p>}
+      </div>}
   </section>;
 }

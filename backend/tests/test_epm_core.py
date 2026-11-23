@@ -70,6 +70,17 @@ def test_remote_sector_is_valid_at_the_epm_endpoint():
         parse_route(raw)
 
 
+@pytest.mark.asyncio
+async def test_map_context_limits_and_normalizes_input():
+    from services.epm_core import nearby_map_sites, parse_site_codes
+
+    assert parse_site_codes("epm155, BGL011, EPM155", limit=2) == ["BGL011", "EPM155"]
+    with pytest.raises(HTTPException, match="maksimal 2"):
+        parse_site_codes("BGL011,EPM155,EPM163", limit=2)
+    with pytest.raises(HTTPException, match="Perbesar peta"):
+        await nearby_map_sites(None, (111, -8, 114, -7))
+
+
 def test_incident_dates_validate_completed_work_and_legacy_import():
     base = dict(route_id=uuid4(),point_id=uuid4(),status="resolved",started_at="2026-11-19T23:50:00+07:00")
     with pytest.raises(HTTPException):

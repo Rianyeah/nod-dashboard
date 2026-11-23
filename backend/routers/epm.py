@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_session
+from map_sectors import parse_viewport_bbox
 from services import epm_cables, epm_core as epm
 
 router = APIRouter(prefix="/epm", tags=["Peta Jalur EPM"])
@@ -23,6 +24,20 @@ async def get_routes(session: Session):
 @router.get("/site-master")
 async def get_site_master(site_ids: Annotated[str, Query(min_length=1, max_length=300)], session: Session):
     return await epm.site_master_details(session, site_ids)
+
+
+@router.get("/map-sites")
+async def get_nearby_sites(bbox: Annotated[str, Query(min_length=7, max_length=110)], session: Session):
+    try:
+        bounds = parse_viewport_bbox(bbox)
+    except ValueError:
+        epm.fail(422, "Batas area peta tidak valid.")
+    return await epm.nearby_map_sites(session, bounds)
+
+
+@router.get("/sector-directions")
+async def get_sector_directions(site_ids: Annotated[str, Query(min_length=1, max_length=40)], session: Session):
+    return await epm.map_sector_directions(session, site_ids)
 
 
 @router.post("/routes/preview")

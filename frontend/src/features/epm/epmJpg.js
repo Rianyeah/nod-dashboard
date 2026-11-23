@@ -89,7 +89,7 @@ function compactInset(ctx,{card,zoom,frame,route,shape,cables,point,image,photo,
   if(image){
     const photoX=x+zoom.w+2*pad;
     photoPanel(ctx,image,{x:photoX,y:contentY,w:card.w-zoom.w-3*pad,h:zoom.h});
-    text(ctx,photo.caption || 'Foto evidence',photoX,contentY+zoom.h+17,
+    text(ctx,photo.caption || 'Foto bukti',photoX,contentY+zoom.h+17,
       {size:13,color:muted,width:card.w-zoom.w-3*pad});
   }
   if(incident) incidentDetails(ctx,incident,x+pad,contentY+zoom.h+(image?40:30),card.w-2*pad);
@@ -191,7 +191,7 @@ export async function buildReportJpg({route,point,incident,photo,layer,format='j
     if(image){
       const photoX=x+zoom.w+12;
       photoPanel(ctx,image,{x:photoX,y:zoom.y,w:w-zoom.w-12,h:zoom.h});
-      text(ctx,photo.caption || 'Foto evidence',photoX,below+19,{size:14,color:muted,width:w-zoom.w-12});
+      text(ctx,photo.caption || 'Foto bukti',photoX,below+19,{size:14,color:muted,width:w-zoom.w-12});
       incidentDetails(ctx,incident,x,below+51,w);
     } else {
       incidentDetails(ctx,incident,x,below+46,w);
