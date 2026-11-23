@@ -11,7 +11,7 @@ import RouteEditor from '../features/epm/RouteEditor';
 import IncidentEditor from '../features/epm/IncidentEditor';
 import CableReplacement,{CableActivityList} from '../features/epm/CableReplacement';
 import {distanceLabel,errorText,INCIDENT_STATUSES,POINT_TYPES,wibLabel} from '../features/epm/routeEditing';
-import {pointMasterCode,sitePointLabel} from '../features/epm/siteMaster';
+import {pointMasterCode,siteMasterCode,sitePointLabel} from '../features/epm/siteMaster';
 import '../features/epm/epm.css';
 
 const tabs=['Peta & Titik','Inventaris Jalur','Laporan Gangguan'];
@@ -50,7 +50,7 @@ function PointPhotoDialog({points, point, events, onSelect, onClose, onChange}) 
   return <dialog ref={dialog} className="epm-photo-dialog" aria-labelledby="epm-photo-title" onCancel={onClose}>
     <div className="epm-stack">
       <div className="epm-heading">
-        <h2 id="epm-photo-title">Foto evidence</h2>
+        <h2 id="epm-photo-title">Foto bukti</h2>
         <button type="button" onClick={onClose}>Tutup galeri</button>
       </div>
       {point ? <>
@@ -75,18 +75,20 @@ export default function EpmRouteMapPage() {
   const [editor,setEditor]=useState(null),[eventEditor,setEventEditor]=useState(null),[notice,setNotice]=useState('');
   const [search,setSearch]=useState(''),[filters,setFilters]=useState({route_id:'',status:'',date_from:'',date_to:''});
   const [photoTarget,setPhotoTarget]=useState(null);
-  const [popupId,setPopupId]=useState('');
+  const [mapSelection,setMapSelection]=useState(null);
   const [cableDraft,setCableDraft]=useState(null);
   const listing=useResource('/epm/routes',tick);
   const routes=listing.data || [];
   const activeId=routes.some(r=>r.id===routeId)?routeId:(routes[0]?.id || '');
   const detail=useResource(activeId?`/epm/routes/${activeId}`:'',tick);
   const route=detail.data;
+  const nearby=mapSelection?.nearby;
+  const nearbyCode=siteMasterCode(nearby?.code);
   const codes=useMemo(()=>{
     if(!route?.points.length) return '';
     const ordered=[route.points[0],route.points.at(-1),...route.points.slice(1,-1)];
-    return [...new Set(ordered.map(p=>pointMasterCode(route,p)).filter(Boolean))].slice(0,20).sort().join(',');
-  },[route]);
+    return [...new Set([nearbyCode,...ordered.map(p=>pointMasterCode(route,p))].filter(Boolean))].slice(0,20).sort().join(',');
+  },[route,nearbyCode]);
   const siteLookup=useResource(tab===tabs[0] && codes ? '/epm/site-master?site_ids='+encodeURIComponent(codes) : '',tick);
   const mapRoute=useMemo(()=>{
     if(!route) return null;
@@ -99,7 +101,12 @@ export default function EpmRouteMapPage() {
   const points=mapRoute?.points || [];
   const point=points.find(p=>p.id===pointId) || points[0];
   const photoPoint=points.find(p=>p.id===photoTarget) || points[0];
-  const popupPoint=points.find(p=>p.id===popupId);
+  const popupPoint=nearby ? {
+    type:'site',label:nearby.name || nearby.code,site_code:nearbyCode,
+    site_master:siteLookup.data?.find(site=>site.site_id===nearbyCode),
+  } : points.find(p=>p.id===mapSelection?.pointId);
+  const monthlyMetrics=useResource(tab===tabs[0] && popupPoint?.site_code
+    ? '/epm/sites/'+encodeURIComponent(popupPoint.site_code)+'/monthly-metrics' : '',tick);
   const routeEvents=useResource(activeId?`/epm/incidents?route_id=${activeId}`:'',tick);
   const events=routeEvents.data || [];
   const pointEvents=events.filter(r=>r.point_id===point?.id);
@@ -110,8 +117,8 @@ export default function EpmRouteMapPage() {
   const reportForActive=incident && incident.route_id===route?.id;
   const cableActivities=route?.cable_replacements || [];
 
-  function selectRoute(id) {setRouteId(id);setPointId('');setPopupId('');setIncidentId('');setEventEditor(null);setNotice('');}
-  function selectPoint(id) {setPointId(id);setPopupId('');setIncidentId('');setEventEditor(null);}
+  function selectRoute(id) {setRouteId(id);setPointId('');setMapSelection(null);setIncidentId('');setEventEditor(null);setNotice('');}
+  function selectPoint(id) {setPointId(id);setMapSelection(null);setIncidentId('');setEventEditor(null);}
   function openEvent(r) {
     setRouteId(r.route_id);setPointId(r.point_id);setIncidentId(r.id);setEventEditor(null);
   }
@@ -122,11 +129,11 @@ export default function EpmRouteMapPage() {
   }
   const failures=[listing.error,detail.error,routeEvents.error,report.error].filter(Boolean);
   const shownRoutes=routes.filter(r=>[r.name,r.area,r.pic,r.start_site,r.end_site].some(v=>v?.toLowerCase().includes(search.toLowerCase())));
-  function changeTab(t) {setTab(t);setPopupId('');setIncidentId('');setEventEditor(null);setNotice('');}
+  function changeTab(t) {setTab(t);setMapSelection(null);setIncidentId('');setEventEditor(null);setNotice('');}
   function incidentDetail(row) {
     return <section className="epm-stack epm-panel"><div className="epm-heading"><div><small>Detail kejadian</small><h3>{row.ticket || row.point_label} · {INCIDENT_STATUSES[row.status] || 'Belum dicatat'}</h3></div><button onClick={()=>setIncidentId('')}>Tutup detail</button></div>
       <dl className="epm-values"><div><dt>Mulai</dt><dd>{wibLabel(row.started_at)}</dd></div><div><dt>Pulih</dt><dd>{wibLabel(row.recovered_at)}</dd></div><div><dt>Penyebab</dt><dd>{row.cause || '—'}</dd></div><div><dt>Tindakan</dt><dd>{row.action || '—'}</dd></div></dl>
-      <div className="epm-row"><button onClick={()=>setEventEditor({initial:row,point:{id:row.point_id,label:row.point_label},routeId:row.route_id})}>Edit kejadian</button><button onClick={()=>archive(row,'incidents')}>Arsipkan kejadian</button></div>
+      <div className="epm-row"><button onClick={()=>setEventEditor({initial:row,point:{id:row.point_id,label:row.point_label},routeId:row.route_id})}>Ubah kejadian</button><button onClick={()=>archive(row,'incidents')}>Arsipkan kejadian</button></div>
       <EvidenceGallery key={row.id} pointId={row.point_id} incidents={[row]} incidentId={row.id} onChange={refresh}
         readOnly={Boolean(row.point_archived_at)}/>
       {route?.id===row.route_id && <CableActivityList activities={cableActivities} incidentId={row.id} incidents={events}/>}
@@ -137,7 +144,7 @@ export default function EpmRouteMapPage() {
     <div className="epm-workspace">
     {failures.length>0 && <div role="alert" className="epm-note">Gagal memuat data. {[...new Set(failures)].join(' ')} <button onClick={refresh}>Coba lagi</button></div>}
     {notice && <p className="epm-note" role="status">{notice}</p>}
-    {editor ? <RouteEditor initial={editor.initial} initialPointId={editor.pointId} initialCorrection={editor.correction} onClose={()=>setEditor(null)}
+    {editor ? <RouteEditor initial={editor.initial} initialPointId={editor.pointId} onClose={()=>setEditor(null)}
       onSaved={id=>{setEditor(null);selectRoute(id);setTab(tabs[0]);setNotice('Jalur tersimpan.');refresh();}}/> : <>
     <div className="epm-top"><nav className="epm-tabs" aria-label="Bagian halaman">{tabs.map(t=><button key={t} aria-current={tab===t?'page':undefined} onClick={()=>changeTab(t)}>{t}</button>)}</nav>
       <div className="epm-row">
@@ -145,43 +152,43 @@ export default function EpmRouteMapPage() {
           incident={reportForActive?incident:null}/>}
         {tab===tabs[1] && <EpmExports key="data" mode="data" filters={filters} onChange={refresh}/>}
         <button className="epm-icon" aria-label="Perbarui data" title="Perbarui data" onClick={refresh}><RotateCw size={16}/></button>
-        <button className="epm-primary" onClick={()=>setEditor({initial:null})}><Plus size={16}/> Jalur baru</button>
+        {tab!==tabs[2] && <button className="epm-primary" onClick={()=>setEditor({initial:null})}><Plus size={16}/> Tambah jalur</button>}
       </div>
     </div>
     {!listing.data && !listing.error && <p role="status">Memuat inventaris jalur…</p>}
     {listing.data && !routes.length && <p className="epm-note">Inventaris masih kosong. Buat jalur atau impor cadangan melalui menu data.</p>}
     {tab===tabs[0] && routes.length>0 && <>
       <div className="epm-toolbar"><label>Jalur aktif<select value={activeId} onChange={e=>selectRoute(e.target.value)}>{routes.map(r=><option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
-      {route && <><div><small>Panjang trase</small><strong>{distanceLabel(route.length_m)}</strong></div><div><small>Verifikasi</small><span>{verificationLabel(route.verification)}</span></div>
+      {route && <><div><small>Panjang lintasan</small><strong>{distanceLabel(route.length_m)}</strong></div><div><small>Verifikasi</small><span>{verificationLabel(route.verification)}</span></div>
       <div className="epm-toolbar-actions">
-        <button onClick={()=>setEditor({initial:route})}>Edit jalur</button>
-        <button onClick={()=>setEditor({initial:route,correction:true,pointId:point?.id})}>Koreksi ruas di peta</button>
-        <button className="epm-primary" onClick={()=>setPhotoTarget(point?.id || '')}>
-          <Camera size={16}/> Foto evidence
-        </button>
+        <button onClick={()=>setEditor({initial:route})}>Ubah jalur</button>
       </div></>}</div>
       {route ? <>
-        <div className="epm-split"><RouteMap route={mapRoute} selected={point?.id}
-          onSelect={id=>{selectPoint(id);setPopupId(id);}}
-          popup={popupPoint && <MapPointPopup point={popupPoint} events={events} lookup={siteLookup} onClose={()=>setPopupId('')}/>}/>
+        <div className="epm-main-map"><RouteMap route={mapRoute} selected={point?.id} contextLayers
+          onSelect={id=>{selectPoint(id);setMapSelection({pointId:id});}}
+          onSelectNearby={site=>setMapSelection({nearby:site})}
+          popup={popupPoint && <MapPointPopup key={popupPoint.id || nearby.code} point={popupPoint}
+            events={events} lookup={siteLookup} metrics={monthlyMetrics} onClose={()=>setMapSelection(null)}/>}/></div>
+        <div className="epm-point-workspace">
         <section className="epm-panel epm-list"><header><h2>Titik jalur <small>{points.length}</small></h2></header>
         <ol>{points.map((p,i)=><li key={p.id}><button aria-current={point?.id===p.id?'location':undefined} onClick={()=>selectPoint(p.id)}>
           <b>{i+1}</b><span><strong>{sitePointLabel(p)}</strong><small>{POINT_TYPES[p.type]}{p.photo_count>0 && <> · <Camera size={11}/> {p.photo_count}</>}</small></span>
           <span className="epm-dist">{distanceLabel(p.station_m)}<small>+{Math.round(p.segment_m || 0)} m</small></span>
-        </button></li>)}</ol></section></div>
+        </button></li>)}</ol></section>
         {point && <section className="epm-panel epm-stack"><div className="epm-heading"><div><small>{POINT_TYPES[point.type]} · {distanceLabel(point.station_m)}</small><h2>{sitePointLabel(point)}</h2></div>
           <div className="epm-row">
-            <button onClick={()=>setEditor({initial:route,pointId:point.id})}>Edit titik</button>
+            <button onClick={()=>setEditor({initial:route,pointId:point.id})}>Ubah titik</button>
             <button onClick={()=>setCableDraft({route,point})}>Catat penggantian kabel</button>
           </div></div>
           <p className="epm-muted">Koordinat {point.lat}, {point.lng}{point.note?' · '+point.note:''}</p>
-          <div className="epm-row"><button className="epm-primary" onClick={()=>setPhotoTarget(point.id)}><Camera size={16}/> Tambah / lihat foto ({point.photo_count || 0})</button></div>
+          <div className="epm-row"><button onClick={()=>setPhotoTarget(point.id)}><Camera size={16}/> Foto bukti ({point.photo_count || 0})</button></div>
           {point.type==='tipus' && <>
             <div className="epm-heading"><h3>Riwayat gangguan</h3><button onClick={()=>setEventEditor({point,routeId:activeId})}>Catat gangguan</button></div>
             {!routeEvents.data ? <p>Memuat riwayat…</p> : pointEvents.length ? <ReportTable rows={pointEvents} selected={incidentId} onSelect={openEvent}/> : <p className="epm-muted">Belum dicatat</p>}
           </>}
           <CableActivityList activities={cableActivities} pointId={point.id} incidents={events}/>
         </section>}
+        </div>
       </>:!detail.error && <p>Memuat trase…</p>}
     </>}
     {tab===tabs[1] && <section className="epm-panel epm-stack"><div className="epm-heading"><h2>Inventaris jalur</h2><label>Cari jalur<input type="search" value={search} placeholder="Nama, site, area, PIC" onChange={e=>setSearch(e.target.value)}/></label></div>

@@ -17,8 +17,8 @@ export default function DraftRoutePhotos({points,items,onChange,disabled,saved})
     event.target.value='';
   }
 
-  return <section className="epm-stack epm-panel" aria-label="Foto evidence">
-    <h3>Foto evidence</h3>
+  return <section className="epm-stack epm-panel" aria-label="Foto bukti">
+    <h3>Foto bukti</h3>
     {!saved && <>
       <p className="epm-muted">{pointId ? 'Foto akan diunggah saat kamu menyimpan jalur.' :
         'Tambahkan titik jalur dan isi labelnya untuk memilih foto.'}</p>
@@ -27,9 +27,9 @@ export default function DraftRoutePhotos({points,items,onChange,disabled,saved})
           {targets.map(point=><option key={point.id} value={point.id}>{point.label}</option>)}
         </select></label>}
         <button type="button" disabled={disabled || !pointId} onClick={()=>input.current.click()}>
-          <Camera size={15}/> Upload foto
+          <Camera size={15}/> Pilih foto
         </button>
-        <input type="file" aria-label="Pilih file foto evidence" ref={input} hidden disabled={disabled}
+        <input type="file" aria-label="Pilih file foto bukti" ref={input} hidden disabled={disabled}
           multiple accept={evidenceAccept} onChange={pick}/>
       </div>
     </>}

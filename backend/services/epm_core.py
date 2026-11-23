@@ -11,6 +11,7 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
+from queries.sql_queries import TREND_AVAILABILITY_EXPR
 from services.epm_geometry import prepare_route
 
 WIB = timezone(timedelta(hours=7))
@@ -87,10 +88,15 @@ async def list_routes(session, *, include_archived=False):
     """, include_archived=include_archived)
 
 
-async def site_master_details(session, codes):
+def parse_site_codes(codes, limit=20):
     site_ids = sorted({code.strip().upper() for code in codes.split(",")})
-    if len(site_ids) > 20 or any(not re.fullmatch(r"[A-Z]{2,6}[0-9]{1,7}", code) for code in site_ids):
-        fail(422, "Masukkan maksimal 20 ID Site Master yang valid.")
+    if len(site_ids) > limit or any(not re.fullmatch(r"[A-Z]{2,6}[0-9]{1,7}", code) for code in site_ids):
+        fail(422, f"Masukkan maksimal {limit} ID Site Master yang valid.")
+    return site_ids
+
+
+async def site_master_details(session, codes):
+    site_ids = parse_site_codes(codes)
     return await records(session, """
         SELECT DISTINCT ON ("Siteid") "Siteid" AS site_id, "Site Name" AS site_name,
                "Type Site" AS type_site, "Status Site" AS status_site, "NOP" AS nop,
@@ -99,6 +105,73 @@ async def site_master_details(session, codes):
         WHERE "Siteid" = ANY(CAST(:site_ids AS text[]))
         ORDER BY "Siteid", NULLIF(BTRIM("Site Name"), '') NULLS LAST
     """, site_ids=site_ids)
+
+
+async def site_monthly_metrics(session, code):
+    site_id, = parse_site_codes(code, limit=1)
+    return await records(session, f"""
+        WITH latest AS (
+            SELECT GREATEST(
+                (SELECT MAKE_DATE("Tahun"::int, "Bulan"::int, 1)
+                 FROM public.availability_logs_jatim
+                 WHERE "Tahun" IS NOT NULL AND "Bulan" BETWEEN 1 AND 12
+                 ORDER BY "Tahun" DESC, "Bulan" DESC LIMIT 1),
+                (SELECT CAST(MAX(trx_month) || '-01' AS date) FROM public.traktor_data)
+            ) AS period
+        ),
+        months AS (
+            SELECT period - n * INTERVAL '1 month' AS month
+            FROM latest CROSS JOIN generate_series(0, 2) AS offsets(n)
+            WHERE period IS NOT NULL
+        )
+        SELECT TO_CHAR(m.month, 'YYYY-MM') AS period, a.availability, r.revenue
+        FROM months m
+        LEFT JOIN LATERAL (
+            SELECT {TREND_AVAILABILITY_EXPR} AS availability
+            FROM public.availability_logs_jatim
+            WHERE "SITE ID" = :site_id AND "Tahun" = EXTRACT(YEAR FROM m.month)::bigint
+              AND "Bulan" = EXTRACT(MONTH FROM m.month)::bigint
+            GROUP BY "Tahun", "Bulan"
+        ) a ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT SUM(rev) AS revenue
+            FROM public.traktor_data
+            WHERE site_id = :site_id AND trx_month = TO_CHAR(m.month, 'YYYY-MM')
+        ) r ON TRUE
+        ORDER BY m.month DESC
+    """, site_id=site_id)
+
+
+async def nearby_map_sites(session, bounds):
+    west, south, east, north = bounds
+    if east - west > 2 or north - south > 2:
+        fail(422, "Perbesar peta untuk menampilkan site sekitar.")
+    limit = 250
+    sites = await records(session, """
+        WITH sites AS (
+            SELECT "Siteid" AS site_id, "Site Name" AS site_name,
+                CASE WHEN BTRIM("Latitude"::text) ~ '^[+-]?[0-9]+([.][0-9]+)?$'
+                     THEN "Latitude"::double precision END AS latitude,
+                CASE WHEN BTRIM("Longitude"::text) ~ '^[+-]?[0-9]+([.][0-9]+)?$'
+                     THEN "Longitude"::double precision END AS longitude
+            FROM public.data_site_master
+            WHERE NULLIF(BTRIM("Siteid"), '') IS NOT NULL
+        )
+        SELECT DISTINCT ON (site_id) site_id, site_name, latitude, longitude
+        FROM sites WHERE longitude BETWEEN :west AND :east AND latitude BETWEEN :south AND :north
+        ORDER BY site_id, latitude, longitude, site_name
+        LIMIT :limit
+    """, west=west, south=south, east=east, north=north, limit=limit+1)
+    return {"sites":sites[:limit], "truncated":len(sites)>limit}
+
+
+async def map_sector_directions(session, codes):
+    return await records(session, """
+        SELECT DISTINCT site_id, CASE WHEN azimuth=360 THEN 0 ELSE azimuth END AS azimuth
+        FROM public.ransys_gabungan
+        WHERE site_id=ANY(CAST(:site_ids AS text[])) AND azimuth BETWEEN 0 AND 360
+        ORDER BY site_id, azimuth
+    """, site_ids=parse_site_codes(codes, limit=2))
 
 
 async def route_detail(session, route_id, *, include_archived=False):

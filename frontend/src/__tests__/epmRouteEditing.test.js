@@ -40,6 +40,37 @@ test('changing trase keeps the incident location id and preserves the field refe
   assert.equal(result.verification, 'pending');
 });
 
+test('reshaping clears obsolete point sections without changing point identity or coordinates', () => {
+  const anchors = [
+    {id:'start',label:'BGL011',lng:112.1,lat:-7.1},
+    {id:'inserted',label:'Belokan',lng:112.101,lat:-7.1},
+    {id:'middle',label:'Tipus 2',lng:112.102,lat:-7.1},
+    {id:'end',label:'EPM155',lng:112.103,lat:-7.1},
+  ].map((anchor,vertex_index)=>({...anchor,vertex_index}));
+  const oldPoints = [
+    {id:'a',label:'BGL011',type:'site'},
+    {id:'b',label:'Tipus 1',type:'tipus',lng:112.1005,lat:-7.1,from_anchor_id:'removed',to_anchor_id:'middle',note:'Dokumentasi',photo_count:1},
+    {id:'c',label:'Tipus 2',type:'tipus',lng:112.1015,lat:-7.1,from_anchor_id:'start',to_anchor_id:'middle'},
+    {id:'d',label:'Sambungan',type:'sambungan',lng:112.1025,lat:-7.1,from_anchor_id:'middle',to_anchor_id:'end',station_m:260},
+    {id:'e',label:'EPM155',type:'remote_sector'},
+  ];
+  const geometry={type:'LineString',coordinates:anchors.map(a=>[a.lng,a.lat])};
+  const reshaped=prepareReshape({points:oldPoints},anchors,geometry,'manual');
+  const payload=routePayload(reshaped);
+  for(const i of [1,2]){
+    assert.equal(payload.points[i].from_anchor_id,null);
+    assert.equal(payload.points[i].to_anchor_id,null);
+    assert.equal(payload.points[i].id,oldPoints[i].id);
+    assert.equal(payload.points[i].lng,oldPoints[i].lng);
+    assert.equal(payload.points[i].lat,oldPoints[i].lat);
+  }
+  assert.equal(reshaped.points[1].photo_count,1);
+  assert.equal(payload.points[1].note,'Dokumentasi');
+  assert.equal(payload.points[3].from_anchor_id,'middle');
+  assert.equal(payload.points[3].to_anchor_id,'end');
+  assert.equal(payload.points[3].station_m,undefined);
+});
+
 const sectionFixture = {
   id: 'route', revision: 7, source: 'road', verification: 'field',
   geometry: { type: 'LineString', coordinates: [[112, -7], [112.001, -7], [112.002, -7], [112.003, -7], [112.004, -7]] },

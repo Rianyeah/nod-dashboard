@@ -13,27 +13,25 @@ function intervalValue(p,anchors) {
 }
 function IntervalSelect({point,anchors,onChange}) {
   const value=point.from_anchor_id || point.to_anchor_id ? intervalValue(point,anchors) : 'auto';
-  return <label>Bagian trase<select value={value} onChange={e=>{
+  return <label>Ruas kabel<select value={value} onChange={e=>{
     if(e.target.value==='auto') {
       onChange({from_anchor_id:null,to_anchor_id:null,station_m:undefined});
       return;
     }
     const i=Number(e.target.value);onChange({from_anchor_id:anchors[i].id,to_anchor_id:anchors[i+1].id,station_m:undefined});
-  }}><option value="" disabled>Pilih ulang bagian trase</option><option value="auto">Ruas terdekat otomatis</option>
+  }}><option value="" disabled>Pilih ulang ruas kabel</option><option value="auto">Ruas terdekat otomatis</option>
     {anchors.slice(0,-1).map((a,i)=><option value={i} key={a.id}>{a.label} → {anchors[i+1].label}</option>)}</select></label>;
 }
 
-export default function RouteEditor({initial, initialPointId, initialCorrection, onClose, onSaved}) {
+export default function RouteEditor({initial, initialPointId, onClose, onSaved}) {
   const [draft,setDraft]=useState(()=>structuredClone(initial || blankRoute()));
   const [text,setText]=useState(()=>rowsText(initial?.anchors || []));
-  const [section,setSection]=useState(initialCorrection || !initial ? 'shape' : initialPointId ? 'points' : 'metadata');
+  const [section,setSection]=useState(!initial ? 'shape' : initialPointId ? 'points' : 'metadata');
   const [target,setTarget]=useState(initialPointId || '');
   const [pendingShape,setPendingShape]=useState(false),[review,setReview]=useState(null);
   const [message,setMessage]=useState(''),[busy,setBusy]=useState(''),[conflict,setConflict]=useState(null);
   const [clickMode,setClickMode]=useState('');
-  const [correctionIndex,setCorrectionIndex]=useState(initialCorrection ? Math.max(0, intervalValue(
-    initial.points.find(p=>p.id===initialPointId) || {}, initial.anchors,
-  )) : null);
+  const [correctionIndex,setCorrectionIndex]=useState(null);
   const [bends,setBends]=useState([]);
   const [photos,setPhotos]=useState([]);
   const [savedRouteId,setSavedRouteId]=useState('');
@@ -183,7 +181,7 @@ export default function RouteEditor({initial, initialPointId, initialCorrection,
   </section>;
 
   return <section className="epm-editor epm-panel" aria-label="Editor jalur">
-    <header className="epm-heading"><h2>{initial?'Edit jalur':'Jalur baru'}</h2><button type="button" disabled={!!busy} onClick={()=>{if(window.confirm('Tutup editor dan buang draf ini?'))onClose();}}>Tutup editor</button></header>
+    <header className="epm-heading"><h2>{initial?'Ubah jalur':'Jalur baru'}</h2><button type="button" disabled={!!busy} onClick={()=>{if(window.confirm('Tutup dan buang draf ini?'))onClose();}}>Tutup</button></header>
     <div className="epm-row">{[['metadata','Info jalur'],['shape','Lintasan kabel (trase)'],['points','Titik operasional']].map(([id,label])=><button key={id} disabled={!!busy} aria-pressed={section===id} onClick={()=>{setSection(id);setClickMode('');}}>{label}</button>)}</div>
     <fieldset disabled={!!busy}><legend className="sr-only">Data jalur</legend>
     {section==='metadata' && <div className="epm-form">
@@ -194,7 +192,7 @@ export default function RouteEditor({initial, initialPointId, initialCorrection,
       <p className="epm-note">Trase adalah garis yang menunjukkan lintasan kabel FO di peta. Panjang jalur dan jarak dari site awal dihitung mengikuti garis ini. Site, sambungan, dan titik putus dikelola di tab Titik operasional.</p>
       {draft.anchors.length>=2 && (correctionIndex===null ?
         <div className="epm-row"><button type="button" className="epm-primary" disabled={pendingShape} onClick={()=>{
-          setClickMode('');setBends([]);setCorrectionIndex(0);setReview(null);setMessage('');
+          setClickMode('');setBends([]);setCorrectionIndex(Math.max(0,intervalValue(current || {},draft.anchors)));setReview(null);setMessage('');
         }}>Koreksi ruas di peta</button></div> :
         <div className="epm-stack">
           <label>Ruas yang dikoreksi<select value={correctionIndex} onChange={e=>{
